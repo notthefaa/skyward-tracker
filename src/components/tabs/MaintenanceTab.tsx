@@ -1,21 +1,25 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
-import { Wrench, Trash2 } from "lucide-react";
+import { Wrench, Trash2, Plus, X } from "lucide-react";
 import { PrimaryButton } from "@/components/AppButtons";
 
 export default function MaintenanceTab({ aircraft, role, onGroundedStatusChange }: { aircraft: any, role: string, onGroundedStatusChange: (isGrounded: boolean) => void }) {
-  const[mxItems, setMxItems] = useState<any[]>([]);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [mxItems, setMxItems] = useState<any[]>([]);
+  
+  // Modal & Loading States
+  const [showMxModal, setShowMxModal] = useState(false);
+  const[isSubmitting, setIsSubmitting] = useState(false);
 
-  const [mxName, setMxName] = useState("");
-  const[mxIsRequired, setMxIsRequired] = useState(true);
+  // Form State
+  const[mxName, setMxName] = useState("");
+  const [mxIsRequired, setMxIsRequired] = useState(true);
   const [mxTrackingType, setMxTrackingType] = useState<'time' | 'date'>('time');
   const [mxLastTime, setMxLastTime] = useState("");
-  const [mxIntervalTime, setMxIntervalTime] = useState("");
-  const[mxDueTime, setMxDueTime] = useState("");
+  const[mxIntervalTime, setMxIntervalTime] = useState("");
+  const [mxDueTime, setMxDueTime] = useState("");
   const [mxLastDate, setMxLastDate] = useState("");
-  const [mxIntervalDays, setMxIntervalDays] = useState("");
-  const[mxDueDate, setMxDueDate] = useState("");
+  const[mxIntervalDays, setMxIntervalDays] = useState("");
+  const [mxDueDate, setMxDueDate] = useState("");
 
   const isTurbine = aircraft?.engine_type === 'Turbine';
   const currentEngineTime = aircraft?.total_engine_time || 0;
@@ -36,11 +40,7 @@ export default function MaintenanceTab({ aircraft, role, onGroundedStatusChange 
     const isGrounded = items.some(item => {
       if (!item.is_required) return false;
       if (item.tracking_type === 'time') return item.due_time <= currentEngineTime;
-      if (item.tracking_type === 'date') {
-        const dueDate = new Date(item.due_date + 'T00:00:00');
-        const today = new Date(); today.setHours(0,0,0,0);
-        return dueDate < today;
-      }
+      if (item.tracking_type === 'date') return new Date(item.due_date + 'T00:00:00') < new Date(new Date().setHours(0,0,0,0));
       return false;
     });
     onGroundedStatusChange(isGrounded);
@@ -80,6 +80,7 @@ export default function MaintenanceTab({ aircraft, role, onGroundedStatusChange 
     await fetchMxItems(aircraft.id);
     setMxName(""); setMxLastTime(""); setMxIntervalTime(""); setMxDueTime(""); setMxLastDate(""); setMxIntervalDays(""); setMxDueDate("");
     setIsSubmitting(false);
+    setShowMxModal(false); // Close modal on success!
   };
 
   const deleteMxItem = async (id: string) => {
@@ -91,7 +92,6 @@ export default function MaintenanceTab({ aircraft, role, onGroundedStatusChange 
 
   if (!aircraft) return null;
 
-  // Re-calculate local grounded status for UI colors
   const isGroundedLocally = mxItems.some(item => {
     if (!item.is_required) return false;
     if (item.tracking_type === 'time') return item.due_time <= currentEngineTime;
@@ -101,6 +101,16 @@ export default function MaintenanceTab({ aircraft, role, onGroundedStatusChange 
 
   return (
     <>
+      {/* Primary Action Button placed at the top for Mobile UX (Admins only) */}
+      {role === 'admin' && (
+        <div className="mb-2">
+          <PrimaryButton onClick={() => setShowMxModal(true)}>
+            <Plus size={18} /> Track New MX Item
+          </PrimaryButton>
+        </div>
+      )}
+
+      {/* COMPLIANCE DASHBOARD */}
       <div className={`bg-cream shadow-lg rounded-sm p-4 md:p-6 border-t-4 mb-6 ${isGroundedLocally ? 'border-red-600' : 'border-success'}`}>
         <div className="flex justify-between items-end mb-6">
           <div>
@@ -145,39 +155,47 @@ export default function MaintenanceTab({ aircraft, role, onGroundedStatusChange 
         </div>
       </div>
 
-      {role === 'admin' ? (
-        <div className="bg-white border border-gray-200 shadow-sm rounded p-5">
-          <h3 className="font-oswald font-bold uppercase text-lg mb-4 text-navy flex items-center gap-2"><Wrench size={18} className="text-brandOrange"/> Track New Item</h3>
-          <form onSubmit={submitMxItem} className="space-y-4">
-            <div className="grid grid-cols-3 gap-4">
-              <div className="col-span-2"><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Item Name <span className="text-red-500">*</span></label><input type="text" required value={mxName} onChange={e=>setMxName(e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-brandOrange outline-none" placeholder="e.g. Annual Inspection" /></div>
-              <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Required?</label><select value={mxIsRequired ? "yes" : "no"} onChange={e=>setMxIsRequired(e.target.value === "yes")} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-brandOrange outline-none bg-white"><option value="yes">Yes</option><option value="no">Optional</option></select></div>
+      {/* POP-UP MODAL FOR ADMIN TO ADD MX ITEM */}
+      {showMxModal && role === 'admin' && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded shadow-2xl w-full max-w-md p-6 border-t-4 border-brandOrange max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="font-oswald text-2xl font-bold uppercase text-navy">Track New Item</h2>
+              <button onClick={() => setShowMxModal(false)} className="text-gray-400 hover:text-red-500 transition-colors"><X size={24}/></button>
             </div>
-            <div>
-              <label className="text-[10px] font-bold uppercase tracking-widest text-navy block mb-2">Tracking Method</label>
-              <div className="flex gap-4">
-                <label className="flex items-center gap-2 text-sm font-bold text-navy"><input type="radio" checked={mxTrackingType==='time'} onChange={()=>setMxTrackingType('time')} /> Track by Time</label>
-                <label className="flex items-center gap-2 text-sm font-bold text-navy"><input type="radio" checked={mxTrackingType==='date'} onChange={()=>setMxTrackingType('date')} /> Track by Date</label>
+            
+            <form onSubmit={submitMxItem} className="space-y-4">
+              <div className="grid grid-cols-3 gap-4">
+                <div className="col-span-2"><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Item Name <span className="text-red-500">*</span></label><input type="text" required value={mxName} onChange={e=>setMxName(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-brandOrange outline-none" placeholder="e.g. Annual Inspection" /></div>
+                <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Required?</label><select value={mxIsRequired ? "yes" : "no"} onChange={e=>setMxIsRequired(e.target.value === "yes")} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-brandOrange outline-none bg-white"><option value="yes">Yes</option><option value="no">Optional</option></select></div>
               </div>
-            </div>
-            {mxTrackingType === 'time' ? (
-              <div className="bg-gray-50 p-4 rounded border border-gray-200 grid grid-cols-2 gap-4">
-                <div className="col-span-2"><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Last Completed ({isTurbine ? 'FTT' : 'Tach'}) <span className="text-red-500">*</span></label><input type="number" step="0.1" required value={mxLastTime} onChange={e=>setMxLastTime(e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm mt-1" /></div>
-                <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Interval (Hrs)</label><input type="number" step="0.1" value={mxIntervalTime} onChange={e=>setMxIntervalTime(e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm mt-1" /></div>
-                <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">OR Exact Due Time</label><input type="number" step="0.1" required={!mxIntervalTime} value={mxDueTime} onChange={e=>setMxDueTime(e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm mt-1" /></div>
+              
+              <div className="pt-2">
+                <label className="text-[10px] font-bold uppercase tracking-widest text-navy block mb-2">Tracking Method</label>
+                <div className="flex gap-4">
+                  <label className="flex items-center gap-2 text-sm font-bold text-navy"><input type="radio" checked={mxTrackingType==='time'} onChange={()=>setMxTrackingType('time')} /> Track by Time</label>
+                  <label className="flex items-center gap-2 text-sm font-bold text-navy"><input type="radio" checked={mxTrackingType==='date'} onChange={()=>setMxTrackingType('date')} /> Track by Date</label>
+                </div>
               </div>
-            ) : (
-              <div className="bg-gray-50 p-4 rounded border border-gray-200 grid grid-cols-2 gap-4">
-                <div className="col-span-2"><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Last Completed Date <span className="text-red-500">*</span></label><input type="date" required value={mxLastDate} onChange={e=>setMxLastDate(e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm mt-1" /></div>
-                <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Interval (Days)</label><input type="number" value={mxIntervalDays} onChange={e=>setMxIntervalDays(e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm mt-1" /></div>
-                <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">OR Exact Due Date</label><input type="date" required={!mxIntervalDays} value={mxDueDate} onChange={e=>setMxDueDate(e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm mt-1" /></div>
-              </div>
-            )}
-            <div className="pt-2"><PrimaryButton>{isSubmitting ? "Saving..." : "Add Maintenance Item"}</PrimaryButton></div>
-          </form>
+              
+              {mxTrackingType === 'time' ? (
+                <div className="bg-gray-50 p-4 rounded border border-gray-200 grid grid-cols-2 gap-4">
+                  <div className="col-span-2"><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Last Completed ({isTurbine ? 'FTT' : 'Tach'}) <span className="text-red-500">*</span></label><input type="number" step="0.1" required value={mxLastTime} onChange={e=>setMxLastTime(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1" /></div>
+                  <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Interval (Hrs)</label><input type="number" step="0.1" value={mxIntervalTime} onChange={e=>setMxIntervalTime(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1" /></div>
+                  <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">OR Exact Due Time</label><input type="number" step="0.1" required={!mxIntervalTime} value={mxDueTime} onChange={e=>setMxDueTime(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1" /></div>
+                </div>
+              ) : (
+                <div className="bg-gray-50 p-4 rounded border border-gray-200 grid grid-cols-2 gap-4">
+                  <div className="col-span-2"><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Last Completed Date <span className="text-red-500">*</span></label><input type="date" required value={mxLastDate} onChange={e=>setMxLastDate(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1" /></div>
+                  <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Interval (Days)</label><input type="number" value={mxIntervalDays} onChange={e=>setMxIntervalDays(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1" /></div>
+                  <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">OR Exact Due Date</label><input type="date" required={!mxIntervalDays} value={mxDueDate} onChange={e=>setMxDueDate(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1" /></div>
+                </div>
+              )}
+              
+              <div className="pt-4"><PrimaryButton>{isSubmitting ? "Saving..." : "Add Maintenance Item"}</PrimaryButton></div>
+            </form>
+          </div>
         </div>
-      ) : (
-        <div className="bg-gray-100 text-gray-500 text-center py-4 rounded border border-gray-200 text-xs font-bold uppercase tracking-widest">Only administrators can add maintenance items.</div>
       )}
     </>
   );

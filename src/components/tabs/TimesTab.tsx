@@ -1,24 +1,28 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
-import { Download, ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { Download, ChevronLeft, ChevronRight, Plus, X } from "lucide-react";
 import { PrimaryButton } from "@/components/AppButtons";
 
 export default function TimesTab({ aircraft, session, onUpdate }: { aircraft: any, session: any, onUpdate: () => void }) {
   const [flightLogs, setFlightLogs] = useState<any[]>([]);
   const [logPage, setLogPage] = useState(1);
   const [hasMoreLogs, setHasMoreLogs] = useState(false);
+  
+  // Modal & Loading States
+  const [showLogModal, setShowLogModal] = useState(false);
   const[isSubmitting, setIsSubmitting] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
 
-  const [logAftt, setLogAftt] = useState("");
-  const[logFtt, setLogFtt] = useState("");
-  const [logHobbs, setLogHobbs] = useState("");
-  const [logTach, setLogTach] = useState("");
-  const[logCycles, setLogCycles] = useState("");
-  const [logLandings, setLogLandings] = useState("");
+  // Form State
+  const[logAftt, setLogAftt] = useState("");
+  const [logFtt, setLogFtt] = useState("");
+  const[logHobbs, setLogHobbs] = useState("");
+  const[logTach, setLogTach] = useState("");
+  const [logCycles, setLogCycles] = useState("");
+  const[logLandings, setLogLandings] = useState("");
   const [logInitials, setLogInitials] = useState("");
-  const[logPax, setLogPax] = useState("");
-  const [logReason, setLogReason] = useState("");
+  const [logPax, setLogPax] = useState("");
+  const[logReason, setLogReason] = useState("");
 
   const isTurbine = aircraft?.engine_type === 'Turbine';
 
@@ -31,7 +35,7 @@ export default function TimesTab({ aircraft, session, onUpdate }: { aircraft: an
 
   useEffect(() => {
     if (aircraft) fetchFlightLogs(aircraft.id, logPage);
-  }, [logPage]);
+  },[logPage]);
 
   const fetchFlightLogs = async (aircraftId: string, page: number) => {
     const pageSize = 10;
@@ -77,16 +81,24 @@ export default function TimesTab({ aircraft, session, onUpdate }: { aircraft: an
 
     setLogPage(1); 
     await fetchFlightLogs(aircraft.id, 1); 
-    onUpdate(); // Tells the main page to refresh the aircraft times
+    onUpdate(); 
     
     setLogAftt(""); setLogFtt(""); setLogHobbs(""); setLogTach(""); setLogCycles(""); setLogLandings(""); setLogInitials(""); setLogPax(""); setLogReason("");
     setIsSubmitting(false);
+    setShowLogModal(false); // Close Modal on success!
   };
 
   if (!aircraft) return null;
 
   return (
     <>
+      {/* Primary Action Button placed at the top for Mobile UX */}
+      <div className="mb-2">
+        <PrimaryButton onClick={() => setShowLogModal(true)}>
+          <Plus size={18} /> Log New Flight
+        </PrimaryButton>
+      </div>
+
       {/* LOGBOOK TABLE */}
       <div className="bg-cream shadow-lg rounded-sm p-4 md:p-6 border-t-4 border-brandOrange overflow-hidden flex flex-col mb-6">
         <div className="flex justify-between items-end mb-6">
@@ -118,35 +130,43 @@ export default function TimesTab({ aircraft, session, onUpdate }: { aircraft: an
         )}
       </div>
 
-      {/* ACTION FORM */}
-      <div className="bg-white border border-gray-200 shadow-sm rounded p-5">
-        <h3 className="font-oswald font-bold uppercase text-lg mb-4 text-navy flex items-center gap-2"><Plus size={18} className="text-brandOrange"/> Log New Flight</h3>
-        <form onSubmit={submitFlightLog} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            {isTurbine ? (
-              <>
-                <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">New AFTT <span className="text-red-500">*</span></label><input type="number" step="0.1" required value={logAftt} onChange={e => setLogAftt(e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-brandOrange outline-none" placeholder={aircraft?.total_airframe_time} /></div>
-                <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">New FTT <span className="text-red-500">*</span></label><input type="number" step="0.1" required value={logFtt} onChange={e => setLogFtt(e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-brandOrange outline-none" placeholder={aircraft?.total_engine_time} /></div>
-              </>
-            ) : (
-              <>
-                <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">New Hobbs <span className="text-gray-400 font-normal lowercase">(Opt)</span></label><input type="number" step="0.1" value={logHobbs} onChange={e => setLogHobbs(e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-brandOrange outline-none" placeholder={aircraft?.total_airframe_time} /></div>
-                <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">New Tach <span className="text-red-500">*</span></label><input type="number" step="0.1" required value={logTach} onChange={e => setLogTach(e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-brandOrange outline-none" placeholder={aircraft?.total_engine_time} /></div>
-              </>
-            )}
+      {/* POP-UP MODAL FOR FLIGHT LOG */}
+      {showLogModal && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded shadow-2xl w-full max-w-md p-6 border-t-4 border-brandOrange max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="font-oswald text-2xl font-bold uppercase text-navy">Log New Flight</h2>
+              <button onClick={() => setShowLogModal(false)} className="text-gray-400 hover:text-red-500 transition-colors"><X size={24}/></button>
+            </div>
+            
+            <form onSubmit={submitFlightLog} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                {isTurbine ? (
+                  <>
+                    <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">New AFTT <span className="text-red-500">*</span></label><input type="number" step="0.1" required value={logAftt} onChange={e => setLogAftt(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-brandOrange outline-none" placeholder={aircraft?.total_airframe_time} /></div>
+                    <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">New FTT <span className="text-red-500">*</span></label><input type="number" step="0.1" required value={logFtt} onChange={e => setLogFtt(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-brandOrange outline-none" placeholder={aircraft?.total_engine_time} /></div>
+                  </>
+                ) : (
+                  <>
+                    <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">New Hobbs <span className="text-gray-400 font-normal lowercase">(Opt)</span></label><input type="number" step="0.1" value={logHobbs} onChange={e => setLogHobbs(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-brandOrange outline-none" placeholder={aircraft?.total_airframe_time} /></div>
+                    <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">New Tach <span className="text-red-500">*</span></label><input type="number" step="0.1" required value={logTach} onChange={e => setLogTach(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-brandOrange outline-none" placeholder={aircraft?.total_engine_time} /></div>
+                  </>
+                )}
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Landings</label><input type="number" required value={logLandings} onChange={e => setLogLandings(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-brandOrange outline-none" placeholder="0" /></div>
+                <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Engine Cycles</label><input type="number" required value={logCycles} onChange={e => setLogCycles(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-brandOrange outline-none" placeholder="0" /></div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Initials</label><input type="text" maxLength={3} required value={logInitials} onChange={e => setLogInitials(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-brandOrange outline-none uppercase" placeholder="ABC" /></div>
+                <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Reason (Opt)</label><select value={logReason} onChange={e => setLogReason(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-brandOrange outline-none bg-white"><option value="">Select...</option><option value="PE">PE - Personal</option><option value="BE">BE - Business</option><option value="MX">MX - Maintenance</option><option value="T">T - Training</option></select></div>
+              </div>
+              <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Passengers (Opt)</label><input type="text" value={logPax} onChange={e => setLogPax(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-brandOrange outline-none" placeholder="Names or notes..." /></div>
+              <div className="pt-4"><PrimaryButton>{isSubmitting ? "Saving..." : "Submit Log Entry"}</PrimaryButton></div>
+            </form>
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Landings</label><input type="number" required value={logLandings} onChange={e => setLogLandings(e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-brandOrange outline-none" placeholder="0" /></div>
-            <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Engine Cycles</label><input type="number" required value={logCycles} onChange={e => setLogCycles(e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-brandOrange outline-none" placeholder="0" /></div>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Initials</label><input type="text" maxLength={3} required value={logInitials} onChange={e => setLogInitials(e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-brandOrange outline-none uppercase" placeholder="ABC" /></div>
-            <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Reason (Opt)</label><select value={logReason} onChange={e => setLogReason(e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-brandOrange outline-none bg-white"><option value="">Select...</option><option value="PE">PE - Personal</option><option value="BE">BE - Business</option><option value="MX">MX - Maintenance</option><option value="T">T - Training</option></select></div>
-          </div>
-          <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Passengers (Opt)</label><input type="text" value={logPax} onChange={e => setLogPax(e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-brandOrange outline-none" placeholder="Names or notes..." /></div>
-          <div className="pt-2"><PrimaryButton>{isSubmitting ? "Saving..." : "Submit Log Entry"}</PrimaryButton></div>
-        </form>
-      </div>
+        </div>
+      )}
     </>
   );
 }
