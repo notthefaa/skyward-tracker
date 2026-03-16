@@ -5,31 +5,30 @@ import { supabase } from "@/lib/supabase";
 import { PlaneTakeoff, Wrench, AlertTriangle, FileText, Clock, LogOut, Plus, X } from "lucide-react";
 import { PrimaryButton } from "@/components/AppButtons";
 
-// Import tabs
 import TimesTab from "@/components/tabs/TimesTab";
 import MaintenanceTab from "@/components/tabs/MaintenanceTab";
+import SquawksTab from "@/components/tabs/SquawksTab"; // We will build this next!
 
 export default function FleetTrackerApp() {
   const [session, setSession] = useState<any>(null);
-  const [role, setRole] = useState<'admin' | 'pilot'>('pilot');
-  const [authEmail, setAuthEmail] = useState("");
-  const[authPassword, setAuthPassword] = useState("");
+  const[role, setRole] = useState<'admin' | 'pilot'>('pilot');
+  const[authEmail, setAuthEmail] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
 
-  const [aircraftList, setAircraftList] = useState<any[]>([]);
+  const[aircraftList, setAircraftList] = useState<any[]>([]);
   const [activeTail, setActiveTail] = useState<string>("");
   const [activeTab, setActiveTab] = useState<'times' | 'mx' | 'squawks' | 'notes'>('times');
-  
-  // --- GLOBAL AIRWORTHINESS STATE ---
   const [isGrounded, setIsGrounded] = useState(false);
 
   // --- ADMIN ADD AIRCRAFT STATE ---
   const[showAddAircraft, setShowAddAircraft] = useState(false);
   const [newTail, setNewTail] = useState("");
-  const[newModel, setNewModel] = useState("");
+  const [newSerial, setNewSerial] = useState(""); // <-- NEW
+  const [newModel, setNewModel] = useState("");
   const [newType, setNewType] = useState<'Piston' | 'Turbine'>('Piston');
   const [newAirframeTime, setNewAirframeTime] = useState("");
-  const [newEngineTime, setNewEngineTime] = useState("");
-  const[isSubmitting, setIsSubmitting] = useState(false);
+  const[newEngineTime, setNewEngineTime] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -38,12 +37,9 @@ export default function FleetTrackerApp() {
     });
   },[]);
 
-  // Automatically check airworthiness whenever the aircraft changes OR flight times are updated
   useEffect(() => {
-    if (activeTail && aircraftList.length > 0) {
-      checkGroundedStatus(activeTail);
-    }
-  },[activeTail, aircraftList]);
+    if (activeTail && aircraftList.length > 0) checkGroundedStatus(activeTail);
+  }, [activeTail, aircraftList]);
 
   const fetchAircraftData = async (userId: string) => {
     const { data: roleData } = await supabase.from('aft_user_roles').select('role').eq('user_id', userId).single();
@@ -60,17 +56,27 @@ export default function FleetTrackerApp() {
     const aircraft = aircraftList.find(a => a.tail_number === tail);
     if (!aircraft) return;
     
-    const { data } = await supabase.from('aft_maintenance_items').select('*').eq('aircraft_id', aircraft.id);
-    if (data) {
+    // Check Maintenance
+    let mxGrounded = false;
+    const { data: mxData } = await supabase.from('aft_maintenance_items').select('*').eq('aircraft_id', aircraft.id);
+    if (mxData) {
       const currentEngineTime = aircraft.total_engine_time || 0;
-      const grounded = data.some(item => {
+      mxGrounded = mxData.some(item => {
         if (!item.is_required) return false;
         if (item.tracking_type === 'time') return item.due_time <= currentEngineTime;
         if (item.tracking_type === 'date') return new Date(item.due_date + 'T00:00:00') < new Date(new Date().setHours(0,0,0,0));
         return false;
       });
-      setIsGrounded(grounded);
     }
+
+    // Check Airworthiness Squawks
+    let sqGrounded = false;
+    const { data: sqData } = await supabase.from('aft_squawks').select('*').eq('aircraft_id', aircraft.id).eq('status', 'open');
+    if (sqData) {
+      sqGrounded = sqData.some(sq => sq.affects_airworthiness);
+    }
+
+    setIsGrounded(mxGrounded || sqGrounded);
   };
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -88,6 +94,7 @@ export default function FleetTrackerApp() {
     setIsSubmitting(true);
     await supabase.from('aft_aircraft').insert({ 
       tail_number: newTail.toUpperCase(), 
+      serial_number: newSerial, // <-- NEW
       aircraft_type: newModel, 
       engine_type: newType, 
       total_airframe_time: parseFloat(newAirframeTime) || 0, 
@@ -95,9 +102,8 @@ export default function FleetTrackerApp() {
     });
     await fetchAircraftData(session.user.id);
     setActiveTail(newTail.toUpperCase());
-    setShowAddAircraft(false); 
-    setIsSubmitting(false); 
-    setNewTail(""); setNewModel(""); setNewAirframeTime(""); setNewEngineTime("");
+    setShowAddAircraft(false); setIsSubmitting(false); 
+    setNewTail(""); setNewSerial(""); setNewModel(""); setNewAirframeTime(""); setNewEngineTime("");
   };
 
   if (!session) {
@@ -120,17 +126,20 @@ export default function FleetTrackerApp() {
   return (
     <div className="h-screen flex flex-col bg-neutral-100 relative">
       
-      {/* ADD AIRCRAFT MODAL (Admin Only) */}
+      {/* ADD AIRCRAFT MODAL */}
       {showAddAircraft && role === 'admin' && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-white rounded shadow-2xl w-full max-w-md p-6 border-t-4 border-brandOrange animate-slide-up">
+          <div className="bg-white rounded shadow-2xl w-full max-w-md p-6 border-t-4 border-brandOrange max-h-[90vh] overflow-y-auto animate-slide-up">
             <div className="flex justify-between items-center mb-6"><h2 className="font-oswald text-2xl font-bold uppercase text-navy">Add Aircraft</h2><button onClick={() => setShowAddAircraft(false)} className="text-gray-400 hover:text-red-500"><X size={24}/></button></div>
             <form onSubmit={handleAddAircraft} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Tail Number</label><input type="text" required value={newTail} onChange={e=>setNewTail(e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 uppercase" placeholder="N12345" /></div>
+                <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Serial Num</label><input type="text" value={newSerial} onChange={e=>setNewSerial(e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 uppercase" placeholder="172-1234" /></div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Model Name</label><input type="text" required value={newModel} onChange={e=>setNewModel(e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm mt-1" placeholder="Cessna 172" /></div>
                 <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Engine Type</label><select value={newType} onChange={e=>setNewType(e.target.value as 'Piston'|'Turbine')} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 bg-white"><option value="Piston">Piston</option><option value="Turbine">Turbine</option></select></div>
               </div>
-              <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Model Name</label><input type="text" required value={newModel} onChange={e=>setNewModel(e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm mt-1" placeholder="Cessna 172" /></div>
               <div className="grid grid-cols-2 gap-4">
                 <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Current {newType === 'Turbine' ? 'AFTT' : 'Hobbs'}</label><input type="number" step="0.1" required value={newAirframeTime} onChange={e=>setNewAirframeTime(e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm mt-1" /></div>
                 <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Current {newType === 'Turbine' ? 'FTT' : 'Tach'}</label><input type="number" step="0.1" required value={newEngineTime} onChange={e=>setNewEngineTime(e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm mt-1" /></div>
@@ -147,13 +156,7 @@ export default function FleetTrackerApp() {
           <div className="flex flex-col">
             <span className="text-[9px] font-bold uppercase tracking-widest text-brandOrange mb-[2px]">Active Aircraft</span>
             <div className="flex items-center gap-3">
-              
-              {/* STATUS INDICATOR CIRCLE */}
-              <div 
-                className={`w-3.5 h-3.5 rounded-full shadow-inner ${isGrounded ? 'bg-red-500 animate-pulse' : 'bg-success'}`} 
-                title={isGrounded ? 'Grounded' : 'Airworthy'}
-              />
-              
+              <div className={`w-3.5 h-3.5 rounded-full shadow-inner ${isGrounded ? 'bg-red-500 animate-pulse' : 'bg-success'}`} title={isGrounded ? 'Grounded' : 'Airworthy'} />
               <select className="bg-transparent text-xl font-oswald font-bold uppercase tracking-wide focus:outline-none cursor-pointer" value={activeTail} onChange={(e) => setActiveTail(e.target.value)}>
                 {aircraftList.map(a => (<option key={a.id} value={a.tail_number} className="text-navy">{a.tail_number}</option>))}
               </select>
@@ -176,25 +179,15 @@ export default function FleetTrackerApp() {
       {/* MAIN CONTENT ROUTER */}
       <main className="flex-1 overflow-y-auto p-4 pb-24 flex justify-center">
         <div className="w-full max-w-3xl flex flex-col gap-6">
-          
           {activeTab === 'times' && <TimesTab aircraft={selectedAircraftData} session={session} onUpdate={() => fetchAircraftData(session.user.id)} />}
-          
           {activeTab === 'mx' && <MaintenanceTab aircraft={selectedAircraftData} role={role} onGroundedStatusChange={setIsGrounded} />}
-
-          {activeTab === 'squawks' && (
-            <div className="bg-cream shadow-lg rounded-sm p-6 border-t-4 border-gray-400 animate-slide-up">
-              <h2 className="font-oswald text-2xl font-bold uppercase text-navy m-0 mb-4">Squawks section</h2>
-              <p className="text-sm text-gray-500 italic">We will build this standalone component next!</p>
-            </div>
-          )}
-
+          {activeTab === 'squawks' && <SquawksTab aircraft={selectedAircraftData} session={session} onGroundedStatusChange={() => checkGroundedStatus(activeTail)} />}
           {activeTab === 'notes' && (
             <div className="bg-cream shadow-lg rounded-sm p-6 border-t-4 border-gray-400 animate-slide-up">
               <h2 className="font-oswald text-2xl font-bold uppercase text-navy m-0 mb-4">Notes section</h2>
-              <p className="text-sm text-gray-500 italic">We will build this standalone component after squawks!</p>
+              <p className="text-sm text-gray-500 italic">We will build this next!</p>
             </div>
           )}
-
         </div>
       </main>
 
