@@ -1,0 +1,22 @@
+@import "tailwindcss";
+
+@theme {
+  /* Brand Colors */
+  --color-navy: #091F3C;
+  --color-cream: #FDFCF4;
+  --color-brandOrange: #E68E2D;
+  --color-brandOrange-alt: #FF8C00;
+  --color-brandYellow: #F4C458;
+  --color-success: #56B94A;
+  --color-slateGray: #525659;
+
+  /* Google Fonts (linked from layout.tsx) */
+  --font-oswald: var(--font-oswald), sans-serif;
+  --font-roboto: var(--font-roboto), sans-serif;
+}
+
+/* Optional: Keep your background nice and smooth */
+body {
+  background-color: #f5f5f5;
+  color: var(--color-navy);
+}
