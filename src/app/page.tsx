@@ -133,7 +133,7 @@ export default function FleetTrackerApp() {
               <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Model Name</label><input type="text" required value={newModel} onChange={e=>setNewModel(e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm mt-1" placeholder="Cessna 172" /></div>
               <div className="grid grid-cols-2 gap-4">
                 <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Current {newType === 'Turbine' ? 'AFTT' : 'Hobbs'}</label><input type="number" step="0.1" required value={newAirframeTime} onChange={e=>setNewAirframeTime(e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm mt-1" /></div>
-                <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Current {newType === 'Turbine' ? 'FTT' : 'Tach'}</label><input type="number" step="0.1" required value={newEngineTime} onChange={e=>setEngineTime(e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm mt-1" /></div>
+                <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Current {newType === 'Turbine' ? 'FTT' : 'Tach'}</label><input type="number" step="0.1" required value={newEngineTime} onChange={e=>setNewEngineTime(e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm mt-1" /></div>
               </div>
               <div className="pt-4"><PrimaryButton>{isSubmitting ? "Saving..." : "Save Aircraft"}</PrimaryButton></div>
             </form>
