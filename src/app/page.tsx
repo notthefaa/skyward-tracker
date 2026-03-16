@@ -10,36 +10,36 @@ export default function FleetTrackerApp() {
   const [session, setSession] = useState<any>(null);
   const [role, setRole] = useState<'admin' | 'pilot'>('pilot');
   const [authEmail, setAuthEmail] = useState("");
-  const [authPassword, setAuthPassword] = useState("");
+  const[authPassword, setAuthPassword] = useState("");
 
   const[aircraftList, setAircraftList] = useState<any[]>([]);
   const [activeTail, setActiveTail] = useState<string>("");
-  const [activeTab, setActiveTab] = useState<'times' | 'mx' | 'squawks' | 'notes'>('times');
+  const[activeTab, setActiveTab] = useState<'times' | 'mx' | 'squawks' | 'notes'>('times');
   
   const [flightLogs, setFlightLogs] = useState<any[]>([]);
-  const [logPage, setLogPage] = useState(1);
+  const[logPage, setLogPage] = useState(1);
   const[hasMoreLogs, setHasMoreLogs] = useState(false);
   const[isSubmitting, setIsSubmitting] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
 
   // --- NEW LOG FORM STATE ---
   const [logAftt, setLogAftt] = useState("");
-  const [logFtt, setLogFtt] = useState("");
+  const[logFtt, setLogFtt] = useState("");
   const[logHobbs, setLogHobbs] = useState("");
   const [logTach, setLogTach] = useState("");
-  const [logCycles, setLogCycles] = useState("");
+  const[logCycles, setLogCycles] = useState("");
   const[logLandings, setLogLandings] = useState("");
   const [logInitials, setLogInitials] = useState("");
-  const [logPax, setLogPax] = useState("");
+  const[logPax, setLogPax] = useState("");
   const[logReason, setLogReason] = useState("");
 
   // --- ADMIN ADD AIRCRAFT STATE ---
   const[showAddAircraft, setShowAddAircraft] = useState(false);
   const [newTail, setNewTail] = useState("");
   const[newModel, setNewModel] = useState("");
-  const [newType, setNewType] = useState<'Piston' | 'Jet'>('Piston');
+  const [newType, setNewType] = useState<'Piston' | 'Turbine'>('Piston');
   const [newAirframeTime, setNewAirframeTime] = useState("");
-  const [newEngineTime, setNewEngineTime] = useState("");
+  const[newEngineTime, setNewEngineTime] = useState("");
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -50,7 +50,7 @@ export default function FleetTrackerApp() {
 
   useEffect(() => {
     if (activeTail) fetchFlightLogs(activeTail, logPage);
-  }, [activeTail, logPage]);
+  },[activeTail, logPage]);
 
   const fetchAircraftData = async (userId: string) => {
     const { data: roleData } = await supabase.from('aft_user_roles').select('role').eq('user_id', userId).single();
@@ -59,7 +59,6 @@ export default function FleetTrackerApp() {
     const { data: aircraftData } = await supabase.from('aft_aircraft').select('*').order('tail_number');
     if (aircraftData && aircraftData.length > 0) {
       setAircraftList(aircraftData);
-      // Only auto-select if one isn't already selected
       if (!activeTail) setActiveTail(aircraftData[0].tail_number);
     }
   };
@@ -98,7 +97,6 @@ export default function FleetTrackerApp() {
   const handleTailChange = (newTail: string) => {
     setActiveTail(newTail);
     setLogPage(1);
-    // Clear forms when switching planes
     setLogAftt(""); setLogFtt(""); setLogHobbs(""); setLogTach(""); 
     setLogCycles(""); setLogLandings(""); setLogInitials(""); setLogPax(""); setLogReason("");
   };
@@ -136,16 +134,16 @@ export default function FleetTrackerApp() {
       setIsExporting(false); return;
     }
 
-    const isJet = aircraft.engine_type === 'Jet';
-    const headers =['Date', 'Initials', isJet ? 'AFTT' : 'Hobbs', isJet ? 'FTT' : 'Tach', 'Landings', 'Engine Cycles', 'Reason', 'Passengers'];
+    const isTurbine = aircraft.engine_type === 'Turbine';
+    const headers =['Date', 'Initials', isTurbine ? 'AFTT' : 'Hobbs', isTurbine ? 'FTT' : 'Tach', 'Landings', 'Engine Cycles', 'Reason', 'Passengers'];
     const csvRows = [headers.join(',')];
 
     data.forEach(log => {
       const row =[
         new Date(log.created_at).toLocaleDateString(),
         log.initials,
-        isJet ? (log.aftt || '') : (log.hobbs || ''),
-        isJet ? (log.ftt || '') : (log.tach || ''),
+        isTurbine ? (log.aftt || '') : (log.hobbs || ''),
+        isTurbine ? (log.ftt || '') : (log.tach || ''),
         log.landings,
         log.engine_cycles,
         log.trip_reason || 'N/A',
@@ -170,7 +168,7 @@ export default function FleetTrackerApp() {
     const aircraft = aircraftList.find(a => a.tail_number === activeTail);
     
     if (aircraft && session) {
-      const isJet = aircraft.engine_type === 'Jet';
+      const isTurbine = aircraft.engine_type === 'Turbine';
       
       const insertData: any = {
         aircraft_id: aircraft.id,
@@ -184,7 +182,7 @@ export default function FleetTrackerApp() {
 
       const updateData: any = {};
 
-      if (isJet) {
+      if (isTurbine) {
         insertData.aftt = parseFloat(logAftt);
         insertData.ftt = parseFloat(logFtt);
         updateData.total_airframe_time = parseFloat(logAftt);
@@ -236,7 +234,7 @@ export default function FleetTrackerApp() {
   }
 
   const selectedAircraftData = aircraftList.find(a => a.tail_number === activeTail);
-  const isJet = selectedAircraftData?.engine_type === 'Jet';
+  const isTurbine = selectedAircraftData?.engine_type === 'Turbine';
 
   return (
     <div className="h-screen flex flex-col bg-neutral-100 relative">
@@ -257,9 +255,9 @@ export default function FleetTrackerApp() {
                 </div>
                 <div>
                   <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Engine Type</label>
-                  <select value={newType} onChange={e=>setNewType(e.target.value as 'Piston'|'Jet')} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 bg-white">
+                  <select value={newType} onChange={e=>setNewType(e.target.value as 'Piston'|'Turbine')} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 bg-white">
                     <option value="Piston">Piston</option>
-                    <option value="Jet">Jet</option>
+                    <option value="Turbine">Turbine</option>
                   </select>
                 </div>
               </div>
@@ -269,11 +267,11 @@ export default function FleetTrackerApp() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Current {newType === 'Jet' ? 'AFTT' : 'Hobbs'}</label>
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Current {newType === 'Turbine' ? 'AFTT' : 'Hobbs'}</label>
                   <input type="number" step="0.1" required value={newAirframeTime} onChange={e=>setNewAirframeTime(e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm mt-1" />
                 </div>
                 <div>
-                  <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Current {newType === 'Jet' ? 'FTT' : 'Tach'}</label>
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Current {newType === 'Turbine' ? 'FTT' : 'Tach'}</label>
                   <input type="number" step="0.1" required value={newEngineTime} onChange={e=>setNewEngineTime(e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm mt-1" />
                 </div>
               </div>
@@ -326,7 +324,7 @@ export default function FleetTrackerApp() {
               <div className="bg-cream shadow-lg rounded-sm p-4 md:p-6 border-t-4 border-brandOrange overflow-hidden flex flex-col">
                 <div className="flex justify-between items-end mb-6">
                   <div>
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-brandOrange block mb-1">{isJet ? 'JET' : 'PISTON'} LOGBOOK</span>
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-brandOrange block mb-1">{isTurbine ? 'TURBINE' : 'PISTON'} LOGBOOK</span>
                     <h2 className="font-oswald text-2xl md:text-3xl font-bold uppercase text-navy m-0 leading-none">Flight Log</h2>
                   </div>
                   <button onClick={exportCSV} disabled={isExporting} className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-brandOrange hover:text-brandOrange-alt transition-colors disabled:opacity-50">
@@ -340,8 +338,8 @@ export default function FleetTrackerApp() {
                       <tr className="border-b-2 border-navy text-[10px] font-bold uppercase tracking-widest text-gray-500">
                         <th className="pb-2 pr-4">Date</th>
                         <th className="pb-2 pr-4">Init</th>
-                        <th className="pb-2 pr-4">{isJet ? 'AFTT' : 'Hobbs'}</th>
-                        <th className="pb-2 pr-4">{isJet ? 'FTT' : 'Tach'}</th>
+                        <th className="pb-2 pr-4">{isTurbine ? 'AFTT' : 'Hobbs'}</th>
+                        <th className="pb-2 pr-4">{isTurbine ? 'FTT' : 'Tach'}</th>
                         <th className="pb-2 pr-4">Lndg</th>
                         <th className="pb-2 pr-4">Cyc</th>
                         <th className="pb-2 pr-4">Rsn</th>
@@ -356,8 +354,8 @@ export default function FleetTrackerApp() {
                           <tr key={log.id} className="border-b border-gray-200 hover:bg-orange-50/50 transition-colors">
                             <td className="py-3 pr-4 whitespace-nowrap">{new Date(log.created_at).toLocaleDateString()}</td>
                             <td className="py-3 pr-4 font-bold">{log.initials}</td>
-                            <td className="py-3 pr-4">{isJet ? log.aftt?.toFixed(1) : log.hobbs?.toFixed(1) || '-'}</td>
-                            <td className="py-3 pr-4">{isJet ? log.ftt?.toFixed(1) : log.tach?.toFixed(1)}</td>
+                            <td className="py-3 pr-4">{isTurbine ? log.aftt?.toFixed(1) : log.hobbs?.toFixed(1) || '-'}</td>
+                            <td className="py-3 pr-4">{isTurbine ? log.ftt?.toFixed(1) : log.tach?.toFixed(1)}</td>
                             <td className="py-3 pr-4">{log.landings}</td>
                             <td className="py-3 pr-4">{log.engine_cycles}</td>
                             <td className="py-3 pr-4">{log.trip_reason || "-"}</td>
@@ -391,9 +389,9 @@ export default function FleetTrackerApp() {
                 
                 <form onSubmit={submitFlightLog} className="space-y-4">
                   
-                  {/* DYNAMIC TIMES ROW based on Jet vs Piston */}
+                  {/* DYNAMIC TIMES ROW based on Turbine vs Piston */}
                   <div className="grid grid-cols-2 gap-4">
-                    {isJet ? (
+                    {isTurbine ? (
                       <>
                         <div>
                           <label className="text-[10px] font-bold uppercase tracking-widest text-navy">New AFTT <span className="text-red-500">*</span></label>
@@ -418,7 +416,7 @@ export default function FleetTrackerApp() {
                     )}
                   </div>
 
-                  {/* Rest of the form remains identical */}
+                  {/* Rest of the form */}
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Landings</label>
@@ -460,7 +458,7 @@ export default function FleetTrackerApp() {
             </>
           )}
 
-          {/* OTHER TABS (Placeholders for now) */}
+          {/* OTHER TABS */}
           {activeTab !== 'times' && (
             <div className="bg-cream shadow-lg rounded-sm p-6 border-t-4 border-gray-400">
               <h2 className="font-oswald text-2xl font-bold uppercase text-navy m-0 mb-4">{activeTab} section</h2>
