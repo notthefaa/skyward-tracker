@@ -2,30 +2,33 @@
 
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
-import { PlaneTakeoff, Wrench, AlertTriangle, FileText, Clock, LogOut, Plus } from "lucide-react";
+import { PlaneTakeoff, Wrench, AlertTriangle, FileText, Clock, LogOut, Plus, ChevronLeft, ChevronRight, Download } from "lucide-react";
 import TicketField from "@/components/TicketField";
 import { PrimaryButton } from "@/components/AppButtons";
 
 export default function FleetTrackerApp() {
   // --- AUTH STATE ---
-  const [session, setSession] = useState<any>(null);
+  const[session, setSession] = useState<any>(null);
   const [role, setRole] = useState<'admin' | 'pilot'>('pilot');
-  const[authEmail, setAuthEmail] = useState("");
-  const [authPassword, setAuthPassword] = useState("");
+  const [authEmail, setAuthEmail] = useState("");
+  const[authPassword, setAuthPassword] = useState("");
 
   // --- APP STATE ---
-  const [aircraftList, setAircraftList] = useState<any[]>([]);
+  const[aircraftList, setAircraftList] = useState<any[]>([]);
   const [activeTail, setActiveTail] = useState<string>("");
-  const[activeTab, setActiveTab] = useState<'times' | 'mx' | 'squawks' | 'notes'>('times');
+  const [activeTab, setActiveTab] = useState<'times' | 'mx' | 'squawks' | 'notes'>('times');
   
-  // --- FLIGHT LOG DATA ---
+  // --- FLIGHT LOG DATA & PAGINATION ---
   const [flightLogs, setFlightLogs] = useState<any[]>([]);
+  const[logPage, setLogPage] = useState(1);
+  const [hasMoreLogs, setHasMoreLogs] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
 
   // --- NEW LOG FORM STATE ---
   const [logAftt, setLogAftt] = useState("");
-  const [logFtt, setLogFtt] = useState("");
-  const[logCycles, setLogCycles] = useState("");
+  const[logFtt, setLogFtt] = useState("");
+  const [logCycles, setLogCycles] = useState("");
   const [logLandings, setLogLandings] = useState("");
   const[logInitials, setLogInitials] = useState("");
   const [logPax, setLogPax] = useState("");
@@ -38,10 +41,10 @@ export default function FleetTrackerApp() {
     });
   },[]);
 
-  // Fetch logs whenever the active aircraft changes
+  // Fetch logs whenever the active aircraft OR page changes
   useEffect(() => {
-    if (activeTail) fetchFlightLogs(activeTail);
-  }, [activeTail]);
+    if (activeTail) fetchFlightLogs(activeTail, logPage);
+  }, [activeTail, logPage]);
 
   const fetchAircraftData = async (userId: string) => {
     const { data: roleData } = await supabase.from('aft_user_roles').select('role').eq('user_id', userId).single();
@@ -54,18 +57,26 @@ export default function FleetTrackerApp() {
     }
   };
 
-  const fetchFlightLogs = async (tail: string) => {
+  const fetchFlightLogs = async (tail: string, page: number) => {
     const aircraft = aircraftList.find(a => a.tail_number === tail);
     if (!aircraft) return;
 
-    const { data } = await supabase
+    const pageSize = 10;
+    const from = (page - 1) * pageSize;
+    const to = from + pageSize - 1;
+
+    // Fetch the logs and the total count to know if there's a "Next" page
+    const { data, count } = await supabase
       .from('aft_flight_logs')
-      .select('*')
+      .select('*', { count: 'exact' })
       .eq('aircraft_id', aircraft.id)
       .order('created_at', { ascending: false })
-      .limit(10);
+      .range(from, to);
     
-    if (data) setFlightLogs(data);
+    if (data) {
+      setFlightLogs(data);
+      setHasMoreLogs(count !== null && count > to + 1);
+    }
   };
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -78,6 +89,65 @@ export default function FleetTrackerApp() {
     setSession(null);
   };
 
+  const handleTailChange = (newTail: string) => {
+    setActiveTail(newTail);
+    setLogPage(1); // Reset to page 1 when switching airplanes
+  };
+
+  // --- CSV EXPORT FUNCTION ---
+  const exportCSV = async () => {
+    setIsExporting(true);
+    const aircraft = aircraftList.find(a => a.tail_number === activeTail);
+    if (!aircraft) return;
+
+    // Fetch ALL logs for the active aircraft
+    const { data } = await supabase
+      .from('aft_flight_logs')
+      .select('*')
+      .eq('aircraft_id', aircraft.id)
+      .order('created_at', { ascending: false });
+
+    if (!data || data.length === 0) {
+      alert("No logs to export for this aircraft.");
+      setIsExporting(false);
+      return;
+    }
+
+    // Build CSV Content
+    const headers =['Date', 'Initials', 'AFTT', 'FTT', 'Landings', 'Engine Cycles', 'Reason', 'Passengers'];
+    const csvRows =[headers.join(',')];
+
+    data.forEach(log => {
+      const formattedDate = new Date(log.created_at).toLocaleDateString();
+      const safePax = `"${(log.pax_info || '').replace(/"/g, '""')}"`; // Escape commas in notes
+      
+      const row =[
+        formattedDate,
+        log.initials,
+        log.aftt,
+        log.ftt,
+        log.landings,
+        log.engine_cycles,
+        log.trip_reason || 'N/A',
+        safePax
+      ];
+      csvRows.push(row.join(','));
+    });
+
+    // Trigger Download
+    const blob = new Blob([csvRows.join('\n')], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.setAttribute('hidden', '');
+    a.setAttribute('href', url);
+    a.setAttribute('download', `${activeTail}_Flight_Logs.csv`);
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    
+    setIsExporting(false);
+  };
+
   // --- SUBMIT NEW FLIGHT LOG ---
   const submitFlightLog = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -85,7 +155,6 @@ export default function FleetTrackerApp() {
     const aircraft = aircraftList.find(a => a.tail_number === activeTail);
     
     if (aircraft && session) {
-      // 1. Insert the new log entry
       await supabase.from('aft_flight_logs').insert({
         aircraft_id: aircraft.id,
         user_id: session.user.id,
@@ -98,16 +167,13 @@ export default function FleetTrackerApp() {
         trip_reason: logReason || null
       });
 
-      // 2. Update the master aircraft times
       await supabase.from('aft_aircraft')
-        .update({ 
-          total_airframe_time: parseFloat(logAftt), 
-          total_engine_time: parseFloat(logFtt) 
-        })
+        .update({ total_airframe_time: parseFloat(logAftt), total_engine_time: parseFloat(logFtt) })
         .eq('id', aircraft.id);
 
-      // 3. Refresh Data & Clear Form
-      await fetchFlightLogs(activeTail);
+      // Force refresh data back to page 1
+      setLogPage(1);
+      await fetchFlightLogs(activeTail, 1);
       await fetchAircraftData(session.user.id);
       
       setLogAftt(""); setLogFtt(""); setLogCycles(""); 
@@ -161,7 +227,7 @@ export default function FleetTrackerApp() {
               <select 
                 className="bg-transparent text-xl font-oswald font-bold uppercase tracking-wide focus:outline-none cursor-pointer"
                 value={activeTail}
-                onChange={(e) => setActiveTail(e.target.value)}
+                onChange={(e) => handleTailChange(e.target.value)}
               >
                 {aircraftList.map(a => (
                   <option key={a.id} value={a.tail_number} className="text-navy">{a.tail_number}</option>
@@ -184,10 +250,18 @@ export default function FleetTrackerApp() {
           {activeTab === 'times' && (
             <>
               {/* Data View: The Logbook */}
-              <div className="bg-cream shadow-lg rounded-sm p-4 md:p-6 border-t-4 border-brandOrange overflow-hidden">
+              <div className="bg-cream shadow-lg rounded-sm p-4 md:p-6 border-t-4 border-brandOrange overflow-hidden flex flex-col">
                 <div className="flex justify-between items-end mb-6">
                   <h2 className="font-oswald text-2xl md:text-3xl font-bold uppercase text-navy m-0 leading-none">Flight Log</h2>
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-brandOrange">Last 10 Entries</span>
+                  
+                  {/* CSV Export Button */}
+                  <button 
+                    onClick={exportCSV}
+                    disabled={isExporting}
+                    className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-brandOrange hover:text-brandOrange-alt transition-colors disabled:opacity-50"
+                  >
+                    <Download size={14} /> {isExporting ? "Exporting..." : "Export CSV"}
+                  </button>
                 </div>
 
                 <div className="overflow-x-auto">
@@ -206,7 +280,7 @@ export default function FleetTrackerApp() {
                     </thead>
                     <tbody className="text-xs font-roboto text-navy">
                       {flightLogs.length === 0 ? (
-                        <tr><td colSpan={8} className="py-4 text-center text-gray-400 italic">No logs found for this aircraft.</td></tr>
+                        <tr><td colSpan={8} className="py-8 text-center text-gray-400 italic">No logs found for this aircraft.</td></tr>
                       ) : (
                         flightLogs.map((log) => (
                           <tr key={log.id} className="border-b border-gray-200 hover:bg-orange-50/50 transition-colors">
@@ -224,6 +298,29 @@ export default function FleetTrackerApp() {
                     </tbody>
                   </table>
                 </div>
+
+                {/* PAGINATION CONTROLS */}
+                {flightLogs.length > 0 && (
+                  <div className="flex justify-between items-center mt-4 border-t border-gray-200 pt-4">
+                    <button 
+                      onClick={() => setLogPage(p => Math.max(1, p - 1))}
+                      disabled={logPage === 1}
+                      className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-navy disabled:opacity-30 disabled:cursor-not-allowed hover:text-brandOrange transition-colors"
+                    >
+                      <ChevronLeft size={14} /> Prev
+                    </button>
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">
+                      Page {logPage}
+                    </span>
+                    <button 
+                      onClick={() => setLogPage(p => p + 1)}
+                      disabled={!hasMoreLogs}
+                      className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-navy disabled:opacity-30 disabled:cursor-not-allowed hover:text-brandOrange transition-colors"
+                    >
+                      Next <ChevronRight size={14} />
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Action Form: New Entry */}
