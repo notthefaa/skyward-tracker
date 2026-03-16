@@ -16,16 +16,16 @@ export default function SquawksTab({ aircraft, session, onGroundedStatusChange }
   const[description, setDescription] = useState("");
   const [affectsAirworthiness, setAffectsAirworthiness] = useState(false);
   const [isDeferred, setIsDeferred] = useState(false);
-  const [status, setStatus] = useState<'open'|'resolved'>('open');
+  const[status, setStatus] = useState<'open'|'resolved'>('open');
   
-  // Images (Files to upload)
-  const [selectedImages, setSelectedImages] = useState<File[]>([]);
-  const[existingImages, setExistingImages] = useState<string[]>([]); // For edits
+  // Images
+  const[selectedImages, setSelectedImages] = useState<File[]>([]);
+  const[existingImages, setExistingImages] = useState<string[]>([]);
   
   // Deferral Fields
   const[mel, setMel] = useState("");
   const [cdl, setCdl] = useState("");
-  const [nef, setNef] = useState("");
+  const[nef, setNef] = useState("");
   const [mdl, setMdl] = useState("");
   const [melControl, setMelControl] = useState("");
   const [category, setCategory] = useState("");
@@ -73,16 +73,14 @@ export default function SquawksTab({ aircraft, session, onGroundedStatusChange }
   };
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      setSelectedImages(Array.from(e.target.files));
-    }
+    if (e.target.files) setSelectedImages(Array.from(e.target.files));
   };
 
   const uploadImages = async (): Promise<string[]> => {
     let uploadedPaths: string[] =[];
     for (const file of selectedImages) {
       const fileName = `${aircraft.tail_number}_${Date.now()}_${file.name}`;
-      const { data, error } = await supabase.storage.from('aft_squawk_images').upload(fileName, file);
+      const { data } = await supabase.storage.from('aft_squawk_images').upload(fileName, file);
       if (data) {
         const { data: publicUrlData } = supabase.storage.from('aft_squawk_images').getPublicUrl(data.path);
         uploadedPaths.push(publicUrlData.publicUrl);
@@ -96,7 +94,7 @@ export default function SquawksTab({ aircraft, session, onGroundedStatusChange }
     setIsSubmitting(true);
 
     const uploadedUrls = await uploadImages();
-    const allPictures = [...existingImages, ...uploadedUrls];
+    const allPictures =[...existingImages, ...uploadedUrls];
 
     let signatureData = null;
     let sigDate = null;
@@ -124,7 +122,6 @@ export default function SquawksTab({ aircraft, session, onGroundedStatusChange }
       deferral_procedures_completed: procCompleted,
       full_name: fullName,
       certificate_number: certNum,
-      // Only overwrite signature if a new one was drawn
       ...(signatureData && { signature_data: signatureData, signature_date: sigDate })
     };
 
@@ -135,7 +132,7 @@ export default function SquawksTab({ aircraft, session, onGroundedStatusChange }
     }
 
     await fetchSquawks();
-    onGroundedStatusChange(); // Tell app to recalculate Airworthy/Grounded
+    onGroundedStatusChange(); 
     setShowModal(false);
     setIsSubmitting(false);
   };
@@ -148,17 +145,12 @@ export default function SquawksTab({ aircraft, session, onGroundedStatusChange }
     body += `Airworthiness Affected: ${sq.affects_airworthiness ? 'YES (GROUNDED)' : 'NO'}\n\n`;
     body += `Location: ${sq.location}\n`;
     body += `Description: ${sq.description}\n\n`;
-    
     if (sq.is_deferred) {
       body += `--- DEFERRAL DETAILS ---\n`;
       body += `Category: ${sq.deferral_category}\n`;
       body += `MEL/CDL/NEF/MDL: ${sq.mel_number} / ${sq.cdl_number} / ${sq.nef_number} / ${sq.mdl_number}\n`;
     }
-
-    if (sq.pictures && sq.pictures.length > 0) {
-      body += `\nImage Links attached in portal.`;
-    }
-
+    if (sq.pictures && sq.pictures.length > 0) body += `\nImage Links attached in portal.`;
     window.location.href = `mailto:?subject=${subject}&body=${encodeURIComponent(body)}`;
   };
 
@@ -172,7 +164,8 @@ export default function SquawksTab({ aircraft, session, onGroundedStatusChange }
         </PrimaryButton>
       </div>
 
-      <div className="bg-cream shadow-lg rounded-sm p-4 md:p-6 border-t-4 border-red-600 mb-6">
+      {/* CHANGED border-red-600 TO border-brandOrange HERE */}
+      <div className="bg-cream shadow-lg rounded-sm p-4 md:p-6 border-t-4 border-brandOrange mb-6">
         <h2 className="font-oswald text-2xl md:text-3xl font-bold uppercase text-navy m-0 mb-6 leading-none">Active Squawks</h2>
         
         <div className="space-y-4">
@@ -188,8 +181,8 @@ export default function SquawksTab({ aircraft, session, onGroundedStatusChange }
                     {sq.is_deferred && <span className="ml-2 text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded bg-blue-600 text-white">DEFERRED ({sq.deferral_category})</span>}
                   </div>
                   <div className="flex gap-2">
-                    <button onClick={() => handleShareMx(sq)} className="text-gray-500 hover:text-brandOrange" title="Email MX"><Mail size={16}/></button>
-                    <button onClick={() => openForm(sq)} className="text-gray-500 hover:text-brandOrange" title="Edit"><Edit2 size={16}/></button>
+                    <button onClick={() => handleShareMx(sq)} className="text-gray-500 hover:text-brandOrange active:scale-95" title="Email MX"><Mail size={16}/></button>
+                    <button onClick={() => openForm(sq)} className="text-gray-500 hover:text-brandOrange active:scale-95" title="Edit"><Edit2 size={16}/></button>
                   </div>
                 </div>
 
@@ -213,16 +206,14 @@ export default function SquawksTab({ aircraft, session, onGroundedStatusChange }
         </div>
       </div>
 
-      {/* SQUAWK REPORT MODAL */}
       {showModal && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-white rounded shadow-2xl w-full max-w-lg p-6 border-t-4 border-red-600 max-h-[90vh] overflow-y-auto animate-slide-up">
+          <div className="bg-white rounded shadow-2xl w-full max-w-lg p-6 border-t-4 border-brandOrange max-h-[90vh] overflow-y-auto animate-slide-up">
             <div className="flex justify-between items-center mb-4">
               <h2 className="font-oswald text-2xl font-bold uppercase text-navy">{editingId ? 'Edit Squawk' : 'Report Squawk'}</h2>
               <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-red-500"><X size={24}/></button>
             </div>
 
-            {/* Read-Only Header Data */}
             <div className="bg-gray-50 p-3 rounded border border-gray-200 mb-4 grid grid-cols-2 gap-2 text-xs">
               <div><span className="font-bold text-gray-500 uppercase">Date:</span> {new Date().toLocaleDateString()}</div>
               <div><span className="font-bold text-gray-500 uppercase">Tail:</span> {aircraft.tail_number}</div>
@@ -231,7 +222,6 @@ export default function SquawksTab({ aircraft, session, onGroundedStatusChange }
             </div>
             
             <form onSubmit={submitSquawk} className="space-y-4">
-              
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Status</label>
@@ -249,29 +239,13 @@ export default function SquawksTab({ aircraft, session, onGroundedStatusChange }
                 </div>
               </div>
 
-              <div>
-                <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Location on Aircraft <span className="text-red-500">*</span></label>
-                <input type="text" required value={location} onChange={e=>setLocation(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-brandOrange" placeholder="e.g. Left Main Gear" />
-              </div>
-              
-              <div>
-                <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Description <span className="text-red-500">*</span></label>
-                <textarea required value={description} onChange={e=>setDescription(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-brandOrange min-h-[100px]" placeholder="Detailed description..." />
-              </div>
+              <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Location on Aircraft <span className="text-red-500">*</span></label><input type="text" required value={location} onChange={e=>setLocation(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-brandOrange" placeholder="e.g. Left Main Gear" /></div>
+              <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Description <span className="text-red-500">*</span></label><textarea required value={description} onChange={e=>setDescription(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-brandOrange min-h-[100px]" placeholder="Detailed description..." /></div>
+              <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy flex items-center gap-2 mb-2"><Upload size={14}/> Attach Photos</label><input type="file" multiple accept="image/*" onChange={handleImageSelect} className="text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-xs file:font-bold file:bg-gray-100 file:text-navy hover:file:bg-gray-200 cursor-pointer" /></div>
 
-              <div>
-                <label className="text-[10px] font-bold uppercase tracking-widest text-navy flex items-center gap-2 mb-2"><Upload size={14}/> Attach Photos</label>
-                <input type="file" multiple accept="image/*" onChange={handleImageSelect} className="text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-xs file:font-bold file:bg-gray-100 file:text-navy hover:file:bg-gray-200 cursor-pointer" />
-              </div>
-
-              {/* DEFERRAL SECTION (Turbine Only) */}
               {isTurbine && status === 'open' && (
                 <div className="border border-blue-200 rounded p-4 bg-blue-50/30">
-                  <label className="flex items-center gap-2 text-sm font-bold text-navy mb-4">
-                    <input type="checkbox" checked={isDeferred} onChange={e=>setIsDeferred(e.target.checked)} className="w-4 h-4" />
-                    Item Deferred
-                  </label>
-
+                  <label className="flex items-center gap-2 text-sm font-bold text-navy mb-4"><input type="checkbox" checked={isDeferred} onChange={e=>setIsDeferred(e.target.checked)} className="w-4 h-4" /> Item Deferred</label>
                   {isDeferred && (
                     <div className="space-y-4 animate-fade-in">
                       <div className="grid grid-cols-2 gap-3">
@@ -282,29 +256,14 @@ export default function SquawksTab({ aircraft, session, onGroundedStatusChange }
                       </div>
                       <div className="grid grid-cols-2 gap-3">
                         <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Control #</label><input type="text" value={melControl} onChange={e=>setMelControl(e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm mt-1" /></div>
-                        <div>
-                          <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Category</label>
-                          <select value={category} onChange={e=>setCategory(e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 bg-white">
-                            <option value="">Select...</option><option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option><option value="NA">N/A</option>
-                          </select>
-                        </div>
+                        <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Category</label><select value={category} onChange={e=>setCategory(e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 bg-white"><option value="">Select...</option><option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option><option value="NA">N/A</option></select></div>
                       </div>
-                      
-                      <div className="pt-2">
-                        <label className="flex items-start gap-2 text-xs font-bold text-navy">
-                          <input type="checkbox" required checked={procCompleted} onChange={e=>setProcCompleted(e.target.checked)} className="mt-1" />
-                          I have completed the related deferral procedures as required by the MEL, CDL, NEF, or MDL.
-                        </label>
-                      </div>
-
+                      <div className="pt-2"><label className="flex items-start gap-2 text-xs font-bold text-navy"><input type="checkbox" required checked={procCompleted} onChange={e=>setProcCompleted(e.target.checked)} className="mt-1" /> I have completed the related deferral procedures as required by the MEL, CDL, NEF, or MDL.</label></div>
                       <div className="pt-4 border-t border-gray-200">
                         <label className="text-[10px] font-bold uppercase tracking-widest text-navy block mb-2">Signature <span className="text-red-500">*</span></label>
-                        <div className="border border-gray-300 rounded bg-white">
-                          <SignatureCanvas ref={sigCanvas} penColor="black" canvasProps={{ className: 'w-full h-32 rounded' }} />
-                        </div>
+                        <div className="border border-gray-300 rounded bg-white"><SignatureCanvas ref={sigCanvas} penColor="black" canvasProps={{ className: 'w-full h-32 rounded' }} /></div>
                         <button type="button" onClick={() => sigCanvas.current?.clear()} className="text-[10px] font-bold uppercase text-gray-500 mt-1 hover:text-red-500">Clear Signature</button>
                       </div>
-
                       <div className="grid grid-cols-2 gap-4">
                         <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Full Name <span className="text-red-500">*</span></label><input type="text" required value={fullName} onChange={e=>setFullName(e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm mt-1" /></div>
                         <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Certificate # <span className="text-red-500">*</span></label><input type="text" required value={certNum} onChange={e=>setCertNum(e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm mt-1" /></div>

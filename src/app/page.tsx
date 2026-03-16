@@ -7,28 +7,29 @@ import { PrimaryButton } from "@/components/AppButtons";
 
 import TimesTab from "@/components/tabs/TimesTab";
 import MaintenanceTab from "@/components/tabs/MaintenanceTab";
-import SquawksTab from "@/components/tabs/SquawksTab"; // We will build this next!
+import SquawksTab from "@/components/tabs/SquawksTab"; 
 
 export default function FleetTrackerApp() {
-  const [session, setSession] = useState<any>(null);
-  const[role, setRole] = useState<'admin' | 'pilot'>('pilot');
-  const[authEmail, setAuthEmail] = useState("");
-  const [authPassword, setAuthPassword] = useState("");
+  const[session, setSession] = useState<any>(null);
+  const [role, setRole] = useState<'admin' | 'pilot'>('pilot');
+  const [authEmail, setAuthEmail] = useState("");
+  const[authPassword, setAuthPassword] = useState("");
 
-  const[aircraftList, setAircraftList] = useState<any[]>([]);
+  const [aircraftList, setAircraftList] = useState<any[]>([]);
   const [activeTail, setActiveTail] = useState<string>("");
-  const [activeTab, setActiveTab] = useState<'times' | 'mx' | 'squawks' | 'notes'>('times');
-  const [isGrounded, setIsGrounded] = useState(false);
+  const[activeTab, setActiveTab] = useState<'times' | 'mx' | 'squawks' | 'notes'>('times');
+  
+  // --- NEW 3-TIER AIRWORTHINESS STATE ---
+  const[aircraftStatus, setAircraftStatus] = useState<'airworthy' | 'issues' | 'grounded'>('airworthy');
 
-  // --- ADMIN ADD AIRCRAFT STATE ---
-  const[showAddAircraft, setShowAddAircraft] = useState(false);
+  const [showAddAircraft, setShowAddAircraft] = useState(false);
   const [newTail, setNewTail] = useState("");
-  const [newSerial, setNewSerial] = useState(""); // <-- NEW
-  const [newModel, setNewModel] = useState("");
+  const [newSerial, setNewSerial] = useState("");
+  const[newModel, setNewModel] = useState("");
   const [newType, setNewType] = useState<'Piston' | 'Turbine'>('Piston');
   const [newAirframeTime, setNewAirframeTime] = useState("");
-  const[newEngineTime, setNewEngineTime] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [newEngineTime, setNewEngineTime] = useState("");
+  const[isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -39,7 +40,7 @@ export default function FleetTrackerApp() {
 
   useEffect(() => {
     if (activeTail && aircraftList.length > 0) checkGroundedStatus(activeTail);
-  }, [activeTail, aircraftList]);
+  },[activeTail, aircraftList]);
 
   const fetchAircraftData = async (userId: string) => {
     const { data: roleData } = await supabase.from('aft_user_roles').select('role').eq('user_id', userId).single();
@@ -56,12 +57,14 @@ export default function FleetTrackerApp() {
     const aircraft = aircraftList.find(a => a.tail_number === tail);
     if (!aircraft) return;
     
-    // Check Maintenance
-    let mxGrounded = false;
+    let isGrounded = false;
+    let hasOpenSquawks = false;
+
+    // 1. Check Maintenance
     const { data: mxData } = await supabase.from('aft_maintenance_items').select('*').eq('aircraft_id', aircraft.id);
     if (mxData) {
       const currentEngineTime = aircraft.total_engine_time || 0;
-      mxGrounded = mxData.some(item => {
+      isGrounded = mxData.some(item => {
         if (!item.is_required) return false;
         if (item.tracking_type === 'time') return item.due_time <= currentEngineTime;
         if (item.tracking_type === 'date') return new Date(item.due_date + 'T00:00:00') < new Date(new Date().setHours(0,0,0,0));
@@ -69,14 +72,21 @@ export default function FleetTrackerApp() {
       });
     }
 
-    // Check Airworthiness Squawks
-    let sqGrounded = false;
-    const { data: sqData } = await supabase.from('aft_squawks').select('*').eq('aircraft_id', aircraft.id).eq('status', 'open');
-    if (sqData) {
-      sqGrounded = sqData.some(sq => sq.affects_airworthiness);
+    // 2. Check Squawks
+    if (!isGrounded) {
+      const { data: sqData } = await supabase.from('aft_squawks').select('*').eq('aircraft_id', aircraft.id).eq('status', 'open');
+      if (sqData && sqData.length > 0) {
+        if (sqData.some(sq => sq.affects_airworthiness)) {
+          isGrounded = true;
+        } else {
+          hasOpenSquawks = true;
+        }
+      }
     }
 
-    setIsGrounded(mxGrounded || sqGrounded);
+    if (isGrounded) setAircraftStatus('grounded');
+    else if (hasOpenSquawks) setAircraftStatus('issues');
+    else setAircraftStatus('airworthy');
   };
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -93,12 +103,8 @@ export default function FleetTrackerApp() {
     e.preventDefault();
     setIsSubmitting(true);
     await supabase.from('aft_aircraft').insert({ 
-      tail_number: newTail.toUpperCase(), 
-      serial_number: newSerial, // <-- NEW
-      aircraft_type: newModel, 
-      engine_type: newType, 
-      total_airframe_time: parseFloat(newAirframeTime) || 0, 
-      total_engine_time: parseFloat(newEngineTime) || 0 
+      tail_number: newTail.toUpperCase(), serial_number: newSerial, aircraft_type: newModel, engine_type: newType, 
+      total_airframe_time: parseFloat(newAirframeTime) || 0, total_engine_time: parseFloat(newEngineTime) || 0 
     });
     await fetchAircraftData(session.user.id);
     setActiveTail(newTail.toUpperCase());
@@ -126,7 +132,6 @@ export default function FleetTrackerApp() {
   return (
     <div className="h-screen flex flex-col bg-neutral-100 relative">
       
-      {/* ADD AIRCRAFT MODAL */}
       {showAddAircraft && role === 'admin' && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-fade-in">
           <div className="bg-white rounded shadow-2xl w-full max-w-md p-6 border-t-4 border-brandOrange max-h-[90vh] overflow-y-auto animate-slide-up">
@@ -156,7 +161,17 @@ export default function FleetTrackerApp() {
           <div className="flex flex-col">
             <span className="text-[9px] font-bold uppercase tracking-widest text-brandOrange mb-[2px]">Active Aircraft</span>
             <div className="flex items-center gap-3">
-              <div className={`w-3.5 h-3.5 rounded-full shadow-inner ${isGrounded ? 'bg-red-500 animate-pulse' : 'bg-success'}`} title={isGrounded ? 'Grounded' : 'Airworthy'} />
+              
+              {/* DYNAMIC 3-TIER STATUS CIRCLE */}
+              <div 
+                className={`w-3.5 h-3.5 rounded-full shadow-inner ${
+                  aircraftStatus === 'grounded' ? 'bg-red-500 animate-pulse' : 
+                  aircraftStatus === 'issues' ? 'bg-brandOrange' : 
+                  'bg-success'
+                }`} 
+                title={aircraftStatus === 'grounded' ? 'Grounded' : aircraftStatus === 'issues' ? 'Open Squawks' : 'Airworthy'} 
+              />
+              
               <select className="bg-transparent text-xl font-oswald font-bold uppercase tracking-wide focus:outline-none cursor-pointer" value={activeTail} onChange={(e) => setActiveTail(e.target.value)}>
                 {aircraftList.map(a => (<option key={a.id} value={a.tail_number} className="text-navy">{a.tail_number}</option>))}
               </select>
@@ -168,7 +183,7 @@ export default function FleetTrackerApp() {
       </header>
 
       {/* GLOBAL GROUNDED BANNER */}
-      {isGrounded && (
+      {aircraftStatus === 'grounded' && (
         <div className="bg-red-600 text-white text-center py-2 px-4 shadow-md z-10 flex justify-center items-center gap-2 animate-pulse">
           <AlertTriangle size={18} />
           <span className="font-oswald tracking-widest font-bold uppercase text-sm md:text-base">This aircraft is not flight ready</span>
@@ -180,7 +195,7 @@ export default function FleetTrackerApp() {
       <main className="flex-1 overflow-y-auto p-4 pb-24 flex justify-center">
         <div className="w-full max-w-3xl flex flex-col gap-6">
           {activeTab === 'times' && <TimesTab aircraft={selectedAircraftData} session={session} onUpdate={() => fetchAircraftData(session.user.id)} />}
-          {activeTab === 'mx' && <MaintenanceTab aircraft={selectedAircraftData} role={role} onGroundedStatusChange={setIsGrounded} />}
+          {activeTab === 'mx' && <MaintenanceTab aircraft={selectedAircraftData} role={role} onGroundedStatusChange={() => checkGroundedStatus(activeTail)} />}
           {activeTab === 'squawks' && <SquawksTab aircraft={selectedAircraftData} session={session} onGroundedStatusChange={() => checkGroundedStatus(activeTail)} />}
           {activeTab === 'notes' && (
             <div className="bg-cream shadow-lg rounded-sm p-6 border-t-4 border-gray-400 animate-slide-up">
