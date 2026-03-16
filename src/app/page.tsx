@@ -13,21 +13,21 @@ export default function FleetTrackerApp() {
   const[session, setSession] = useState<any>(null);
   const [role, setRole] = useState<'admin' | 'pilot'>('pilot');
   const [authEmail, setAuthEmail] = useState("");
-  const[authPassword, setAuthPassword] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
 
   const [aircraftList, setAircraftList] = useState<any[]>([]);
   const [activeTail, setActiveTail] = useState<string>("");
-  const[activeTab, setActiveTab] = useState<'times' | 'mx' | 'squawks' | 'notes'>('times');
+  const [activeTab, setActiveTab] = useState<'times' | 'mx' | 'squawks' | 'notes'>('times');
   const [isGrounded, setIsGrounded] = useState(false);
 
   // --- ADMIN ADD AIRCRAFT STATE ---
   const [showAddAircraft, setShowAddAircraft] = useState(false);
   const [newTail, setNewTail] = useState("");
-  const [newModel, setNewModel] = useState("");
+  const[newModel, setNewModel] = useState("");
   const [newType, setNewType] = useState<'Piston' | 'Turbine'>('Piston');
   const [newAirframeTime, setNewAirframeTime] = useState("");
-  const[newEngineTime, setNewEngineTime] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [newEngineTime, setNewEngineTime] = useState("");
+  const[isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -60,16 +60,24 @@ export default function FleetTrackerApp() {
   const handleAddAircraft = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
-    await supabase.from('aft_aircraft').insert({ tail_number: newTail.toUpperCase(), aircraft_type: newModel, engine_type: newType, total_airframe_time: parseFloat(newAirframeTime) || 0, total_engine_time: parseFloat(newEngineTime) || 0 });
+    await supabase.from('aft_aircraft').insert({ 
+      tail_number: newTail.toUpperCase(), 
+      aircraft_type: newModel, 
+      engine_type: newType, 
+      total_airframe_time: parseFloat(newAirframeTime) || 0, 
+      total_engine_time: parseFloat(newEngineTime) || 0 
+    });
     await fetchAircraftData(session.user.id);
     setActiveTail(newTail.toUpperCase());
-    setShowAddAircraft(false); setIsSubmitting(false); setNewTail(""); setNewModel(""); setNewAirframeTime(""); setNewEngineTime("");
+    setShowAddAircraft(false); 
+    setIsSubmitting(false); 
+    setNewTail(""); setNewModel(""); setNewAirframeTime(""); setNewEngineTime("");
   };
 
   if (!session) {
     return (
       <div className="min-h-screen bg-slateGray flex items-center justify-center p-4">
-        <div className="bg-cream shadow-2xl rounded-sm p-8 w-full max-w-md border-t-4 border-brandOrange">
+        <div className="bg-cream shadow-2xl rounded-sm p-8 w-full max-w-md border-t-4 border-brandOrange animate-slide-up">
           <div className="text-center mb-8"><PlaneTakeoff size={48} className="text-navy mx-auto mb-4" /><h1 className="font-oswald text-3xl font-bold uppercase tracking-widest text-navy">Skyward Society</h1></div>
           <form onSubmit={handleLogin} className="space-y-4">
             <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Email</label><input type="email" required value={authEmail} onChange={(e) => setAuthEmail(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-blue-400 bg-white" /></div>
@@ -86,10 +94,10 @@ export default function FleetTrackerApp() {
   return (
     <div className="h-screen flex flex-col bg-neutral-100 relative">
       
-      {/* ADD AIRCRAFT MODAL (Admin Only) */}
+      {/* ADD AIRCRAFT MODAL (Admin Only) with smooth animations */}
       {showAddAircraft && role === 'admin' && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded shadow-2xl w-full max-w-md p-6 border-t-4 border-brandOrange">
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white rounded shadow-2xl w-full max-w-md p-6 border-t-4 border-brandOrange animate-slide-up">
             <div className="flex justify-between items-center mb-6"><h2 className="font-oswald text-2xl font-bold uppercase text-navy">Add Aircraft</h2><button onClick={() => setShowAddAircraft(false)} className="text-gray-400 hover:text-red-500"><X size={24}/></button></div>
             <form onSubmit={handleAddAircraft} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
@@ -117,10 +125,10 @@ export default function FleetTrackerApp() {
               <select className="bg-transparent text-xl font-oswald font-bold uppercase tracking-wide focus:outline-none cursor-pointer" value={activeTail} onChange={(e) => {setActiveTail(e.target.value); setIsGrounded(false);}}>
                 {aircraftList.map(a => (<option key={a.id} value={a.tail_number} className="text-navy">{a.tail_number}</option>))}
               </select>
-              {role === 'admin' && (<button onClick={() => setShowAddAircraft(true)} className="ml-2 bg-brandOrange text-white rounded-full p-1 hover:bg-brandOrange-alt transition-colors"><Plus size={14} /></button>)}
+              {role === 'admin' && (<button onClick={() => setShowAddAircraft(true)} className="ml-2 bg-brandOrange text-white rounded-full p-1 hover:bg-brandOrange-alt transition-colors active:scale-95"><Plus size={14} /></button>)}
             </div>
           </div>
-          <button onClick={handleLogout} className="text-gray-400 hover:text-white transition-colors flex flex-col items-center"><LogOut size={18} /><span className="text-[8px] font-bold uppercase tracking-widest mt-1">Logout</span></button>
+          <button onClick={handleLogout} className="text-gray-400 hover:text-white transition-colors flex flex-col items-center active:scale-95"><LogOut size={18} /><span className="text-[8px] font-bold uppercase tracking-widest mt-1">Logout</span></button>
         </div>
       </header>
 
@@ -142,14 +150,14 @@ export default function FleetTrackerApp() {
           {activeTab === 'mx' && <MaintenanceTab aircraft={selectedAircraftData} role={role} onGroundedStatusChange={setIsGrounded} />}
 
           {activeTab === 'squawks' && (
-            <div className="bg-cream shadow-lg rounded-sm p-6 border-t-4 border-gray-400">
+            <div className="bg-cream shadow-lg rounded-sm p-6 border-t-4 border-gray-400 animate-slide-up">
               <h2 className="font-oswald text-2xl font-bold uppercase text-navy m-0 mb-4">Squawks section</h2>
               <p className="text-sm text-gray-500 italic">We will build this standalone component next!</p>
             </div>
           )}
 
           {activeTab === 'notes' && (
-            <div className="bg-cream shadow-lg rounded-sm p-6 border-t-4 border-gray-400">
+            <div className="bg-cream shadow-lg rounded-sm p-6 border-t-4 border-gray-400 animate-slide-up">
               <h2 className="font-oswald text-2xl font-bold uppercase text-navy m-0 mb-4">Notes section</h2>
               <p className="text-sm text-gray-500 italic">We will build this standalone component after squawks!</p>
             </div>
@@ -167,7 +175,7 @@ export default function FleetTrackerApp() {
             { id: 'squawks', icon: AlertTriangle, label: 'Squawks' },
             { id: 'notes', icon: FileText, label: 'Notes' }
           ].map((tab) => (
-            <button key={tab.id} onClick={() => setActiveTab(tab.id as any)} className={`flex-1 py-3 md:py-4 flex flex-col items-center justify-center transition-all relative ${activeTab === tab.id ? 'text-brandOrange' : 'text-gray-400 hover:text-navy hover:bg-gray-50'}`}>
+            <button key={tab.id} onClick={() => setActiveTab(tab.id as any)} className={`flex-1 py-3 md:py-4 flex flex-col items-center justify-center transition-all relative active:scale-95 ${activeTab === tab.id ? 'text-brandOrange' : 'text-gray-400 hover:text-navy hover:bg-gray-50'}`}>
               <tab.icon size={20} className="mb-1" />
               <span className={`text-[10px] font-bold uppercase tracking-widest ${activeTab === tab.id ? 'text-brandOrange' : 'text-navy'}`}>{tab.label}</span>
               {activeTab === tab.id && <div className="absolute top-0 w-12 h-1 bg-brandOrange rounded-b-full"></div>}
