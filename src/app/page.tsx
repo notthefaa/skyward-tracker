@@ -11,29 +11,50 @@ import SquawksTab from "@/components/tabs/SquawksTab";
 import NotesTab from "@/components/tabs/NotesTab";
 
 export default function FleetTrackerApp() {
-  const[session, setSession] = useState<any>(null);
+  const [session, setSession] = useState<any>(null);
   const [role, setRole] = useState<'admin' | 'pilot'>('pilot');
-  const [authEmail, setAuthEmail] = useState("");
-  const[authPassword, setAuthPassword] = useState("");
+  const[authEmail, setAuthEmail] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
 
   const [aircraftList, setAircraftList] = useState<any[]>([]);
-  const [activeTail, setActiveTail] = useState<string>("");
+  const[activeTail, setActiveTail] = useState<string>("");
   const [activeTab, setActiveTab] = useState<'times' | 'mx' | 'squawks' | 'notes'>('times');
   const[aircraftStatus, setAircraftStatus] = useState<'airworthy' | 'issues' | 'grounded'>('airworthy');
-  const[unreadNotes, setUnreadNotes] = useState(0);
+  const [unreadNotes, setUnreadNotes] = useState(0);
 
-  const [showAircraftModal, setShowAircraftModal] = useState(false);
-  const[editingAircraftId, setEditingAircraftId] = useState<string | null>(null);
-  const[newTail, setNewTail] = useState("");
-  const [newSerial, setNewSerial] = useState("");
+  const[showAircraftModal, setShowAircraftModal] = useState(false);
+  const [editingAircraftId, setEditingAircraftId] = useState<string | null>(null);
+  const [newTail, setNewTail] = useState("");
+  const[newSerial, setNewSerial] = useState("");
   const [newModel, setNewModel] = useState("");
-  const [newType, setNewType] = useState<'Piston' | 'Turbine'>('Piston');
-  const[newAirframeTime, setNewAirframeTime] = useState("");
+  const[newType, setNewType] = useState<'Piston' | 'Turbine'>('Piston');
+  const [newAirframeTime, setNewAirframeTime] = useState("");
   const [newEngineTime, setNewEngineTime] = useState("");
-  const[isSubmitting, setIsSubmitting] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  useEffect(() => { supabase.auth.getSession().then(({ data: { session } }) => { setSession(session); if (session) fetchAircraftData(session.user.id); }); },[]);
-  useEffect(() => { if (activeTail && aircraftList.length > 0 && session) { checkGroundedStatus(activeTail); fetchUnreadNotes(activeTail, session.user.id); } },[activeTail, aircraftList, session]);
+  // --- AUTH LISTENER FIX ---
+  useEffect(() => { 
+    // Check initial session
+    supabase.auth.getSession().then(({ data: { session } }) => { 
+      setSession(session); 
+      if (session) fetchAircraftData(session.user.id); 
+    }); 
+
+    // Listen for changes (like logging in or logging out)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      if (session) fetchAircraftData(session.user.id);
+    });
+
+    return () => subscription.unsubscribe();
+  },[]);
+
+  useEffect(() => { 
+    if (activeTail && aircraftList.length > 0 && session) { 
+      checkGroundedStatus(activeTail); 
+      fetchUnreadNotes(activeTail, session.user.id); 
+    } 
+  }, [activeTail, aircraftList, session]);
 
   const fetchAircraftData = async (userId: string) => {
     const { data: roleData } = await supabase.from('aft_user_roles').select('role').eq('user_id', userId).single();
@@ -59,7 +80,8 @@ export default function FleetTrackerApp() {
   const checkGroundedStatus = async (tail: string) => {
     const aircraft = aircraftList.find(a => a.tail_number === tail);
     if (!aircraft) return;
-    let isGrounded = false; let hasOpenSquawks = false;
+    let isGrounded = false; 
+    let hasOpenSquawks = false;
 
     const { data: mxData } = await supabase.from('aft_maintenance_items').select('*').eq('aircraft_id', aircraft.id);
     if (mxData) {
@@ -79,28 +101,73 @@ export default function FleetTrackerApp() {
         else hasOpenSquawks = true;
       }
     }
+
     if (isGrounded) setAircraftStatus('grounded');
     else if (hasOpenSquawks) setAircraftStatus('issues');
     else setAircraftStatus('airworthy');
   };
 
   const openAircraftForm = (aircraft: any = null) => {
-    if (aircraft) { setEditingAircraftId(aircraft.id); setNewTail(aircraft.tail_number); setNewSerial(aircraft.serial_number || ""); setNewModel(aircraft.aircraft_type); setNewType(aircraft.engine_type); setNewAirframeTime(aircraft.total_airframe_time || ""); setNewEngineTime(aircraft.total_engine_time || ""); } 
-    else { setEditingAircraftId(null); setNewTail(""); setNewSerial(""); setNewModel(""); setNewType('Piston'); setNewAirframeTime(""); setNewEngineTime(""); }
+    if (aircraft) { 
+      setEditingAircraftId(aircraft.id); 
+      setNewTail(aircraft.tail_number); 
+      setNewSerial(aircraft.serial_number || ""); 
+      setNewModel(aircraft.aircraft_type); 
+      setNewType(aircraft.engine_type); 
+      setNewAirframeTime(aircraft.total_airframe_time || ""); 
+      setNewEngineTime(aircraft.total_engine_time || ""); 
+    } else { 
+      setEditingAircraftId(null); 
+      setNewTail(""); 
+      setNewSerial(""); 
+      setNewModel(""); 
+      setNewType('Piston'); 
+      setNewAirframeTime(""); 
+      setNewEngineTime(""); 
+    }
     setShowAircraftModal(true);
   };
 
   const handleSaveAircraft = async (e: React.FormEvent) => {
-    e.preventDefault(); setIsSubmitting(true);
-    const payload = { tail_number: newTail.toUpperCase(), serial_number: newSerial, aircraft_type: newModel, engine_type: newType, total_airframe_time: parseFloat(newAirframeTime) || 0, total_engine_time: parseFloat(newEngineTime) || 0 };
-    if (editingAircraftId) await supabase.from('aft_aircraft').update(payload).eq('id', editingAircraftId);
-    else await supabase.from('aft_aircraft').insert(payload);
-    await fetchAircraftData(session.user.id); setActiveTail(newTail.toUpperCase()); setShowAircraftModal(false); setIsSubmitting(false);
+    e.preventDefault(); 
+    setIsSubmitting(true);
+    
+    const payload = { 
+      tail_number: newTail.toUpperCase(), 
+      serial_number: newSerial, 
+      aircraft_type: newModel, 
+      engine_type: newType, 
+      total_airframe_time: parseFloat(newAirframeTime) || 0, 
+      total_engine_time: parseFloat(newEngineTime) || 0 
+    };
+    
+    if (editingAircraftId) {
+      await supabase.from('aft_aircraft').update(payload).eq('id', editingAircraftId);
+    } else {
+      await supabase.from('aft_aircraft').insert(payload);
+    }
+    
+    await fetchAircraftData(session.user.id); 
+    setActiveTail(newTail.toUpperCase()); 
+    setShowAircraftModal(false); 
+    setIsSubmitting(false);
   };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    await supabase.auth.signInWithPassword({ email: authEmail, password: authPassword });
+    setIsSubmitting(true);
+    
+    const { error } = await supabase.auth.signInWithPassword({ 
+      email: authEmail, 
+      password: authPassword 
+    });
+    
+    setIsSubmitting(false);
+    
+    // Alert the user if they typed the wrong password!
+    if (error) {
+      alert("Login Failed: " + error.message);
+    }
   };
 
   const getTabColor = (tabId: string) => {
@@ -124,18 +191,30 @@ export default function FleetTrackerApp() {
     }
   };
 
+  // --- LOGIN SCREEN ---
   if (!session) {
     return (
       <div className="fixed inset-0 bg-slateGray flex items-center justify-center p-4">
-        <div className="bg-cream shadow-2xl rounded-sm p-8 w-full max-w-md border-t-4 border-[#CE3732] animate-slide-up">
+        {/* Removed the red border classes from this container */}
+        <div className="bg-cream shadow-2xl rounded-sm p-8 w-full max-w-md animate-slide-up">
           <div className="text-center mb-8">
             <img src="/logo.png" alt="Alis Grave Nil" className="mx-auto h-32 object-contain mb-4" />
             <h2 className="font-oswald text-xl font-bold uppercase tracking-widest text-navy">Aircraft Tracker</h2>
           </div>
           <form onSubmit={handleLogin} className="space-y-4">
-            <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Email</label><input type="email" required value={authEmail} onChange={(e) => setAuthEmail(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 bg-white focus:border-[#F08B46] outline-none" /></div>
-            <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Password</label><input type="password" required value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 bg-white focus:border-[#F08B46] outline-none" /></div>
-            <div className="pt-4"><PrimaryButton>Access Portal</PrimaryButton></div>
+            <div>
+              <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Email</label>
+              <input type="email" required value={authEmail} onChange={(e) => setAuthEmail(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 bg-white focus:border-[#F08B46] outline-none" />
+            </div>
+            <div>
+              <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Password</label>
+              <input type="password" required value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 bg-white focus:border-[#F08B46] outline-none" />
+            </div>
+            <div className="pt-4">
+              <PrimaryButton disabled={isSubmitting}>
+                {isSubmitting ? "Logging in..." : "Access Portal"}
+              </PrimaryButton>
+            </div>
           </form>
         </div>
       </div>
@@ -147,22 +226,78 @@ export default function FleetTrackerApp() {
   return (
     <div className="fixed inset-0 flex flex-col bg-neutral-100 overflow-hidden">
       
+      {/* AIRCRAFT MODAL */}
       {showAircraftModal && role === 'admin' && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-fade-in"><div className="bg-white rounded shadow-2xl w-full max-w-md p-6 border-t-4 border-[#F08B46] max-h-[90vh] overflow-y-auto animate-slide-up"><div className="flex justify-between items-center mb-6"><h2 className="font-oswald text-2xl font-bold uppercase text-[#1B4869]">{editingAircraftId ? 'Edit Aircraft' : 'Add Aircraft'}</h2><button onClick={() => setShowAircraftModal(false)} className="text-gray-400 hover:text-red-500"><X size={24}/></button></div><form onSubmit={handleSaveAircraft} className="space-y-4"><div className="grid grid-cols-2 gap-4"><div><label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">Tail Number</label><input type="text" required value={newTail} onChange={e=>setNewTail(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 uppercase focus:border-[#F08B46] outline-none" /></div><div><label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">Serial Num</label><input type="text" value={newSerial} onChange={e=>setNewSerial(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 uppercase focus:border-[#F08B46] outline-none" /></div></div><div className="grid grid-cols-2 gap-4"><div><label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">Model Name</label><input type="text" required value={newModel} onChange={e=>setNewModel(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" /></div><div><label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">Engine Type</label><select value={newType} onChange={e=>setNewType(e.target.value as 'Piston'|'Turbine')} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 bg-white focus:border-[#F08B46] outline-none"><option value="Piston">Piston</option><option value="Turbine">Turbine</option></select></div></div><div className="grid grid-cols-2 gap-4"><div><label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">Current {newType === 'Turbine' ? 'AFTT' : 'Hobbs'}</label><input type="number" step="0.1" required value={newAirframeTime} onChange={e=>setNewAirframeTime(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" /></div><div><label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">Current {newType === 'Turbine' ? 'FTT' : 'Tach'}</label><input type="number" step="0.1" required value={newEngineTime} onChange={e=>setNewEngineTime(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" /></div></div><div className="pt-4"><PrimaryButton>{isSubmitting ? "Saving..." : "Save Aircraft"}</PrimaryButton></div></form></div></div>
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white rounded shadow-2xl w-full max-w-md p-6 border-t-4 border-[#F08B46] max-h-[90vh] overflow-y-auto animate-slide-up">
+            
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="font-oswald text-2xl font-bold uppercase text-[#1B4869]">{editingAircraftId ? 'Edit Aircraft' : 'Add Aircraft'}</h2>
+              <button onClick={() => setShowAircraftModal(false)} className="text-gray-400 hover:text-red-500"><X size={24}/></button>
+            </div>
+            
+            <form onSubmit={handleSaveAircraft} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">Tail Number</label>
+                  <input type="text" required value={newTail} onChange={e=>setNewTail(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 uppercase focus:border-[#F08B46] outline-none" />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">Serial Num</label>
+                  <input type="text" value={newSerial} onChange={e=>setNewSerial(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 uppercase focus:border-[#F08B46] outline-none" />
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">Model Name</label>
+                  <input type="text" required value={newModel} onChange={e=>setNewModel(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">Engine Type</label>
+                  <select value={newType} onChange={e=>setNewType(e.target.value as 'Piston'|'Turbine')} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 bg-white focus:border-[#F08B46] outline-none">
+                    <option value="Piston">Piston</option>
+                    <option value="Turbine">Turbine</option>
+                  </select>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">Current {newType === 'Turbine' ? 'AFTT' : 'Hobbs'}</label>
+                  <input type="number" step="0.1" required value={newAirframeTime} onChange={e=>setNewAirframeTime(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">Current {newType === 'Turbine' ? 'FTT' : 'Tach'}</label>
+                  <input type="number" step="0.1" required value={newEngineTime} onChange={e=>setNewEngineTime(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" />
+                </div>
+              </div>
+              
+              <div className="pt-4">
+                <PrimaryButton disabled={isSubmitting}>{isSubmitting ? "Saving..." : "Save Aircraft"}</PrimaryButton>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
+
+      {/* BRAND BANNER */}
+      <div className="w-full h-4 md:h-6 shrink-0">
+        <img src="/header-bg.png" alt="Brand Stripes" className="w-full h-full object-cover object-right block" />
+      </div>
 
       {/* TOP HEADER */}
       <header className="bg-navy text-white shadow-md z-20 shrink-0">
         <div className="max-w-3xl mx-auto px-4 py-3 flex justify-between items-center">
-          <div className="flex flex-col">
+          <div className="flex flex-col max-w-[70%]">
             <span className="text-[9px] font-bold uppercase tracking-widest text-[#F5B05B] mb-[2px]">Active Aircraft</span>
             <div className="flex items-center gap-3">
+              
               <div className={`w-3.5 h-3.5 rounded-full shrink-0 shadow-inner ${aircraftStatus === 'grounded' ? 'bg-red-500 animate-pulse' : aircraftStatus === 'issues' ? 'bg-[#F08B46]' : 'bg-success'}`} />
               
-              {/* FIXED WIDTH: Locked exactly to w-[120px] */}
               <div className="relative flex items-center">
-                <select className="appearance-none bg-transparent text-xl font-oswald font-bold uppercase tracking-wide focus:outline-none cursor-pointer w-[120px] shrink-0 text-white pr-6 truncate" value={activeTail} onChange={(e) => setActiveTail(e.target.value)}>
-                  {aircraftList.map(a => (<option key={a.id} value={a.tail_number} className="text-[#1B4869]">{a.tail_number}</option>))}
+                <select className="appearance-none bg-transparent text-xl font-oswald font-bold uppercase tracking-wide focus:outline-none cursor-pointer flex-1 min-w-[150px] md:min-w-[200px] text-white pr-6" value={activeTail} onChange={(e) => setActiveTail(e.target.value)}>
+                  {aircraftList.map(a => (<option key={a.id} value={a.tail_number} className="text-white">{a.tail_number}</option>))}
                 </select>
                 <ChevronDown size={18} className="absolute right-1 text-white pointer-events-none opacity-80" />
               </div>
@@ -175,10 +310,14 @@ export default function FleetTrackerApp() {
               )}
             </div>
           </div>
-          <button onClick={async () => { await supabase.auth.signOut(); setSession(null); }} className="text-gray-300 hover:text-white transition-colors flex flex-col items-center active:scale-95 shrink-0"><LogOut size={18} /><span className="text-[8px] font-bold uppercase tracking-widest mt-1">Logout</span></button>
+          <button onClick={handleLogout} className="text-gray-300 hover:text-white transition-colors flex flex-col items-center active:scale-95 shrink-0">
+            <LogOut size={18} />
+            <span className="text-[8px] font-bold uppercase tracking-widest mt-1">Logout</span>
+          </button>
         </div>
       </header>
 
+      {/* GROUNDED BANNER */}
       {aircraftStatus === 'grounded' && (
         <div className="bg-[#CE3732] text-white text-center py-2 px-4 shadow-md z-10 flex justify-center items-center gap-2 animate-pulse shrink-0">
           <AlertTriangle size={18} />
@@ -187,7 +326,7 @@ export default function FleetTrackerApp() {
         </div>
       )}
 
-      {/* MAIN SCROLLABLE CONTENT */}
+      {/* MAIN CONTENT */}
       <main className="flex-1 overflow-y-auto p-4 flex justify-center w-full">
         <div className="w-full max-w-3xl flex flex-col gap-6">
           {activeTab === 'times' && <TimesTab aircraft={selectedAircraftData} session={session} role={role} onUpdate={() => fetchAircraftData(session.user.id)} />}
@@ -197,7 +336,7 @@ export default function FleetTrackerApp() {
         </div>
       </main>
 
-      {/* BOTTOM NAVIGATION BAR */}
+      {/* BOTTOM NAV */}
       <nav className="bg-white border-t border-gray-200 w-full z-20 shrink-0 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
         <div className="max-w-3xl mx-auto flex justify-around">
           {[
@@ -210,7 +349,10 @@ export default function FleetTrackerApp() {
               <div className="relative mb-1">
                 <tab.icon size={20} />
                 {tab.badge > 0 && (
-                  <span className="absolute -top-1 -right-2 flex h-3 w-3"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#CE3732] opacity-75"></span><span className="relative inline-flex rounded-full h-3 w-3 bg-[#CE3732] text-[8px] text-white font-bold items-center justify-center border border-white"></span></span>
+                  <span className="absolute -top-1 -right-2 flex h-3 w-3">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#CE3732] opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-3 w-3 bg-[#CE3732] text-[8px] text-white font-bold items-center justify-center border border-white"></span>
+                  </span>
                 )}
               </div>
               <span className="text-[10px] font-bold uppercase tracking-widest">{tab.label}</span>
