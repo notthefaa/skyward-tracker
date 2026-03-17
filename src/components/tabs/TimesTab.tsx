@@ -297,18 +297,18 @@ export default function TimesTab({ aircraft, session, role, onUpdate }: { aircra
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="border-b-2 border-navy text-[10px] font-bold uppercase tracking-widest text-gray-500">
-                <th className="pb-2 pr-4">Date</th>
-                <th className="pb-2 pr-4">Init</th>
-                <th className="pb-2 pr-4">Flt Hrs</th>
+                <th className="pb-2 pr-4">DATE</th>
+                <th className="pb-2 pr-4">PIC</th>
+                <th className="pb-2 pr-4">FLT</th>
                 <th className="pb-2 pr-4">{isTurbine ? 'AFTT' : 'Hobbs'}</th>
                 <th className="pb-2 pr-4">{isTurbine ? 'FTT' : 'Tach'}</th>
-                <th className="pb-2 pr-4">Lndg</th>
+                <th className="pb-2 pr-4">LDG</th>
                 
                 {/* Dynamically hide/show Cycles Header */}
                 {isTurbine && <th className="pb-2 pr-4">Cyc</th>}
                 
-                <th className="pb-2 pr-4">Rsn</th>
-                <th className="pb-2 text-center">Pax</th>
+                <th className="pb-2 pr-4">CODE</th>
+                <th className="pb-2 text-center">PAX</th>
                 
                 {/* Empty Header for Edit column */}
                 {role === 'admin' && <th className="pb-2"></th>}

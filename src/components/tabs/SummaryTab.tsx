@@ -3,12 +3,12 @@ import { supabase } from "@/lib/supabase";
 import { PlaneTakeoff, MapPin, Droplet, Phone, Mail, Wrench, AlertTriangle, FileText, Clock, X } from "lucide-react";
 import TicketField from "@/components/TicketField";
 
-export default function SummaryTab({ aircraft, setActiveTab }: { aircraft: any, setActiveTab: (tab: 'summary' | 'times' | 'mx' | 'squawks' | 'notes') => void }) {
+export default function SummaryTab({ aircraft, setActiveTab }: { aircraft: any, setActiveTab: (tab: string) => void }) {
   const [nextMx, setNextMx] = useState<any>(null);
   const [activeSquawks, setActiveSquawks] = useState<any[]>([]);
   const[latestNote, setLatestNote] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const[showNoteModal, setShowNoteModal] = useState(false);
+  const [showNoteModal, setShowNoteModal] = useState(false);
 
   useEffect(() => {
     if (aircraft) fetchSummaryData();
@@ -64,11 +64,17 @@ export default function SummaryTab({ aircraft, setActiveTab }: { aircraft: any, 
   const fuelGals = aircraft.current_fuel_gallons || 0;
   const fuelLbs = Math.round(fuelGals * weightPerGal);
 
+  // Calculate dynamic colors for the Flight Times card based on Airworthiness Status
+  const isGrounded = nextMx?.isExpired || activeSquawks.some(sq => sq.affects_airworthiness);
+  const hasIssues = activeSquawks.length > 0;
+  const statusBorderColor = isGrounded ? 'border-[#CE3732]' : hasIssues ? 'border-[#F08B46]' : 'border-success';
+  const statusIconColor = isGrounded ? 'text-[#CE3732]' : hasIssues ? 'text-[#F08B46]' : 'text-success';
+
   return (
     <div className="flex flex-col gap-4 animate-fade-in">
       
-      {/* 1. HEADER CARD: Avatar & Details */}
-      <div className="bg-white shadow-lg rounded-sm overflow-hidden border-t-4 border-navy">
+      {/* 1. HEADER CARD: Avatar & Details (Top color bar removed!) */}
+      <div className="bg-white shadow-lg rounded-sm overflow-hidden">
         
         <div className="relative h-40 md:h-56 bg-slateGray flex items-center justify-center">
           {aircraft.avatar_url ? (
@@ -140,9 +146,21 @@ export default function SummaryTab({ aircraft, setActiveTab }: { aircraft: any, 
             </div>
           </div>
         </div>
+      </div>
 
-        {/* 2. FLIGHT TIMES COMPACT GRID */}
-        <div className="p-4 grid grid-cols-2 gap-4 bg-white border-t border-gray-200">
+      {/* 2. FLIGHT TIMES CARD (Standalone & Color Coded to Airworthiness) */}
+      <div className={`bg-white shadow-lg rounded-sm p-4 border-t-4 ${statusBorderColor} flex flex-col`}>
+        <div className="flex justify-between items-center mb-3 border-b border-gray-100 pb-3">
+          <div className="flex items-center gap-2">
+            <Clock size={20} className={statusIconColor} />
+            <h3 className="font-oswald text-xl font-bold uppercase text-navy m-0 leading-none">Flight Times</h3>
+          </div>
+          <span className="text-[10px] font-bold uppercase tracking-widest bg-gray-100 px-2 py-1 rounded text-gray-600">
+            {isTurbine ? 'TURBINE' : 'PISTON'}
+          </span>
+        </div>
+        
+        <div className="grid grid-cols-2 gap-4">
           <div>
             <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 block mb-1">
               {isTurbine ? "Total Airframe" : "Current Hobbs"}
@@ -162,11 +180,11 @@ export default function SummaryTab({ aircraft, setActiveTab }: { aircraft: any, 
         </div>
       </div>
 
-      {/* 3. FUEL STATE CARD (Moved up!) */}
-      <div className="bg-white shadow-lg rounded-sm p-4 border-t-4 border-[#F5B05B] flex flex-col">
+      {/* 3. FUEL STATE CARD (Restored Blue Highlights & Renamed Labels) */}
+      <div className="bg-white shadow-lg rounded-sm p-4 border-t-4 border-blue-500 flex flex-col">
         <div className="flex justify-between items-center mb-3 border-b border-gray-100 pb-3">
           <div className="flex items-center gap-2">
-            <Droplet size={20} className="text-[#F5B05B]" />
+            <Droplet size={20} className="text-blue-500" />
             <h3 className="font-oswald text-xl font-bold uppercase text-navy m-0 leading-none">Current Fuel</h3>
           </div>
           <span className="text-[10px] font-bold uppercase tracking-widest bg-gray-100 px-2 py-1 rounded text-gray-600">
@@ -176,12 +194,14 @@ export default function SummaryTab({ aircraft, setActiveTab }: { aircraft: any, 
         
         <div className="grid grid-cols-2 gap-4">
           <div>
+            {/* Renamed from Volume to Quantity */}
             <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 block mb-1">Quantity</span>
             <p className="text-3xl font-roboto font-bold text-navy">
               {fuelGals.toFixed(1)} <span className="text-sm text-gray-400">Gal</span>
             </p>
           </div>
           <div>
+            {/* Renamed from Weight to Weight */}
             <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 block mb-1">Weight</span>
             <p className="text-3xl font-roboto font-bold text-navy">
               {fuelLbs.toLocaleString()} <span className="text-sm text-gray-400">Lbs</span>
@@ -190,7 +210,7 @@ export default function SummaryTab({ aircraft, setActiveTab }: { aircraft: any, 
         </div>
       </div>
 
-      {/* 4. QUICK GLANCE DASHBOARD (Clickable Routing) */}
+      {/* 4. QUICK GLANCE DASHBOARD */}
       {!isLoading && (
         <div className="grid grid-cols-1 gap-3">
           
