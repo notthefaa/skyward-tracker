@@ -79,21 +79,21 @@ export default function NotesTab({ aircraft, session, onNotesRead }: { aircraft:
     <>
       <div className="mb-2"><PrimaryButton onClick={() => openForm()}><Plus size={18} /> Add New Note</PrimaryButton></div>
 
-      <div className="bg-cream shadow-lg rounded-sm p-4 md:p-6 border-t-4 border-[#1B4869] mb-6">
+      <div className="bg-cream shadow-lg rounded-sm p-4 md:p-6 border-t-4 border-navy mb-6">
         <h2 className="font-oswald text-2xl md:text-3xl font-bold uppercase text-navy m-0 mb-6 leading-none">Flight Notes</h2>
         <div className="space-y-4">
           {notes.length === 0 ? (<p className="text-center text-sm text-gray-400 italic py-4">No notes for this aircraft.</p>) : (
             notes.map(note => (
-              <div key={note.id} className="p-4 border border-[#1B4869]/20 bg-white rounded shadow-sm">
+              <div key={note.id} className="p-4 border border-navy/20 bg-white rounded shadow-sm">
                 <div className="flex justify-between items-start mb-3 border-b border-gray-100 pb-2">
                   <div>
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869] block">{note.author_email || 'Pilot'}</span>
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-navy block">{note.author_email || 'Pilot'}</span>
                     <span className="text-[10px] uppercase text-gray-400 font-bold">
                       {new Date(note.created_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
                       {note.edited_at && <span className="text-[#F08B46] ml-2">(Edited: {new Date(note.edited_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })})</span>}
                     </span>
                   </div>
-                  {note.author_id === session.user.id && (<button onClick={() => openForm(note)} className="text-gray-400 hover:text-[#1B4869] active:scale-95"><Edit2 size={14}/></button>)}
+                  {note.author_id === session.user.id && (<button onClick={() => openForm(note)} className="text-gray-400 hover:text-navy active:scale-95"><Edit2 size={14}/></button>)}
                 </div>
                 <p className="text-sm text-navy font-roboto whitespace-pre-wrap leading-relaxed">{note.content}</p>
                 {note.pictures && note.pictures.length > 0 && (
@@ -123,10 +123,10 @@ export default function NotesTab({ aircraft, session, onNotesRead }: { aircraft:
 
       {showModal && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-white rounded shadow-2xl w-full max-w-md p-6 border-t-4 border-[#1B4869] animate-slide-up">
-            <div className="flex justify-between items-center mb-4"><h2 className="font-oswald text-2xl font-bold uppercase text-navy flex items-center gap-2"><FileText size={20} className="text-[#1B4869]"/> {editingId ? 'Edit Note' : 'Add Note'}</h2><button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-red-500"><X size={24}/></button></div>
+          <div className="bg-white rounded shadow-2xl w-full max-w-md p-6 border-t-4 border-navy animate-slide-up">
+            <div className="flex justify-between items-center mb-4"><h2 className="font-oswald text-2xl font-bold uppercase text-navy flex items-center gap-2"><FileText size={20} className="text-navy"/> {editingId ? 'Edit Note' : 'Add Note'}</h2><button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-red-500"><X size={24}/></button></div>
             <form onSubmit={submitNote} className="space-y-4">
-              <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Message *</label><textarea required value={content} onChange={e=>setContent(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#1B4869] outline-none min-h-[120px]" placeholder="Share info with the next pilot..." /></div>
+              <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Message *</label><textarea required value={content} onChange={e=>setContent(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-navy outline-none min-h-[120px]" placeholder="Share info with the next pilot..." /></div>
               <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy flex items-center gap-2 mb-2"><Upload size={14}/> Attach Photos (Optional)</label><input type="file" multiple accept="image/*" onChange={(e)=>{if (e.target.files) setSelectedImages(Array.from(e.target.files));}} className="text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:bg-gray-100 file:text-navy cursor-pointer" /></div>
               <div className="pt-4"><PrimaryButton disabled={isSubmitting}>{isSubmitting ? "Saving..." : "Post Note"}</PrimaryButton></div>
             </form>

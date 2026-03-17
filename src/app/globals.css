@@ -2,7 +2,7 @@
 
 @theme {
   /* Brand Colors */
-  --color-navy: #1B4869;
+  --color-navy: #091F3C; /* Original Itinerary Generator Deep Navy */
   --color-cream: #FDFCF4;
   --color-brandOrange: #E68E2D;
   --color-brandOrange-alt: #FF8C00;
@@ -21,9 +21,9 @@ html, body {
   color: var(--color-navy);
   height: 100%;
   width: 100%;
-  overflow: hidden; /* Prevents the entire page from moving */
-  overscroll-behavior-y: none; /* Kills the mobile "pull-to-refresh" bounce */
-  touch-action: none; /* Stops native browser panning */
+  overflow: hidden;
+  overscroll-behavior-y: none;
+  touch-action: none;
 }
 
 /* Modal Animations */
