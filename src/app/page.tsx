@@ -352,7 +352,7 @@ export default function FleetTrackerApp() {
         <div className="w-full max-w-3xl flex flex-col gap-6">
           {activeTab === 'times' && <TimesTab aircraft={selectedAircraftData} session={session} role={role} onUpdate={() => fetchAircraftData(session.user.id)} />}
           {activeTab === 'mx' && <MaintenanceTab aircraft={selectedAircraftData} role={role} onGroundedStatusChange={() => checkGroundedStatus(activeTail)} />}
-          {activeTab === 'squawks' && <SquawksTab aircraft={selectedAircraftData} session={session} onGroundedStatusChange={() => checkGroundedStatus(activeTail)} />}
+          {activeTab === 'squawks' && <SquawksTab aircraft={selectedAircraftData} session={session} role={role} onGroundedStatusChange={() => checkGroundedStatus(activeTail)} />}
           {activeTab === 'notes' && <NotesTab aircraft={selectedAircraftData} session={session} onNotesRead={() => setUnreadNotes(0)} />}
         </div>
       </main>
