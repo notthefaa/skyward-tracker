@@ -35,7 +35,7 @@ export default function TimesTab({ aircraft, session, role, onUpdate }: { aircra
 
   useEffect(() => { 
     if (aircraft) fetchFlightLogs(aircraft.id, logPage); 
-  },[logPage]);
+  }, [logPage]);
 
   const fetchFlightLogs = async (aircraftId: string, page: number) => {
     const pageSize = 10; 
@@ -188,7 +188,7 @@ export default function TimesTab({ aircraft, session, role, onUpdate }: { aircra
             </span>
             <h2 className="font-oswald text-2xl md:text-3xl font-bold uppercase text-navy m-0 leading-none">Flight Log</h2>
           </div>
-          <button onClick={exportCSV} disabled={isExporting} className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-[#F5B05B] hover:text-[#F5B05B]-alt transition-colors disabled:opacity-50">
+          <button onClick={exportCSV} disabled={isExporting} className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-[#F5B05B] hover:opacity-80 transition-colors disabled:opacity-50">
             <Download size={14} /> {isExporting ? "Exporting..." : "Export CSV"}
           </button>
         </div>
@@ -202,14 +202,9 @@ export default function TimesTab({ aircraft, session, role, onUpdate }: { aircra
                 <th className="pb-2 pr-4">{isTurbine ? 'AFTT' : 'Hobbs'}</th>
                 <th className="pb-2 pr-4">{isTurbine ? 'FTT' : 'Tach'}</th>
                 <th className="pb-2 pr-4">Lndg</th>
-                
-                {/* Dynamically hide/show Cycles Header */}
                 {isTurbine && <th className="pb-2 pr-4">Cyc</th>}
-                
                 <th className="pb-2 pr-4">Rsn</th>
                 <th className="pb-2">Pax</th>
-
-                {/* Empty Header for Edit column */}
                 {role === 'admin' && <th className="pb-2"></th>}
               </tr>
             </thead>
@@ -222,14 +217,9 @@ export default function TimesTab({ aircraft, session, role, onUpdate }: { aircra
                   <td className="py-3 pr-4">{isTurbine ? log.aftt?.toFixed(1) : log.hobbs?.toFixed(1) || '-'}</td>
                   <td className="py-3 pr-4">{isTurbine ? log.ftt?.toFixed(1) : log.tach?.toFixed(1)}</td>
                   <td className="py-3 pr-4">{log.landings}</td>
-                  
-                  {/* Dynamically hide/show Cycles Data */}
                   {isTurbine && <td className="py-3 pr-4">{log.engine_cycles}</td>}
-                  
                   <td className="py-3 pr-4">{log.trip_reason || "-"}</td>
                   <td className="py-3 truncate max-w-[100px]" title={log.pax_info}>{log.pax_info || "-"}</td>
-                  
-                  {/* Edit Icon Button without a header text */}
                   {role === 'admin' && (
                     <td className="py-3 text-right">
                       <button onClick={() => openLogForm(log)} className="text-gray-400 hover:text-[#F5B05B] transition-colors">
@@ -266,8 +256,6 @@ export default function TimesTab({ aircraft, session, role, onUpdate }: { aircra
             </div>
             
             <form onSubmit={submitFlightLog} className="space-y-4">
-              
-              {/* TIMES ROW */}
               <div className="grid grid-cols-2 gap-4">
                 {isTurbine ? (
                   <>
@@ -294,7 +282,6 @@ export default function TimesTab({ aircraft, session, role, onUpdate }: { aircra
                 )}
               </div>
 
-              {/* DYNAMIC LANDINGS & CYCLES ROW */}
               <div className={`grid ${isTurbine ? 'grid-cols-2' : 'grid-cols-1'} gap-4`}>
                 <div>
                   <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Landings</label>

@@ -12,40 +12,86 @@ export default function SquawksTab({ aircraft, session, onGroundedStatusChange }
   const [isSubmitting, setIsSubmitting] = useState(false);
   const sigCanvas = useRef<SignatureCanvas>(null);
 
-  const[previewImages, setPreviewImages] = useState<string[] | null>(null);
+  const [previewImages, setPreviewImages] = useState<string[] | null>(null);
   const[previewIndex, setPreviewIndex] = useState<number>(0);
 
   const [showExportModal, setShowExportModal] = useState(false);
   const [selectedForExport, setSelectedForExport] = useState<string[]>([]);
-  const[isExportingPdf, setIsExportingPdf] = useState(false);
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
 
-  const[editingId, setEditingId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [location, setLocation] = useState("");
   const [description, setDescription] = useState("");
-  const[affectsAirworthiness, setAffectsAirworthiness] = useState(false);
+  const [affectsAirworthiness, setAffectsAirworthiness] = useState(false);
   const [isDeferred, setIsDeferred] = useState(false);
   const [status, setStatus] = useState<'open'|'resolved'>('open');
-  const[selectedImages, setSelectedImages] = useState<File[]>([]);
+  const [selectedImages, setSelectedImages] = useState<File[]>([]);
   const [existingImages, setExistingImages] = useState<string[]>([]);
-  const[mel, setMel] = useState(""); const[cdl, setCdl] = useState(""); const [nef, setNef] = useState(""); const[mdl, setMdl] = useState("");
-  const [melControl, setMelControl] = useState(""); const[category, setCategory] = useState("");
-  const[procCompleted, setProcCompleted] = useState(false); const [fullName, setFullName] = useState(""); const[certNum, setCertNum] = useState("");
+  
+  const[mel, setMel] = useState(""); 
+  const [cdl, setCdl] = useState(""); 
+  const [nef, setNef] = useState(""); 
+  const[mdl, setMdl] = useState("");
+  const [melControl, setMelControl] = useState(""); 
+  const [category, setCategory] = useState("");
+  const [procCompleted, setProcCompleted] = useState(false); 
+  const[fullName, setFullName] = useState(""); 
+  const [certNum, setCertNum] = useState("");
 
   const isTurbine = aircraft?.engine_type === 'Turbine';
   const reporterEmail = session?.user?.email || "Unknown Pilot";
 
-  useEffect(() => { if (aircraft) fetchSquawks(); }, [aircraft?.id]);
+  useEffect(() => { 
+    if (aircraft) fetchSquawks(); 
+  }, [aircraft?.id]);
 
   const fetchSquawks = async () => {
-    const { data } = await supabase.from('aft_squawks').select('*').eq('aircraft_id', aircraft.id).order('created_at', { ascending: false });
+    const { data } = await supabase
+      .from('aft_squawks')
+      .select('*')
+      .eq('aircraft_id', aircraft.id)
+      .order('created_at', { ascending: false });
+      
     if (data) setSquawks(data);
   };
 
   const openForm = (squawk: any = null) => {
     if (squawk) {
-      setEditingId(squawk.id); setLocation(squawk.location || ""); setDescription(squawk.description || ""); setAffectsAirworthiness(squawk.affects_airworthiness || false); setIsDeferred(squawk.is_deferred || false); setStatus(squawk.status || 'open'); setExistingImages(squawk.pictures ||[]); setMel(squawk.mel_number || ""); setCdl(squawk.cdl_number || ""); setNef(squawk.nef_number || ""); setMdl(squawk.mdl_number || ""); setMelControl(squawk.mel_control_number || ""); setCategory(squawk.deferral_category || ""); setProcCompleted(squawk.deferral_procedures_completed || false); setFullName(squawk.full_name || ""); setCertNum(squawk.certificate_number || "");
+      setEditingId(squawk.id); 
+      setLocation(squawk.location || ""); 
+      setDescription(squawk.description || ""); 
+      setAffectsAirworthiness(squawk.affects_airworthiness || false); 
+      setIsDeferred(squawk.is_deferred || false); 
+      setStatus(squawk.status || 'open'); 
+      setExistingImages(squawk.pictures ||[]); 
+      setMel(squawk.mel_number || ""); 
+      setCdl(squawk.cdl_number || ""); 
+      setNef(squawk.nef_number || ""); 
+      setMdl(squawk.mdl_number || ""); 
+      setMelControl(squawk.mel_control_number || ""); 
+      setCategory(squawk.deferral_category || ""); 
+      setProcCompleted(squawk.deferral_procedures_completed || false); 
+      setFullName(squawk.full_name || ""); 
+      setCertNum(squawk.certificate_number || "");
     } else {
-      setEditingId(null); setLocation(""); setDescription(""); setAffectsAirworthiness(false); setIsDeferred(false); setStatus('open'); setExistingImages([]); setSelectedImages([]); setMel(""); setCdl(""); setNef(""); setMdl(""); setMelControl(""); setCategory(""); setProcCompleted(false); setFullName(""); setCertNum(""); if (sigCanvas.current) sigCanvas.current.clear();
+      setEditingId(null); 
+      setLocation(""); 
+      setDescription(""); 
+      setAffectsAirworthiness(false); 
+      setIsDeferred(false); 
+      setStatus('open'); 
+      setExistingImages([]); 
+      setSelectedImages([]); 
+      setMel(""); 
+      setCdl(""); 
+      setNef(""); 
+      setMdl(""); 
+      setMelControl(""); 
+      setCategory(""); 
+      setProcCompleted(false); 
+      setFullName(""); 
+      setCertNum(""); 
+      if (sigCanvas.current) sigCanvas.current.clear();
     }
     setShowModal(true);
   };
@@ -62,32 +108,72 @@ export default function SquawksTab({ aircraft, session, onGroundedStatusChange }
           const { data: publicUrlData } = supabase.storage.from('aft_squawk_images').getPublicUrl(data.path);
           uploadedPaths.push(publicUrlData.publicUrl);
         }
-      } catch (error) { console.error(error); }
+      } catch (error) { 
+        console.error(error); 
+      }
     }
     return uploadedPaths;
   };
 
   const submitSquawk = async (e: React.FormEvent) => {
-    e.preventDefault(); setIsSubmitting(true);
-    const uploadedUrls = await uploadImages(); const allPictures = [...existingImages, ...uploadedUrls];
-    let signatureData = null; let sigDate = null;
-    if (isDeferred && sigCanvas.current && !sigCanvas.current.isEmpty()) { signatureData = sigCanvas.current.getTrimmedCanvas().toDataURL('image/png'); sigDate = new Date().toISOString().split('T')[0]; }
+    e.preventDefault(); 
+    setIsSubmitting(true);
+    
+    const uploadedUrls = await uploadImages(); 
+    const allPictures = [...existingImages, ...uploadedUrls];
+    
+    let signatureData = null; 
+    let sigDate = null;
+    
+    if (isDeferred && sigCanvas.current && !sigCanvas.current.isEmpty()) { 
+      signatureData = sigCanvas.current.getTrimmedCanvas().toDataURL('image/png'); 
+      sigDate = new Date().toISOString().split('T')[0]; 
+    }
 
     const squawkData = {
-      aircraft_id: aircraft.id, reported_by: session.user.id, location, description, affects_airworthiness: affectsAirworthiness, status, pictures: allPictures, is_deferred: isDeferred, mel_number: mel, cdl_number: cdl, nef_number: nef, mdl_number: mdl, mel_control_number: melControl, deferral_category: category || null, deferral_procedures_completed: procCompleted, full_name: fullName, certificate_number: certNum, ...(signatureData && { signature_data: signatureData, signature_date: sigDate })
+      aircraft_id: aircraft.id, 
+      reported_by: session.user.id, 
+      location, 
+      description, 
+      affects_airworthiness: affectsAirworthiness, 
+      status, 
+      pictures: allPictures, 
+      is_deferred: isDeferred, 
+      mel_number: mel, 
+      cdl_number: cdl, 
+      nef_number: nef, 
+      mdl_number: mdl, 
+      mel_control_number: melControl, 
+      deferral_category: category || null, 
+      deferral_procedures_completed: procCompleted, 
+      full_name: fullName, 
+      certificate_number: certNum, 
+      ...(signatureData && { signature_data: signatureData, signature_date: sigDate })
     };
 
-    if (editingId) await supabase.from('aft_squawks').update(squawkData).eq('id', editingId);
-    else await supabase.from('aft_squawks').insert(squawkData);
+    if (editingId) {
+      await supabase.from('aft_squawks').update(squawkData).eq('id', editingId);
+    } else {
+      await supabase.from('aft_squawks').insert(squawkData);
+    }
 
-    await fetchSquawks(); onGroundedStatusChange(); setShowModal(false); setIsSubmitting(false);
+    await fetchSquawks(); 
+    onGroundedStatusChange(); 
+    setShowModal(false); 
+    setIsSubmitting(false);
   };
 
-  const handleShareMx = (sq: any) => { window.location.href = `mailto:?subject=${encodeURIComponent(`Squawk Report: ${aircraft.tail_number}`)}`; };
+  const handleShareMx = (sq: any) => { 
+    window.location.href = `mailto:?subject=${encodeURIComponent(`Squawk Report: ${aircraft.tail_number}`)}`; 
+  };
 
   const loadImageForPdf = async (url: string): Promise<HTMLImageElement> => {
     return new Promise((resolve, reject) => {
-      const img = new Image(); img.crossOrigin = "Anonymous"; img.onload = () => resolve(img); img.onerror = (err) => reject(err); img.src = url;
+      const img = new Image(); 
+      img.crossOrigin = "Anonymous"; 
+      img.onload = () => resolve(img); 
+      img.onerror = (err) => reject(err); 
+      img.src = url;
     });
   };
 
@@ -95,38 +181,84 @@ export default function SquawksTab({ aircraft, session, onGroundedStatusChange }
     setIsExportingPdf(true);
     const doc = new jsPDF();
     const itemsToExport = squawks.filter(s => selectedForExport.includes(s.id));
-    let y = 20; doc.setFont("helvetica", "bold"); doc.setFontSize(18); doc.text(`Squawk Report - ${aircraft.tail_number}`, 14, y); y += 8; doc.setFontSize(10); doc.setFont("helvetica", "normal"); doc.text(`Generated on ${new Date().toLocaleDateString()}`, 14, y); y += 15;
+    let y = 20; 
+    
+    doc.setFont("helvetica", "bold"); 
+    doc.setFontSize(18); 
+    doc.text(`Squawk Report - ${aircraft.tail_number}`, 14, y); 
+    y += 8; 
+    
+    doc.setFontSize(10); 
+    doc.setFont("helvetica", "normal"); 
+    doc.text(`Generated on ${new Date().toLocaleDateString()}`, 14, y); 
+    y += 15;
 
     for (const sq of itemsToExport) {
       if (y > 260) { doc.addPage(); y = 20; }
-      doc.setFontSize(12); doc.setFont("helvetica", "bold"); doc.text(`Date: ${new Date(sq.created_at).toLocaleDateString()} | Location: ${sq.location}`, 14, y); y += 6;
-      doc.setFontSize(10); doc.setFont("helvetica", "normal"); doc.text(`Status: ${sq.status.toUpperCase()} | Airworthiness: ${sq.affects_airworthiness ? 'GROUNDED' : 'Monitor'}`, 14, y); y += 6;
-      if (sq.is_deferred) { doc.text(`Deferred (${sq.deferral_category}): MEL/CDL/NEF: ${sq.mel_number||'-'} / ${sq.cdl_number||'-'} / ${sq.nef_number||'-'}`, 14, y); y += 6; }
-      const splitDesc = doc.splitTextToSize(`Description: ${sq.description}`, 180); doc.text(splitDesc, 14, y); y += (splitDesc.length * 5) + 4;
+      
+      doc.setFontSize(12); 
+      doc.setFont("helvetica", "bold"); 
+      doc.text(`Date: ${new Date(sq.created_at).toLocaleDateString()} | Location: ${sq.location}`, 14, y); 
+      y += 6;
+      
+      doc.setFontSize(10); 
+      doc.setFont("helvetica", "normal"); 
+      doc.text(`Status: ${sq.status.toUpperCase()} | Airworthiness: ${sq.affects_airworthiness ? 'GROUNDED' : 'Monitor'}`, 14, y); 
+      y += 6;
+      
+      if (sq.is_deferred) { 
+        doc.text(`Deferred (${sq.deferral_category}): MEL/CDL/NEF: ${sq.mel_number||'-'} / ${sq.cdl_number||'-'} / ${sq.nef_number||'-'}`, 14, y); 
+        y += 6; 
+      }
+      
+      const splitDesc = doc.splitTextToSize(`Description: ${sq.description}`, 180); 
+      doc.text(splitDesc, 14, y); 
+      y += (splitDesc.length * 5) + 4;
 
       if (sq.pictures && sq.pictures.length > 0) {
         for (const picUrl of sq.pictures) {
           if (y > 200) { doc.addPage(); y = 20; }
           try {
-            const img = await loadImageForPdf(picUrl); const maxW = 150; const maxH = 100; const ratio = Math.min(maxW / img.width, maxH / img.height);
-            doc.addImage(img, 'JPEG', 14, y, img.width * ratio, img.height * ratio); y += (img.height * ratio) + 8;
-          } catch (e) { doc.text("[Image failed to load]", 14, y); y += 6; }
+            const img = await loadImageForPdf(picUrl); 
+            const maxW = 150; 
+            const maxH = 100; 
+            const ratio = Math.min(maxW / img.width, maxH / img.height);
+            doc.addImage(img, 'JPEG', 14, y, img.width * ratio, img.height * ratio); 
+            y += (img.height * ratio) + 8;
+          } catch (e) { 
+            doc.text("[Image failed to load]", 14, y); 
+            y += 6; 
+          }
         }
       }
-      y += 5; doc.setDrawColor(200); doc.line(14, y, 196, y); y += 10;
+      y += 5; 
+      doc.setDrawColor(200); 
+      doc.line(14, y, 196, y); 
+      y += 10;
     }
-    doc.save(`${aircraft.tail_number}_Squawk_Report.pdf`); setIsExportingPdf(false); setShowExportModal(false);
+    
+    doc.save(`${aircraft.tail_number}_Squawk_Report.pdf`); 
+    setIsExportingPdf(false); 
+    setShowExportModal(false);
   };
 
   const toggleExportSelection = (id: string) => {
-    if (selectedForExport.includes(id)) setSelectedForExport(selectedForExport.filter(i => i !== id)); else setSelectedForExport([...selectedForExport, id]);
+    if (selectedForExport.includes(id)) {
+      setSelectedForExport(selectedForExport.filter(i => i !== id)); 
+    } else {
+      setSelectedForExport([...selectedForExport, id]);
+    }
   };
 
   if (!aircraft) return null;
 
   return (
     <>
-      <div className="mb-2"><PrimaryButton onClick={() => openForm()}><Plus size={18} /> Report New Squawk</PrimaryButton></div>
+      <div className="mb-2">
+        <PrimaryButton onClick={() => openForm()}>
+          <Plus size={18} /> Report New Squawk
+        </PrimaryButton>
+      </div>
 
       <div className="bg-cream shadow-lg rounded-sm p-4 md:p-6 border-t-4 border-[#CE3732] mb-6">
         <div className="flex justify-between items-end mb-6">
@@ -145,15 +277,26 @@ export default function SquawksTab({ aircraft, session, onGroundedStatusChange }
                     <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded text-white ${sq.status === 'resolved' ? 'bg-success' : (sq.affects_airworthiness ? 'bg-[#CE3732]' : 'bg-[#F08B46]')}`}>
                       {sq.status === 'resolved' ? 'RESOLVED' : (sq.affects_airworthiness ? 'AOG / GROUNDED' : 'OPEN')}
                     </span>
-                    {sq.is_deferred && <span className="ml-2 text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded bg-blue-600 text-white">DEFERRED ({sq.deferral_category})</span>}
+                    {sq.is_deferred && (
+                      <span className="ml-2 text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded bg-blue-600 text-white">
+                        DEFERRED ({sq.deferral_category})
+                      </span>
+                    )}
                   </div>
                   <div className="flex gap-2">
-                    <button onClick={() => handleShareMx(sq)} className="text-gray-500 hover:text-[#CE3732] active:scale-95" title="Email MX"><Mail size={16}/></button>
-                    <button onClick={() => openForm(sq)} className="text-gray-500 hover:text-[#CE3732] active:scale-95" title="Edit"><Edit2 size={16}/></button>
+                    <button onClick={() => handleShareMx(sq)} className="text-gray-500 hover:text-[#CE3732] active:scale-95" title="Email MX">
+                      <Mail size={16}/>
+                    </button>
+                    <button onClick={() => openForm(sq)} className="text-gray-500 hover:text-[#CE3732] active:scale-95" title="Edit">
+                      <Edit2 size={16}/>
+                    </button>
                   </div>
                 </div>
 
-                <div className="mt-3"><p className="text-xs text-gray-500 font-bold uppercase tracking-widest">{new Date(sq.created_at).toLocaleDateString()} | {sq.location}</p><p className="text-sm text-navy mt-1 font-roboto whitespace-pre-wrap">{sq.description}</p></div>
+                <div className="mt-3">
+                  <p className="text-xs text-gray-500 font-bold uppercase tracking-widest">{new Date(sq.created_at).toLocaleDateString()} | {sq.location}</p>
+                  <p className="text-sm text-navy mt-1 font-roboto whitespace-pre-wrap">{sq.description}</p>
+                </div>
 
                 {sq.pictures && sq.pictures.length > 0 && (
                   <div className="mt-3 flex gap-2 overflow-x-auto pb-2">
@@ -175,8 +318,12 @@ export default function SquawksTab({ aircraft, session, onGroundedStatusChange }
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-fade-in">
           <div className="bg-white rounded shadow-2xl w-full max-w-md p-6 border-t-4 border-[#CE3732] max-h-[90vh] overflow-y-auto animate-slide-up flex flex-col">
             <div className="flex justify-between items-center mb-4">
-              <h2 className="font-oswald text-2xl font-bold uppercase text-navy flex items-center gap-2"><CheckSquare size={20} className="text-[#CE3732]" /> Export to PDF</h2>
-              <button onClick={() => setShowExportModal(false)} className="text-gray-400 hover:text-red-500 transition-colors"><X size={24}/></button>
+              <h2 className="font-oswald text-2xl font-bold uppercase text-navy flex items-center gap-2">
+                <CheckSquare size={20} className="text-[#CE3732]" /> Export to PDF
+              </h2>
+              <button onClick={() => setShowExportModal(false)} className="text-gray-400 hover:text-red-500 transition-colors">
+                <X size={24}/>
+              </button>
             </div>
             
             <p className="text-xs text-gray-500 mb-4">Select the squawks you wish to include in the formal PDF report.</p>
@@ -200,38 +347,125 @@ export default function SquawksTab({ aircraft, session, onGroundedStatusChange }
                 </label>
               ))}
             </div>
-            <PrimaryButton onClick={generatePDF} disabled={selectedForExport.length === 0 || isExportingPdf}>{isExportingPdf ? "Generating Report..." : `Export ${selectedForExport.length} Items to PDF`}</PrimaryButton>
+            <PrimaryButton onClick={generatePDF} disabled={selectedForExport.length === 0 || isExportingPdf}>
+              {isExportingPdf ? "Generating Report..." : `Export ${selectedForExport.length} Items to PDF`}
+            </PrimaryButton>
           </div>
         </div>
       )}
 
       {/* FULLSCREEN LIGHTBOX */}
-      {previewImages && (<div className="fixed inset-0 z-[60] bg-black/95 flex items-center justify-center animate-fade-in" onClick={() => setPreviewImages(null)}><button className="absolute top-4 right-4 text-gray-400 hover:text-white z-50 p-2"><X size={32}/></button>{previewImages.length > 1 && (<button onClick={(e) => { e.stopPropagation(); setPreviewIndex(prev => prev === 0 ? previewImages.length - 1 : prev - 1); }} className="absolute left-4 text-gray-400 hover:text-white z-50 p-2"><ChevronLeft size={48}/></button>)}<div className="max-w-full max-h-full p-4 flex items-center justify-center" onClick={(e) => e.stopPropagation()}><img src={previewImages[previewIndex]} className="max-h-[85vh] max-w-full object-contain rounded shadow-2xl" /></div>{previewImages.length > 1 && (<button onClick={(e) => { e.stopPropagation(); setPreviewIndex(prev => prev === previewImages.length - 1 ? 0 : prev + 1); }} className="absolute right-4 text-gray-400 hover:text-white z-50 p-2"><ChevronRight size={48}/></button>)}<div className="absolute bottom-6 text-gray-400 font-oswald tracking-widest text-sm uppercase">Image {previewIndex + 1} of {previewImages.length}</div></div>)}
+      {previewImages && (
+        <div className="fixed inset-0 z-[60] bg-black/95 flex items-center justify-center animate-fade-in" onClick={() => setPreviewImages(null)}>
+          <button className="absolute top-4 right-4 text-gray-400 hover:text-white z-50 p-2">
+            <X size={32}/>
+          </button>
+          {previewImages.length > 1 && (
+            <button onClick={(e) => { e.stopPropagation(); setPreviewIndex(prev => prev === 0 ? previewImages.length - 1 : prev - 1); }} className="absolute left-4 text-gray-400 hover:text-white z-50 p-2">
+              <ChevronLeft size={48}/>
+            </button>
+          )}
+          <div className="max-w-full max-h-full p-4 flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
+            <img src={previewImages[previewIndex]} className="max-h-[85vh] max-w-full object-contain rounded shadow-2xl" />
+          </div>
+          {previewImages.length > 1 && (
+            <button onClick={(e) => { e.stopPropagation(); setPreviewIndex(prev => prev === previewImages.length - 1 ? 0 : prev + 1); }} className="absolute right-4 text-gray-400 hover:text-white z-50 p-2">
+              <ChevronRight size={48}/>
+            </button>
+          )}
+          <div className="absolute bottom-6 text-gray-400 font-oswald tracking-widest text-sm uppercase">
+            Image {previewIndex + 1} of {previewImages.length}
+          </div>
+        </div>
+      )}
 
       {/* REPORT MODAL */}
       {showModal && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-fade-in">
           <div className="bg-white rounded shadow-2xl w-full max-w-lg p-6 border-t-4 border-[#CE3732] max-h-[90vh] overflow-y-auto animate-slide-up">
-            <div className="flex justify-between items-center mb-4"><h2 className="font-oswald text-2xl font-bold uppercase text-navy">{editingId ? 'Edit Squawk' : 'Report Squawk'}</h2><button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-red-500"><X size={24}/></button></div>
-            <div className="bg-gray-50 p-3 rounded border border-gray-200 mb-4 grid grid-cols-2 gap-2 text-xs"><div><span className="font-bold text-gray-500 uppercase">Date:</span> {new Date().toLocaleDateString()}</div><div><span className="font-bold text-gray-500 uppercase">Tail:</span> {aircraft.tail_number}</div></div>
+            
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="font-oswald text-2xl font-bold uppercase text-navy">{editingId ? 'Edit Squawk' : 'Report Squawk'}</h2>
+              <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-red-500">
+                <X size={24}/>
+              </button>
+            </div>
+            
+            <div className="bg-gray-50 p-3 rounded border border-gray-200 mb-4 grid grid-cols-2 gap-2 text-xs">
+              <div><span className="font-bold text-gray-500 uppercase">Date:</span> {new Date().toLocaleDateString()}</div>
+              <div><span className="font-bold text-gray-500 uppercase">Tail:</span> {aircraft.tail_number}</div>
+            </div>
+            
             <form onSubmit={submitSquawk} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4"><div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Status</label><select value={status} onChange={e=>setStatus(e.target.value as any)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#CE3732] bg-white font-bold outline-none"><option value="open">Open</option><option value="resolved">Resolved</option></select></div><div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Affects Airworthiness?</label><select value={affectsAirworthiness ? "yes" : "no"} onChange={e=>setAffectsAirworthiness(e.target.value === "yes")} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#CE3732] bg-white font-bold outline-none"><option value="no">No (Monitor)</option><option value="yes">YES (GROUNDED)</option></select></div></div>
-              <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Location on Aircraft *</label><input type="text" required value={location} onChange={e=>setLocation(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#CE3732] outline-none" /></div>
-              <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Description *</label><textarea required value={description} onChange={e=>setDescription(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 min-h-[100px] focus:border-[#CE3732] outline-none" /></div>
-              <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy flex items-center gap-2 mb-2"><Upload size={14}/> Attach Photos</label><input type="file" multiple accept="image/*" onChange={(e)=>{if (e.target.files) setSelectedImages(Array.from(e.target.files));}} className="text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:bg-gray-100 file:text-navy cursor-pointer" /></div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Status</label>
+                  <select value={status} onChange={e=>setStatus(e.target.value as any)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#CE3732] bg-white font-bold outline-none">
+                    <option value="open">Open</option>
+                    <option value="resolved">Resolved</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Affects Airworthiness?</label>
+                  <select value={affectsAirworthiness ? "yes" : "no"} onChange={e=>setAffectsAirworthiness(e.target.value === "yes")} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-red-500 bg-white font-bold outline-none">
+                    <option value="no">No (Monitor)</option>
+                    <option value="yes">YES (GROUNDED)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Location on Aircraft *</label>
+                <input type="text" required value={location} onChange={e=>setLocation(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#CE3732] outline-none" />
+              </div>
+              
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Description *</label>
+                <textarea required value={description} onChange={e=>setDescription(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 min-h-[100px] focus:border-[#CE3732] outline-none" />
+              </div>
+              
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-widest text-navy flex items-center gap-2 mb-2">
+                  <Upload size={14}/> Attach Photos
+                </label>
+                <input type="file" multiple accept="image/*" onChange={(e)=>{if (e.target.files) setSelectedImages(Array.from(e.target.files));}} className="text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:bg-gray-100 file:text-navy cursor-pointer" />
+              </div>
+
               {isTurbine && status === 'open' && (
                 <div className="border border-blue-200 rounded p-4 bg-blue-50/30">
-                  <label className="flex items-center gap-2 text-sm font-bold text-navy mb-4"><input type="checkbox" checked={isDeferred} onChange={e=>setIsDeferred(e.target.checked)} className="w-4 h-4" /> Item Deferred</label>
+                  <label className="flex items-center gap-2 text-sm font-bold text-navy mb-4">
+                    <input type="checkbox" checked={isDeferred} onChange={e=>setIsDeferred(e.target.checked)} className="w-4 h-4" /> 
+                    Item Deferred
+                  </label>
+                  
                   {isDeferred && (
                     <div className="space-y-4 animate-fade-in">
-                      <div className="grid grid-cols-2 gap-3"><div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">MEL #</label><input type="text" value={mel} onChange={e=>setMel(e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-[#CE3732] outline-none" /></div><div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">CDL #</label><input type="text" value={cdl} onChange={e=>setCdl(e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-[#CE3732] outline-none" /></div></div>
-                      <div className="grid grid-cols-2 gap-3"><div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Category</label><select value={category} onChange={e=>setCategory(e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 bg-white focus:border-[#CE3732] outline-none"><option value="">Select...</option><option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option></select></div></div>
-                      <div className="pt-4 border-t border-gray-200"><label className="text-[10px] font-bold uppercase tracking-widest text-navy block mb-2">Signature *</label><div className="border border-gray-300 rounded bg-white"><SignatureCanvas ref={sigCanvas} penColor="black" canvasProps={{ className: 'w-full h-32 rounded' }} /></div><button type="button" onClick={() => sigCanvas.current?.clear()} className="text-[10px] font-bold uppercase text-gray-500 mt-1 hover:text-red-500">Clear</button></div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">MEL #</label><input type="text" value={mel} onChange={e=>setMel(e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-[#CE3732] outline-none" /></div>
+                        <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">CDL #</label><input type="text" value={cdl} onChange={e=>setCdl(e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-[#CE3732] outline-none" /></div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Category</label>
+                          <select value={category} onChange={e=>setCategory(e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 bg-white focus:border-[#CE3732] outline-none">
+                            <option value="">Select...</option><option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div className="pt-4 border-t border-gray-200">
+                        <label className="text-[10px] font-bold uppercase tracking-widest text-navy block mb-2">Signature *</label>
+                        <div className="border border-gray-300 rounded bg-white">
+                          <SignatureCanvas ref={sigCanvas} penColor="black" canvasProps={{ className: 'w-full h-32 rounded' }} />
+                        </div>
+                        <button type="button" onClick={() => sigCanvas.current?.clear()} className="text-[10px] font-bold uppercase text-gray-500 mt-1 hover:text-red-500">Clear</button>
+                      </div>
                     </div>
                   )}
                 </div>
               )}
-              <div className="pt-4"><PrimaryButton disabled={isSubmitting}>{isSubmitting ? "Saving..." : "Save Squawk"}</PrimaryButton></div>
+              <div className="pt-4">
+                <PrimaryButton disabled={isSubmitting}>{isSubmitting ? "Saving..." : "Save Squawk"}</PrimaryButton>
+              </div>
             </form>
           </div>
         </div>
