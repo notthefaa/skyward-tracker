@@ -1,12 +1,11 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
-import { PlaneTakeoff, MapPin, User, Droplet, Phone, Mail, Wrench, AlertTriangle, FileText } from "lucide-react";
-import TicketField from "@/components/TicketField";
+import { PlaneTakeoff, MapPin, User, Droplet, Phone, Mail, Wrench, AlertTriangle, FileText, Clock } from "lucide-react";
 
 export default function SummaryTab({ aircraft }: { aircraft: any }) {
   const [nextMx, setNextMx] = useState<any>(null);
-  const[activeSquawks, setActiveSquawks] = useState<any[]>([]);
-  const [latestNote, setLatestNote] = useState<any>(null);
+  const [activeSquawks, setActiveSquawks] = useState<any[]>([]);
+  const[latestNote, setLatestNote] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -66,8 +65,8 @@ export default function SummaryTab({ aircraft }: { aircraft: any }) {
   return (
     <div className="flex flex-col gap-6 animate-fade-in">
       
-      {/* HEADER CARD: Avatar & Details */}
-      <div className="bg-cream shadow-lg rounded-sm overflow-hidden border-t-4 border-navy">
+      {/* 1. HEADER CARD: Avatar & Details */}
+      <div className="bg-white shadow-lg rounded-sm overflow-hidden border-t-4 border-navy">
         
         <div className="relative h-56 bg-slateGray flex items-center justify-center">
           {aircraft.avatar_url ? (
@@ -86,8 +85,7 @@ export default function SummaryTab({ aircraft }: { aircraft: any }) {
         </div>
 
         {/* 3-COLUMN CONTACT GRID */}
-        <div className="bg-white border-b border-gray-200 px-6 py-4 grid grid-cols-1 md:grid-cols-3 gap-6">
-          
+        <div className="bg-cream px-6 py-4 grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="flex items-start gap-3 text-navy">
             <MapPin size={18} className="text-brandOrange mt-1 shrink-0" />
             <div>
@@ -135,80 +133,46 @@ export default function SummaryTab({ aircraft }: { aircraft: any }) {
               </div>
             </div>
           </div>
-
-        </div>
-
-        <div className="p-6 grid grid-cols-2 gap-6 bg-cream">
-          <TicketField label={isTurbine ? "Total Airframe" : "Current Hobbs"} value={`${isTurbine ? (aircraft.total_airframe_time || 0) : (aircraft.total_airframe_time || '-')} hrs`} emphasis />
-          <TicketField label={isTurbine ? "Total Engine" : "Current Tach"} value={`${aircraft.total_engine_time || 0} hrs`} emphasis />
         </div>
       </div>
 
-      {/* QUICK GLANCE DASHBOARD */}
-      {!isLoading && (
-        <div className="grid grid-cols-1 gap-3">
-          
-          {nextMx ? (
-            <div className="bg-white border border-gray-200 shadow-sm rounded-sm p-4 flex gap-4 items-center">
-              <div className="bg-orange-50 p-3 rounded-full text-[#F08B46] shrink-0"><Wrench size={20}/></div>
-              <div className="flex-1">
-                <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Next Mx Due</span>
-                <p className="text-sm font-bold text-navy leading-tight">{nextMx.item_name}</p>
-                <p className={`text-xs font-bold mt-0.5 ${nextMx.isExpired ? 'text-[#CE3732]' : 'text-[#F08B46]'}`}>{nextMx.dueText}</p>
-              </div>
-            </div>
-          ) : (
-            <div className="bg-white border border-gray-200 shadow-sm rounded-sm p-4 flex gap-4 items-center opacity-70">
-              <div className="bg-gray-100 p-3 rounded-full text-gray-400 shrink-0"><Wrench size={20}/></div>
-              <div>
-                <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Next Mx Due</span>
-                <p className="text-sm font-bold text-gray-500 leading-tight">No Maintenance Tracked</p>
-              </div>
-            </div>
-          )}
-
-          {activeSquawks.length > 0 ? (
-            <div className="bg-white border border-red-200 shadow-sm rounded-sm p-4 flex gap-4 items-center">
-              <div className="bg-red-50 p-3 rounded-full text-[#CE3732] shrink-0"><AlertTriangle size={20}/></div>
-              <div className="flex-1">
-                <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Active Squawks</span>
-                <p className="text-sm font-bold text-navy leading-tight">{activeSquawks.length} Open Issue{activeSquawks.length > 1 ? 's' : ''}</p>
-                {activeSquawks.some(sq => sq.affects_airworthiness) && (
-                  <p className="text-xs font-bold text-[#CE3732] mt-0.5">Aircraft Grounded</p>
-                )}
-              </div>
-            </div>
-          ) : (
-            <div className="bg-white border border-gray-200 shadow-sm rounded-sm p-4 flex gap-4 items-center opacity-70">
-              <div className="bg-gray-100 p-3 rounded-full text-gray-400 shrink-0"><AlertTriangle size={20}/></div>
-              <div>
-                <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Active Squawks</span>
-                <p className="text-sm font-bold text-gray-500 leading-tight">No Active Squawks</p>
-              </div>
-            </div>
-          )}
-
-          {latestNote ? (
-            <div className="bg-white border border-gray-200 shadow-sm rounded-sm p-4 flex gap-4 items-center">
-              <div className="bg-blue-50 p-3 rounded-full text-navy shrink-0"><FileText size={20}/></div>
-              <div className="flex-1">
-                <div className="flex justify-between items-center mb-1">
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Latest Note</span>
-                  <span className="text-[10px] text-gray-400 font-bold">{new Date(latestNote.created_at).toLocaleDateString()}</span>
-                </div>
-                <p className="text-sm font-bold text-navy leading-tight line-clamp-2">{latestNote.content}</p>
-              </div>
-            </div>
-          ) : null}
-
-        </div>
-      )}
-
-      {/* FUEL STATE CARD */}
-      <div className="bg-white shadow-lg rounded-sm p-6 border-t-4 border-[#F5B05B] flex flex-col mb-6">
+      {/* 2. FLIGHT TIMES CARD */}
+      <div className="bg-white shadow-lg rounded-sm p-6 border-t-4 border-[#F5B05B] flex flex-col">
         <div className="flex justify-between items-start mb-4 border-b border-gray-100 pb-4">
           <div className="flex items-center gap-2">
-            <Droplet size={24} className="text-[#F5B05B]" />
+            <Clock size={24} className="text-[#F5B05B]" />
+            <h3 className="font-oswald text-2xl font-bold uppercase text-navy m-0 leading-none">Flight Times</h3>
+          </div>
+          <span className="text-[10px] font-bold uppercase tracking-widest bg-gray-100 px-2 py-1 rounded text-gray-600">
+            {isTurbine ? 'TURBINE' : 'PISTON'}
+          </span>
+        </div>
+        
+        <div className="grid grid-cols-2 gap-6">
+          <div>
+            <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 block mb-1">
+              {isTurbine ? "Total Airframe" : "Current Hobbs"}
+            </span>
+            <p className="text-4xl font-roboto font-bold text-navy">
+              {isTurbine ? (aircraft.total_airframe_time?.toFixed(1) || 0) : (aircraft.total_airframe_time?.toFixed(1) || '-')} <span className="text-lg text-gray-400">hrs</span>
+            </p>
+          </div>
+          <div>
+            <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 block mb-1">
+              {isTurbine ? "Total Engine" : "Current Tach"}
+            </span>
+            <p className="text-4xl font-roboto font-bold text-navy">
+              {aircraft.total_engine_time?.toFixed(1) || 0} <span className="text-lg text-gray-400">hrs</span>
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* 3. FUEL STATE CARD */}
+      <div className="bg-white shadow-lg rounded-sm p-6 border-t-4 border-blue-500 flex flex-col">
+        <div className="flex justify-between items-start mb-4 border-b border-gray-100 pb-4">
+          <div className="flex items-center gap-2">
+            <Droplet size={24} className="text-blue-500" />
             <h3 className="font-oswald text-2xl font-bold uppercase text-navy m-0 leading-none">Current Fuel</h3>
           </div>
           <span className="text-[10px] font-bold uppercase tracking-widest bg-gray-100 px-2 py-1 rounded text-gray-600">
@@ -231,6 +195,69 @@ export default function SummaryTab({ aircraft }: { aircraft: any }) {
           </div>
         </div>
       </div>
+
+      {/* 4. QUICK GLANCE DASHBOARD */}
+      {!isLoading && (
+        <div className="grid grid-cols-1 gap-3 mb-6">
+          
+          {/* NEXT MX DUE */}
+          {nextMx ? (
+            <div className="bg-white border border-gray-200 shadow-sm rounded-sm p-4 flex gap-4 items-center">
+              <div className="bg-orange-50 p-3 rounded-full text-[#F08B46] shrink-0"><Wrench size={20}/></div>
+              <div className="flex-1">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Next Mx Due</span>
+                <p className="text-sm font-bold text-navy leading-tight">{nextMx.item_name}</p>
+                <p className={`text-xs font-bold mt-0.5 ${nextMx.isExpired ? 'text-[#CE3732]' : 'text-[#F08B46]'}`}>{nextMx.dueText}</p>
+              </div>
+            </div>
+          ) : (
+            <div className="bg-white border border-gray-200 shadow-sm rounded-sm p-4 flex gap-4 items-center opacity-70">
+              <div className="bg-gray-100 p-3 rounded-full text-gray-400 shrink-0"><Wrench size={20}/></div>
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Next Mx Due</span>
+                <p className="text-sm font-bold text-gray-500 leading-tight">No Maintenance Tracked</p>
+              </div>
+            </div>
+          )}
+
+          {/* ACTIVE SQUAWKS */}
+          {activeSquawks.length > 0 ? (
+            <div className="bg-white border border-red-200 shadow-sm rounded-sm p-4 flex gap-4 items-center">
+              <div className="bg-red-50 p-3 rounded-full text-[#CE3732] shrink-0"><AlertTriangle size={20}/></div>
+              <div className="flex-1">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Active Squawks</span>
+                <p className="text-sm font-bold text-navy leading-tight">{activeSquawks.length} Open Issue{activeSquawks.length > 1 ? 's' : ''}</p>
+                {activeSquawks.some(sq => sq.affects_airworthiness) && (
+                  <p className="text-xs font-bold text-[#CE3732] mt-0.5">Aircraft Grounded</p>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="bg-white border border-gray-200 shadow-sm rounded-sm p-4 flex gap-4 items-center opacity-70">
+              <div className="bg-gray-100 p-3 rounded-full text-gray-400 shrink-0"><AlertTriangle size={20}/></div>
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Active Squawks</span>
+                <p className="text-sm font-bold text-gray-500 leading-tight">No Active Squawks</p>
+              </div>
+            </div>
+          )}
+
+          {/* LATEST NOTE */}
+          {latestNote ? (
+            <div className="bg-white border border-gray-200 shadow-sm rounded-sm p-4 flex gap-4 items-center">
+              <div className="bg-blue-50 p-3 rounded-full text-navy shrink-0"><FileText size={20}/></div>
+              <div className="flex-1">
+                <div className="flex justify-between items-center mb-1">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Latest Note</span>
+                  <span className="text-[10px] text-gray-400 font-bold">{new Date(latestNote.created_at).toLocaleDateString()}</span>
+                </div>
+                <p className="text-sm font-bold text-navy leading-tight line-clamp-2">{latestNote.content}</p>
+              </div>
+            </div>
+          ) : null}
+
+        </div>
+      )}
 
     </div>
   );
