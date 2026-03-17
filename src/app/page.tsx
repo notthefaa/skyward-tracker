@@ -424,7 +424,7 @@ const openAircraftForm = (aircraft: any = null) => {
           {activeTab === 'times' && <TimesTab aircraft={selectedAircraftData} session={session} role={role} onUpdate={() => fetchAircraftData(session.user.id)} />}
           {activeTab === 'mx' && <MaintenanceTab aircraft={selectedAircraftData} role={role} onGroundedStatusChange={() => checkGroundedStatus(activeTail)} />}
           {activeTab === 'squawks' && <SquawksTab aircraft={selectedAircraftData} session={session} role={role} onGroundedStatusChange={() => checkGroundedStatus(activeTail)} />}
-          {activeTab === 'notes' && <NotesTab aircraft={selectedAircraftData} session={session} onNotesRead={() => setUnreadNotes(0)} />}
+          {activeTab === 'notes' && <NotesTab aircraft={selectedAircraftData} session={session} role={role} onNotesRead={() => setUnreadNotes(0)} />}
         </div>
       </main>
 
