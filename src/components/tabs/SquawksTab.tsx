@@ -12,14 +12,17 @@ export default function SquawksTab({ aircraft, session, role, onGroundedStatusCh
   const [isSubmitting, setIsSubmitting] = useState(false);
   const sigCanvas = useRef<SignatureCanvas>(null);
 
+  // Lightbox State
   const [previewImages, setPreviewImages] = useState<string[] | null>(null);
   const [previewIndex, setPreviewIndex] = useState<number>(0);
 
-  const[showExportModal, setShowExportModal] = useState(false);
-  const [selectedForExport, setSelectedForExport] = useState<string[]>([]);
+  // PDF Export State
+  const [showExportModal, setShowExportModal] = useState(false);
+  const[selectedForExport, setSelectedForExport] = useState<string[]>([]);
   const [isExportingPdf, setIsExportingPdf] = useState(false);
 
-  const[editingId, setEditingId] = useState<string | null>(null);
+  // Form State
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [location, setLocation] = useState("");
   const [description, setDescription] = useState("");
   const [affectsAirworthiness, setAffectsAirworthiness] = useState(false);
@@ -28,15 +31,16 @@ export default function SquawksTab({ aircraft, session, role, onGroundedStatusCh
   const [selectedImages, setSelectedImages] = useState<File[]>([]);
   const [existingImages, setExistingImages] = useState<string[]>([]);
   
+  // Deferral State
   const [mel, setMel] = useState(""); 
-  const[cdl, setCdl] = useState(""); 
+  const [cdl, setCdl] = useState(""); 
   const [nef, setNef] = useState(""); 
-  const[mdl, setMdl] = useState("");
+  const [mdl, setMdl] = useState("");
   const [melControl, setMelControl] = useState(""); 
-  const[category, setCategory] = useState("");
+  const [category, setCategory] = useState("");
   const [procCompleted, setProcCompleted] = useState(false); 
-  const [fullName, setFullName] = useState(""); 
-  const[certNum, setCertNum] = useState("");
+  const[fullName, setFullName] = useState(""); 
+  const [certNum, setCertNum] = useState("");
 
   const isTurbine = aircraft?.engine_type === 'Turbine';
   const reporterEmail = session?.user?.email || "Unknown Pilot";
@@ -171,13 +175,9 @@ export default function SquawksTab({ aircraft, session, role, onGroundedStatusCh
   };
 
   const handleShareMx = (sq: any) => { 
-    // 1. Get the MX Email from the aircraft profile
     const targetEmail = aircraft.mx_contact_email || "";
+    const subject = encodeURIComponent(`${aircraft.tail_number}: ${sq.location}`);
     
-    // 2. Format the subject as requested: (Tailnumber): squawk location
-    const subject = encodeURIComponent(`(${aircraft.tail_number}): ${sq.location}`);
-    
-    // 3. Build the body
     let body = `Aircraft: ${aircraft.tail_number} (Serial: ${aircraft.serial_number || 'N/A'})\n`;
     body += `Reported Date: ${new Date(sq.created_at).toLocaleDateString()}\n`;
     body += `Status: ${sq.status.toUpperCase()}\n`;
@@ -192,41 +192,82 @@ export default function SquawksTab({ aircraft, session, role, onGroundedStatusCh
       body += `MEL/CDL/NEF/MDL: ${sq.mel_number} / ${sq.cdl_number} / ${sq.nef_number} / ${sq.mdl_number}\n\n`;
     }
 
-    // 4. Attach image links
-    if (sq.pictures && sq.pictures.length > 0) {
-      body += `--- SQUAWK PHOTOS ---\n`;
-      sq.pictures.forEach((pic: string, i: number) => {
-        body += `Photo ${i + 1}: ${pic}\n`;
-      });
-      body += `\n`;
-    }
+    body += `--- VIEW FULL DETAILS & PHOTOS ---\n`;
+    body += `Secure Link:\n`;
+    body += `${window.location.origin}/squawk/${sq.id}\n\n`;
+    body += `---\n`;
 
-    // 5. Add the separator line for the user's email client signature
-    body += `\n---\n`;
-
-    // 6. Launch the native email app
     window.location.href = `mailto:${targetEmail}?subject=${subject}&body=${encodeURIComponent(body)}`;
   };
 
-  // --- PDF LOGIC OMITTED FOR BREVITY BUT IS IDENTICAL UNDER THE HOOD ---
-  const generatePDF = async () => { /* Same PDF logic */
-    setIsExportingPdf(true); const doc = new jsPDF(); const itemsToExport = squawks.filter(s => selectedForExport.includes(s.id));
-    let y = 20; doc.setFont("helvetica", "bold"); doc.setFontSize(18); doc.text(`Squawk Report - ${aircraft.tail_number}`, 14, y); y += 8; doc.setFontSize(10); doc.setFont("helvetica", "normal"); doc.text(`Generated on ${new Date().toLocaleDateString()}`, 14, y); y += 15;
+  const loadImageForPdf = async (url: string): Promise<HTMLImageElement> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image(); 
+      img.crossOrigin = "Anonymous"; 
+      img.onload = () => resolve(img); 
+      img.onerror = (err) => reject(err); 
+      img.src = url;
+    });
+  };
+
+  const generatePDF = async () => {
+    setIsExportingPdf(true);
+    const doc = new jsPDF();
+    const itemsToExport = squawks.filter(s => selectedForExport.includes(s.id));
+    let y = 20; 
+    
+    doc.setFont("helvetica", "bold"); doc.setFontSize(18); 
+    doc.text(`Squawk Report - ${aircraft.tail_number}`, 14, y); y += 8; 
+    doc.setFontSize(10); doc.setFont("helvetica", "normal"); 
+    doc.text(`Generated on ${new Date().toLocaleDateString()}`, 14, y); y += 15;
+
     for (const sq of itemsToExport) {
       if (y > 260) { doc.addPage(); y = 20; }
-      doc.setFontSize(12); doc.setFont("helvetica", "bold"); doc.text(`Date: ${new Date(sq.created_at).toLocaleDateString()} | Location: ${sq.location}`, 14, y); y += 6;
-      doc.setFontSize(10); doc.setFont("helvetica", "normal"); doc.text(`Status: ${sq.status.toUpperCase()} | Airworthiness: ${sq.affects_airworthiness ? 'GROUNDED' : 'Monitor'}`, 14, y); y += 6;
-      if (sq.is_deferred) { doc.text(`Deferred (${sq.deferral_category}): MEL/CDL/NEF: ${sq.mel_number||'-'} / ${sq.cdl_number||'-'} / ${sq.nef_number||'-'}`, 14, y); y += 6; }
-      const splitDesc = doc.splitTextToSize(`Description: ${sq.description}`, 180); doc.text(splitDesc, 14, y); y += (splitDesc.length * 5) + 4;
+      
+      doc.setFontSize(12); doc.setFont("helvetica", "bold"); 
+      doc.text(`Date: ${new Date(sq.created_at).toLocaleDateString()} | Location: ${sq.location}`, 14, y); y += 6;
+      
+      doc.setFontSize(10); doc.setFont("helvetica", "normal"); 
+      doc.text(`Status: ${sq.status.toUpperCase()} | Airworthiness: ${sq.affects_airworthiness ? 'GROUNDED' : 'Monitor'}`, 14, y); y += 6;
+      
+      if (sq.is_deferred) { 
+        doc.text(`Deferred (${sq.deferral_category}): MEL/CDL/NEF: ${sq.mel_number||'-'} / ${sq.cdl_number||'-'} / ${sq.nef_number||'-'}`, 14, y); y += 6; 
+      }
+      
+      const splitDesc = doc.splitTextToSize(`Description: ${sq.description}`, 180); 
+      doc.text(splitDesc, 14, y); y += (splitDesc.length * 5) + 4;
+
+      if (sq.pictures && sq.pictures.length > 0) {
+        for (const picUrl of sq.pictures) {
+          if (y > 200) { doc.addPage(); y = 20; }
+          try {
+            const img = await loadImageForPdf(picUrl); 
+            const maxW = 150; const maxH = 100; 
+            const ratio = Math.min(maxW / img.width, maxH / img.height);
+            doc.addImage(img, 'JPEG', 14, y, img.width * ratio, img.height * ratio); y += (img.height * ratio) + 8;
+          } catch (e) { 
+            doc.text("[Image failed to load]", 14, y); y += 6; 
+          }
+        }
+      }
       y += 5; doc.setDrawColor(200); doc.line(14, y, 196, y); y += 10;
     }
-    doc.save(`${aircraft.tail_number}_Squawk_Report.pdf`); setIsExportingPdf(false); setShowExportModal(false);
+    
+    doc.save(`${aircraft.tail_number}_Squawk_Report.pdf`); 
+    setIsExportingPdf(false); setShowExportModal(false);
   };
-  const toggleExportSelection = (id: string) => { if (selectedForExport.includes(id)) setSelectedForExport(selectedForExport.filter(i => i !== id)); else setSelectedForExport([...selectedForExport, id]); };
+
+  const toggleExportSelection = (id: string) => {
+    if (selectedForExport.includes(id)) {
+      setSelectedForExport(selectedForExport.filter(i => i !== id)); 
+    } else {
+      setSelectedForExport([...selectedForExport, id]);
+    }
+  };
 
   if (!aircraft) return null;
 
-  // SPLIT THE LISTS
+  // Split the squawks into Active and Archived
   const activeSquawks = squawks.filter(sq => sq.status === 'open');
   const resolvedSquawks = squawks.filter(sq => sq.status === 'resolved');
 
@@ -251,6 +292,7 @@ export default function SquawksTab({ aircraft, session, role, onGroundedStatusCh
           {activeSquawks.length === 0 ? (<p className="text-center text-sm text-gray-400 italic py-4">No active squawks!</p>) : (
             activeSquawks.map(sq => (
               <div key={sq.id} className={`p-4 border rounded ${sq.affects_airworthiness ? 'border-[#CE3732]/30 bg-[#CE3732]/10' : 'border-[#F08B46]/30 bg-[#F08B46]/10'}`}>
+                
                 <div className="flex justify-between items-start mb-2">
                   <div>
                     <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded text-white ${sq.affects_airworthiness ? 'bg-[#CE3732]' : 'bg-[#F08B46]'}`}>
@@ -262,13 +304,22 @@ export default function SquawksTab({ aircraft, session, role, onGroundedStatusCh
                       </span>
                     )}
                   </div>
+                  
                   <div className="flex gap-3 items-center">
-                    <button onClick={() => handleShareMx(sq)} className="text-gray-500 hover:text-[#CE3732] active:scale-95" title="Email MX"><Mail size={16}/></button>
-                    <button onClick={() => openForm(sq)} className="text-gray-500 hover:text-[#CE3732] active:scale-95" title="Edit"><Edit2 size={16}/></button>
+                    <button onClick={() => handleShareMx(sq)} className="text-gray-500 hover:text-[#CE3732] active:scale-95" title="Email MX">
+                      <Mail size={16}/>
+                    </button>
+                    <button onClick={() => openForm(sq)} className="text-gray-500 hover:text-[#CE3732] active:scale-95" title="Edit">
+                      <Edit2 size={16}/>
+                    </button>
                     {role === 'admin' && (
                       <>
-                        <button onClick={() => resolveSquawk(sq)} className="text-gray-500 hover:text-green-600 active:scale-95" title="Mark Resolved"><CheckCircle size={16}/></button>
-                        <button onClick={() => deleteSquawk(sq.id)} className="text-gray-500 hover:text-red-600 active:scale-95" title="Delete"><Trash2 size={16}/></button>
+                        <button onClick={() => resolveSquawk(sq)} className="text-gray-500 hover:text-green-600 active:scale-95" title="Mark Resolved">
+                          <CheckCircle size={16}/>
+                        </button>
+                        <button onClick={() => deleteSquawk(sq.id)} className="text-gray-500 hover:text-red-600 active:scale-95" title="Delete">
+                          <Trash2 size={16}/>
+                        </button>
                       </>
                     )}
                   </div>
@@ -282,7 +333,7 @@ export default function SquawksTab({ aircraft, session, role, onGroundedStatusCh
                 {sq.pictures && sq.pictures.length > 0 && (
                   <div className="mt-3 flex gap-2 overflow-x-auto pb-2">
                     {sq.pictures.map((pic: string, i: number) => (
-                      <button key={i} onClick={() => { setPreviewImages(sq.pictures); setPreviewIndex(i); }} className="active:scale-95 transition-transform">
+                      <button key={i} onClick={() => { setPreviewImages(sq.pictures); setPreviewIndex(i); }} className="active:scale-95 transition-transform shrink-0">
                         <img src={pic} loading="lazy" alt="Squawk" className="h-16 w-16 object-cover rounded border border-gray-300 shadow-sm" />
                       </button>
                     ))}
@@ -294,13 +345,15 @@ export default function SquawksTab({ aircraft, session, role, onGroundedStatusCh
         </div>
       </div>
 
-      {/* ARCHIVED / RESOLVED SQUAWKS */}
+      {/* RESTORED: ARCHIVED / RESOLVED SQUAWKS */}
       <div className="bg-gray-100 shadow-inner rounded-sm p-4 md:p-6 border-t-4 border-gray-400 mb-6">
         <h2 className="font-oswald text-xl md:text-2xl font-bold uppercase text-gray-500 m-0 mb-6 leading-none">Archived History</h2>
+        
         <div className="space-y-4">
           {resolvedSquawks.length === 0 ? (<p className="text-center text-sm text-gray-400 italic py-4">No archived history.</p>) : (
             resolvedSquawks.map(sq => (
               <div key={sq.id} className="p-4 border border-gray-300 bg-white rounded opacity-70 hover:opacity-100 transition-opacity">
+                
                 <div className="flex justify-between items-start mb-2">
                   <div>
                     <span className="text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded text-white bg-gray-500">
@@ -308,12 +361,17 @@ export default function SquawksTab({ aircraft, session, role, onGroundedStatusCh
                     </span>
                   </div>
                   <div className="flex gap-3 items-center">
-                    <button onClick={() => openForm(sq)} className="text-gray-500 hover:text-gray-700 active:scale-95" title="View/Edit"><Edit2 size={16}/></button>
+                    <button onClick={() => openForm(sq)} className="text-gray-500 hover:text-gray-700 active:scale-95" title="View/Edit">
+                      <Edit2 size={16}/>
+                    </button>
                     {role === 'admin' && (
-                      <button onClick={() => deleteSquawk(sq.id)} className="text-gray-500 hover:text-red-600 active:scale-95" title="Delete"><Trash2 size={16}/></button>
+                      <button onClick={() => deleteSquawk(sq.id)} className="text-gray-500 hover:text-red-600 active:scale-95" title="Delete">
+                        <Trash2 size={16}/>
+                      </button>
                     )}
                   </div>
                 </div>
+
                 <div className="mt-3">
                   <p className="text-xs text-gray-500 font-bold uppercase tracking-widest">{new Date(sq.created_at).toLocaleDateString()} | {sq.location}</p>
                   <p className="text-sm text-gray-700 mt-1 font-roboto whitespace-pre-wrap">{sq.description}</p>
@@ -371,19 +429,23 @@ export default function SquawksTab({ aircraft, session, role, onGroundedStatusCh
           <button className="absolute top-4 right-4 text-gray-400 hover:text-white z-50 p-2">
             <X size={32}/>
           </button>
+          
           {previewImages.length > 1 && (
             <button onClick={(e) => { e.stopPropagation(); setPreviewIndex(prev => prev === 0 ? previewImages.length - 1 : prev - 1); }} className="absolute left-4 text-gray-400 hover:text-white z-50 p-2">
               <ChevronLeft size={48}/>
             </button>
           )}
+          
           <div className="max-w-full max-h-full p-4 flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
             <img src={previewImages[previewIndex]} className="max-h-[85vh] max-w-full object-contain rounded shadow-2xl" />
           </div>
+          
           {previewImages.length > 1 && (
             <button onClick={(e) => { e.stopPropagation(); setPreviewIndex(prev => prev === previewImages.length - 1 ? 0 : prev + 1); }} className="absolute right-4 text-gray-400 hover:text-white z-50 p-2">
               <ChevronRight size={48}/>
             </button>
           )}
+          
           <div className="absolute bottom-6 text-gray-400 font-oswald tracking-widest text-sm uppercase">
             Image {previewIndex + 1} of {previewImages.length}
           </div>
