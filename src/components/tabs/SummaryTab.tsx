@@ -1,14 +1,20 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { PlaneTakeoff, MapPin, Droplet, Phone, Mail, Wrench, AlertTriangle, FileText, Clock, X } from "lucide-react";
-import TicketField from "@/components/TicketField";
 
-export default function SummaryTab({ aircraft, setActiveTab }: { aircraft: any, setActiveTab: (tab: string) => void }) {
+export default function SummaryTab({ 
+  aircraft, 
+  setActiveTab 
+}: { 
+  aircraft: any, 
+  // FIX: This strict type definition perfectly matches page.tsx and clears the Vercel error!
+  setActiveTab: (tab: 'summary' | 'times' | 'mx' | 'squawks' | 'notes') => void 
+}) {
   const [nextMx, setNextMx] = useState<any>(null);
   const [activeSquawks, setActiveSquawks] = useState<any[]>([]);
-  const[latestNote, setLatestNote] = useState<any>(null);
+  const [latestNote, setLatestNote] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [showNoteModal, setShowNoteModal] = useState(false);
+  const[showNoteModal, setShowNoteModal] = useState(false);
 
   useEffect(() => {
     if (aircraft) fetchSummaryData();
@@ -180,7 +186,7 @@ export default function SummaryTab({ aircraft, setActiveTab }: { aircraft: any, 
         </div>
       </div>
 
-      {/* 3. FUEL STATE CARD (Restored Blue Highlights & Renamed Labels) */}
+      {/* 3. FUEL STATE CARD */}
       <div className="bg-white shadow-lg rounded-sm p-4 border-t-4 border-blue-500 flex flex-col">
         <div className="flex justify-between items-center mb-3 border-b border-gray-100 pb-3">
           <div className="flex items-center gap-2">
@@ -194,14 +200,12 @@ export default function SummaryTab({ aircraft, setActiveTab }: { aircraft: any, 
         
         <div className="grid grid-cols-2 gap-4">
           <div>
-            {/* Renamed from Volume to Quantity */}
             <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 block mb-1">Quantity</span>
             <p className="text-3xl font-roboto font-bold text-navy">
               {fuelGals.toFixed(1)} <span className="text-sm text-gray-400">Gal</span>
             </p>
           </div>
           <div>
-            {/* Renamed from Weight to Weight */}
             <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 block mb-1">Weight</span>
             <p className="text-3xl font-roboto font-bold text-navy">
               {fuelLbs.toLocaleString()} <span className="text-sm text-gray-400">Lbs</span>
@@ -219,7 +223,9 @@ export default function SummaryTab({ aircraft, setActiveTab }: { aircraft: any, 
             onClick={() => setActiveTab('mx')}
             className={`bg-white border shadow-sm rounded-sm p-4 flex gap-4 items-center transition-colors cursor-pointer active:scale-[0.98] ${nextMx ? 'border-gray-200 hover:bg-orange-50' : 'border-gray-200 opacity-70 hover:bg-gray-50'}`}
           >
-            <div className={`p-3 rounded-full shrink-0 ${nextMx ? 'bg-orange-50 text-[#F08B46]' : 'bg-gray-100 text-gray-400'}`}><Wrench size={20}/></div>
+            <div className={`p-3 rounded-full shrink-0 ${nextMx ? 'bg-orange-50 text-[#F08B46]' : 'bg-gray-100 text-gray-400'}`}>
+              <Wrench size={20}/>
+            </div>
             <div className="flex-1">
               <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Next Mx Due</span>
               {nextMx ? (
@@ -238,7 +244,9 @@ export default function SummaryTab({ aircraft, setActiveTab }: { aircraft: any, 
             onClick={() => setActiveTab('squawks')}
             className={`bg-white border shadow-sm rounded-sm p-4 flex gap-4 items-center transition-colors cursor-pointer active:scale-[0.98] ${activeSquawks.length > 0 ? 'border-red-200 hover:bg-red-50' : 'border-gray-200 opacity-70 hover:bg-gray-50'}`}
           >
-            <div className={`p-3 rounded-full shrink-0 ${activeSquawks.length > 0 ? 'bg-red-50 text-[#CE3732]' : 'bg-gray-100 text-gray-400'}`}><AlertTriangle size={20}/></div>
+            <div className={`p-3 rounded-full shrink-0 ${activeSquawks.length > 0 ? 'bg-red-50 text-[#CE3732]' : 'bg-gray-100 text-gray-400'}`}>
+              <AlertTriangle size={20}/>
+            </div>
             <div className="flex-1">
               <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Active Squawks</span>
               {activeSquawks.length > 0 ? (
@@ -273,7 +281,9 @@ export default function SummaryTab({ aircraft, setActiveTab }: { aircraft: any, 
               {showNoteModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 animate-fade-in" onClick={() => setShowNoteModal(false)}>
                   <div className="bg-white rounded shadow-2xl w-full max-w-md p-6 border-t-4 border-navy animate-slide-up relative" onClick={(e) => e.stopPropagation()}>
-                    <button onClick={() => setShowNoteModal(false)} className="absolute top-4 right-4 text-gray-400 hover:text-red-500"><X size={20}/></button>
+                    <button onClick={() => setShowNoteModal(false)} className="absolute top-4 right-4 text-gray-400 hover:text-red-500">
+                      <X size={20}/>
+                    </button>
                     <div className="mb-4">
                       <span className="text-[10px] font-bold uppercase tracking-widest text-navy block">{latestNote.author_email || 'Pilot'}</span>
                       <span className="text-[10px] uppercase text-gray-400 font-bold">{new Date(latestNote.created_at).toLocaleString()}</span>
