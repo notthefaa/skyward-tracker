@@ -179,16 +179,16 @@ export default function TimesTab({ aircraft, session, role, onUpdate }: { aircra
       </div>
 
       {/* LOGBOOK TABLE CONTAINER */}
-      <div className="bg-cream shadow-lg rounded-sm p-4 md:p-6 border-t-4 border-brandOrange overflow-hidden flex flex-col mb-6">
+      <div className="bg-cream shadow-lg rounded-sm p-4 md:p-6 border-t-4 border-[#F5B05B] overflow-hidden flex flex-col mb-6">
         
         <div className="flex justify-between items-end mb-6">
           <div>
-            <span className="text-[10px] font-bold uppercase tracking-widest text-brandOrange block mb-1">
+            <span className="text-[10px] font-bold uppercase tracking-widest text-[#F5B05B] block mb-1">
               {isTurbine ? 'TURBINE' : 'PISTON'} LOGBOOK
             </span>
             <h2 className="font-oswald text-2xl md:text-3xl font-bold uppercase text-navy m-0 leading-none">Flight Log</h2>
           </div>
-          <button onClick={exportCSV} disabled={isExporting} className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-brandOrange hover:text-brandOrange-alt transition-colors disabled:opacity-50">
+          <button onClick={exportCSV} disabled={isExporting} className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-[#F5B05B] hover:text-[#F5B05B]-alt transition-colors disabled:opacity-50">
             <Download size={14} /> {isExporting ? "Exporting..." : "Export CSV"}
           </button>
         </div>
@@ -232,7 +232,7 @@ export default function TimesTab({ aircraft, session, role, onUpdate }: { aircra
                   {/* Edit Icon Button without a header text */}
                   {role === 'admin' && (
                     <td className="py-3 text-right">
-                      <button onClick={() => openLogForm(log)} className="text-gray-400 hover:text-brandOrange transition-colors">
+                      <button onClick={() => openLogForm(log)} className="text-gray-400 hover:text-[#F5B05B] transition-colors">
                         <Edit2 size={14}/>
                       </button>
                     </td>
@@ -245,11 +245,11 @@ export default function TimesTab({ aircraft, session, role, onUpdate }: { aircra
 
         {/* PAGINATION */}
         <div className="flex justify-between items-center mt-4 border-t border-gray-200 pt-4">
-          <button onClick={() => setLogPage(p => Math.max(1, p - 1))} disabled={logPage === 1} className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-navy disabled:opacity-30 disabled:cursor-not-allowed hover:text-brandOrange transition-colors">
+          <button onClick={() => setLogPage(p => Math.max(1, p - 1))} disabled={logPage === 1} className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-navy disabled:opacity-30 disabled:cursor-not-allowed hover:text-[#F5B05B] transition-colors">
             <ChevronLeft size={14} /> Prev
           </button>
           <span className="text-[10px] font-bold uppercase text-gray-400">Page {logPage}</span>
-          <button onClick={() => setLogPage(p => p + 1)} disabled={!hasMoreLogs} className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-navy disabled:opacity-30 disabled:cursor-not-allowed hover:text-brandOrange transition-colors">
+          <button onClick={() => setLogPage(p => p + 1)} disabled={!hasMoreLogs} className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-navy disabled:opacity-30 disabled:cursor-not-allowed hover:text-[#F5B05B] transition-colors">
             Next <ChevronRight size={14} />
           </button>
         </div>
@@ -258,7 +258,7 @@ export default function TimesTab({ aircraft, session, role, onUpdate }: { aircra
       {/* POP-UP FORM MODAL */}
       {showLogModal && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-white rounded shadow-2xl w-full max-w-md p-6 border-t-4 border-brandOrange max-h-[90vh] overflow-y-auto animate-slide-up">
+          <div className="bg-white rounded shadow-2xl w-full max-w-md p-6 border-t-4 border-[#F5B05B] max-h-[90vh] overflow-y-auto animate-slide-up">
             
             <div className="flex justify-between items-center mb-6">
               <h2 className="font-oswald text-2xl font-bold uppercase text-navy">{editingId ? 'Edit Flight Log' : 'Log New Flight'}</h2>
@@ -273,22 +273,22 @@ export default function TimesTab({ aircraft, session, role, onUpdate }: { aircra
                   <>
                     <div>
                       <label className="text-[10px] font-bold uppercase tracking-widest text-navy">AFTT *</label>
-                      <input type="number" step="0.1" required value={logAftt} onChange={e=>setLogAftt(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-brandOrange outline-none" />
+                      <input type="number" step="0.1" required value={logAftt} onChange={e=>setLogAftt(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F5B05B] outline-none" />
                     </div>
                     <div>
                       <label className="text-[10px] font-bold uppercase tracking-widest text-navy">FTT *</label>
-                      <input type="number" step="0.1" required value={logFtt} onChange={e=>setLogFtt(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-brandOrange outline-none" />
+                      <input type="number" step="0.1" required value={logFtt} onChange={e=>setLogFtt(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F5B05B] outline-none" />
                     </div>
                   </>
                 ) : (
                   <>
                     <div>
                       <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Hobbs (Opt)</label>
-                      <input type="number" step="0.1" value={logHobbs} onChange={e=>setLogHobbs(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-brandOrange outline-none" />
+                      <input type="number" step="0.1" value={logHobbs} onChange={e=>setLogHobbs(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F5B05B] outline-none" />
                     </div>
                     <div>
                       <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Tach *</label>
-                      <input type="number" step="0.1" required value={logTach} onChange={e=>setLogTach(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-brandOrange outline-none" />
+                      <input type="number" step="0.1" required value={logTach} onChange={e=>setLogTach(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F5B05B] outline-none" />
                     </div>
                   </>
                 )}
@@ -298,12 +298,12 @@ export default function TimesTab({ aircraft, session, role, onUpdate }: { aircra
               <div className={`grid ${isTurbine ? 'grid-cols-2' : 'grid-cols-1'} gap-4`}>
                 <div>
                   <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Landings</label>
-                  <input type="number" required value={logLandings} onChange={e=>setLogLandings(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-brandOrange outline-none" placeholder="0" />
+                  <input type="number" required value={logLandings} onChange={e=>setLogLandings(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F5B05B] outline-none" placeholder="0" />
                 </div>
                 {isTurbine && (
                   <div>
                     <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Engine Cycles</label>
-                    <input type="number" required value={logCycles} onChange={e=>setLogCycles(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-brandOrange outline-none" placeholder="0" />
+                    <input type="number" required value={logCycles} onChange={e=>setLogCycles(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F5B05B] outline-none" placeholder="0" />
                   </div>
                 )}
               </div>
@@ -311,11 +311,11 @@ export default function TimesTab({ aircraft, session, role, onUpdate }: { aircra
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Initials</label>
-                  <input type="text" maxLength={3} required value={logInitials} onChange={e=>setLogInitials(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 uppercase focus:border-brandOrange outline-none" placeholder="ABC" />
+                  <input type="text" maxLength={3} required value={logInitials} onChange={e=>setLogInitials(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 uppercase focus:border-[#F5B05B] outline-none" placeholder="ABC" />
                 </div>
                 <div>
                   <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Reason (Opt)</label>
-                  <select value={logReason} onChange={e=>setLogReason(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 bg-white focus:border-brandOrange outline-none">
+                  <select value={logReason} onChange={e=>setLogReason(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 bg-white focus:border-[#F5B05B] outline-none">
                     <option value="">Select...</option>
                     <option value="PE">PE</option>
                     <option value="BE">BE</option>
@@ -327,7 +327,7 @@ export default function TimesTab({ aircraft, session, role, onUpdate }: { aircra
 
               <div>
                 <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Passengers (Opt)</label>
-                <input type="text" value={logPax} onChange={e=>setLogPax(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-brandOrange outline-none" placeholder="Names or notes..." />
+                <input type="text" value={logPax} onChange={e=>setLogPax(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F5B05B] outline-none" placeholder="Names or notes..." />
               </div>
 
               <div className="pt-4">

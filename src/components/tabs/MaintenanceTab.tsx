@@ -110,7 +110,7 @@ export default function MaintenanceTab({ aircraft, role, onGroundedStatusChange 
                   </div>
                   {role === 'admin' && (
                     <div className="flex gap-3">
-                      <button onClick={() => openMxForm(item)} className="text-gray-400 hover:text-brandOrange transition-colors"><Edit2 size={16}/></button>
+                      <button onClick={() => openMxForm(item)} className="text-gray-400 hover:text-[#F08B46] transition-colors"><Edit2 size={16}/></button>
                       <button onClick={() => deleteMxItem(item.id)} className="text-gray-400 hover:text-red-500 transition-colors"><Trash2 size={16}/></button>
                     </div>
                   )}
@@ -123,12 +123,12 @@ export default function MaintenanceTab({ aircraft, role, onGroundedStatusChange 
 
       {showMxModal && role === 'admin' && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-white rounded shadow-2xl w-full max-w-md p-6 border-t-4 border-brandOrange max-h-[90vh] overflow-y-auto animate-slide-up">
+          <div className="bg-white rounded shadow-2xl w-full max-w-md p-6 border-t-4 border-[#F08B46] max-h-[90vh] overflow-y-auto animate-slide-up">
             <div className="flex justify-between items-center mb-6"><h2 className="font-oswald text-2xl font-bold uppercase text-navy">{editingId ? 'Edit MX Item' : 'Track New Item'}</h2><button onClick={() => setShowMxModal(false)} className="text-gray-400 hover:text-red-500 transition-colors"><X size={24}/></button></div>
             <form onSubmit={submitMxItem} className="space-y-4">
               <div className="grid grid-cols-3 gap-4">
-                <div className="col-span-2"><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Item Name *</label><input type="text" required value={mxName} onChange={e=>setMxName(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-brandOrange outline-none" /></div>
-                <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Required?</label><select value={mxIsRequired ? "yes" : "no"} onChange={e=>setMxIsRequired(e.target.value === "yes")} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-brandOrange outline-none bg-white"><option value="yes">Yes</option><option value="no">Optional</option></select></div>
+                <div className="col-span-2"><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Item Name *</label><input type="text" required value={mxName} onChange={e=>setMxName(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" /></div>
+                <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Required?</label><select value={mxIsRequired ? "yes" : "no"} onChange={e=>setMxIsRequired(e.target.value === "yes")} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none bg-white"><option value="yes">Yes</option><option value="no">Optional</option></select></div>
               </div>
               <div className="pt-2">
                 <label className="text-[10px] font-bold uppercase tracking-widest text-navy block mb-2">Tracking Method</label>

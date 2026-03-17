@@ -12,16 +12,13 @@ export default function SquawksTab({ aircraft, session, onGroundedStatusChange }
   const [isSubmitting, setIsSubmitting] = useState(false);
   const sigCanvas = useRef<SignatureCanvas>(null);
 
-  // --- LIGHTBOX STATE ---
   const[previewImages, setPreviewImages] = useState<string[] | null>(null);
   const[previewIndex, setPreviewIndex] = useState<number>(0);
 
-  // --- PDF EXPORT STATE ---
   const [showExportModal, setShowExportModal] = useState(false);
   const [selectedForExport, setSelectedForExport] = useState<string[]>([]);
   const[isExportingPdf, setIsExportingPdf] = useState(false);
 
-  // --- FORM STATE ---
   const[editingId, setEditingId] = useState<string | null>(null);
   const [location, setLocation] = useState("");
   const [description, setDescription] = useState("");
@@ -86,16 +83,11 @@ export default function SquawksTab({ aircraft, session, onGroundedStatusChange }
     await fetchSquawks(); onGroundedStatusChange(); setShowModal(false); setIsSubmitting(false);
   };
 
-  const handleShareMx = (sq: any) => { /* Omitting string building for brevity, functionally identical */ window.location.href = `mailto:?subject=${encodeURIComponent(`Squawk Report: ${aircraft.tail_number}`)}`; };
+  const handleShareMx = (sq: any) => { window.location.href = `mailto:?subject=${encodeURIComponent(`Squawk Report: ${aircraft.tail_number}`)}`; };
 
-  // --- PDF EXPORT LOGIC ---
   const loadImageForPdf = async (url: string): Promise<HTMLImageElement> => {
     return new Promise((resolve, reject) => {
-      const img = new Image();
-      img.crossOrigin = "Anonymous"; // Required for Supabase CORS
-      img.onload = () => resolve(img);
-      img.onerror = (err) => reject(err);
-      img.src = url;
+      const img = new Image(); img.crossOrigin = "Anonymous"; img.onload = () => resolve(img); img.onerror = (err) => reject(err); img.src = url;
     });
   };
 
@@ -103,67 +95,31 @@ export default function SquawksTab({ aircraft, session, onGroundedStatusChange }
     setIsExportingPdf(true);
     const doc = new jsPDF();
     const itemsToExport = squawks.filter(s => selectedForExport.includes(s.id));
-    
-    let y = 20;
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(18);
-    doc.text(`Squawk Report - ${aircraft.tail_number}`, 14, y);
-    y += 8;
-    
-    doc.setFontSize(10);
-    doc.setFont("helvetica", "normal");
-    doc.text(`Generated on ${new Date().toLocaleDateString()}`, 14, y);
-    y += 15;
+    let y = 20; doc.setFont("helvetica", "bold"); doc.setFontSize(18); doc.text(`Squawk Report - ${aircraft.tail_number}`, 14, y); y += 8; doc.setFontSize(10); doc.setFont("helvetica", "normal"); doc.text(`Generated on ${new Date().toLocaleDateString()}`, 14, y); y += 15;
 
     for (const sq of itemsToExport) {
-      if (y > 260) { doc.addPage(); y = 20; } // Page break if running out of room
+      if (y > 260) { doc.addPage(); y = 20; }
+      doc.setFontSize(12); doc.setFont("helvetica", "bold"); doc.text(`Date: ${new Date(sq.created_at).toLocaleDateString()} | Location: ${sq.location}`, 14, y); y += 6;
+      doc.setFontSize(10); doc.setFont("helvetica", "normal"); doc.text(`Status: ${sq.status.toUpperCase()} | Airworthiness: ${sq.affects_airworthiness ? 'GROUNDED' : 'Monitor'}`, 14, y); y += 6;
+      if (sq.is_deferred) { doc.text(`Deferred (${sq.deferral_category}): MEL/CDL/NEF: ${sq.mel_number||'-'} / ${sq.cdl_number||'-'} / ${sq.nef_number||'-'}`, 14, y); y += 6; }
+      const splitDesc = doc.splitTextToSize(`Description: ${sq.description}`, 180); doc.text(splitDesc, 14, y); y += (splitDesc.length * 5) + 4;
 
-      doc.setFontSize(12); doc.setFont("helvetica", "bold");
-      doc.text(`Date: ${new Date(sq.created_at).toLocaleDateString()} | Location: ${sq.location}`, 14, y); y += 6;
-      
-      doc.setFontSize(10); doc.setFont("helvetica", "normal");
-      doc.text(`Status: ${sq.status.toUpperCase()} | Airworthiness: ${sq.affects_airworthiness ? 'GROUNDED' : 'Monitor'}`, 14, y); y += 6;
-
-      if (sq.is_deferred) {
-        doc.text(`Deferred (${sq.deferral_category}): MEL/CDL/NEF: ${sq.mel_number||'-'} / ${sq.cdl_number||'-'} / ${sq.nef_number||'-'}`, 14, y); y += 6;
-      }
-
-      // Handle multi-line descriptions
-      const splitDesc = doc.splitTextToSize(`Description: ${sq.description}`, 180);
-      doc.text(splitDesc, 14, y);
-      y += (splitDesc.length * 5) + 4;
-
-      // Embed Large Images
       if (sq.pictures && sq.pictures.length > 0) {
         for (const picUrl of sq.pictures) {
-          if (y > 200) { doc.addPage(); y = 20; } // Ensure image fits
+          if (y > 200) { doc.addPage(); y = 20; }
           try {
-            const img = await loadImageForPdf(picUrl);
-            const maxW = 150; const maxH = 100;
-            const ratio = Math.min(maxW / img.width, maxH / img.height);
-            const w = img.width * ratio; const h = img.height * ratio;
-            doc.addImage(img, 'JPEG', 14, y, w, h);
-            y += h + 8;
-          } catch (e) {
-            console.error("Could not load image into PDF", e);
-            doc.text("[Image failed to load]", 14, y); y += 6;
-          }
+            const img = await loadImageForPdf(picUrl); const maxW = 150; const maxH = 100; const ratio = Math.min(maxW / img.width, maxH / img.height);
+            doc.addImage(img, 'JPEG', 14, y, img.width * ratio, img.height * ratio); y += (img.height * ratio) + 8;
+          } catch (e) { doc.text("[Image failed to load]", 14, y); y += 6; }
         }
       }
-      
-      y += 5;
-      doc.setDrawColor(200); doc.line(14, y, 196, y); // Separator Line
-      y += 10;
+      y += 5; doc.setDrawColor(200); doc.line(14, y, 196, y); y += 10;
     }
-
-    doc.save(`${aircraft.tail_number}_Squawk_Report.pdf`);
-    setIsExportingPdf(false);
-    setShowExportModal(false);
+    doc.save(`${aircraft.tail_number}_Squawk_Report.pdf`); setIsExportingPdf(false); setShowExportModal(false);
   };
 
   const toggleExportSelection = (id: string) => {
-    if (selectedForExport.includes(id)) setSelectedForExport(selectedForExport.filter(i => i !== id));
-    else setSelectedForExport([...selectedForExport, id]);
+    if (selectedForExport.includes(id)) setSelectedForExport(selectedForExport.filter(i => i !== id)); else setSelectedForExport([...selectedForExport, id]);
   };
 
   if (!aircraft) return null;
@@ -172,11 +128,10 @@ export default function SquawksTab({ aircraft, session, onGroundedStatusChange }
     <>
       <div className="mb-2"><PrimaryButton onClick={() => openForm()}><Plus size={18} /> Report New Squawk</PrimaryButton></div>
 
-      <div className="bg-cream shadow-lg rounded-sm p-4 md:p-6 border-t-4 border-brandOrange mb-6">
+      <div className="bg-cream shadow-lg rounded-sm p-4 md:p-6 border-t-4 border-[#CE3732] mb-6">
         <div className="flex justify-between items-end mb-6">
           <h2 className="font-oswald text-2xl md:text-3xl font-bold uppercase text-navy m-0 leading-none">Active Squawks</h2>
-          {/* EXPORT BUTTON */}
-          <button onClick={() => { setSelectedForExport([]); setShowExportModal(true); }} className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-brandOrange hover:text-brandOrange-alt transition-colors active:scale-95">
+          <button onClick={() => { setSelectedForExport([]); setShowExportModal(true); }} className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-[#CE3732] hover:opacity-80 transition-colors active:scale-95">
             <Download size={14} /> Export PDF
           </button>
         </div>
@@ -184,17 +139,17 @@ export default function SquawksTab({ aircraft, session, onGroundedStatusChange }
         <div className="space-y-4">
           {squawks.length === 0 ? (<p className="text-center text-sm text-gray-400 italic py-4">No squawks on file.</p>) : (
             squawks.map(sq => (
-              <div key={sq.id} className={`p-4 border rounded ${sq.status === 'resolved' ? 'border-green-200 bg-green-50' : (sq.affects_airworthiness ? 'border-red-400 bg-red-50' : 'border-orange-200 bg-orange-50')}`}>
+              <div key={sq.id} className={`p-4 border rounded ${sq.status === 'resolved' ? 'border-green-200 bg-green-50' : (sq.affects_airworthiness ? 'border-[#CE3732]/30 bg-[#CE3732]/10' : 'border-[#F08B46]/30 bg-[#F08B46]/10')}`}>
                 <div className="flex justify-between items-start mb-2">
                   <div>
-                    <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded text-white ${sq.status === 'resolved' ? 'bg-success' : (sq.affects_airworthiness ? 'bg-red-600' : 'bg-brandOrange')}`}>
+                    <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded text-white ${sq.status === 'resolved' ? 'bg-success' : (sq.affects_airworthiness ? 'bg-[#CE3732]' : 'bg-[#F08B46]')}`}>
                       {sq.status === 'resolved' ? 'RESOLVED' : (sq.affects_airworthiness ? 'AOG / GROUNDED' : 'OPEN')}
                     </span>
                     {sq.is_deferred && <span className="ml-2 text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded bg-blue-600 text-white">DEFERRED ({sq.deferral_category})</span>}
                   </div>
                   <div className="flex gap-2">
-                    <button onClick={() => handleShareMx(sq)} className="text-gray-500 hover:text-brandOrange active:scale-95" title="Email MX"><Mail size={16}/></button>
-                    <button onClick={() => openForm(sq)} className="text-gray-500 hover:text-brandOrange active:scale-95" title="Edit"><Edit2 size={16}/></button>
+                    <button onClick={() => handleShareMx(sq)} className="text-gray-500 hover:text-[#CE3732] active:scale-95" title="Email MX"><Mail size={16}/></button>
+                    <button onClick={() => openForm(sq)} className="text-gray-500 hover:text-[#CE3732] active:scale-95" title="Edit"><Edit2 size={16}/></button>
                   </div>
                 </div>
 
@@ -218,23 +173,23 @@ export default function SquawksTab({ aircraft, session, onGroundedStatusChange }
       {/* PDF EXPORT SELECTION MODAL */}
       {showExportModal && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-white rounded shadow-2xl w-full max-w-md p-6 border-t-4 border-brandOrange max-h-[90vh] overflow-y-auto animate-slide-up flex flex-col">
+          <div className="bg-white rounded shadow-2xl w-full max-w-md p-6 border-t-4 border-[#CE3732] max-h-[90vh] overflow-y-auto animate-slide-up flex flex-col">
             <div className="flex justify-between items-center mb-4">
-              <h2 className="font-oswald text-2xl font-bold uppercase text-navy flex items-center gap-2"><CheckSquare size={20} className="text-brandOrange" /> Export to PDF</h2>
+              <h2 className="font-oswald text-2xl font-bold uppercase text-navy flex items-center gap-2"><CheckSquare size={20} className="text-[#CE3732]" /> Export to PDF</h2>
               <button onClick={() => setShowExportModal(false)} className="text-gray-400 hover:text-red-500 transition-colors"><X size={24}/></button>
             </div>
             
-            <p className="text-xs text-gray-500 mb-4">Select the squawks you wish to include in the formal PDF report. Large images will be automatically embedded.</p>
+            <p className="text-xs text-gray-500 mb-4">Select the squawks you wish to include in the formal PDF report.</p>
 
             <div className="flex justify-between items-center mb-2 pb-2 border-b border-gray-200">
-              <button onClick={() => setSelectedForExport(squawks.map(s => s.id))} className="text-[10px] font-bold uppercase tracking-widest text-brandOrange hover:text-brandOrange-alt">Select All</button>
+              <button onClick={() => setSelectedForExport(squawks.map(s => s.id))} className="text-[10px] font-bold uppercase tracking-widest text-[#CE3732] hover:opacity-80">Select All</button>
               <button onClick={() => setSelectedForExport([])} className="text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:text-gray-600">Clear All</button>
             </div>
 
             <div className="space-y-2 mb-6 overflow-y-auto flex-1 max-h-[40vh]">
               {squawks.map(sq => (
                 <label key={sq.id} className="flex items-start gap-3 p-3 border border-gray-200 rounded cursor-pointer hover:bg-gray-50 transition-colors">
-                  <input type="checkbox" checked={selectedForExport.includes(sq.id)} onChange={() => toggleExportSelection(sq.id)} className="mt-1 w-4 h-4 text-brandOrange border-gray-300 rounded focus:ring-brandOrange" />
+                  <input type="checkbox" checked={selectedForExport.includes(sq.id)} onChange={() => toggleExportSelection(sq.id)} className="mt-1 w-4 h-4 text-[#CE3732] border-gray-300 rounded" />
                   <div className="flex-1">
                     <p className="text-xs font-bold text-navy">{new Date(sq.created_at).toLocaleDateString()} - {sq.location}</p>
                     <p className="text-[10px] text-gray-500 line-clamp-1">{sq.description}</p>
@@ -245,35 +200,32 @@ export default function SquawksTab({ aircraft, session, onGroundedStatusChange }
                 </label>
               ))}
             </div>
-
-            <PrimaryButton onClick={generatePDF} disabled={selectedForExport.length === 0 || isExportingPdf}>
-              {isExportingPdf ? "Generating Report..." : `Export ${selectedForExport.length} Items to PDF`}
-            </PrimaryButton>
+            <PrimaryButton onClick={generatePDF} disabled={selectedForExport.length === 0 || isExportingPdf}>{isExportingPdf ? "Generating Report..." : `Export ${selectedForExport.length} Items to PDF`}</PrimaryButton>
           </div>
         </div>
       )}
 
-      {/* FULLSCREEN LIGHTBOX (Omitted layout wrapper for brevity, logic identical to previous) */}
+      {/* FULLSCREEN LIGHTBOX */}
       {previewImages && (<div className="fixed inset-0 z-[60] bg-black/95 flex items-center justify-center animate-fade-in" onClick={() => setPreviewImages(null)}><button className="absolute top-4 right-4 text-gray-400 hover:text-white z-50 p-2"><X size={32}/></button>{previewImages.length > 1 && (<button onClick={(e) => { e.stopPropagation(); setPreviewIndex(prev => prev === 0 ? previewImages.length - 1 : prev - 1); }} className="absolute left-4 text-gray-400 hover:text-white z-50 p-2"><ChevronLeft size={48}/></button>)}<div className="max-w-full max-h-full p-4 flex items-center justify-center" onClick={(e) => e.stopPropagation()}><img src={previewImages[previewIndex]} className="max-h-[85vh] max-w-full object-contain rounded shadow-2xl" /></div>{previewImages.length > 1 && (<button onClick={(e) => { e.stopPropagation(); setPreviewIndex(prev => prev === previewImages.length - 1 ? 0 : prev + 1); }} className="absolute right-4 text-gray-400 hover:text-white z-50 p-2"><ChevronRight size={48}/></button>)}<div className="absolute bottom-6 text-gray-400 font-oswald tracking-widest text-sm uppercase">Image {previewIndex + 1} of {previewImages.length}</div></div>)}
 
       {/* REPORT MODAL */}
       {showModal && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-white rounded shadow-2xl w-full max-w-lg p-6 border-t-4 border-brandOrange max-h-[90vh] overflow-y-auto animate-slide-up">
+          <div className="bg-white rounded shadow-2xl w-full max-w-lg p-6 border-t-4 border-[#CE3732] max-h-[90vh] overflow-y-auto animate-slide-up">
             <div className="flex justify-between items-center mb-4"><h2 className="font-oswald text-2xl font-bold uppercase text-navy">{editingId ? 'Edit Squawk' : 'Report Squawk'}</h2><button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-red-500"><X size={24}/></button></div>
             <div className="bg-gray-50 p-3 rounded border border-gray-200 mb-4 grid grid-cols-2 gap-2 text-xs"><div><span className="font-bold text-gray-500 uppercase">Date:</span> {new Date().toLocaleDateString()}</div><div><span className="font-bold text-gray-500 uppercase">Tail:</span> {aircraft.tail_number}</div></div>
             <form onSubmit={submitSquawk} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4"><div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Status</label><select value={status} onChange={e=>setStatus(e.target.value as any)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-brandOrange bg-white font-bold"><option value="open">Open</option><option value="resolved">Resolved</option></select></div><div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Affects Airworthiness?</label><select value={affectsAirworthiness ? "yes" : "no"} onChange={e=>setAffectsAirworthiness(e.target.value === "yes")} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-red-500 bg-white font-bold"><option value="no">No (Monitor)</option><option value="yes">YES (GROUNDED)</option></select></div></div>
-              <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Location on Aircraft *</label><input type="text" required value={location} onChange={e=>setLocation(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1" /></div>
-              <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Description *</label><textarea required value={description} onChange={e=>setDescription(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 min-h-[100px]" /></div>
+              <div className="grid grid-cols-2 gap-4"><div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Status</label><select value={status} onChange={e=>setStatus(e.target.value as any)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#CE3732] bg-white font-bold outline-none"><option value="open">Open</option><option value="resolved">Resolved</option></select></div><div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Affects Airworthiness?</label><select value={affectsAirworthiness ? "yes" : "no"} onChange={e=>setAffectsAirworthiness(e.target.value === "yes")} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#CE3732] bg-white font-bold outline-none"><option value="no">No (Monitor)</option><option value="yes">YES (GROUNDED)</option></select></div></div>
+              <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Location on Aircraft *</label><input type="text" required value={location} onChange={e=>setLocation(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#CE3732] outline-none" /></div>
+              <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Description *</label><textarea required value={description} onChange={e=>setDescription(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 min-h-[100px] focus:border-[#CE3732] outline-none" /></div>
               <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy flex items-center gap-2 mb-2"><Upload size={14}/> Attach Photos</label><input type="file" multiple accept="image/*" onChange={(e)=>{if (e.target.files) setSelectedImages(Array.from(e.target.files));}} className="text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:bg-gray-100 file:text-navy cursor-pointer" /></div>
               {isTurbine && status === 'open' && (
                 <div className="border border-blue-200 rounded p-4 bg-blue-50/30">
                   <label className="flex items-center gap-2 text-sm font-bold text-navy mb-4"><input type="checkbox" checked={isDeferred} onChange={e=>setIsDeferred(e.target.checked)} className="w-4 h-4" /> Item Deferred</label>
                   {isDeferred && (
                     <div className="space-y-4 animate-fade-in">
-                      <div className="grid grid-cols-2 gap-3"><div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">MEL #</label><input type="text" value={mel} onChange={e=>setMel(e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm mt-1" /></div><div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">CDL #</label><input type="text" value={cdl} onChange={e=>setCdl(e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm mt-1" /></div></div>
-                      <div className="grid grid-cols-2 gap-3"><div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Category</label><select value={category} onChange={e=>setCategory(e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 bg-white"><option value="">Select...</option><option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option></select></div></div>
+                      <div className="grid grid-cols-2 gap-3"><div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">MEL #</label><input type="text" value={mel} onChange={e=>setMel(e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-[#CE3732] outline-none" /></div><div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">CDL #</label><input type="text" value={cdl} onChange={e=>setCdl(e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-[#CE3732] outline-none" /></div></div>
+                      <div className="grid grid-cols-2 gap-3"><div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Category</label><select value={category} onChange={e=>setCategory(e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 bg-white focus:border-[#CE3732] outline-none"><option value="">Select...</option><option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option></select></div></div>
                       <div className="pt-4 border-t border-gray-200"><label className="text-[10px] font-bold uppercase tracking-widest text-navy block mb-2">Signature *</label><div className="border border-gray-300 rounded bg-white"><SignatureCanvas ref={sigCanvas} penColor="black" canvasProps={{ className: 'w-full h-32 rounded' }} /></div><button type="button" onClick={() => sigCanvas.current?.clear()} className="text-[10px] font-bold uppercase text-gray-500 mt-1 hover:text-red-500">Clear</button></div>
                     </div>
                   )}
