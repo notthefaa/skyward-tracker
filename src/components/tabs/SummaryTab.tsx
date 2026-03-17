@@ -5,8 +5,8 @@ import TicketField from "@/components/TicketField";
 
 export default function SummaryTab({ aircraft }: { aircraft: any }) {
   const [nextMx, setNextMx] = useState<any>(null);
-  const [activeSquawks, setActiveSquawks] = useState<any[]>([]);
-  const[latestNote, setLatestNote] = useState<any>(null);
+  const[activeSquawks, setActiveSquawks] = useState<any[]>([]);
+  const [latestNote, setLatestNote] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -21,7 +21,6 @@ export default function SummaryTab({ aircraft }: { aircraft: any }) {
     if (mxData && mxData.length > 0) {
       const currentEngineTime = aircraft.total_engine_time || 0;
       
-      // Calculate remaining time/days for each item to find the closest one
       const processedMx = mxData.map(item => {
         let remaining = 0;
         let isExpired = false;
@@ -40,7 +39,6 @@ export default function SummaryTab({ aircraft }: { aircraft: any }) {
         return { ...item, remaining, isExpired, dueText };
       });
 
-      // Sort by smallest remaining amount and pick the first one
       processedMx.sort((a, b) => a.remaining - b.remaining);
       setNextMx(processedMx[0]);
     } else {
@@ -87,9 +85,11 @@ export default function SummaryTab({ aircraft }: { aircraft: any }) {
           </div>
         </div>
 
-        <div className="bg-white border-b border-gray-200 px-6 py-4 flex flex-col md:flex-row md:items-start justify-between gap-6">
+        {/* 3-COLUMN CONTACT GRID */}
+        <div className="bg-white border-b border-gray-200 px-6 py-4 grid grid-cols-1 md:grid-cols-3 gap-6">
+          
           <div className="flex items-start gap-3 text-navy">
-            <MapPin size={18} className="text-brandOrange mt-1" />
+            <MapPin size={18} className="text-brandOrange mt-1 shrink-0" />
             <div>
               <span className="block text-[10px] font-bold uppercase tracking-widest text-gray-400">Home Base</span>
               <span className="font-roboto font-bold text-sm">{aircraft.home_airport || 'Not Assigned'}</span>
@@ -97,12 +97,10 @@ export default function SummaryTab({ aircraft }: { aircraft: any }) {
           </div>
           
           <div className="flex items-start gap-3 text-navy">
-            <User size={18} className="text-brandOrange mt-1" />
+            <User size={18} className="text-brandOrange mt-1 shrink-0" />
             <div>
               <span className="block text-[10px] font-bold uppercase tracking-widest text-gray-400">Main Contact</span>
               <span className="font-roboto font-bold text-sm block mb-2">{aircraft.main_contact || 'Not Assigned'}</span>
-              
-              {/* INTERACTIVE PHONE AND EMAIL BUTTONS */}
               <div className="flex flex-wrap gap-2 mt-1">
                 {aircraft.main_contact_phone && (
                   <a href={`tel:${aircraft.main_contact_phone}`} className="flex items-center gap-1 text-[11px] font-bold uppercase tracking-widest text-brandOrange hover:text-orange-600 bg-orange-50 border border-orange-200 px-2 py-1 rounded transition-colors active:scale-95">
@@ -117,6 +115,27 @@ export default function SummaryTab({ aircraft }: { aircraft: any }) {
               </div>
             </div>
           </div>
+
+          <div className="flex items-start gap-3 text-navy">
+            <Wrench size={18} className="text-brandOrange mt-1 shrink-0" />
+            <div>
+              <span className="block text-[10px] font-bold uppercase tracking-widest text-gray-400">MX Contact</span>
+              <span className="font-roboto font-bold text-sm block mb-2">{aircraft.mx_contact || 'Not Assigned'}</span>
+              <div className="flex flex-wrap gap-2 mt-1">
+                {aircraft.mx_contact_phone && (
+                  <a href={`tel:${aircraft.mx_contact_phone}`} className="flex items-center gap-1 text-[11px] font-bold uppercase tracking-widest text-brandOrange hover:text-orange-600 bg-orange-50 border border-orange-200 px-2 py-1 rounded transition-colors active:scale-95">
+                    <Phone size={12} /> Call
+                  </a>
+                )}
+                {aircraft.mx_contact_email && (
+                  <a href={`mailto:${aircraft.mx_contact_email}`} className="flex items-center gap-1 text-[11px] font-bold uppercase tracking-widest text-navy hover:text-blue-800 bg-blue-50 border border-blue-200 px-2 py-1 rounded transition-colors active:scale-95">
+                    <Mail size={12} /> Email
+                  </a>
+                )}
+              </div>
+            </div>
+          </div>
+
         </div>
 
         <div className="p-6 grid grid-cols-2 gap-6 bg-cream">
@@ -129,7 +148,6 @@ export default function SummaryTab({ aircraft }: { aircraft: any }) {
       {!isLoading && (
         <div className="grid grid-cols-1 gap-3">
           
-          {/* NEXT MX DUE */}
           {nextMx ? (
             <div className="bg-white border border-gray-200 shadow-sm rounded-sm p-4 flex gap-4 items-center">
               <div className="bg-orange-50 p-3 rounded-full text-[#F08B46] shrink-0"><Wrench size={20}/></div>
@@ -149,7 +167,6 @@ export default function SummaryTab({ aircraft }: { aircraft: any }) {
             </div>
           )}
 
-          {/* ACTIVE SQUAWKS */}
           {activeSquawks.length > 0 ? (
             <div className="bg-white border border-red-200 shadow-sm rounded-sm p-4 flex gap-4 items-center">
               <div className="bg-red-50 p-3 rounded-full text-[#CE3732] shrink-0"><AlertTriangle size={20}/></div>
@@ -171,7 +188,6 @@ export default function SummaryTab({ aircraft }: { aircraft: any }) {
             </div>
           )}
 
-          {/* LATEST NOTE */}
           {latestNote ? (
             <div className="bg-white border border-gray-200 shadow-sm rounded-sm p-4 flex gap-4 items-center">
               <div className="bg-blue-50 p-3 rounded-full text-navy shrink-0"><FileText size={20}/></div>

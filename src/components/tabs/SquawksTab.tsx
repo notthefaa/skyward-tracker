@@ -171,25 +171,41 @@ export default function SquawksTab({ aircraft, session, role, onGroundedStatusCh
   };
 
   const handleShareMx = (sq: any) => { 
-    const subject = encodeURIComponent(`Squawk Report: ${aircraft.tail_number}`);
+    // 1. Get the MX Email from the aircraft profile
+    const targetEmail = aircraft.mx_contact_email || "";
+    
+    // 2. Format the subject as requested: (Tailnumber): squawk location
+    const subject = encodeURIComponent(`(${aircraft.tail_number}): ${sq.location}`);
+    
+    // 3. Build the body
     let body = `Aircraft: ${aircraft.tail_number} (Serial: ${aircraft.serial_number || 'N/A'})\n`;
     body += `Reported Date: ${new Date(sq.created_at).toLocaleDateString()}\n`;
     body += `Status: ${sq.status.toUpperCase()}\n`;
     body += `Airworthiness Affected: ${sq.affects_airworthiness ? 'YES (GROUNDED)' : 'NO'}\n\n`;
+    
     body += `Location: ${sq.location}\n`;
     body += `Description: ${sq.description}\n\n`;
     
     if (sq.is_deferred) {
       body += `--- DEFERRAL DETAILS ---\n`;
       body += `Category: ${sq.deferral_category}\n`;
-      body += `MEL/CDL/NEF/MDL: ${sq.mel_number} / ${sq.cdl_number} / ${sq.nef_number} / ${sq.mdl_number}\n`;
+      body += `MEL/CDL/NEF/MDL: ${sq.mel_number} / ${sq.cdl_number} / ${sq.nef_number} / ${sq.mdl_number}\n\n`;
     }
 
+    // 4. Attach image links
     if (sq.pictures && sq.pictures.length > 0) {
-      body += `\nImage Links attached in portal.`;
+      body += `--- SQUAWK PHOTOS ---\n`;
+      sq.pictures.forEach((pic: string, i: number) => {
+        body += `Photo ${i + 1}: ${pic}\n`;
+      });
+      body += `\n`;
     }
 
-    window.location.href = `mailto:?subject=${subject}&body=${encodeURIComponent(body)}`;
+    // 5. Add the separator line for the user's email client signature
+    body += `\n---\n`;
+
+    // 6. Launch the native email app
+    window.location.href = `mailto:${targetEmail}?subject=${subject}&body=${encodeURIComponent(body)}`;
   };
 
   // --- PDF LOGIC OMITTED FOR BREVITY BUT IS IDENTICAL UNDER THE HOOD ---

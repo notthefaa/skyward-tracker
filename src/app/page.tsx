@@ -34,10 +34,13 @@ export default function FleetTrackerApp() {
   const [newEngineTime, setNewEngineTime] = useState("");
   
   const [newHomeAirport, setNewHomeAirport] = useState("");
-  const [newMainContact, setNewMainContact] = useState("");
-  const [newMainContactPhone, setNewMainContactPhone] = useState(""); // NEW
-  const[newMainContactEmail, setNewMainContactEmail] = useState(""); // NEW
-  const [newAvatarFile, setNewAvatarFile] = useState<File | null>(null);
+  const[newMainContact, setNewMainContact] = useState("");
+  const [newMainContactPhone, setNewMainContactPhone] = useState("");
+  const [newMainContactEmail, setNewMainContactEmail] = useState("");
+  const[newMxContact, setNewMxContact] = useState(""); // NEW
+  const [newMxContactPhone, setNewMxContactPhone] = useState(""); // NEW
+  const [newMxContactEmail, setNewMxContactEmail] = useState(""); // NEW
+  const[newAvatarFile, setNewAvatarFile] = useState<File | null>(null);
   
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -121,7 +124,7 @@ export default function FleetTrackerApp() {
     else setAircraftStatus('airworthy');
   };
 
-  const openAircraftForm = (aircraft: any = null) => {
+const openAircraftForm = (aircraft: any = null) => {
     if (aircraft) { 
       setEditingAircraftId(aircraft.id); 
       setNewTail(aircraft.tail_number); 
@@ -134,18 +137,15 @@ export default function FleetTrackerApp() {
       setNewMainContact(aircraft.main_contact || "");
       setNewMainContactPhone(aircraft.main_contact_phone || "");
       setNewMainContactEmail(aircraft.main_contact_email || "");
+      setNewMxContact(aircraft.mx_contact || ""); // NEW
+      setNewMxContactPhone(aircraft.mx_contact_phone || ""); // NEW
+      setNewMxContactEmail(aircraft.mx_contact_email || ""); // NEW
     } else { 
       setEditingAircraftId(null); 
-      setNewTail(""); 
-      setNewSerial(""); 
-      setNewModel(""); 
-      setNewType('Piston'); 
-      setNewAirframeTime(""); 
-      setNewEngineTime(""); 
-      setNewHomeAirport("");
-      setNewMainContact("");
-      setNewMainContactPhone("");
-      setNewMainContactEmail("");
+      setNewTail(""); setNewSerial(""); setNewModel(""); setNewType('Piston'); 
+      setNewAirframeTime(""); setNewEngineTime(""); setNewHomeAirport("");
+      setNewMainContact(""); setNewMainContactPhone(""); setNewMainContactEmail("");
+      setNewMxContact(""); setNewMxContactPhone(""); setNewMxContactEmail(""); // NEW
     }
     setNewAvatarFile(null);
     setShowAircraftModal(true);
@@ -180,6 +180,9 @@ export default function FleetTrackerApp() {
       main_contact: newMainContact,
       main_contact_phone: newMainContactPhone,
       main_contact_email: newMainContactEmail,
+      mx_contact: newMxContact, // NEW
+      mx_contact_phone: newMxContactPhone, // NEW
+      mx_contact_email: newMxContactEmail, // NEW
       avatar_url: avatarUrl
     };
     
@@ -326,6 +329,21 @@ export default function FleetTrackerApp() {
                 <div>
                   <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Email</label>
                   <input type="email" value={newMainContactEmail} onChange={e=>setNewMainContactEmail(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" placeholder="john@doe.com" />
+                </div>
+              </div>
+
+               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-navy">MX Contact</label>
+                  <input type="text" value={newMxContact} onChange={e=>setNewMxContact(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" placeholder="Jane Smith" />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-navy">MX Phone</label>
+                  <input type="tel" value={newMxContactPhone} onChange={e=>setNewMxContactPhone(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" placeholder="(555) 987-6543" />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-navy">MX Email</label>
+                  <input type="email" value={newMxContactEmail} onChange={e=>setNewMxContactEmail(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" placeholder="mx@shop.com" />
                 </div>
               </div>
               
