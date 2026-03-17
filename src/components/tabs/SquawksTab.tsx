@@ -6,8 +6,8 @@ import SignatureCanvas from "react-signature-canvas";
 import imageCompression from "browser-image-compression";
 import { jsPDF } from "jspdf";
 
-export default function SquawksTab({ aircraft, session, role, onGroundedStatusChange }: { aircraft: any, session: any, role: string, onGroundedStatusChange: () => void }) {
-  const [squawks, setSquawks] = useState<any[]>([]);
+export default function SquawksTab({ aircraft, session, role, userInitials, onGroundedStatusChange }: { aircraft: any, session: any, role: string, userInitials: string, onGroundedStatusChange: () => void }) {
+  const[squawks, setSquawks] = useState<any[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const sigCanvas = useRef<SignatureCanvas>(null);
@@ -18,11 +18,11 @@ export default function SquawksTab({ aircraft, session, role, onGroundedStatusCh
 
   // PDF Export State
   const [showExportModal, setShowExportModal] = useState(false);
-  const[selectedForExport, setSelectedForExport] = useState<string[]>([]);
-  const [isExportingPdf, setIsExportingPdf] = useState(false);
+  const [selectedForExport, setSelectedForExport] = useState<string[]>([]);
+  const[isExportingPdf, setIsExportingPdf] = useState(false);
 
   // Form State
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const[editingId, setEditingId] = useState<string | null>(null);
   const [location, setLocation] = useState("");
   const [description, setDescription] = useState("");
   const [affectsAirworthiness, setAffectsAirworthiness] = useState(false);
@@ -43,7 +43,6 @@ export default function SquawksTab({ aircraft, session, role, onGroundedStatusCh
   const [certNum, setCertNum] = useState("");
 
   const isTurbine = aircraft?.engine_type === 'Turbine';
-  const reporterEmail = session?.user?.email || "Unknown Pilot";
 
   useEffect(() => { 
     if (aircraft) fetchSquawks(); 
@@ -86,8 +85,15 @@ export default function SquawksTab({ aircraft, session, role, onGroundedStatusCh
       setStatus('open'); 
       setExistingImages([]); 
       setSelectedImages([]); 
-      setMel(""); setCdl(""); setNef(""); setMdl(""); setMelControl(""); setCategory(""); 
-      setProcCompleted(false); setFullName(""); setCertNum(""); 
+      setMel(""); 
+      setCdl(""); 
+      setNef(""); 
+      setMdl(""); 
+      setMelControl(""); 
+      setCategory(""); 
+      setProcCompleted(false); 
+      setFullName(""); 
+      setCertNum(""); 
       if (sigCanvas.current) sigCanvas.current.clear();
     }
     setShowModal(true);
@@ -96,17 +102,20 @@ export default function SquawksTab({ aircraft, session, role, onGroundedStatusCh
   const uploadImages = async (): Promise<string[]> => {
     let uploadedPaths: string[] =[];
     const options = { maxSizeMB: 1, maxWidthOrHeight: 1920, useWebWorker: true };
+    
     for (const file of selectedImages) {
       try {
         const compressedFile = await imageCompression(file, options);
         const fileName = `${aircraft.tail_number}_${Date.now()}_${compressedFile.name}`;
+        
         const { data } = await supabase.storage.from('aft_squawk_images').upload(fileName, compressedFile);
+        
         if (data) {
           const { data: publicUrlData } = supabase.storage.from('aft_squawk_images').getPublicUrl(data.path);
           uploadedPaths.push(publicUrlData.publicUrl);
         }
       } catch (error) { 
-        console.error(error); 
+        console.error("Image upload failed:", error); 
       }
     }
     return uploadedPaths;
@@ -130,6 +139,7 @@ export default function SquawksTab({ aircraft, session, role, onGroundedStatusCh
     const squawkData = {
       aircraft_id: aircraft.id, 
       reported_by: session.user.id, 
+      reporter_initials: userInitials, // Permanently stamps the user's initials
       location, 
       description, 
       affects_airworthiness: affectsAirworthiness, 
@@ -216,45 +226,64 @@ export default function SquawksTab({ aircraft, session, role, onGroundedStatusCh
     const itemsToExport = squawks.filter(s => selectedForExport.includes(s.id));
     let y = 20; 
     
-    doc.setFont("helvetica", "bold"); doc.setFontSize(18); 
-    doc.text(`Squawk Report - ${aircraft.tail_number}`, 14, y); y += 8; 
-    doc.setFontSize(10); doc.setFont("helvetica", "normal"); 
-    doc.text(`Generated on ${new Date().toLocaleDateString()}`, 14, y); y += 15;
+    doc.setFont("helvetica", "bold"); 
+    doc.setFontSize(18); 
+    doc.text(`Squawk Report - ${aircraft.tail_number}`, 14, y); 
+    y += 8; 
+    
+    doc.setFontSize(10); 
+    doc.setFont("helvetica", "normal"); 
+    doc.text(`Generated on ${new Date().toLocaleDateString()}`, 14, y); 
+    y += 15;
 
     for (const sq of itemsToExport) {
       if (y > 260) { doc.addPage(); y = 20; }
       
-      doc.setFontSize(12); doc.setFont("helvetica", "bold"); 
-      doc.text(`Date: ${new Date(sq.created_at).toLocaleDateString()} | Location: ${sq.location}`, 14, y); y += 6;
+      doc.setFontSize(12); 
+      doc.setFont("helvetica", "bold"); 
+      doc.text(`Date: ${new Date(sq.created_at).toLocaleDateString()} | Location: ${sq.location}`, 14, y); 
+      y += 6;
       
-      doc.setFontSize(10); doc.setFont("helvetica", "normal"); 
-      doc.text(`Status: ${sq.status.toUpperCase()} | Airworthiness: ${sq.affects_airworthiness ? 'GROUNDED' : 'Monitor'}`, 14, y); y += 6;
+      doc.setFontSize(10); 
+      doc.setFont("helvetica", "normal"); 
+      doc.text(`Status: ${sq.status.toUpperCase()} | Airworthiness: ${sq.affects_airworthiness ? 'GROUNDED' : 'Monitor'}`, 14, y); 
+      y += 6;
       
       if (sq.is_deferred) { 
-        doc.text(`Deferred (${sq.deferral_category}): MEL/CDL/NEF: ${sq.mel_number||'-'} / ${sq.cdl_number||'-'} / ${sq.nef_number||'-'}`, 14, y); y += 6; 
+        doc.text(`Deferred (${sq.deferral_category}): MEL/CDL/NEF: ${sq.mel_number||'-'} / ${sq.cdl_number||'-'} / ${sq.nef_number||'-'}`, 14, y); 
+        y += 6; 
       }
       
       const splitDesc = doc.splitTextToSize(`Description: ${sq.description}`, 180); 
-      doc.text(splitDesc, 14, y); y += (splitDesc.length * 5) + 4;
+      doc.text(splitDesc, 14, y); 
+      y += (splitDesc.length * 5) + 4;
 
       if (sq.pictures && sq.pictures.length > 0) {
         for (const picUrl of sq.pictures) {
           if (y > 200) { doc.addPage(); y = 20; }
           try {
             const img = await loadImageForPdf(picUrl); 
-            const maxW = 150; const maxH = 100; 
+            const maxW = 150; 
+            const maxH = 100; 
             const ratio = Math.min(maxW / img.width, maxH / img.height);
-            doc.addImage(img, 'JPEG', 14, y, img.width * ratio, img.height * ratio); y += (img.height * ratio) + 8;
+            doc.addImage(img, 'JPEG', 14, y, img.width * ratio, img.height * ratio); 
+            y += (img.height * ratio) + 8;
           } catch (e) { 
-            doc.text("[Image failed to load]", 14, y); y += 6; 
+            doc.text("[Image failed to load]", 14, y); 
+            y += 6; 
           }
         }
       }
-      y += 5; doc.setDrawColor(200); doc.line(14, y, 196, y); y += 10;
+      
+      y += 5; 
+      doc.setDrawColor(200); 
+      doc.line(14, y, 196, y); 
+      y += 10;
     }
     
     doc.save(`${aircraft.tail_number}_Squawk_Report.pdf`); 
-    setIsExportingPdf(false); setShowExportModal(false);
+    setIsExportingPdf(false); 
+    setShowExportModal(false);
   };
 
   const toggleExportSelection = (id: string) => {
@@ -267,7 +296,6 @@ export default function SquawksTab({ aircraft, session, role, onGroundedStatusCh
 
   if (!aircraft) return null;
 
-  // Split the squawks into Active and Archived
   const activeSquawks = squawks.filter(sq => sq.status === 'open');
   const resolvedSquawks = squawks.filter(sq => sq.status === 'resolved');
 
@@ -326,7 +354,9 @@ export default function SquawksTab({ aircraft, session, role, onGroundedStatusCh
                 </div>
 
                 <div className="mt-3">
-                  <p className="text-xs text-gray-500 font-bold uppercase tracking-widest">{new Date(sq.created_at).toLocaleDateString()} | {sq.location}</p>
+                  <p className="text-xs text-gray-500 font-bold uppercase tracking-widest">
+                    {new Date(sq.created_at).toLocaleDateString()} | {sq.location} {sq.reporter_initials ? `| ${sq.reporter_initials}` : ''}
+                  </p>
                   <p className="text-sm text-navy mt-1 font-roboto whitespace-pre-wrap">{sq.description}</p>
                 </div>
 
@@ -345,7 +375,7 @@ export default function SquawksTab({ aircraft, session, role, onGroundedStatusCh
         </div>
       </div>
 
-      {/* RESTORED: ARCHIVED / RESOLVED SQUAWKS */}
+      {/* ARCHIVED / RESOLVED SQUAWKS */}
       <div className="bg-gray-100 shadow-inner rounded-sm p-4 md:p-6 border-t-4 border-gray-400 mb-6">
         <h2 className="font-oswald text-xl md:text-2xl font-bold uppercase text-gray-500 m-0 mb-6 leading-none">Archived History</h2>
         
@@ -373,7 +403,9 @@ export default function SquawksTab({ aircraft, session, role, onGroundedStatusCh
                 </div>
 
                 <div className="mt-3">
-                  <p className="text-xs text-gray-500 font-bold uppercase tracking-widest">{new Date(sq.created_at).toLocaleDateString()} | {sq.location}</p>
+                  <p className="text-xs text-gray-500 font-bold uppercase tracking-widest">
+                    {new Date(sq.created_at).toLocaleDateString()} | {sq.location} {sq.reporter_initials ? `| ${sq.reporter_initials}` : ''}
+                  </p>
                   <p className="text-sm text-gray-700 mt-1 font-roboto whitespace-pre-wrap">{sq.description}</p>
                 </div>
               </div>
@@ -386,6 +418,7 @@ export default function SquawksTab({ aircraft, session, role, onGroundedStatusCh
       {showExportModal && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-fade-in">
           <div className="bg-white rounded shadow-2xl w-full max-w-md p-6 border-t-4 border-[#CE3732] max-h-[90vh] overflow-y-auto animate-slide-up flex flex-col">
+            
             <div className="flex justify-between items-center mb-4">
               <h2 className="font-oswald text-2xl font-bold uppercase text-navy flex items-center gap-2">
                 <CheckSquare size={20} className="text-[#CE3732]" /> Export to PDF
@@ -405,7 +438,12 @@ export default function SquawksTab({ aircraft, session, role, onGroundedStatusCh
             <div className="space-y-2 mb-6 overflow-y-auto flex-1 max-h-[40vh]">
               {squawks.map(sq => (
                 <label key={sq.id} className="flex items-start gap-3 p-3 border border-gray-200 rounded cursor-pointer hover:bg-gray-50 transition-colors">
-                  <input type="checkbox" checked={selectedForExport.includes(sq.id)} onChange={() => toggleExportSelection(sq.id)} className="mt-1 w-4 h-4 text-[#CE3732] border-gray-300 rounded" />
+                  <input 
+                    type="checkbox" 
+                    checked={selectedForExport.includes(sq.id)} 
+                    onChange={() => toggleExportSelection(sq.id)} 
+                    className="mt-1 w-4 h-4 text-[#CE3732] border-gray-300 rounded" 
+                  />
                   <div className="flex-1">
                     <p className="text-xs font-bold text-navy">{new Date(sq.created_at).toLocaleDateString()} - {sq.location}</p>
                     <p className="text-[10px] text-gray-500 line-clamp-1">{sq.description}</p>
@@ -416,6 +454,7 @@ export default function SquawksTab({ aircraft, session, role, onGroundedStatusCh
                 </label>
               ))}
             </div>
+            
             <PrimaryButton onClick={generatePDF} disabled={selectedForExport.length === 0 || isExportingPdf}>
               {isExportingPdf ? "Generating Report..." : `Export ${selectedForExport.length} Items to PDF`}
             </PrimaryButton>
@@ -452,13 +491,15 @@ export default function SquawksTab({ aircraft, session, role, onGroundedStatusCh
         </div>
       )}
 
-      {/* REPORT MODAL */}
+      {/* SQUAWK REPORT MODAL */}
       {showModal && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-fade-in">
           <div className="bg-white rounded shadow-2xl w-full max-w-lg p-6 border-t-4 border-[#CE3732] max-h-[90vh] overflow-y-auto animate-slide-up">
             
             <div className="flex justify-between items-center mb-4">
-              <h2 className="font-oswald text-2xl font-bold uppercase text-navy">{editingId ? 'Edit Squawk' : 'Report Squawk'}</h2>
+              <h2 className="font-oswald text-2xl font-bold uppercase text-navy">
+                {editingId ? 'Edit Squawk' : 'Report Squawk'}
+              </h2>
               <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-red-500">
                 <X size={24}/>
               </button>
@@ -470,6 +511,7 @@ export default function SquawksTab({ aircraft, session, role, onGroundedStatusCh
             </div>
             
             <form onSubmit={submitSquawk} className="space-y-4">
+              
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Status</label>
@@ -514,8 +556,14 @@ export default function SquawksTab({ aircraft, session, role, onGroundedStatusCh
                   {isDeferred && (
                     <div className="space-y-4 animate-fade-in">
                       <div className="grid grid-cols-2 gap-3">
-                        <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">MEL #</label><input type="text" value={mel} onChange={e=>setMel(e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-[#CE3732] outline-none" /></div>
-                        <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">CDL #</label><input type="text" value={cdl} onChange={e=>setCdl(e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-[#CE3732] outline-none" /></div>
+                        <div>
+                          <label className="text-[10px] font-bold uppercase tracking-widest text-navy">MEL #</label>
+                          <input type="text" value={mel} onChange={e=>setMel(e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-[#CE3732] outline-none" />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-bold uppercase tracking-widest text-navy">CDL #</label>
+                          <input type="text" value={cdl} onChange={e=>setCdl(e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-[#CE3732] outline-none" />
+                        </div>
                       </div>
                       <div className="grid grid-cols-2 gap-3">
                         <div>
@@ -530,7 +578,9 @@ export default function SquawksTab({ aircraft, session, role, onGroundedStatusCh
                         <div className="border border-gray-300 rounded bg-white">
                           <SignatureCanvas ref={sigCanvas} penColor="black" canvasProps={{ className: 'w-full h-32 rounded' }} />
                         </div>
-                        <button type="button" onClick={() => sigCanvas.current?.clear()} className="text-[10px] font-bold uppercase text-gray-500 mt-1 hover:text-red-500">Clear</button>
+                        <button type="button" onClick={() => sigCanvas.current?.clear()} className="text-[10px] font-bold uppercase text-gray-500 mt-1 hover:text-red-500">
+                          Clear
+                        </button>
                       </div>
                     </div>
                   )}
@@ -540,6 +590,7 @@ export default function SquawksTab({ aircraft, session, role, onGroundedStatusCh
                 <PrimaryButton disabled={isSubmitting}>{isSubmitting ? "Saving..." : "Save Squawk"}</PrimaryButton>
               </div>
             </form>
+
           </div>
         </div>
       )}

@@ -4,20 +4,20 @@ import { FileText, Plus, X, Upload, Edit2, ChevronLeft, ChevronRight, Trash2 } f
 import { PrimaryButton } from "@/components/AppButtons";
 import imageCompression from "browser-image-compression";
 
-export default function NotesTab({ aircraft, session, role, onNotesRead }: { aircraft: any, session: any, role: string, onNotesRead: () => void }) {
-  const[notes, setNotes] = useState<any[]>([]);
+export default function NotesTab({ aircraft, session, role, userInitials, onNotesRead }: { aircraft: any, session: any, role: string, userInitials: string, onNotesRead: () => void }) {
+  const [notes, setNotes] = useState<any[]>([]);
   const [showModal, setShowModal] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const[isSubmitting, setIsSubmitting] = useState(false);
 
   // Form State
   const [editingId, setEditingId] = useState<string | null>(null);
-  const[content, setContent] = useState("");
+  const [content, setContent] = useState("");
   const [selectedImages, setSelectedImages] = useState<File[]>([]);
   const [existingImages, setExistingImages] = useState<string[]>([]);
 
   // Lightbox State
   const [previewImages, setPreviewImages] = useState<string[] | null>(null);
-  const[previewIndex, setPreviewIndex] = useState<number>(0);
+  const [previewIndex, setPreviewIndex] = useState<number>(0);
 
   useEffect(() => {
     if (aircraft) fetchNotes();
@@ -71,17 +71,20 @@ export default function NotesTab({ aircraft, session, role, onNotesRead }: { air
   const uploadImages = async (): Promise<string[]> => {
     let uploadedPaths: string[] =[];
     const options = { maxSizeMB: 1, maxWidthOrHeight: 1920, useWebWorker: true };
+    
     for (const file of selectedImages) {
       try {
         const compressedFile = await imageCompression(file, options);
         const fileName = `${aircraft.tail_number}_${Date.now()}_${compressedFile.name}`;
+        
         const { data } = await supabase.storage.from('aft_note_images').upload(fileName, compressedFile);
+        
         if (data) {
           const { data: urlData } = supabase.storage.from('aft_note_images').getPublicUrl(data.path);
           uploadedPaths.push(urlData.publicUrl);
         }
       } catch (error) { 
-        console.error(error); 
+        console.error("Error compressing/uploading image:", error); 
       }
     }
     return uploadedPaths;
@@ -106,6 +109,7 @@ export default function NotesTab({ aircraft, session, role, onNotesRead }: { air
     } else {
       noteData.author_id = session.user.id;
       noteData.author_email = session.user.email;
+      noteData.author_initials = userInitials; // Permanently stamps their initials
       await supabase.from('aft_notes').insert(noteData);
     }
 
@@ -114,7 +118,6 @@ export default function NotesTab({ aircraft, session, role, onNotesRead }: { air
     setIsSubmitting(false);
   };
 
-  // --- NEW: DELETE NOTE LOGIC ---
   const deleteNote = async (id: string) => {
     if (!confirm("Are you sure you want to permanently delete this note?")) return;
     await supabase.from('aft_notes').delete().eq('id', id);
@@ -131,18 +134,19 @@ export default function NotesTab({ aircraft, session, role, onNotesRead }: { air
         </PrimaryButton>
       </div>
 
-      <div className="bg-cream shadow-lg rounded-sm p-4 md:p-6 border-t-4 border-[#1B4869] mb-6">
+      <div className="bg-cream shadow-lg rounded-sm p-4 md:p-6 border-t-4 border-navy mb-6">
         <h2 className="font-oswald text-2xl md:text-3xl font-bold uppercase text-navy m-0 mb-6 leading-none">Flight Notes</h2>
         
         <div className="space-y-4">
           {notes.length === 0 ? (<p className="text-center text-sm text-gray-400 italic py-4">No notes for this aircraft.</p>) : (
             notes.map(note => (
-              <div key={note.id} className="p-4 border border-[#1B4869]/20 bg-white rounded shadow-sm">
+              <div key={note.id} className="p-4 border border-navy/20 bg-white rounded shadow-sm">
                 
                 <div className="flex justify-between items-start mb-3 border-b border-gray-100 pb-2">
                   <div>
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869] block">
-                      {note.author_email || 'Pilot'}
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-navy block">
+                      {/* Displays the stamped initials next to the email */}
+                      {note.author_initials ? `${note.author_initials} (${note.author_email})` : note.author_email || 'Pilot'}
                     </span>
                     <span className="text-[10px] uppercase text-gray-400 font-bold">
                       {new Date(note.created_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
@@ -150,15 +154,12 @@ export default function NotesTab({ aircraft, session, role, onNotesRead }: { air
                     </span>
                   </div>
                   
-                  {/* EDIT & DELETE BUTTONS */}
                   <div className="flex gap-3 items-center">
-                    {/* Only the author can edit their own note */}
                     {note.author_id === session.user.id && (
-                      <button onClick={() => openForm(note)} className="text-gray-400 hover:text-[#1B4869] active:scale-95" title="Edit Note">
+                      <button onClick={() => openForm(note)} className="text-gray-400 hover:text-navy active:scale-95" title="Edit Note">
                         <Edit2 size={14}/>
                       </button>
                     )}
-                    {/* Only an Admin can delete a note */}
                     {role === 'admin' && (
                       <button onClick={() => deleteNote(note.id)} className="text-gray-400 hover:text-red-500 active:scale-95" title="Delete Note">
                         <Trash2 size={14}/>
@@ -216,11 +217,11 @@ export default function NotesTab({ aircraft, session, role, onNotesRead }: { air
       {/* ADD/EDIT NOTE MODAL */}
       {showModal && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-white rounded shadow-2xl w-full max-w-md p-6 border-t-4 border-[#1B4869] animate-slide-up max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded shadow-2xl w-full max-w-md p-6 border-t-4 border-navy animate-slide-up max-h-[90vh] overflow-y-auto">
             
             <div className="flex justify-between items-center mb-4">
               <h2 className="font-oswald text-2xl font-bold uppercase text-navy flex items-center gap-2">
-                <FileText size={20} className="text-[#1B4869]"/> {editingId ? 'Edit Note' : 'Add Note'}
+                <FileText size={20} className="text-navy"/> {editingId ? 'Edit Note' : 'Add Note'}
               </h2>
               <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-red-500">
                 <X size={24}/>
@@ -230,14 +231,26 @@ export default function NotesTab({ aircraft, session, role, onNotesRead }: { air
             <form onSubmit={submitNote} className="space-y-4">
               <div>
                 <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Message *</label>
-                <textarea required value={content} onChange={e=>setContent(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#1B4869] outline-none min-h-[120px]" placeholder="Share info with the next pilot..." />
+                <textarea 
+                  required 
+                  value={content} 
+                  onChange={e=>setContent(e.target.value)} 
+                  className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-navy outline-none min-h-[120px]" 
+                  placeholder="Share info with the next pilot..." 
+                />
               </div>
               
               <div>
                 <label className="text-[10px] font-bold uppercase tracking-widest text-navy flex items-center gap-2 mb-2">
                   <Upload size={14}/> Attach Photos (Optional)
                 </label>
-                <input type="file" multiple accept="image/*" onChange={(e)=>{if (e.target.files) setSelectedImages(Array.from(e.target.files));}} className="text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:bg-gray-100 file:text-navy cursor-pointer" />
+                <input 
+                  type="file" 
+                  multiple 
+                  accept="image/*" 
+                  onChange={(e)=>{if (e.target.files) setSelectedImages(Array.from(e.target.files));}} 
+                  className="text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:bg-gray-100 file:text-navy cursor-pointer" 
+                />
               </div>
               
               <div className="pt-4">
