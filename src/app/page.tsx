@@ -496,7 +496,7 @@ export default function FleetTrackerApp() {
       {/* MAIN SCROLLABLE CONTENT */}
       <main className="flex-1 overflow-y-auto p-4 flex justify-center w-full" style={{ touchAction: 'auto' }}>
         <div className="w-full max-w-3xl flex flex-col gap-6">
-          {activeTab === 'summary' && <SummaryTab aircraft={selectedAircraftData} />}
+          {activeTab === 'summary' && <SummaryTab aircraft={selectedAircraftData} setActiveTab={setActiveTab} />}
           {activeTab === 'times' && <TimesTab aircraft={selectedAircraftData} session={session} role={role} onUpdate={() => fetchAircraftData(session.user.id)} />}
           {activeTab === 'mx' && <MaintenanceTab aircraft={selectedAircraftData} role={role} onGroundedStatusChange={() => checkGroundedStatus(activeTail)} />}
           {activeTab === 'squawks' && <SquawksTab aircraft={selectedAircraftData} session={session} role={role} onGroundedStatusChange={() => checkGroundedStatus(activeTail)} />}
