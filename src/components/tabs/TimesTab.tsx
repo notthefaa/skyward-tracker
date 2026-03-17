@@ -1,28 +1,32 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
-import { Download, ChevronLeft, ChevronRight, Plus, X, Edit2 } from "lucide-react";
+import { Download, ChevronLeft, ChevronRight, Plus, X, Edit2, Trash2 } from "lucide-react";
 import { PrimaryButton } from "@/components/AppButtons";
 
 export default function TimesTab({ aircraft, session, role, onUpdate }: { aircraft: any, session: any, role: string, onUpdate: () => void }) {
   const [flightLogs, setFlightLogs] = useState<any[]>([]);
-  const [logPage, setLogPage] = useState(1);
-  const[hasMoreLogs, setHasMoreLogs] = useState(false);
+  const[logPage, setLogPage] = useState(1);
+  const [hasMoreLogs, setHasMoreLogs] = useState(false);
   
   const [showLogModal, setShowLogModal] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const[isExporting, setIsExporting] = useState(false);
+  const[isSubmitting, setIsSubmitting] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
 
   // Form State
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [logAftt, setLogAftt] = useState("");
-  const[logFtt, setLogFtt] = useState("");
+  const[logAftt, setLogAftt] = useState("");
+  const [logFtt, setLogFtt] = useState("");
   const [logHobbs, setLogHobbs] = useState("");
-  const [logTach, setLogTach] = useState("");
-  const[logCycles, setLogCycles] = useState("");
-  const [logLandings, setLogLandings] = useState("");
-  const[logInitials, setLogInitials] = useState("");
+  const[logTach, setLogTach] = useState("");
+  const [logCycles, setLogCycles] = useState("");
+  const[logLandings, setLogLandings] = useState("");
+  const [logInitials, setLogInitials] = useState("");
   const [logPax, setLogPax] = useState("");
-  const[logReason, setLogReason] = useState("");
+  const [logReason, setLogReason] = useState("");
+  
+  // NEW: Fuel State
+  const [logFuel, setLogFuel] = useState("");
+  const [logFuelUnit, setLogFuelUnit] = useState<'gallons' | 'lbs'>('gallons');
 
   const isTurbine = aircraft?.engine_type === 'Turbine';
 
@@ -67,6 +71,8 @@ export default function TimesTab({ aircraft, session, role, onUpdate }: { aircra
       setLogInitials(log.initials || ""); 
       setLogPax(log.pax_info || ""); 
       setLogReason(log.trip_reason || "");
+      setLogFuel(log.fuel_gallons || "");
+      setLogFuelUnit("gallons");
     } else {
       setEditingId(null); 
       setLogAftt(""); 
@@ -78,17 +84,50 @@ export default function TimesTab({ aircraft, session, role, onUpdate }: { aircra
       setLogInitials(""); 
       setLogPax(""); 
       setLogReason("");
+      setLogFuel("");
+      setLogFuelUnit("gallons");
     }
     setShowLogModal(true);
   };
 
-  const exportCSV = async () => {
-    setIsExporting(true);
-    const { data } = await supabase
+  const deleteLatestLog = async (log: any) => {
+    if (!confirm("Are you sure you want to delete the most recent flight log? This will permanently erase it and roll the aircraft totals back to the previous log.")) return;
+    
+    setIsSubmitting(true);
+
+    const { data: previousLogs } = await supabase
       .from('aft_flight_logs')
       .select('*')
       .eq('aircraft_id', aircraft.id)
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false })
+      .limit(2);
+    
+    const previousLog = previousLogs && previousLogs.length > 1 ? previousLogs[1] : null;
+
+    const updateData: any = {};
+    if (isTurbine) {
+      updateData.total_airframe_time = previousLog ? previousLog.aftt : 0;
+      updateData.total_engine_time = previousLog ? previousLog.ftt : 0;
+    } else {
+      updateData.total_engine_time = previousLog ? previousLog.tach : 0;
+      updateData.total_airframe_time = previousLog && previousLog.hobbs ? previousLog.hobbs : (aircraft.total_airframe_time || 0);
+    }
+    
+    // Rollback Fuel safely
+    updateData.current_fuel_gallons = previousLog && previousLog.fuel_gallons !== null ? previousLog.fuel_gallons : 0;
+
+    await supabase.from('aft_flight_logs').delete().eq('id', log.id);
+    await supabase.from('aft_aircraft').update(updateData).eq('id', aircraft.id);
+
+    setLogPage(1);
+    await fetchFlightLogs(aircraft.id, 1);
+    onUpdate();
+    setIsSubmitting(false);
+  };
+
+  const exportCSV = async () => {
+    setIsExporting(true);
+    const { data } = await supabase.from('aft_flight_logs').select('*').eq('aircraft_id', aircraft.id).order('created_at', { ascending: false });
 
     if (!data || data.length === 0) { 
       alert("No logs to export."); 
@@ -98,7 +137,7 @@ export default function TimesTab({ aircraft, session, role, onUpdate }: { aircra
 
     const headers =['Date', 'Initials', isTurbine ? 'AFTT' : 'Hobbs', isTurbine ? 'FTT' : 'Tach', 'Landings'];
     if (isTurbine) headers.push('Engine Cycles');
-    headers.push('Reason', 'Passengers');
+    headers.push('Fuel (Gal)', 'Reason', 'Passengers');
 
     const csvRows =[headers.join(',')];
 
@@ -111,8 +150,7 @@ export default function TimesTab({ aircraft, session, role, onUpdate }: { aircra
         log.landings
       ];
       if (isTurbine) row.push(log.engine_cycles);
-      row.push(log.trip_reason || 'N/A', `"${(log.pax_info || '').replace(/"/g, '""')}"`);
-      
+      row.push(log.fuel_gallons || '-', log.trip_reason || 'N/A', `"${(log.pax_info || '').replace(/"/g, '""')}"`);
       csvRows.push(row.join(','));
     });
 
@@ -128,6 +166,13 @@ export default function TimesTab({ aircraft, session, role, onUpdate }: { aircra
     e.preventDefault(); 
     setIsSubmitting(true);
 
+    // Fuel Conversion Logic
+    let fuelGallons = logFuel ? parseFloat(logFuel) : null;
+    if (fuelGallons !== null && logFuelUnit === 'lbs') {
+      const weightPerGal = isTurbine ? 6.7 : 6.0;
+      fuelGallons = fuelGallons / weightPerGal;
+    }
+
     const payload: any = { 
       aircraft_id: aircraft.id, 
       user_id: session.user.id, 
@@ -135,7 +180,8 @@ export default function TimesTab({ aircraft, session, role, onUpdate }: { aircra
       landings: parseInt(logLandings), 
       initials: logInitials.toUpperCase(), 
       pax_info: logPax || null, 
-      trip_reason: logReason || null 
+      trip_reason: logReason || null,
+      fuel_gallons: fuelGallons
     };
     
     const aircraftUpdate: any = {};
@@ -152,6 +198,11 @@ export default function TimesTab({ aircraft, session, role, onUpdate }: { aircra
         payload.hobbs = parseFloat(logHobbs); 
         aircraftUpdate.total_airframe_time = parseFloat(logHobbs); 
       }
+    }
+
+    // Only update aircraft's master fuel state if a new value was actually entered
+    if (fuelGallons !== null) {
+      aircraftUpdate.current_fuel_gallons = fuelGallons;
     }
 
     if (editingId) {
@@ -178,9 +229,7 @@ export default function TimesTab({ aircraft, session, role, onUpdate }: { aircra
         </PrimaryButton>
       </div>
 
-      {/* LOGBOOK TABLE CONTAINER */}
       <div className="bg-cream shadow-lg rounded-sm p-4 md:p-6 border-t-4 border-[#F5B05B] overflow-hidden flex flex-col mb-6">
-        
         <div className="flex justify-between items-end mb-6">
           <div>
             <span className="text-[10px] font-bold uppercase tracking-widest text-[#F5B05B] block mb-1">
@@ -203,6 +252,7 @@ export default function TimesTab({ aircraft, session, role, onUpdate }: { aircra
                 <th className="pb-2 pr-4">{isTurbine ? 'FTT' : 'Tach'}</th>
                 <th className="pb-2 pr-4">Lndg</th>
                 {isTurbine && <th className="pb-2 pr-4">Cyc</th>}
+                <th className="pb-2 pr-4">Fuel(G)</th>
                 <th className="pb-2 pr-4">Rsn</th>
                 <th className="pb-2">Pax</th>
                 {role === 'admin' && <th className="pb-2"></th>}
@@ -210,7 +260,7 @@ export default function TimesTab({ aircraft, session, role, onUpdate }: { aircra
             </thead>
             
             <tbody className="text-xs font-roboto text-navy">
-              {flightLogs.map((log) => (
+              {flightLogs.map((log, index) => (
                 <tr key={log.id} className="border-b border-gray-200 hover:bg-orange-50/50 transition-colors">
                   <td className="py-3 pr-4 whitespace-nowrap">{new Date(log.created_at).toLocaleDateString()}</td>
                   <td className="py-3 pr-4 font-bold">{log.initials}</td>
@@ -218,13 +268,20 @@ export default function TimesTab({ aircraft, session, role, onUpdate }: { aircra
                   <td className="py-3 pr-4">{isTurbine ? log.ftt?.toFixed(1) : log.tach?.toFixed(1)}</td>
                   <td className="py-3 pr-4">{log.landings}</td>
                   {isTurbine && <td className="py-3 pr-4">{log.engine_cycles}</td>}
+                  <td className="py-3 pr-4 text-gray-500">{log.fuel_gallons ? log.fuel_gallons.toFixed(1) : '-'}</td>
                   <td className="py-3 pr-4">{log.trip_reason || "-"}</td>
                   <td className="py-3 truncate max-w-[100px]" title={log.pax_info}>{log.pax_info || "-"}</td>
+                  
                   {role === 'admin' && (
-                    <td className="py-3 text-right">
-                      <button onClick={() => openLogForm(log)} className="text-gray-400 hover:text-[#F5B05B] transition-colors">
+                    <td className="py-3 text-right flex justify-end items-center gap-3">
+                      <button onClick={() => openLogForm(log)} className="text-gray-400 hover:text-[#F5B05B] transition-colors" title="Edit Log">
                         <Edit2 size={14}/>
                       </button>
+                      {logPage === 1 && index === 0 && (
+                        <button onClick={() => deleteLatestLog(log)} className="text-gray-400 hover:text-red-500 transition-colors" title="Delete Latest Log">
+                          <Trash2 size={14}/>
+                        </button>
+                      )}
                     </td>
                   )}
                 </tr>
@@ -233,7 +290,6 @@ export default function TimesTab({ aircraft, session, role, onUpdate }: { aircra
           </table>
         </div>
 
-        {/* PAGINATION */}
         <div className="flex justify-between items-center mt-4 border-t border-gray-200 pt-4">
           <button onClick={() => setLogPage(p => Math.max(1, p - 1))} disabled={logPage === 1} className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-navy disabled:opacity-30 disabled:cursor-not-allowed hover:text-[#F5B05B] transition-colors">
             <ChevronLeft size={14} /> Prev
@@ -245,7 +301,6 @@ export default function TimesTab({ aircraft, session, role, onUpdate }: { aircra
         </div>
       </div>
 
-      {/* POP-UP FORM MODAL */}
       {showLogModal && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-fade-in">
           <div className="bg-white rounded shadow-2xl w-full max-w-md p-6 border-t-4 border-[#F5B05B] max-h-[90vh] overflow-y-auto animate-slide-up">
@@ -280,6 +335,21 @@ export default function TimesTab({ aircraft, session, role, onUpdate }: { aircra
                     </div>
                   </>
                 )}
+              </div>
+
+              {/* NEW FUEL ENTRY ROW */}
+              <div className="grid grid-cols-2 gap-4 border border-[#F5B05B]/30 bg-[#F5B05B]/5 p-3 rounded">
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Current Fuel State (Opt)</label>
+                  <input type="number" step="0.1" value={logFuel} onChange={e=>setLogFuel(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F5B05B] outline-none" placeholder="Amount..." />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Fuel Unit</label>
+                  <select value={logFuelUnit} onChange={e=>setLogFuelUnit(e.target.value as any)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 bg-white focus:border-[#F5B05B] outline-none">
+                    <option value="gallons">Gallons</option>
+                    <option value="lbs">Lbs</option>
+                  </select>
+                </div>
               </div>
 
               <div className={`grid ${isTurbine ? 'grid-cols-2' : 'grid-cols-1'} gap-4`}>
