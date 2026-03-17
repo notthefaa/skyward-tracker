@@ -170,6 +170,11 @@ export default function FleetTrackerApp() {
     }
   };
 
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    setSession(null);
+  };
+
   const getTabColor = (tabId: string) => {
     if (activeTab !== tabId) return 'text-gray-400 hover:bg-gray-50';
     switch(tabId) {
