@@ -12,13 +12,13 @@ import NotesTab from "@/components/tabs/NotesTab";
 
 export default function FleetTrackerApp() {
   const [session, setSession] = useState<any>(null);
-  const [role, setRole] = useState<'admin' | 'pilot'>('pilot');
-  const [authEmail, setAuthEmail] = useState("");
-  const[authPassword, setAuthPassword] = useState("");
+  const[role, setRole] = useState<'admin' | 'pilot'>('pilot');
+  const[authEmail, setAuthEmail] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
 
-  const [aircraftList, setAircraftList] = useState<any[]>([]);
+  const[aircraftList, setAircraftList] = useState<any[]>([]);
   const [activeTail, setActiveTail] = useState<string>("");
-  const[activeTab, setActiveTab] = useState<'times' | 'mx' | 'squawks' | 'notes'>('times');
+  const [activeTab, setActiveTab] = useState<'times' | 'mx' | 'squawks' | 'notes'>('times');
   const [aircraftStatus, setAircraftStatus] = useState<'airworthy' | 'issues' | 'grounded'>('airworthy');
   const [unreadNotes, setUnreadNotes] = useState(0);
 
@@ -26,20 +26,18 @@ export default function FleetTrackerApp() {
   const[editingAircraftId, setEditingAircraftId] = useState<string | null>(null);
   const [newTail, setNewTail] = useState("");
   const [newSerial, setNewSerial] = useState("");
-  const[newModel, setNewModel] = useState("");
+  const [newModel, setNewModel] = useState("");
   const [newType, setNewType] = useState<'Piston' | 'Turbine'>('Piston');
   const [newAirframeTime, setNewAirframeTime] = useState("");
   const [newEngineTime, setNewEngineTime] = useState("");
-  const[isSubmitting, setIsSubmitting] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => { 
-    // Load initial session
     supabase.auth.getSession().then(({ data: { session } }) => { 
       setSession(session); 
       if (session) fetchAircraftData(session.user.id); 
     }); 
 
-    // Listen for auth changes so login/logout happens instantly
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
       if (session) fetchAircraftData(session.user.id);
@@ -205,8 +203,8 @@ export default function FleetTrackerApp() {
   // --- LOGIN SCREEN ---
   if (!session) {
     return (
-      <div className="fixed inset-0 bg-slateGray flex items-center justify-center p-4">
-        {/* Notice the red top border has been cleanly removed here */}
+      // FIX 1: Used h-[100dvh] instead of fixed inset-0
+      <div className="flex flex-col items-center justify-center p-4 bg-slateGray h-[100dvh] w-full overflow-hidden">
         <div className="bg-cream shadow-2xl rounded-sm p-8 w-full max-w-md animate-slide-up">
           <div className="text-center mb-8">
             <img src="/logo.png" alt="Alis Grave Nil" className="mx-auto h-32 object-contain mb-4" />
@@ -235,7 +233,8 @@ export default function FleetTrackerApp() {
   const selectedAircraftData = aircraftList.find(a => a.tail_number === activeTail);
 
   return (
-    <div className="fixed inset-0 flex flex-col bg-neutral-100 overflow-hidden">
+    // FIX 2: The Native App Shell wrapper (100dvh prevents all body bouncing)
+    <div className="flex flex-col bg-neutral-100 h-[100dvh] w-full overflow-hidden relative">
       
       {/* AIRCRAFT MODAL */}
       {showAircraftModal && role === 'admin' && (
@@ -243,7 +242,7 @@ export default function FleetTrackerApp() {
           <div className="bg-white rounded shadow-2xl w-full max-w-md p-6 border-t-4 border-[#F08B46] max-h-[90vh] overflow-y-auto animate-slide-up">
             
             <div className="flex justify-between items-center mb-6">
-              <h2 className="font-oswald text-2xl font-bold uppercase text-navy">
+              <h2 className="font-oswald text-2xl font-bold uppercase text-[#1B4869]">
                 {editingAircraftId ? 'Edit Aircraft' : 'Add Aircraft'}
               </h2>
               <button onClick={() => setShowAircraftModal(false)} className="text-gray-400 hover:text-red-500 transition-colors">
@@ -254,22 +253,22 @@ export default function FleetTrackerApp() {
             <form onSubmit={handleSaveAircraft} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Tail Number</label>
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">Tail Number</label>
                   <input type="text" required value={newTail} onChange={e=>setNewTail(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 uppercase focus:border-[#F08B46] outline-none" />
                 </div>
                 <div>
-                  <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Serial Num</label>
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">Serial Num</label>
                   <input type="text" value={newSerial} onChange={e=>setNewSerial(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 uppercase focus:border-[#F08B46] outline-none" />
                 </div>
               </div>
               
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Model Name</label>
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">Model Name</label>
                   <input type="text" required value={newModel} onChange={e=>setNewModel(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" />
                 </div>
                 <div>
-                  <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Engine Type</label>
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">Engine Type</label>
                   <select value={newType} onChange={e=>setNewType(e.target.value as 'Piston'|'Turbine')} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 bg-white focus:border-[#F08B46] outline-none">
                     <option value="Piston">Piston</option>
                     <option value="Turbine">Turbine</option>
@@ -279,11 +278,11 @@ export default function FleetTrackerApp() {
               
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Current {newType === 'Turbine' ? 'AFTT' : 'Hobbs'}</label>
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">Current {newType === 'Turbine' ? 'AFTT' : 'Hobbs'}</label>
                   <input type="number" step="0.1" required value={newAirframeTime} onChange={e=>setNewAirframeTime(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" />
                 </div>
                 <div>
-                  <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Current {newType === 'Turbine' ? 'FTT' : 'Tach'}</label>
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">Current {newType === 'Turbine' ? 'FTT' : 'Tach'}</label>
                   <input type="number" step="0.1" required value={newEngineTime} onChange={e=>setNewEngineTime(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" />
                 </div>
               </div>
@@ -297,15 +296,14 @@ export default function FleetTrackerApp() {
       )}
 
       {/* TOP HEADER */}
-      <header className="bg-navy text-white shadow-md z-20 shrink-0">
-        <div className="max-w-3xl mx-auto px-4 py-3 flex justify-between items-center">
+      <header className="bg-navy text-white shadow-md z-20 shrink-0 w-full">
+        <div className="max-w-3xl mx-auto px-4 py-3 flex justify-between items-center w-full">
           <div className="flex flex-col">
             <span className="text-[9px] font-bold uppercase tracking-widest text-[#F5B05B] mb-[2px]">Active Aircraft</span>
             <div className="flex items-center gap-3">
               
               <div className={`w-3.5 h-3.5 rounded-full shrink-0 shadow-inner ${aircraftStatus === 'grounded' ? 'bg-red-500 animate-pulse' : aircraftStatus === 'issues' ? 'bg-[#F08B46]' : 'bg-success'}`} />
               
-              {/* FIXED WIDTH DROPDOWN */}
               <div className="relative flex items-center">
                 <select 
                   className="appearance-none bg-transparent text-xl font-oswald font-bold uppercase tracking-wide focus:outline-none cursor-pointer w-[120px] shrink-0 text-white pr-6 truncate" 
@@ -332,7 +330,6 @@ export default function FleetTrackerApp() {
             </div>
           </div>
           
-          {/* RESTORED LOGOUT FUNCTIONALITY */}
           <button onClick={handleLogout} className="text-gray-300 hover:text-white transition-colors flex flex-col items-center active:scale-95 shrink-0">
             <LogOut size={18} />
             <span className="text-[8px] font-bold uppercase tracking-widest mt-1">Logout</span>
@@ -342,7 +339,7 @@ export default function FleetTrackerApp() {
 
       {/* GROUNDED BANNER */}
       {aircraftStatus === 'grounded' && (
-        <div className="bg-[#CE3732] text-white text-center py-2 px-4 shadow-md z-10 flex justify-center items-center gap-2 animate-pulse shrink-0">
+        <div className="bg-[#CE3732] text-white text-center py-2 px-4 shadow-md z-10 flex justify-center items-center gap-2 animate-pulse shrink-0 w-full">
           <AlertTriangle size={18} />
           <span className="font-oswald tracking-widest font-bold uppercase text-sm md:text-base">This aircraft is not flight ready</span>
           <AlertTriangle size={18} />
@@ -350,7 +347,8 @@ export default function FleetTrackerApp() {
       )}
 
       {/* MAIN SCROLLABLE CONTENT */}
-      <main className="flex-1 overflow-y-auto p-4 flex justify-center w-full">
+      {/* FIX 3: touch-action auto combined with the locked body gives native mobile scroll physics! */}
+      <main className="flex-1 overflow-y-auto p-4 flex justify-center w-full" style={{ touchAction: 'auto' }}>
         <div className="w-full max-w-3xl flex flex-col gap-6">
           {activeTab === 'times' && <TimesTab aircraft={selectedAircraftData} session={session} role={role} onUpdate={() => fetchAircraftData(session.user.id)} />}
           {activeTab === 'mx' && <MaintenanceTab aircraft={selectedAircraftData} role={role} onGroundedStatusChange={() => checkGroundedStatus(activeTail)} />}
