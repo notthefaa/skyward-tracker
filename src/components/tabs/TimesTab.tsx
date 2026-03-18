@@ -33,10 +33,10 @@ export default function TimesTab({
   const [logHobbs, setLogHobbs] = useState("");
   const[logTach, setLogTach] = useState("");
   const [logCycles, setLogCycles] = useState("");
-  const[logLandings, setLogLandings] = useState("");
+  const [logLandings, setLogLandings] = useState("");
   const[logInitials, setLogInitials] = useState("");
   const [logPax, setLogPax] = useState("");
-  const [logReason, setLogReason] = useState("");
+  const[logReason, setLogReason] = useState("");
   
   const [logFuel, setLogFuel] = useState("");
   const[logFuelUnit, setLogFuelUnit] = useState<'gallons' | 'lbs'>('gallons');
@@ -57,6 +57,7 @@ export default function TimesTab({
   const fetchFlightLogs = async (aircraftId: string, page: number) => {
     const pageSize = 10; 
     const from = (page - 1) * pageSize; 
+    // Fetch 11 items so we can accurately calculate the duration of the 10th item!
     const to = from + pageSize; 
     
     const { data, count } = await supabase
@@ -126,7 +127,6 @@ export default function TimesTab({
       updateData.total_airframe_time = previousLog && previousLog.hobbs ? previousLog.hobbs : (aircraft.total_airframe_time || 0);
     }
     
-    // Safely Rollback Fuel state and timestamp to the previous log
     updateData.current_fuel_gallons = previousLog && previousLog.fuel_gallons !== null ? previousLog.fuel_gallons : 0;
     updateData.fuel_last_updated = previousLog ? previousLog.created_at : null;
 
@@ -153,13 +153,13 @@ export default function TimesTab({
       return; 
     }
 
-    const headers =['Date', 'Initials', 'Flt Hrs', isTurbine ? 'AFTT' : 'Hobbs', isTurbine ? 'FTT' : 'Tach', 'Landings'];
+    const headers =['Date', 'Initials', 'FLT', isTurbine ? 'AFTT' : 'Hobbs', isTurbine ? 'FTT' : 'Tach', 'LDG'];
     if (isTurbine) headers.push('Engine Cycles');
     headers.push('Fuel (Gal)', 'Reason', 'Passengers');
 
     const csvRows =[headers.join(',')];
 
-    data.forEach((log, index) => {
+    const rowsWithMath = data.map((log, index) => {
       const prevLog = data[index + 1];
       let fltTime = "-";
       if (prevLog) {
@@ -185,9 +185,11 @@ export default function TimesTab({
         log.trip_reason || 'N/A', 
         `"${(log.pax_info || '').replace(/"/g, '""')}"`
       );
-      
-      csvRows.push(row.join(','));
+
+      return row.join(',');
     });
+
+    csvRows.push(...rowsWithMath.reverse());
 
     const blob = new Blob([csvRows.join('\n')], { type: 'text/csv' });
     const a = document.createElement('a'); 
@@ -202,19 +204,11 @@ export default function TimesTab({
     
     if (!editingId) {
       if (isTurbine) {
-        if (parseFloat(logAftt) < (aircraft.total_airframe_time || 0)) {
-          return alert(`Error: New AFTT (${logAftt}) cannot be less than current AFTT (${aircraft.total_airframe_time || 0}).`);
-        }
-        if (parseFloat(logFtt) < (aircraft.total_engine_time || 0)) {
-          return alert(`Error: New FTT (${logFtt}) cannot be less than current FTT (${aircraft.total_engine_time || 0}).`);
-        }
+        if (parseFloat(logAftt) < (aircraft.total_airframe_time || 0)) return alert(`Error: New AFTT (${logAftt}) cannot be less than current AFTT (${aircraft.total_airframe_time || 0}).`);
+        if (parseFloat(logFtt) < (aircraft.total_engine_time || 0)) return alert(`Error: New FTT (${logFtt}) cannot be less than current FTT (${aircraft.total_engine_time || 0}).`);
       } else {
-        if (parseFloat(logTach) < (aircraft.total_engine_time || 0)) {
-          return alert(`Error: New Tach (${logTach}) cannot be less than current Tach (${aircraft.total_engine_time || 0}).`);
-        }
-        if (logHobbs && parseFloat(logHobbs) < (aircraft.total_airframe_time || 0)) {
-          return alert(`Error: New Hobbs (${logHobbs}) cannot be less than current Hobbs (${aircraft.total_airframe_time || 0}).`);
-        }
+        if (parseFloat(logTach) < (aircraft.total_engine_time || 0)) return alert(`Error: New Tach (${logTach}) cannot be less than current Tach (${aircraft.total_engine_time || 0}).`);
+        if (logHobbs && parseFloat(logHobbs) < (aircraft.total_airframe_time || 0)) return alert(`Error: New Hobbs (${logHobbs}) cannot be less than current Hobbs (${aircraft.total_airframe_time || 0}).`);
       }
     }
     
@@ -255,7 +249,6 @@ export default function TimesTab({
 
     if (fuelGallons !== null) {
       aircraftUpdate.current_fuel_gallons = fuelGallons;
-      // NEW: Stamp the date when fuel was entered!
       aircraftUpdate.fuel_last_updated = new Date().toISOString(); 
     }
 
@@ -275,7 +268,21 @@ export default function TimesTab({
 
   if (!aircraft) return null;
 
-  const displayLogs = flightLogs.slice(0, 10);
+  // 1. Calculate duration on descending list to preserve math accuracy
+  const logsWithMath = flightLogs.slice(0, 10).map((log, index) => {
+    const prevLog = flightLogs[index + 1];
+    let fltTime = "-";
+    if (prevLog) {
+      const diff = isTurbine 
+        ? ((log.aftt || 0) - (prevLog.aftt || 0)) 
+        : (log.hobbs ? (log.hobbs - (prevLog.hobbs || 0)) : ((log.tach || 0) - (prevLog.tach || 0)));
+      fltTime = Math.max(0, diff).toFixed(1);
+    }
+    return { ...log, fltTime }; 
+  });
+
+  // 2. Reverse the array so the newest log sits at the bottom of the table
+  const displayLogsReversed = [...logsWithMath].reverse();
 
   return (
     <>
@@ -316,53 +323,49 @@ export default function TimesTab({
             </thead>
             
             <tbody className="text-xs font-roboto text-navy">
-              {displayLogs.map((log, index) => {
-                
-                const prevLog = flightLogs[index + 1];
-                let fltTime = "-";
-                if (prevLog) {
-                  const diff = isTurbine 
-                    ? ((log.aftt || 0) - (prevLog.aftt || 0)) 
-                    : (log.hobbs ? (log.hobbs - (prevLog.hobbs || 0)) : ((log.tach || 0) - (prevLog.tach || 0)));
-                  fltTime = Math.max(0, diff).toFixed(1);
-                }
-
-                return (
-                  <tr key={log.id} className="border-b border-gray-200 hover:bg-orange-50/50 transition-colors">
-                    <td className="py-3 pr-4 whitespace-nowrap">
-                      {new Date(log.created_at).toLocaleDateString('en-US', { year: '2-digit', month: 'numeric', day: 'numeric' })}
-                    </td>
-                    <td className="py-3 pr-4 font-bold">{log.initials}</td>
-                    <td className="py-3 pr-4 text-[#F5B05B] font-bold">{fltTime}</td>
-                    <td className="py-3 pr-4">{isTurbine ? log.aftt?.toFixed(1) : log.hobbs?.toFixed(1) || '-'}</td>
-                    <td className="py-3 pr-4">{isTurbine ? log.ftt?.toFixed(1) : log.tach?.toFixed(1)}</td>
-                    <td className="py-3 pr-4">{log.landings}</td>
-                    {isTurbine && <td className="py-3 pr-4">{log.engine_cycles}</td>}
-                    <td className="py-3 pr-4">{log.trip_reason || "-"}</td>
-                    
-                    <td className="py-3 text-center">
-                      {log.pax_info ? (
-                        <button onClick={() => setViewPax(log.pax_info)} className="text-[#F5B05B] font-bold underline active:scale-95 transition-transform">Y</button>
-                      ) : (
-                        <span className="text-gray-400 font-medium">N</span>
+              {displayLogsReversed.map((log) => (
+                <tr key={log.id} className="border-b border-gray-200 hover:bg-orange-50/50 transition-colors">
+                  
+                  <td className="py-3 pr-4 whitespace-nowrap">
+                    {new Date(log.created_at).toLocaleDateString('en-US', { year: '2-digit', month: 'numeric', day: 'numeric' })}
+                  </td>
+                  
+                  <td className="py-3 pr-4 font-bold">{log.initials}</td>
+                  <td className="py-3 pr-4 text-[#F5B05B] font-bold">{log.fltTime}</td>
+                  <td className="py-3 pr-4">{isTurbine ? log.aftt?.toFixed(1) : log.hobbs?.toFixed(1) || '-'}</td>
+                  <td className="py-3 pr-4">{isTurbine ? log.ftt?.toFixed(1) : log.tach?.toFixed(1)}</td>
+                  <td className="py-3 pr-4">{log.landings}</td>
+                  
+                  {isTurbine && (
+                    <td className="py-3 pr-4">{log.engine_cycles}</td>
+                  )}
+                  
+                  <td className="py-3 pr-4">{log.trip_reason || "-"}</td>
+                  
+                  <td className="py-3 text-center">
+                    {log.pax_info ? (
+                      <button onClick={() => setViewPax(log.pax_info)} className="text-[#F5B05B] font-bold underline active:scale-95 transition-transform">Y</button>
+                    ) : (
+                      <span className="text-gray-400 font-medium">N</span>
+                    )}
+                  </td>
+                  
+                  {/* ADMIN ACTIONS: Securely targeting the absolute newest log's database ID */}
+                  {role === 'admin' && (
+                    <td className="py-3 text-right flex justify-end items-center gap-3">
+                      <button onClick={() => openLogForm(log)} className="text-gray-400 hover:text-[#F5B05B] transition-colors" title="Edit Log">
+                        <Edit2 size={14}/>
+                      </button>
+                      
+                      {logPage === 1 && log.id === flightLogs[0]?.id && (
+                        <button onClick={() => deleteLatestLog(log)} className="text-gray-400 hover:text-red-500 transition-colors" title="Delete Latest Log">
+                          <Trash2 size={14}/>
+                        </button>
                       )}
                     </td>
-                    
-                    {role === 'admin' && (
-                      <td className="py-3 text-right flex justify-end items-center gap-3">
-                        <button onClick={() => openLogForm(log)} className="text-gray-400 hover:text-[#F5B05B] transition-colors" title="Edit Log">
-                          <Edit2 size={14}/>
-                        </button>
-                        {logPage === 1 && index === 0 && (
-                          <button onClick={() => deleteLatestLog(log)} className="text-gray-400 hover:text-red-500 transition-colors" title="Delete Latest Log">
-                            <Trash2 size={14}/>
-                          </button>
-                        )}
-                      </td>
-                    )}
-                  </tr>
-                );
-              })}
+                  )}
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
@@ -426,29 +429,58 @@ export default function TimesTab({
                 {isTurbine ? (
                   <>
                     <div>
-                      <label className="text-[10px] font-bold uppercase tracking-widest text-navy">AFTT *</label>
-                      <input type="number" step="0.1" required value={logAftt} onChange={e=>setLogAftt(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F5B05B] outline-none" />
+                      <div className="flex justify-between items-center mb-1">
+                        <label className="text-[10px] font-bold uppercase tracking-widest text-navy">AFTT *</label>
+                        <span className="text-[9px] font-bold uppercase text-gray-400">Last: {aircraft?.total_airframe_time?.toFixed(1) || 0}</span>
+                      </div>
+                      <input type="number" step="0.1" required value={logAftt} onChange={e=>setLogAftt(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-[#F5B05B] outline-none" />
                     </div>
                     <div>
-                      <label className="text-[10px] font-bold uppercase tracking-widest text-navy">FTT *</label>
-                      <input type="number" step="0.1" required value={logFtt} onChange={e=>setLogFtt(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F5B05B] outline-none" />
+                      <div className="flex justify-between items-center mb-1">
+                        <label className="text-[10px] font-bold uppercase tracking-widest text-navy">FTT *</label>
+                        <span className="text-[9px] font-bold uppercase text-gray-400">Last: {aircraft?.total_engine_time?.toFixed(1) || 0}</span>
+                      </div>
+                      <input type="number" step="0.1" required value={logFtt} onChange={e=>setLogFtt(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-[#F5B05B] outline-none" />
                     </div>
                   </>
                 ) : (
                   <>
                     <div>
-                      <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Hobbs (Opt)</label>
-                      <input type="number" step="0.1" value={logHobbs} onChange={e=>setLogHobbs(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F5B05B] outline-none" />
+                      <div className="flex justify-between items-center mb-1">
+                        <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Hobbs (Opt)</label>
+                        <span className="text-[9px] font-bold uppercase text-gray-400">Last: {aircraft?.total_airframe_time?.toFixed(1) || 0}</span>
+                      </div>
+                      <input type="number" step="0.1" value={logHobbs} onChange={e=>setLogHobbs(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-[#F5B05B] outline-none" />
                     </div>
                     <div>
-                      <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Tach *</label>
-                      <input type="number" step="0.1" required value={logTach} onChange={e=>setLogTach(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F5B05B] outline-none" />
+                      <div className="flex justify-between items-center mb-1">
+                        <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Tach *</label>
+                        <span className="text-[9px] font-bold uppercase text-gray-400">Last: {aircraft?.total_engine_time?.toFixed(1) || 0}</span>
+                      </div>
+                      <input type="number" step="0.1" required value={logTach} onChange={e=>setLogTach(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-[#F5B05B] outline-none" />
                     </div>
                   </>
                 )}
               </div>
 
-              <div className="grid grid-cols-2 gap-4 border border-[#F5B05B]/30 bg-[#F5B05B]/5 p-3 rounded">
+              <div className={`grid ${isTurbine ? 'grid-cols-2' : 'grid-cols-1'} gap-4`}>
+                <div>
+                  <div className="flex items-center justify-between mb-1 h-4">
+                    <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Landings</label>
+                  </div>
+                  <input type="number" required value={logLandings} onChange={e=>setLogLandings(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-[#F5B05B] outline-none" placeholder="0" />
+                </div>
+                {isTurbine && (
+                  <div>
+                    <div className="flex items-center justify-between mb-1 h-4">
+                      <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Engine Cycles</label>
+                    </div>
+                    <input type="number" required value={logCycles} onChange={e=>setLogCycles(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-[#F5B05B] outline-none" placeholder="0" />
+                  </div>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 border border-[#F5B05B]/30 bg-[#F5B05B]/5 p-3 rounded mt-2">
                 <div>
                   <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Current Fuel State (Opt)</label>
                   <input type="number" step="0.1" value={logFuel} onChange={e=>setLogFuel(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F5B05B] outline-none" placeholder="Amount..." />
@@ -462,26 +494,15 @@ export default function TimesTab({
                 </div>
               </div>
 
-              <div className={`grid ${isTurbine ? 'grid-cols-2' : 'grid-cols-1'} gap-4`}>
-                <div>
-                  <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Landings</label>
-                  <input type="number" required value={logLandings} onChange={e=>setLogLandings(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F5B05B] outline-none" placeholder="0" />
-                </div>
-                {isTurbine && (
-                  <div>
-                    <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Engine Cycles</label>
-                    <input type="number" required value={logCycles} onChange={e=>setLogCycles(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F5B05B] outline-none" placeholder="0" />
-                  </div>
-                )}
-              </div>
-
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Initials</label>
-                  <input type="text" maxLength={3} required value={logInitials} onChange={e=>setLogInitials(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 uppercase focus:border-[#F5B05B] outline-none" placeholder="ABC" />
+                  <div className="flex items-center justify-between mb-1 h-4">
+                    <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Initials</label>
+                  </div>
+                  <input type="text" maxLength={3} required value={logInitials} onChange={e=>setLogInitials(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm uppercase focus:border-[#F5B05B] outline-none" placeholder="ABC" />
                 </div>
                 <div>
-                  <div className="flex items-center justify-between mb-1 mt-1">
+                  <div className="flex items-center justify-between mb-1 h-4">
                     <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Reason (Opt)</label>
                     <button type="button" onClick={() => setShowLegend(true)} className="text-[10px] text-[#F5B05B] hover:text-orange-600 flex items-center gap-1">
                       <Info size={10} /> Legend
