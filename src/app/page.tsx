@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/lib/supabase";
-import { PlaneTakeoff, Wrench, AlertTriangle, FileText, Clock, LogOut, Plus, X, Edit2, ChevronDown, Home, Users, Eye, EyeOff, LayoutGrid, ShieldCheck } from "lucide-react";
+import { PlaneTakeoff, Wrench, AlertTriangle, FileText, Clock, LogOut, Plus, X, Edit2, ChevronDown, Home, Users, LayoutGrid, ShieldCheck } from "lucide-react";
 import { PrimaryButton } from "@/components/AppButtons";
 import imageCompression from "browser-image-compression";
 import ReactCrop, { Crop } from 'react-image-crop';
@@ -13,45 +13,45 @@ import TimesTab from "@/components/tabs/TimesTab";
 import MaintenanceTab from "@/components/tabs/MaintenanceTab";
 import SquawksTab from "@/components/tabs/SquawksTab"; 
 import NotesTab from "@/components/tabs/NotesTab";
-import FleetSummary from "@/components/tabs/FleetSummary"; // NEW
+import FleetSummary from "@/components/tabs/FleetSummary";
 
 export default function FleetTrackerApp() {
   const [session, setSession] = useState<any>(null);
-  const[role, setRole] = useState<'admin' | 'pilot'>('pilot');
-  const[userInitials, setUserInitials] = useState("");
+  const [role, setRole] = useState<'admin' | 'pilot'>('pilot');
+  const [userInitials, setUserInitials] = useState("");
   
   // Login State
   const [authEmail, setAuthEmail] = useState("");
   const[authPassword, setAuthPassword] = useState("");
   const [showForgotPassword, setShowForgotPassword] = useState(false);
-  const[showPassword, setShowPassword] = useState(false);
 
   // App State
-  const[aircraftList, setAircraftList] = useState<any[]>([]);
-  const [activeTail, setActiveTail] = useState<string>("");
+  const [aircraftList, setAircraftList] = useState<any[]>([]);
+  const[activeTail, setActiveTail] = useState<string>("");
   const [activeTab, setActiveTab] = useState<'fleet' | 'summary' | 'times' | 'mx' | 'squawks' | 'notes'>('fleet');
-  const[aircraftStatus, setAircraftStatus] = useState<'airworthy' | 'issues' | 'grounded'>('airworthy');
+  const [aircraftStatus, setAircraftStatus] = useState<'airworthy' | 'issues' | 'grounded'>('airworthy');
   const [unreadNotes, setUnreadNotes] = useState(0);
 
   // Invite User State
   const[showInviteModal, setShowInviteModal] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteRole, setInviteRole] = useState<'admin'|'pilot'>('pilot');
+  const[inviteRole, setInviteRole] = useState<'admin'|'pilot'>('pilot');
+  const[inviteAircraftIds, setInviteAircraftIds] = useState<string[]>([]); // NEW: Invite Aircraft State
 
-  // NEW: Aircraft Access State
-  const [showAccessModal, setShowAccessModal] = useState(false);
-  const[allUsers, setAllUsers] = useState<any[]>([]);
+  // Aircraft Access State
+  const[showAccessModal, setShowAccessModal] = useState(false);
+  const [allUsers, setAllUsers] = useState<any[]>([]);
   const [selectedAccessUserId, setSelectedAccessUserId] = useState<string>("");
-  const [userAccessList, setUserAccessList] = useState<string[]>([]);
+  const[userAccessList, setUserAccessList] = useState<string[]>([]);
 
-  // Aircraft Modal State
-  const [showAircraftModal, setShowAircraftModal] = useState(false);
-  const[editingAircraftId, setEditingAircraftId] = useState<string | null>(null);
+  // Aircraft Editor State
+  const[showAircraftModal, setShowAircraftModal] = useState(false);
+  const [editingAircraftId, setEditingAircraftId] = useState<string | null>(null);
   const [newTail, setNewTail] = useState("");
-  const [newSerial, setNewSerial] = useState("");
-  const[newModel, setNewModel] = useState("");
-  const [newType, setNewType] = useState<'Piston' | 'Turbine'>('Piston');
-  const [newAirframeTime, setNewAirframeTime] = useState("");
+  const[newSerial, setNewSerial] = useState("");
+  const [newModel, setNewModel] = useState("");
+  const[newType, setNewType] = useState<'Piston' | 'Turbine'>('Piston');
+  const[newAirframeTime, setNewAirframeTime] = useState("");
   const [newEngineTime, setNewEngineTime] = useState("");
   const[newHomeAirport, setNewHomeAirport] = useState("");
   const [newMainContact, setNewMainContact] = useState("");
@@ -64,7 +64,7 @@ export default function FleetTrackerApp() {
 
   // Cropper State
   const [avatarSrc, setAvatarSrc] = useState<string>("");
-  const [crop, setCrop] = useState<Crop>({ unit: '%', width: 100, height: 56.25, x: 0, y: 0 }); // 16:9 aspect ratio
+  const [crop, setCrop] = useState<Crop>({ unit: '%', width: 100, height: 56.25, x: 0, y: 0 }); // 16:9
   const imageRef = useRef<HTMLImageElement>(null);
 
   useEffect(() => { 
@@ -153,7 +153,6 @@ export default function FleetTrackerApp() {
   // --- ACCESS MANAGEMENT FUNCTIONS ---
   const openAccessModal = async () => {
     setIsSubmitting(true);
-    // Fetch all pilots
     const { data } = await supabase.from('aft_user_roles').select('*').eq('role', 'pilot');
     if (data) setAllUsers(data);
     setSelectedAccessUserId("");
@@ -165,25 +164,69 @@ export default function FleetTrackerApp() {
   const fetchUserAccess = async (userId: string) => {
     setSelectedAccessUserId(userId);
     const { data } = await supabase.from('aft_user_aircraft_access').select('aircraft_id').eq('user_id', userId);
-    if (data) {
-      setUserAccessList(data.map(d => d.aircraft_id));
-    } else {
-      setUserAccessList([]);
-    }
+    if (data) setUserAccessList(data.map(d => d.aircraft_id));
+    else setUserAccessList([]);
   };
 
   const toggleAccess = async (aircraftId: string, hasAccess: boolean) => {
     if (!selectedAccessUserId) return;
     
     if (hasAccess) {
-      // Remove Access
       setUserAccessList(prev => prev.filter(id => id !== aircraftId));
       await supabase.from('aft_user_aircraft_access').delete().match({ user_id: selectedAccessUserId, aircraft_id: aircraftId });
     } else {
-      // Add Access
       setUserAccessList(prev =>[...prev, aircraftId]);
       await supabase.from('aft_user_aircraft_access').insert({ user_id: selectedAccessUserId, aircraft_id: aircraftId });
     }
+  };
+
+  const toggleInviteAircraft = (id: string) => {
+    setInviteAircraftIds(prev => prev.includes(id) ? prev.filter(a => a !== id) :[...prev, id]);
+  };
+
+  // --- NEW: USER MANAGEMENT (RESET & DELETE) ---
+  const handleAdminResetPassword = async () => {
+    const selectedUserEmail = allUsers.find(u => u.user_id === selectedAccessUserId)?.email;
+    if (!selectedUserEmail) return;
+    
+    if (!confirm(`Are you sure you want to send a password reset email to ${selectedUserEmail}?`)) return;
+    
+    setIsSubmitting(true);
+    const { error } = await supabase.auth.resetPasswordForEmail(selectedUserEmail, { 
+      redirectTo: `${window.location.origin}/update-password` 
+    });
+    setIsSubmitting(false);
+    
+    if (error) alert("Error: " + error.message);
+    else alert("Password reset link sent securely to " + selectedUserEmail);
+  };
+
+  const handleDeleteUser = async () => {
+    const selectedUserEmail = allUsers.find(u => u.user_id === selectedAccessUserId)?.email;
+    if (!selectedUserEmail) return;
+    
+    if (!confirm(`CRITICAL WARNING: Are you absolutely sure you want to permanently delete ${selectedUserEmail} and revoke all their access?`)) return;
+    
+    setIsSubmitting(true);
+    try {
+      const res = await fetch('/api/users', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: selectedAccessUserId })
+      });
+      if (!res.ok) throw new Error(await res.text());
+      
+      alert("User successfully deleted.");
+      
+      // Refetch the active users and reset the UI
+      const { data } = await supabase.from('aft_user_roles').select('*').eq('role', 'pilot');
+      if (data) setAllUsers(data);
+      setSelectedAccessUserId("");
+      setUserAccessList([]);
+    } catch (error: any) {
+      alert("Failed to delete user: " + error.message);
+    }
+    setIsSubmitting(false);
   };
 
   // --- AUTHENTICATION FUNCTIONS ---
@@ -220,12 +263,19 @@ export default function FleetTrackerApp() {
       const res = await fetch('/api/invite', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: inviteEmail, role: inviteRole })
+        body: JSON.stringify({ 
+          email: inviteEmail, 
+          role: inviteRole,
+          aircraftIds: inviteAircraftIds // NEW: Passes the selected aircraft securely
+        })
       });
+      
       if (!res.ok) throw new Error(await res.text());
+      
       alert(`Invitation successfully sent to ${inviteEmail}!`);
       setShowInviteModal(false); 
       setInviteEmail("");
+      setInviteAircraftIds([]);
     } catch (error: any) {
       alert("Failed to invite user: " + error.message);
     }
@@ -317,9 +367,7 @@ export default function FleetTrackerApp() {
             const { data: urlData } = supabase.storage.from('aft_aircraft_avatars').getPublicUrl(data.path);
             avatarUrl = urlData.publicUrl;
           }
-        } catch (err) { 
-          console.error("Avatar upload failed:", err); 
-        }
+        } catch (err) { console.error("Avatar upload failed:", err); }
       }
     }
 
@@ -375,7 +423,6 @@ export default function FleetTrackerApp() {
     }
   };
 
-  // --- LOGIN SCREEN ---
   if (!session) {
     return (
       <div className="flex flex-col items-center justify-center p-4 bg-slateGray h-[100dvh] w-full overflow-hidden">
@@ -402,41 +449,24 @@ export default function FleetTrackerApp() {
               </div>
               <div>
                 <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Password</label>
-                <div className="relative mt-1">
-                  <input 
-                    type={showPassword ? "text" : "password"} 
-                    required 
-                    value={authPassword} 
-                    onChange={(e) => setAuthPassword(e.target.value)} 
-                    className="w-full border border-gray-300 rounded p-3 text-sm bg-white focus:border-[#F08B46] outline-none pr-10" 
-                  />
-                  <button 
-                    type="button" 
-                    onClick={() => setShowPassword(!showPassword)} 
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-navy transition-colors"
-                  >
-                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                  </button>
-                </div>
+                <input 
+                  type="password" 
+                  required 
+                  value={authPassword} 
+                  onChange={(e) => setAuthPassword(e.target.value)} 
+                  className="w-full border border-gray-300 rounded p-3 text-sm mt-1 bg-white focus:border-[#F08B46] outline-none" 
+                />
               </div>
               <div className="pt-4">
-                <PrimaryButton disabled={isSubmitting}>
-                  {isSubmitting ? "Logging in..." : "Access Portal"}
-                </PrimaryButton>
+                <PrimaryButton disabled={isSubmitting}>{isSubmitting ? "Logging in..." : "Access Portal"}</PrimaryButton>
               </div>
-              <button 
-                type="button" 
-                onClick={() => setShowForgotPassword(true)} 
-                className="w-full text-center text-xs text-gray-500 mt-4 hover:text-navy underline"
-              >
+              <button type="button" onClick={() => setShowForgotPassword(true)} className="w-full text-center text-xs text-gray-500 mt-4 hover:text-navy underline">
                 Forgot Password?
               </button>
             </form>
           ) : (
             <form onSubmit={handleForgotPassword} className="space-y-4 animate-fade-in">
-              <p className="text-xs text-gray-500 text-center mb-4">
-                Enter your email and we will send you a secure link to set a new password.
-              </p>
+              <p className="text-xs text-gray-500 text-center mb-4">Enter your email and we will send you a secure link to set a new password.</p>
               <div>
                 <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Email Address</label>
                 <input 
@@ -448,15 +478,9 @@ export default function FleetTrackerApp() {
                 />
               </div>
               <div className="pt-4">
-                <PrimaryButton disabled={isSubmitting}>
-                  {isSubmitting ? "Sending..." : "Send Reset Link"}
-                </PrimaryButton>
+                <PrimaryButton disabled={isSubmitting}>{isSubmitting ? "Sending..." : "Send Reset Link"}</PrimaryButton>
               </div>
-              <button 
-                type="button" 
-                onClick={() => setShowForgotPassword(false)} 
-                className="w-full text-center text-xs text-gray-500 mt-4 hover:text-navy underline"
-              >
+              <button type="button" onClick={() => setShowForgotPassword(false)} className="w-full text-center text-xs text-gray-500 mt-4 hover:text-navy underline">
                 Back to Login
               </button>
             </form>
@@ -487,6 +511,7 @@ export default function FleetTrackerApp() {
             
             <form onSubmit={handleSaveAircraft} className="space-y-4">
               
+              {/* IMAGE CROPPER UI */}
               <div className="border border-dashed border-gray-300 bg-gray-50 rounded p-4 text-center">
                 <label className="text-[10px] font-bold uppercase tracking-widest text-navy block mb-2 cursor-pointer">
                   {avatarSrc ? 'Adjust Photo Alignment' : 'Upload Aircraft Photo (Avatar)'}
@@ -539,6 +564,7 @@ export default function FleetTrackerApp() {
                 </div>
               </div>
 
+              {/* Main Contact Info */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">Main Contact</label>
@@ -554,6 +580,7 @@ export default function FleetTrackerApp() {
                 </div>
               </div>
               
+              {/* MX Contact Info */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">MX Contact</label>
@@ -618,26 +645,46 @@ export default function FleetTrackerApp() {
               </div>
 
               {selectedAccessUserId && (
-                <div className="border border-gray-200 rounded p-4 bg-gray-50">
-                  <h3 className="text-[10px] font-bold uppercase tracking-widest text-navy mb-3">Allowed Aircraft</h3>
-                  <div className="space-y-3 max-h-[40vh] overflow-y-auto">
-                    {aircraftList.map(ac => {
-                      const hasAccess = userAccessList.includes(ac.id);
-                      return (
-                        <label key={ac.id} className="flex items-center gap-3 cursor-pointer">
-                          <input 
-                            type="checkbox" 
-                            checked={hasAccess} 
-                            onChange={() => toggleAccess(ac.id, hasAccess)} 
-                            className="w-4 h-4 text-navy border-gray-300 rounded"
-                          />
-                          <span className="font-bold text-sm text-navy uppercase">{ac.tail_number}</span>
-                          <span className="text-[10px] text-gray-500 uppercase">{ac.aircraft_type}</span>
-                        </label>
-                      );
-                    })}
+                <>
+                  <div className="border border-gray-200 rounded p-4 bg-gray-50">
+                    <h3 className="text-[10px] font-bold uppercase tracking-widest text-navy mb-3">Allowed Aircraft</h3>
+                    <div className="space-y-3 max-h-[40vh] overflow-y-auto">
+                      {aircraftList.map(ac => {
+                        const hasAccess = userAccessList.includes(ac.id);
+                        return (
+                          <label key={ac.id} className="flex items-center gap-3 cursor-pointer">
+                            <input 
+                              type="checkbox" 
+                              checked={hasAccess} 
+                              onChange={() => toggleAccess(ac.id, hasAccess)} 
+                              className="w-4 h-4 text-navy border-gray-300 rounded"
+                            />
+                            <span className="font-bold text-sm text-navy uppercase">{ac.tail_number}</span>
+                            <span className="text-[10px] text-gray-500 uppercase">{ac.aircraft_type}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
+
+                  {/* USER MANAGEMENT BUTTONS */}
+                  <div className="flex gap-2 pt-4 border-t border-gray-200 mt-4">
+                    <button 
+                      type="button" 
+                      onClick={handleAdminResetPassword} 
+                      className="flex-1 border border-brandOrange text-brandOrange text-[10px] font-bold uppercase tracking-widest py-2 rounded hover:bg-orange-50 transition-colors"
+                    >
+                      Reset Password
+                    </button>
+                    <button 
+                      type="button" 
+                      onClick={handleDeleteUser} 
+                      className="flex-1 border border-[#CE3732] text-[#CE3732] text-[10px] font-bold uppercase tracking-widest py-2 rounded hover:bg-red-50 transition-colors"
+                    >
+                      Delete User
+                    </button>
+                  </div>
+                </>
               )}
             </div>
             
@@ -657,7 +704,10 @@ export default function FleetTrackerApp() {
               <h2 className="font-oswald text-2xl font-bold uppercase text-navy flex items-center gap-2">
                 <Users size={20}/> Invite User
               </h2>
-              <button onClick={() => setShowInviteModal(false)} className="text-gray-400 hover:text-red-500">
+              <button onClick={() => {
+                setShowInviteModal(false);
+                setInviteAircraftIds([]);
+              }} className="text-gray-400 hover:text-red-500">
                 <X size={24}/>
               </button>
             </div>
@@ -665,15 +715,47 @@ export default function FleetTrackerApp() {
             <form onSubmit={handleInviteUser} className="space-y-4">
               <div>
                 <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Email Address</label>
-                <input type="email" required value={inviteEmail} onChange={e=>setInviteEmail(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 outline-none focus:border-navy" />
+                <input 
+                  type="email" 
+                  required 
+                  value={inviteEmail} 
+                  onChange={e=>setInviteEmail(e.target.value)} 
+                  className="w-full border border-gray-300 rounded p-3 text-sm mt-1 outline-none focus:border-navy" 
+                />
               </div>
+              
               <div>
                 <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Role</label>
-                <select value={inviteRole} onChange={e=>setInviteRole(e.target.value as any)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 bg-white outline-none focus:border-navy">
+                <select 
+                  value={inviteRole} 
+                  onChange={e=>setInviteRole(e.target.value as any)} 
+                  className="w-full border border-gray-300 rounded p-3 text-sm mt-1 bg-white outline-none focus:border-navy"
+                >
                   <option value="pilot">Pilot</option>
                   <option value="admin">Administrator</option>
                 </select>
               </div>
+
+              {/* NEW: Aircraft Assignment on Invite */}
+              {inviteRole === 'pilot' && (
+                <div className="border border-gray-200 rounded p-3 bg-gray-50 mt-2 max-h-[30vh] overflow-y-auto">
+                  <h3 className="text-[10px] font-bold uppercase tracking-widest text-navy mb-2">Assign Aircraft Access</h3>
+                  <div className="space-y-2">
+                    {aircraftList.map(ac => (
+                      <label key={ac.id} className="flex items-center gap-3 cursor-pointer">
+                        <input 
+                          type="checkbox" 
+                          checked={inviteAircraftIds.includes(ac.id)} 
+                          onChange={() => toggleInviteAircraft(ac.id)} 
+                          className="w-4 h-4 text-navy border-gray-300 rounded" 
+                        />
+                        <span className="font-bold text-xs text-navy uppercase">{ac.tail_number}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div className="pt-4">
                 <PrimaryButton disabled={isSubmitting}>{isSubmitting ? "Sending..." : "Send Invite Email"}</PrimaryButton>
               </div>
@@ -720,7 +802,6 @@ export default function FleetTrackerApp() {
           
           <div className="flex gap-4">
             
-            {/* NEW FLEET DASHBOARD BUTTON */}
             <button onClick={() => setActiveTab('fleet')} className={`hover:text-white transition-colors flex flex-col items-center active:scale-95 shrink-0 ${activeTab === 'fleet' ? 'text-[#F5B05B]' : 'text-gray-300'}`}>
               <LayoutGrid size={18} />
               <span className="text-[8px] font-bold uppercase tracking-widest mt-1">Fleet</span>
@@ -728,12 +809,11 @@ export default function FleetTrackerApp() {
 
             {role === 'admin' && (
               <>
-                {/* NEW AIRCRAFT ACCESS BUTTON */}
                 <button onClick={openAccessModal} className="text-gray-300 hover:text-white transition-colors flex flex-col items-center active:scale-95 shrink-0">
                   <ShieldCheck size={18} />
                   <span className="text-[8px] font-bold uppercase tracking-widest mt-1">Access</span>
                 </button>
-                <button onClick={() => setShowInviteModal(true)} className="text-gray-300 hover:text-white transition-colors flex flex-col items-center active:scale-95 shrink-0">
+                <button onClick={() => { setInviteAircraftIds([]); setShowInviteModal(true); }} className="text-gray-300 hover:text-white transition-colors flex flex-col items-center active:scale-95 shrink-0">
                   <Users size={18} />
                   <span className="text-[8px] font-bold uppercase tracking-widest mt-1">Users</span>
                 </button>
@@ -744,6 +824,7 @@ export default function FleetTrackerApp() {
               <span className="text-[8px] font-bold uppercase tracking-widest mt-1">Logout</span>
             </button>
           </div>
+
         </div>
       </header>
 
@@ -759,9 +840,7 @@ export default function FleetTrackerApp() {
       {/* MAIN SCROLLABLE CONTENT */}
       <main className="flex-1 overflow-y-auto p-4 flex justify-center w-full" style={{ touchAction: 'auto' }}>
         <div className="w-full max-w-3xl flex flex-col gap-6">
-          {/* NEW FLEET DASHBOARD */}
           {activeTab === 'fleet' && <FleetSummary aircraftList={aircraftList} onSelectAircraft={(tail) => { setActiveTail(tail); setActiveTab('summary'); }} />}
-          
           {activeTab === 'summary' && <SummaryTab aircraft={selectedAircraftData} setActiveTab={setActiveTab} />}
           {activeTab === 'times' && <TimesTab aircraft={selectedAircraftData} session={session} role={role} userInitials={userInitials} onUpdate={() => fetchAircraftData(session.user.id)} />}
           {activeTab === 'mx' && <MaintenanceTab aircraft={selectedAircraftData} role={role} onGroundedStatusChange={() => checkGroundedStatus(activeTail)} />}
@@ -780,7 +859,7 @@ export default function FleetTrackerApp() {
             { id: 'squawks', icon: AlertTriangle, label: 'Squawks', badge: 0 },
             { id: 'notes', icon: FileText, label: 'Notes', badge: unreadNotes }
           ].map((tab) => (
-            <button key={tab.id} onClick={() => setActiveTab(tab.id as any)} className={`flex-1 py-3 md:py-4 flex flex-col items-center justify-center transition-all relative active:scale-95 ${getTabColor(tab.id)}`}>
+            <button key={tab.id} onClick={() => setActiveTab(tab.id as any)} className={`flex-1 py-3 md:py-4 flex flex-col items-center justify-center transition-all relative active:scale-95 ${activeTab === tab.id ? 'text-navy' : 'text-gray-400 hover:text-navy hover:bg-gray-50'}`}>
               
               <div className="relative mb-1">
                 <tab.icon size={20} />
@@ -793,7 +872,7 @@ export default function FleetTrackerApp() {
               </div>
               
               <span className="text-[10px] font-bold uppercase tracking-widest">{tab.label}</span>
-              {activeTab === tab.id && <div className={`absolute top-0 w-12 h-1 rounded-b-full ${getIndicatorColor(tab.id)}`}></div>}
+              {activeTab === tab.id && <div className="absolute top-0 w-12 h-1 rounded-b-full bg-navy"></div>}
             </button>
           ))}
         </div>
