@@ -15,7 +15,7 @@ export default function UpdatePassword() {
     e.preventDefault();
     setIsSubmitting(true);
     
-    // 1. Save the new password
+    // 1. Save the new password via Supabase Auth
     const { error: pwdError } = await supabase.auth.updateUser({ password });
     
     if (pwdError) {
@@ -24,11 +24,12 @@ export default function UpdatePassword() {
       return;
     }
 
-    // 2. Save their initials to their database profile
+    // 2. Save their initials and email to their database profile
     const { data: { session } } = await supabase.auth.getSession();
     if (session) {
       await supabase.from('aft_user_roles').update({ 
-        initials: initials.toUpperCase() 
+        initials: initials.toUpperCase(),
+        email: session.user.email
       }).eq('user_id', session.user.id);
     }
 
@@ -37,7 +38,7 @@ export default function UpdatePassword() {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center p-4 bg-slateGray h-[100dvh] w-full">
+    <div className="flex flex-col items-center justify-center p-4 bg-slateGray h-[100dvh] w-full overflow-hidden">
       <div className="bg-cream shadow-2xl rounded-sm p-8 w-full max-w-md animate-slide-up">
         
         <div className="text-center mb-8">

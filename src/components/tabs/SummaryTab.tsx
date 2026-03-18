@@ -7,14 +7,13 @@ export default function SummaryTab({
   setActiveTab 
 }: { 
   aircraft: any, 
-  // FIX: This strict type definition perfectly matches page.tsx and clears the Vercel error!
   setActiveTab: (tab: 'summary' | 'times' | 'mx' | 'squawks' | 'notes') => void 
 }) {
   const [nextMx, setNextMx] = useState<any>(null);
   const [activeSquawks, setActiveSquawks] = useState<any[]>([]);
   const [latestNote, setLatestNote] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const[showNoteModal, setShowNoteModal] = useState(false);
+  const [showNoteModal, setShowNoteModal] = useState(false);
 
   useEffect(() => {
     if (aircraft) fetchSummaryData();
@@ -79,7 +78,7 @@ export default function SummaryTab({
   return (
     <div className="flex flex-col gap-4 animate-fade-in">
       
-      {/* 1. HEADER CARD: Avatar & Details (Top color bar removed!) */}
+      {/* 1. HEADER CARD: Avatar & Details */}
       <div className="bg-white shadow-lg rounded-sm overflow-hidden">
         
         <div className="relative h-40 md:h-56 bg-slateGray flex items-center justify-center">
@@ -154,7 +153,7 @@ export default function SummaryTab({
         </div>
       </div>
 
-      {/* 2. FLIGHT TIMES CARD (Standalone & Color Coded to Airworthiness) */}
+      {/* 2. FLIGHT TIMES CARD */}
       <div className={`bg-white shadow-lg rounded-sm p-4 border-t-4 ${statusBorderColor} flex flex-col`}>
         <div className="flex justify-between items-center mb-3 border-b border-gray-100 pb-3">
           <div className="flex items-center gap-2">
@@ -186,16 +185,24 @@ export default function SummaryTab({
         </div>
       </div>
 
-      {/* 3. FUEL STATE CARD */}
+      {/* 3. FUEL STATE CARD (Added Timestamp) */}
       <div className="bg-white shadow-lg rounded-sm p-4 border-t-4 border-blue-500 flex flex-col">
         <div className="flex justify-between items-center mb-3 border-b border-gray-100 pb-3">
           <div className="flex items-center gap-2">
             <Droplet size={20} className="text-blue-500" />
             <h3 className="font-oswald text-xl font-bold uppercase text-navy m-0 leading-none">Current Fuel</h3>
           </div>
-          <span className="text-[10px] font-bold uppercase tracking-widest bg-gray-100 px-2 py-1 rounded text-gray-600">
-            {isTurbine ? 'Jet-A (6.7 lbs/gal)' : 'AvGas (6.0 lbs/gal)'}
-          </span>
+          <div className="text-right">
+            <span className="text-[10px] font-bold uppercase tracking-widest bg-gray-100 px-2 py-1 rounded text-gray-600 block mb-1">
+              {isTurbine ? 'Jet-A (6.7 lbs/gal)' : 'AvGas (6.0 lbs/gal)'}
+            </span>
+            {/* NEW FUEL TIMESTAMP LOGIC */}
+            {aircraft.fuel_last_updated && (
+              <span className="text-[9px] font-bold uppercase tracking-widest text-gray-400 block mt-1">
+                Updated: {new Date(aircraft.fuel_last_updated).toLocaleString('en-US', { month: 'numeric', day: 'numeric', year: '2-digit', hour: 'numeric', minute: '2-digit' })}
+              </span>
+            )}
+          </div>
         </div>
         
         <div className="grid grid-cols-2 gap-4">

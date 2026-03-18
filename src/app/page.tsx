@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/lib/supabase";
-import { PlaneTakeoff, Wrench, AlertTriangle, FileText, Clock, LogOut, Plus, X, Edit2, ChevronDown, Home, Users, Eye, EyeOff } from "lucide-react";
+import { PlaneTakeoff, Wrench, AlertTriangle, FileText, Clock, LogOut, Plus, X, Edit2, ChevronDown, Home, Users, Eye, EyeOff, LayoutGrid, ShieldCheck } from "lucide-react";
 import { PrimaryButton } from "@/components/AppButtons";
 import imageCompression from "browser-image-compression";
 import ReactCrop, { Crop } from 'react-image-crop';
@@ -13,46 +13,53 @@ import TimesTab from "@/components/tabs/TimesTab";
 import MaintenanceTab from "@/components/tabs/MaintenanceTab";
 import SquawksTab from "@/components/tabs/SquawksTab"; 
 import NotesTab from "@/components/tabs/NotesTab";
+import FleetSummary from "@/components/tabs/FleetSummary"; // NEW
 
 export default function FleetTrackerApp() {
   const [session, setSession] = useState<any>(null);
-  const [role, setRole] = useState<'admin' | 'pilot'>('pilot');
-  const [userInitials, setUserInitials] = useState("");
+  const[role, setRole] = useState<'admin' | 'pilot'>('pilot');
+  const[userInitials, setUserInitials] = useState("");
   
   // Login State
-  const[authEmail, setAuthEmail] = useState("");
-  const [authPassword, setAuthPassword] = useState("");
-  const[showForgotPassword, setShowForgotPassword] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
+  const [authEmail, setAuthEmail] = useState("");
+  const[authPassword, setAuthPassword] = useState("");
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const[showPassword, setShowPassword] = useState(false);
 
   // App State
-  const [aircraftList, setAircraftList] = useState<any[]>([]);
+  const[aircraftList, setAircraftList] = useState<any[]>([]);
   const [activeTail, setActiveTail] = useState<string>("");
-  const[activeTab, setActiveTab] = useState<'summary' | 'times' | 'mx' | 'squawks' | 'notes'>('summary');
-  const [aircraftStatus, setAircraftStatus] = useState<'airworthy' | 'issues' | 'grounded'>('airworthy');
+  const [activeTab, setActiveTab] = useState<'fleet' | 'summary' | 'times' | 'mx' | 'squawks' | 'notes'>('fleet');
+  const[aircraftStatus, setAircraftStatus] = useState<'airworthy' | 'issues' | 'grounded'>('airworthy');
   const [unreadNotes, setUnreadNotes] = useState(0);
 
   // Invite User State
-  const [showInviteModal, setShowInviteModal] = useState(false);
+  const[showInviteModal, setShowInviteModal] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
-  const[inviteRole, setInviteRole] = useState<'admin'|'pilot'>('pilot');
+  const [inviteRole, setInviteRole] = useState<'admin'|'pilot'>('pilot');
+
+  // NEW: Aircraft Access State
+  const [showAccessModal, setShowAccessModal] = useState(false);
+  const[allUsers, setAllUsers] = useState<any[]>([]);
+  const [selectedAccessUserId, setSelectedAccessUserId] = useState<string>("");
+  const [userAccessList, setUserAccessList] = useState<string[]>([]);
 
   // Aircraft Modal State
-  const[showAircraftModal, setShowAircraftModal] = useState(false);
+  const [showAircraftModal, setShowAircraftModal] = useState(false);
   const[editingAircraftId, setEditingAircraftId] = useState<string | null>(null);
   const [newTail, setNewTail] = useState("");
   const [newSerial, setNewSerial] = useState("");
-  const [newModel, setNewModel] = useState("");
+  const[newModel, setNewModel] = useState("");
   const [newType, setNewType] = useState<'Piston' | 'Turbine'>('Piston');
   const [newAirframeTime, setNewAirframeTime] = useState("");
-  const[newEngineTime, setNewEngineTime] = useState("");
-  const [newHomeAirport, setNewHomeAirport] = useState("");
-  const[newMainContact, setNewMainContact] = useState("");
-  const [newMainContactPhone, setNewMainContactPhone] = useState(""); 
-  const [newMainContactEmail, setNewMainContactEmail] = useState(""); 
-  const[newMxContact, setNewMxContact] = useState(""); 
+  const [newEngineTime, setNewEngineTime] = useState("");
+  const[newHomeAirport, setNewHomeAirport] = useState("");
+  const [newMainContact, setNewMainContact] = useState("");
+  const[newMainContactPhone, setNewMainContactPhone] = useState(""); 
+  const[newMainContactEmail, setNewMainContactEmail] = useState(""); 
+  const [newMxContact, setNewMxContact] = useState(""); 
   const [newMxContactPhone, setNewMxContactPhone] = useState(""); 
-  const [newMxContactEmail, setNewMxContactEmail] = useState(""); 
+  const[newMxContactEmail, setNewMxContactEmail] = useState(""); 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Cropper State
@@ -82,22 +89,13 @@ export default function FleetTrackerApp() {
   }, [activeTail, aircraftList, session]);
 
   const fetchAircraftData = async (userId: string) => {
-    const { data: roleData } = await supabase
-      .from('aft_user_roles')
-      .select('role, initials')
-      .eq('user_id', userId)
-      .single();
-
+    const { data: roleData } = await supabase.from('aft_user_roles').select('role, initials').eq('user_id', userId).single();
     if (roleData) {
       setRole(roleData.role);
       setUserInitials(roleData.initials || "");
     }
     
-    const { data: aircraftData } = await supabase
-      .from('aft_aircraft')
-      .select('*')
-      .order('tail_number');
-
+    const { data: aircraftData } = await supabase.from('aft_aircraft').select('*').order('tail_number');
     if (aircraftData && aircraftData.length > 0) {
       setAircraftList(aircraftData); 
       if (!activeTail) setActiveTail(aircraftData[0].tail_number);
@@ -108,23 +106,14 @@ export default function FleetTrackerApp() {
     const aircraft = aircraftList.find(a => a.tail_number === tail);
     if (!aircraft) return;
     
-    const { data: notes } = await supabase
-      .from('aft_notes')
-      .select('id')
-      .eq('aircraft_id', aircraft.id);
-
+    const { data: notes } = await supabase.from('aft_notes').select('id').eq('aircraft_id', aircraft.id);
     if (!notes || notes.length === 0) { 
       setUnreadNotes(0); 
       return; 
     }
     
     const noteIds = notes.map(n => n.id);
-    const { data: reads } = await supabase
-      .from('aft_note_reads')
-      .select('note_id')
-      .eq('user_id', userId)
-      .in('note_id', noteIds);
-
+    const { data: reads } = await supabase.from('aft_note_reads').select('note_id').eq('user_id', userId).in('note_id', noteIds);
     const readIds = reads ? reads.map(r => r.note_id) :[];
     
     setUnreadNotes(noteIds.length - readIds.length);
@@ -137,11 +126,7 @@ export default function FleetTrackerApp() {
     let isGrounded = false; 
     let hasOpenSquawks = false;
 
-    const { data: mxData } = await supabase
-      .from('aft_maintenance_items')
-      .select('*')
-      .eq('aircraft_id', aircraft.id);
-
+    const { data: mxData } = await supabase.from('aft_maintenance_items').select('*').eq('aircraft_id', aircraft.id);
     if (mxData) {
       const currentEngineTime = aircraft.total_engine_time || 0;
       isGrounded = mxData.some(item => {
@@ -153,12 +138,7 @@ export default function FleetTrackerApp() {
     }
 
     if (!isGrounded) {
-      const { data: sqData } = await supabase
-        .from('aft_squawks')
-        .select('*')
-        .eq('aircraft_id', aircraft.id)
-        .eq('status', 'open');
-
+      const { data: sqData } = await supabase.from('aft_squawks').select('*').eq('aircraft_id', aircraft.id).eq('status', 'open');
       if (sqData && sqData.length > 0) {
         if (sqData.some(sq => sq.affects_airworthiness)) isGrounded = true;
         else hasOpenSquawks = true;
@@ -170,6 +150,43 @@ export default function FleetTrackerApp() {
     else setAircraftStatus('airworthy');
   };
 
+  // --- ACCESS MANAGEMENT FUNCTIONS ---
+  const openAccessModal = async () => {
+    setIsSubmitting(true);
+    // Fetch all pilots
+    const { data } = await supabase.from('aft_user_roles').select('*').eq('role', 'pilot');
+    if (data) setAllUsers(data);
+    setSelectedAccessUserId("");
+    setUserAccessList([]);
+    setShowAccessModal(true);
+    setIsSubmitting(false);
+  };
+
+  const fetchUserAccess = async (userId: string) => {
+    setSelectedAccessUserId(userId);
+    const { data } = await supabase.from('aft_user_aircraft_access').select('aircraft_id').eq('user_id', userId);
+    if (data) {
+      setUserAccessList(data.map(d => d.aircraft_id));
+    } else {
+      setUserAccessList([]);
+    }
+  };
+
+  const toggleAccess = async (aircraftId: string, hasAccess: boolean) => {
+    if (!selectedAccessUserId) return;
+    
+    if (hasAccess) {
+      // Remove Access
+      setUserAccessList(prev => prev.filter(id => id !== aircraftId));
+      await supabase.from('aft_user_aircraft_access').delete().match({ user_id: selectedAccessUserId, aircraft_id: aircraftId });
+    } else {
+      // Add Access
+      setUserAccessList(prev =>[...prev, aircraftId]);
+      await supabase.from('aft_user_aircraft_access').insert({ user_id: selectedAccessUserId, aircraft_id: aircraftId });
+    }
+  };
+
+  // --- AUTHENTICATION FUNCTIONS ---
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault(); 
     setIsSubmitting(true);
@@ -215,6 +232,7 @@ export default function FleetTrackerApp() {
     setIsSubmitting(false);
   };
 
+  // --- CROPPER FUNCTIONS ---
   const onSelectFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       const reader = new FileReader();
@@ -235,11 +253,7 @@ export default function FleetTrackerApp() {
     const ctx = canvas.getContext('2d');
 
     if (!ctx) return null;
-    ctx.drawImage(
-      image, 
-      crop.x * scaleX, crop.y * scaleY, crop.width * scaleX, crop.height * scaleY, 
-      0, 0, canvas.width, canvas.height
-    );
+    ctx.drawImage(image, crop.x * scaleX, crop.y * scaleY, crop.width * scaleX, crop.height * scaleY, 0, 0, canvas.width, canvas.height);
 
     return new Promise((resolve) => {
       canvas.toBlob((blob) => {
@@ -249,6 +263,7 @@ export default function FleetTrackerApp() {
     });
   };
 
+  // --- AIRCRAFT FORM ---
   const openAircraftForm = (aircraft: any = null) => {
     if (aircraft) { 
       setEditingAircraftId(aircraft.id); 
@@ -360,6 +375,7 @@ export default function FleetTrackerApp() {
     }
   };
 
+  // --- LOGIN SCREEN ---
   if (!session) {
     return (
       <div className="flex flex-col items-center justify-center p-4 bg-slateGray h-[100dvh] w-full overflow-hidden">
@@ -572,6 +588,66 @@ export default function FleetTrackerApp() {
         </div>
       )}
 
+      {/* ADMIN AIRCRAFT ACCESS MODAL */}
+      {showAccessModal && role === 'admin' && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white rounded shadow-2xl w-full max-w-md p-6 border-t-4 border-navy animate-slide-up max-h-[90vh] overflow-y-auto">
+            
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="font-oswald text-2xl font-bold uppercase text-navy flex items-center gap-2">
+                <ShieldCheck size={20}/> Assign Aircraft
+              </h2>
+              <button onClick={() => setShowAccessModal(false)} className="text-gray-400 hover:text-red-500">
+                <X size={24}/>
+              </button>
+            </div>
+
+            <div className="space-y-6">
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Select Pilot</label>
+                <select 
+                  className="w-full border border-gray-300 rounded p-3 text-sm mt-1 bg-white focus:border-navy outline-none"
+                  value={selectedAccessUserId}
+                  onChange={(e) => fetchUserAccess(e.target.value)}
+                >
+                  <option value="">-- Choose a Pilot --</option>
+                  {allUsers.map(u => (
+                    <option key={u.user_id} value={u.user_id}>{u.email || u.user_id}</option>
+                  ))}
+                </select>
+              </div>
+
+              {selectedAccessUserId && (
+                <div className="border border-gray-200 rounded p-4 bg-gray-50">
+                  <h3 className="text-[10px] font-bold uppercase tracking-widest text-navy mb-3">Allowed Aircraft</h3>
+                  <div className="space-y-3 max-h-[40vh] overflow-y-auto">
+                    {aircraftList.map(ac => {
+                      const hasAccess = userAccessList.includes(ac.id);
+                      return (
+                        <label key={ac.id} className="flex items-center gap-3 cursor-pointer">
+                          <input 
+                            type="checkbox" 
+                            checked={hasAccess} 
+                            onChange={() => toggleAccess(ac.id, hasAccess)} 
+                            className="w-4 h-4 text-navy border-gray-300 rounded"
+                          />
+                          <span className="font-bold text-sm text-navy uppercase">{ac.tail_number}</span>
+                          <span className="text-[10px] text-gray-500 uppercase">{ac.aircraft_type}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+            
+            <div className="pt-6">
+              <PrimaryButton onClick={() => setShowAccessModal(false)}>Done</PrimaryButton>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* INVITE USER MODAL */}
       {showInviteModal && role === 'admin' && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-fade-in">
@@ -613,6 +689,7 @@ export default function FleetTrackerApp() {
           <div className="flex flex-col">
             <span className="text-[9px] font-bold uppercase tracking-widest text-[#F5B05B] mb-[2px]">Active Aircraft</span>
             <div className="flex items-center gap-3">
+              
               <div className={`w-3.5 h-3.5 rounded-full shrink-0 shadow-inner ${aircraftStatus === 'grounded' ? 'bg-red-500 animate-pulse' : aircraftStatus === 'issues' ? 'bg-[#F08B46]' : 'bg-success'}`} />
               
               <div className="relative flex items-center">
@@ -642,18 +719,31 @@ export default function FleetTrackerApp() {
           </div>
           
           <div className="flex gap-4">
+            
+            {/* NEW FLEET DASHBOARD BUTTON */}
+            <button onClick={() => setActiveTab('fleet')} className={`hover:text-white transition-colors flex flex-col items-center active:scale-95 shrink-0 ${activeTab === 'fleet' ? 'text-[#F5B05B]' : 'text-gray-300'}`}>
+              <LayoutGrid size={18} />
+              <span className="text-[8px] font-bold uppercase tracking-widest mt-1">Fleet</span>
+            </button>
+
             {role === 'admin' && (
-              <button onClick={() => setShowInviteModal(true)} className="text-gray-300 hover:text-white transition-colors flex flex-col items-center active:scale-95 shrink-0">
-                <Users size={18} />
-                <span className="text-[8px] font-bold uppercase tracking-widest mt-1">Users</span>
-              </button>
+              <>
+                {/* NEW AIRCRAFT ACCESS BUTTON */}
+                <button onClick={openAccessModal} className="text-gray-300 hover:text-white transition-colors flex flex-col items-center active:scale-95 shrink-0">
+                  <ShieldCheck size={18} />
+                  <span className="text-[8px] font-bold uppercase tracking-widest mt-1">Access</span>
+                </button>
+                <button onClick={() => setShowInviteModal(true)} className="text-gray-300 hover:text-white transition-colors flex flex-col items-center active:scale-95 shrink-0">
+                  <Users size={18} />
+                  <span className="text-[8px] font-bold uppercase tracking-widest mt-1">Users</span>
+                </button>
+              </>
             )}
             <button onClick={handleLogout} className="text-gray-300 hover:text-white transition-colors flex flex-col items-center active:scale-95 shrink-0">
               <LogOut size={18} />
               <span className="text-[8px] font-bold uppercase tracking-widest mt-1">Logout</span>
             </button>
           </div>
-
         </div>
       </header>
 
@@ -669,6 +759,9 @@ export default function FleetTrackerApp() {
       {/* MAIN SCROLLABLE CONTENT */}
       <main className="flex-1 overflow-y-auto p-4 flex justify-center w-full" style={{ touchAction: 'auto' }}>
         <div className="w-full max-w-3xl flex flex-col gap-6">
+          {/* NEW FLEET DASHBOARD */}
+          {activeTab === 'fleet' && <FleetSummary aircraftList={aircraftList} onSelectAircraft={(tail) => { setActiveTail(tail); setActiveTab('summary'); }} />}
+          
           {activeTab === 'summary' && <SummaryTab aircraft={selectedAircraftData} setActiveTab={setActiveTab} />}
           {activeTab === 'times' && <TimesTab aircraft={selectedAircraftData} session={session} role={role} userInitials={userInitials} onUpdate={() => fetchAircraftData(session.user.id)} />}
           {activeTab === 'mx' && <MaintenanceTab aircraft={selectedAircraftData} role={role} onGroundedStatusChange={() => checkGroundedStatus(activeTail)} />}
@@ -688,6 +781,7 @@ export default function FleetTrackerApp() {
             { id: 'notes', icon: FileText, label: 'Notes', badge: unreadNotes }
           ].map((tab) => (
             <button key={tab.id} onClick={() => setActiveTab(tab.id as any)} className={`flex-1 py-3 md:py-4 flex flex-col items-center justify-center transition-all relative active:scale-95 ${getTabColor(tab.id)}`}>
+              
               <div className="relative mb-1">
                 <tab.icon size={20} />
                 {tab.badge > 0 && (
@@ -697,6 +791,7 @@ export default function FleetTrackerApp() {
                   </span>
                 )}
               </div>
+              
               <span className="text-[10px] font-bold uppercase tracking-widest">{tab.label}</span>
               {activeTab === tab.id && <div className={`absolute top-0 w-12 h-1 rounded-b-full ${getIndicatorColor(tab.id)}`}></div>}
             </button>

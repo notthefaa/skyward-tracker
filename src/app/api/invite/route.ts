@@ -18,11 +18,12 @@ export async function POST(req: Request) {
 
     if (error) throw error;
 
-    // 2. Assign the Role
+    // 2. Assign the Role and save the Email
     if (data.user) {
       await supabaseAdmin.from('aft_user_roles').upsert({
         user_id: data.user.id,
-        role: role
+        role: role,
+        email: email // Stores the email so admins can see it in the assignment UI
       });
     }
 
