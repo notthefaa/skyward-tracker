@@ -1,19 +1,25 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
-import { PlaneTakeoff, MapPin, Droplet, Phone, Mail, Wrench, AlertTriangle, FileText, Clock, X } from "lucide-react";
+import { PlaneTakeoff, MapPin, Droplet, Phone, Mail, Wrench, AlertTriangle, FileText, Clock, X, Trash2 } from "lucide-react";
 
 export default function SummaryTab({ 
   aircraft, 
-  setActiveTab 
+  setActiveTab,
+  role,
+  onDeleteAircraft
 }: { 
   aircraft: any, 
-  setActiveTab: (tab: 'summary' | 'times' | 'mx' | 'squawks' | 'notes') => void 
+  setActiveTab: (tab: 'summary' | 'times' | 'mx' | 'squawks' | 'notes') => void,
+  role: string,
+  onDeleteAircraft: (id: string) => void
 }) {
-  const [nextMx, setNextMx] = useState<any>(null);
-  const[activeSquawks, setActiveSquawks] = useState<any[]>([]);
+  const[nextMx, setNextMx] = useState<any>(null);
+  const [activeSquawks, setActiveSquawks] = useState<any[]>([]);
   const [latestNote, setLatestNote] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [showNoteModal, setShowNoteModal] = useState(false);
+  
+  const[showNoteModal, setShowNoteModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   useEffect(() => {
     if (aircraft) fetchSummaryData();
@@ -69,14 +75,54 @@ export default function SummaryTab({
   const fuelGals = aircraft.current_fuel_gallons || 0;
   const fuelLbs = Math.round(fuelGals * weightPerGal);
 
+  // Calculate dynamic colors for the Flight Times card based on Airworthiness Status
   const isGrounded = nextMx?.isExpired || activeSquawks.some(sq => sq.affects_airworthiness);
   const hasIssues = activeSquawks.length > 0;
   const statusBorderColor = isGrounded ? 'border-[#CE3732]' : hasIssues ? 'border-[#F08B46]' : 'border-success';
   const statusIconColor = isGrounded ? 'text-[#CE3732]' : hasIssues ? 'text-[#F08B46]' : 'text-success';
 
   return (
-    <div className="flex flex-col gap-4 animate-fade-in">
+    <div className="flex flex-col gap-4 animate-fade-in relative">
       
+      {/* DELETE AIRCRAFT MODAL (Admin Only) */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/80 animate-fade-in" onClick={() => setShowDeleteModal(false)}>
+          <div className="bg-white rounded shadow-2xl w-full max-w-sm p-6 border-t-4 border-[#CE3732] animate-slide-up relative" onClick={(e) => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="font-oswald text-2xl font-bold uppercase text-[#CE3732] flex items-center gap-2">
+                <AlertTriangle size={24} /> Delete Aircraft
+              </h2>
+              <button onClick={() => setShowDeleteModal(false)} className="text-gray-400 hover:text-red-500 transition-colors">
+                <X size={24}/>
+              </button>
+            </div>
+            
+            <p className="text-sm text-navy font-roboto mb-6 leading-relaxed">
+              <strong>WARNING:</strong> This action is strictly irreversible.<br/><br/>
+              Deleting <strong className="text-[#CE3732]">{aircraft.tail_number}</strong> will permanently erase all associated flight logs, maintenance items, squawks, and notes from the database.
+            </p>
+
+            <div className="flex gap-4">
+              <button 
+                onClick={() => setShowDeleteModal(false)} 
+                className="flex-1 border border-gray-300 text-gray-600 font-bold uppercase tracking-widest text-[10px] py-3 rounded hover:bg-gray-50 transition-colors active:scale-95"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={() => {
+                  setShowDeleteModal(false);
+                  onDeleteAircraft(aircraft.id);
+                }} 
+                className="flex-1 bg-[#CE3732] text-white font-bold uppercase tracking-widest text-[10px] py-3 rounded hover:bg-red-700 transition-colors shadow-md active:scale-95"
+              >
+                Confirm Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 1. HEADER CARD: Avatar & Details */}
       <div className="bg-white shadow-lg rounded-sm overflow-hidden">
         
@@ -86,7 +132,19 @@ export default function SummaryTab({
           ) : (
             <PlaneTakeoff size={64} className="text-white/20" />
           )}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent flex flex-col justify-end p-4 md:p-6">
+          
+          {/* RESTORED: ADMIN DELETE BUTTON */}
+          {role === 'admin' && (
+            <button 
+              onClick={() => setShowDeleteModal(true)} 
+              className="absolute top-4 right-4 bg-[#CE3732] text-white p-2.5 rounded-full shadow-[0_4px_10px_rgba(0,0,0,0.5)] hover:bg-red-700 active:scale-95 transition-all z-10"
+              title="Delete Aircraft"
+            >
+              <Trash2 size={18} />
+            </button>
+          )}
+
+          <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent flex flex-col justify-end p-4 md:p-6 pointer-events-none">
             <h2 className="font-oswald text-4xl md:text-5xl font-bold text-white uppercase leading-none mb-1">
               {aircraft.tail_number}
             </h2>
@@ -184,7 +242,7 @@ export default function SummaryTab({
         </div>
       </div>
 
-      {/* 3. FUEL STATE CARD (Updated Timestamp Location) */}
+      {/* 3. FUEL STATE CARD WITH TIMESTAMP */}
       <div className="bg-white shadow-lg rounded-sm p-4 border-t-4 border-blue-500 flex flex-col">
         <div className="flex justify-between items-start mb-3 border-b border-gray-100 pb-3">
           <div className="flex flex-col gap-1">
@@ -226,6 +284,7 @@ export default function SummaryTab({
       {!isLoading && (
         <div className="grid grid-cols-1 gap-3 mb-6">
           
+          {/* NEXT MX DUE */}
           <div 
             onClick={() => setActiveTab('mx')}
             className={`bg-white border shadow-sm rounded-sm p-4 flex gap-4 items-center transition-colors cursor-pointer active:scale-[0.98] ${nextMx ? 'border-gray-200 hover:bg-orange-50' : 'border-gray-200 opacity-70 hover:bg-gray-50'}`}
@@ -246,6 +305,7 @@ export default function SummaryTab({
             </div>
           </div>
 
+          {/* ACTIVE SQUAWKS */}
           <div 
             onClick={() => setActiveTab('squawks')}
             className={`bg-white border shadow-sm rounded-sm p-4 flex gap-4 items-center transition-colors cursor-pointer active:scale-[0.98] ${activeSquawks.length > 0 ? 'border-red-200 hover:bg-red-50' : 'border-gray-200 opacity-70 hover:bg-gray-50'}`}
@@ -266,6 +326,7 @@ export default function SummaryTab({
             </div>
           </div>
 
+          {/* LATEST NOTE */}
           {latestNote && (
             <>
               <div 
@@ -282,6 +343,7 @@ export default function SummaryTab({
                 </div>
               </div>
 
+              {/* Note Modal */}
               {showNoteModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 animate-fade-in" onClick={() => setShowNoteModal(false)}>
                   <div className="bg-white rounded shadow-2xl w-full max-w-md p-6 border-t-4 border-navy animate-slide-up relative" onClick={(e) => e.stopPropagation()}>
