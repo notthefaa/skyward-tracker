@@ -2,8 +2,8 @@ import { MetadataRoute } from 'next'
  
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'Skyward Aircraft Tracker',
-    short_name: 'Skyward',
+    name: 'Aircraft Manager',
+    short_name: 'Aircraft Manager',
     description: 'Fleet flight logs, maintenance, and squawk tracker.',
     start_url: '/',
     display: 'standalone', // Hides the browser URL bar!
