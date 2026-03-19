@@ -233,7 +233,7 @@ export default function SummaryTab({
           </div>
           <div>
             <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 block mb-1">
-              {isTurbine ? "Total Engine" : "Current Tach"}
+              {isTurbine ? "Total Flight" : "Current Tach"}
             </span>
             <p className="text-3xl font-roboto font-bold text-navy">
               {aircraft.total_engine_time?.toFixed(1) || 0} <span className="text-sm text-gray-400">hrs</span>
