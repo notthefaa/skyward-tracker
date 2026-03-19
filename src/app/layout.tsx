@@ -5,7 +5,7 @@ import "./globals.css";
 const oswald = Oswald({ 
   subsets: ["latin"], 
   variable: "--font-oswald",
-  weight: ["400", "700"] 
+  weight:["400", "700"] 
 });
 
 const roboto = Roboto({ 
@@ -14,12 +14,17 @@ const roboto = Roboto({
   weight: ["400", "500", "700"] 
 });
 
+// THIS TELLS ALL BROWSERS AND APPLE DEVICES TO USE YOUR ONE ICON
 export const metadata: Metadata = {
   title: "Aviation Fleet Tracker",
   description: "Pilot log and maintenance tracker for the fleet",
+  icons: {
+    icon: '/icon.png',
+    apple: '/icon.png',
+  },
 };
 
-// THIS IS THE FIX FOR THE AUTO-ZOOM BUG
+// THIS STRICTLY PREVENTS THE MOBILE AUTO-ZOOM BUG
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
