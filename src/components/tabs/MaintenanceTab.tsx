@@ -12,22 +12,21 @@ export default function MaintenanceTab({
   role: string, 
   onGroundedStatusChange: (isGrounded: boolean) => void 
 }) {
-  const[mxItems, setMxItems] = useState<any[]>([]);
-  const[showMxModal, setShowMxModal] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [mxItems, setMxItems] = useState<any[]>([]);
+  const [showMxModal, setShowMxModal] = useState(false);
+  const[isSubmitting, setIsSubmitting] = useState(false);
 
   const [editingId, setEditingId] = useState<string | null>(null);
-  const[mxName, setMxName] = useState("");
-  const [mxIsRequired, setMxIsRequired] = useState(true);
+  const [mxName, setMxName] = useState("");
+  const[mxIsRequired, setMxIsRequired] = useState(true);
   const [mxTrackingType, setMxTrackingType] = useState<'time' | 'date'>('time');
   const [mxLastTime, setMxLastTime] = useState("");
   const[mxIntervalTime, setMxIntervalTime] = useState("");
-  const [mxDueTime, setMxDueTime] = useState("");
+  const[mxDueTime, setMxDueTime] = useState("");
   const [mxLastDate, setMxLastDate] = useState("");
   const[mxIntervalDays, setMxIntervalDays] = useState("");
   const [mxDueDate, setMxDueDate] = useState("");
   
-  // NEW: Automate Scheduling Checkbox
   const [automateScheduling, setAutomateScheduling] = useState(false);
 
   const isTurbine = aircraft?.engine_type === 'Turbine';
@@ -73,7 +72,7 @@ export default function MaintenanceTab({
       setMxLastDate(item.last_completed_date || ""); 
       setMxIntervalDays(item.date_interval_days || ""); 
       setMxDueDate(item.due_date || "");
-      setAutomateScheduling(false); // Can only automate on creation
+      setAutomateScheduling(item.automate_scheduling || false);
     } else {
       setEditingId(null); 
       setMxName(""); 
@@ -119,16 +118,15 @@ export default function MaintenanceTab({
       due_time: finalDueTime,
       last_completed_date: mxLastDate || null, 
       date_interval_days: mxIntervalDays ? parseInt(mxIntervalDays) : null, 
-      due_date: finalDueDate
+      due_date: finalDueDate,
+      automate_scheduling: automateScheduling
     };
 
     if (editingId) {
       await supabase.from('aft_maintenance_items').update(payload).eq('id', editingId);
     } else {
-      payload.automate_scheduling = automateScheduling;
       await supabase.from('aft_maintenance_items').insert(payload);
 
-      // Trigger Email Automation API if checked!
       if (automateScheduling) {
         try {
           await fetch('/api/emails/mx-schedule', {
@@ -202,14 +200,16 @@ export default function MaintenanceTab({
                 ? (item.is_required ? 'bg-red-50 border-red-200' : 'bg-orange-50 border-orange-200') 
                 : 'bg-white border-gray-200';
 
-              // NEW: Strict Due Text Color Logic
-              let dueTextColor = "text-navy"; // Default for 31-45 days
+              // Exact Logic: Red if <= 10, Orange if <= 30, Green if > 45
+              let dueTextColor = "text-success"; 
               if (isExpired || remaining <= 10) {
-                dueTextColor = "text-[#CE3732]"; // Red
+                dueTextColor = "text-[#CE3732]"; 
               } else if (remaining <= 30) {
-                dueTextColor = "text-[#F08B46]"; // Orange
+                dueTextColor = "text-[#F08B46]"; 
               } else if (remaining > 45) {
-                dueTextColor = "text-success"; // Green
+                dueTextColor = "text-success"; 
+              } else {
+                dueTextColor = "text-success"; 
               }
 
               return (
@@ -263,11 +263,22 @@ export default function MaintenanceTab({
               <div className="grid grid-cols-3 gap-4">
                 <div className="col-span-2">
                   <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Item Name *</label>
-                  <input type="text" required value={mxName} onChange={e=>setMxName(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" placeholder="e.g. Annual Inspection" />
+                  <input 
+                    type="text" 
+                    required 
+                    value={mxName} 
+                    onChange={e=>setMxName(e.target.value)} 
+                    className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" 
+                    placeholder="e.g. Annual Inspection" 
+                  />
                 </div>
                 <div>
                   <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Required?</label>
-                  <select value={mxIsRequired ? "yes" : "no"} onChange={e=>setMxIsRequired(e.target.value === "yes")} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none bg-white">
+                  <select 
+                    value={mxIsRequired ? "yes" : "no"} 
+                    onChange={e=>setMxIsRequired(e.target.value === "yes")} 
+                    className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none bg-white"
+                  >
                     <option value="yes">Yes</option>
                     <option value="no">Optional</option>
                   </select>
@@ -277,11 +288,21 @@ export default function MaintenanceTab({
               <div className="pt-2">
                 <label className="text-[10px] font-bold uppercase tracking-widest text-navy block mb-2">Tracking Method</label>
                 <div className="flex gap-4">
-                  <label className="flex items-center gap-2 text-sm font-bold text-navy">
-                    <input type="radio" checked={mxTrackingType==='time'} onChange={()=>setMxTrackingType('time')} /> Track by Time
+                  <label className="flex items-center gap-2 text-sm font-bold text-navy cursor-pointer">
+                    <input 
+                      type="radio" 
+                      checked={mxTrackingType==='time'} 
+                      onChange={()=>setMxTrackingType('time')} 
+                    /> 
+                    Track by Time
                   </label>
-                  <label className="flex items-center gap-2 text-sm font-bold text-navy">
-                    <input type="radio" checked={mxTrackingType==='date'} onChange={()=>setMxTrackingType('date')} /> Track by Date
+                  <label className="flex items-center gap-2 text-sm font-bold text-navy cursor-pointer">
+                    <input 
+                      type="radio" 
+                      checked={mxTrackingType==='date'} 
+                      onChange={()=>setMxTrackingType('date')} 
+                    /> 
+                    Track by Date
                   </label>
                 </div>
               </div>
@@ -290,35 +311,71 @@ export default function MaintenanceTab({
                 <div className="bg-gray-50 p-4 rounded border border-gray-200 grid grid-cols-2 gap-4">
                   <div className="col-span-2">
                     <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Last Completed ({isTurbine ? 'FTT' : 'Tach'}) *</label>
-                    <input type="number" step="0.1" required value={mxLastTime} onChange={e=>setMxLastTime(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" />
+                    <input 
+                      type="number" 
+                      step="0.1" 
+                      required 
+                      value={mxLastTime} 
+                      onChange={e=>setMxLastTime(e.target.value)} 
+                      className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" 
+                    />
                   </div>
                   <div>
                     <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Interval (Hrs)</label>
-                    <input type="number" step="0.1" value={mxIntervalTime} onChange={e=>setMxIntervalTime(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" />
+                    <input 
+                      type="number" 
+                      step="0.1" 
+                      value={mxIntervalTime} 
+                      onChange={e=>setMxIntervalTime(e.target.value)} 
+                      className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" 
+                    />
                   </div>
                   <div>
                     <label className="text-[10px] font-bold uppercase tracking-widest text-navy">OR Exact Due Time</label>
-                    <input type="number" step="0.1" required={!mxIntervalTime} value={mxDueTime} onChange={e=>setMxDueTime(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" />
+                    <input 
+                      type="number" 
+                      step="0.1" 
+                      required={!mxIntervalTime} 
+                      value={mxDueTime} 
+                      onChange={e=>setMxDueTime(e.target.value)} 
+                      className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" 
+                    />
                   </div>
                 </div>
               ) : (
                 <div className="bg-gray-50 p-4 rounded border border-gray-200 grid grid-cols-2 gap-4">
                   <div className="col-span-2">
                     <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Last Completed Date *</label>
-                    <input type="date" required value={mxLastDate} onChange={e=>setMxLastDate(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" />
+                    <input 
+                      type="date" 
+                      required 
+                      value={mxLastDate} 
+                      onChange={e=>setMxLastDate(e.target.value)} 
+                      className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" 
+                    />
                   </div>
                   <div>
                     <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Interval (Days)</label>
-                    <input type="number" value={mxIntervalDays} onChange={e=>setMxIntervalDays(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" />
+                    <input 
+                      type="number" 
+                      value={mxIntervalDays} 
+                      onChange={e=>setMxIntervalDays(e.target.value)} 
+                      className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" 
+                    />
                   </div>
                   <div>
                     <label className="text-[10px] font-bold uppercase tracking-widest text-navy">OR Exact Due Date</label>
-                    <input type="date" required={!mxIntervalDays} value={mxDueDate} onChange={e=>setMxDueDate(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" />
+                    <input 
+                      type="date" 
+                      required={!mxIntervalDays} 
+                      value={mxDueDate} 
+                      onChange={e=>setMxDueDate(e.target.value)} 
+                      className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" 
+                    />
                   </div>
                 </div>
               )}
 
-              {/* NEW: Automate Scheduling Checkbox */}
               {!editingId && (
                 <div className="pt-2 pb-2">
                   <label className="flex items-start gap-2 text-xs font-bold text-navy cursor-pointer">
@@ -326,9 +383,14 @@ export default function MaintenanceTab({
                       type="checkbox" 
                       checked={automateScheduling} 
                       onChange={e=>setAutomateScheduling(e.target.checked)} 
-                      className="mt-0.5 w-4 h-4 text-[#F08B46] border-gray-300 rounded focus:ring-[#F08B46]" 
+                      className="mt-0.5 w-4 h-4 text-[#F08B46] border-gray-300 rounded focus:ring-[#F08B46] cursor-pointer" 
                     />
-                    Automate MX Scheduling (Instantly emails the MX Contact advising them of this item)
+                    <span className="flex flex-col">
+                      <span>Automate MX Scheduling</span>
+                      <span className="text-[10px] text-gray-500 font-normal mt-1 leading-tight">
+                        Emails the MX contact when the item is {mxTrackingType === 'time' ? '10 hours' : '30 days'} from becoming due. The primary aircraft contact will be cc'd.
+                      </span>
+                    </span>
                   </label>
                 </div>
               )}

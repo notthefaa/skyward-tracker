@@ -20,16 +20,16 @@ export default function SquawksTab({
 }) {
   const [squawks, setSquawks] = useState<any[]>([]);
   const [showModal, setShowModal] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const[isSubmitting, setIsSubmitting] = useState(false);
   const sigCanvas = useRef<SignatureCanvas>(null);
 
   // Lightbox State
-  const[previewImages, setPreviewImages] = useState<string[] | null>(null);
-  const[previewIndex, setPreviewIndex] = useState<number>(0);
+  const [previewImages, setPreviewImages] = useState<string[] | null>(null);
+  const [previewIndex, setPreviewIndex] = useState<number>(0);
 
   // PDF Export State
-  const[showExportModal, setShowExportModal] = useState(false);
-  const [selectedForExport, setSelectedForExport] = useState<string[]>([]);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const[selectedForExport, setSelectedForExport] = useState<string[]>([]);
   const [isExportingPdf, setIsExportingPdf] = useState(false);
 
   // Form State
@@ -39,7 +39,7 @@ export default function SquawksTab({
   const[affectsAirworthiness, setAffectsAirworthiness] = useState(false);
   const [isDeferred, setIsDeferred] = useState(false);
   const [status, setStatus] = useState<'open'|'resolved'>('open');
-  const[selectedImages, setSelectedImages] = useState<File[]>([]);
+  const [selectedImages, setSelectedImages] = useState<File[]>([]);
   const [existingImages, setExistingImages] = useState<string[]>([]);
   
   // Deferral State
@@ -101,15 +101,8 @@ export default function SquawksTab({
       setStatus('open'); 
       setExistingImages([]); 
       setSelectedImages([]); 
-      setMel(""); 
-      setCdl(""); 
-      setNef(""); 
-      setMdl(""); 
-      setMelControl(""); 
-      setCategory(""); 
-      setProcCompleted(false); 
-      setFullName(""); 
-      setCertNum(""); 
+      setMel(""); setCdl(""); setNef(""); setMdl(""); setMelControl(""); setCategory(""); 
+      setProcCompleted(false); setFullName(""); setCertNum(""); 
       setNotifyMx(false);
       if (sigCanvas.current) sigCanvas.current.clear();
     }
@@ -119,14 +112,11 @@ export default function SquawksTab({
   const uploadImages = async (): Promise<string[]> => {
     let uploadedPaths: string[] =[];
     const options = { maxSizeMB: 1, maxWidthOrHeight: 1920, useWebWorker: true };
-    
     for (const file of selectedImages) {
       try {
         const compressedFile = await imageCompression(file, options);
         const fileName = `${aircraft.tail_number}_${Date.now()}_${compressedFile.name}`;
-        
         const { data } = await supabase.storage.from('aft_squawk_images').upload(fileName, compressedFile);
-        
         if (data) {
           const { data: publicUrlData } = supabase.storage.from('aft_squawk_images').getPublicUrl(data.path);
           uploadedPaths.push(publicUrlData.publicUrl);
@@ -143,7 +133,7 @@ export default function SquawksTab({
     setIsSubmitting(true);
     
     const uploadedUrls = await uploadImages(); 
-    const allPictures = [...existingImages, ...uploadedUrls];
+    const allPictures =[...existingImages, ...uploadedUrls];
     
     let signatureData = null; 
     let sigDate = null;
@@ -340,24 +330,17 @@ export default function SquawksTab({
         </PrimaryButton>
       </div>
 
-      {/* RESTORED TO DEEP RED (#CE3732) */}
+      {/* ACTIVE SQUAWKS LIST */}
       <div className="bg-cream shadow-lg rounded-sm p-4 md:p-6 border-t-4 border-[#CE3732] mb-6">
         <div className="flex justify-between items-end mb-6">
-          <h2 className="font-oswald text-2xl md:text-3xl font-bold uppercase text-navy m-0 leading-none">
-            Active Squawks
-          </h2>
-          <button 
-            onClick={() => { setSelectedForExport([]); setShowExportModal(true); }} 
-            className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-[#CE3732] hover:opacity-80 transition-colors active:scale-95"
-          >
+          <h2 className="font-oswald text-2xl md:text-3xl font-bold uppercase text-navy m-0 leading-none">Active Squawks</h2>
+          <button onClick={() => { setSelectedForExport([]); setShowExportModal(true); }} className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-[#CE3732] hover:opacity-80 transition-colors active:scale-95">
             <Download size={14} /> Export PDF
           </button>
         </div>
         
         <div className="space-y-4">
-          {activeSquawks.length === 0 ? (
-            <p className="text-center text-sm text-gray-400 italic py-4">No active squawks!</p>
-          ) : (
+          {activeSquawks.length === 0 ? (<p className="text-center text-sm text-gray-400 italic py-4">No active squawks!</p>) : (
             activeSquawks.map(sq => (
               <div key={sq.id} className={`p-4 border rounded ${sq.affects_airworthiness ? 'border-[#CE3732]/30 bg-[#CE3732]/10' : 'border-[#F08B46]/30 bg-[#F08B46]/10'}`}>
                 
@@ -578,9 +561,10 @@ export default function SquawksTab({
                 </div>
               </div>
 
+              {/* FIX: Form label updated from "Location on Aircraft" to "Location (Airport)" */}
               <div>
-                <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Location on Aircraft *</label>
-                <input type="text" required value={location} onChange={e=>setLocation(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#CE3732] outline-none" />
+                <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Location (Airport) *</label>
+                <input type="text" required value={location} onChange={e=>setLocation(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#CE3732] outline-none" placeholder="e.g. KDFW" />
               </div>
               
               <div>
@@ -603,7 +587,6 @@ export default function SquawksTab({
                 />
               </div>
 
-              {/* DEFERRAL BLOCK (Turbine Only) */}
               {isTurbine && status === 'open' && (
                 <div className="border border-blue-200 rounded p-4 bg-blue-50/30">
                   <label className="flex items-center gap-2 text-sm font-bold text-navy mb-4 cursor-pointer">

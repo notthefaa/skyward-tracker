@@ -24,7 +24,6 @@ export async function POST(req: Request) {
       }
     }
 
-    // FIX: ES5-safe array concatenation and deduplication to bypass TS2802 Vercel Error
     const adminEmails = admins ? admins.map(a => a.email).filter(Boolean) :[];
     const combinedEmails = adminEmails.concat(pilotEmails);
     const internalEmails: string[] =[];
@@ -36,53 +35,50 @@ export async function POST(req: Request) {
       }
     }
 
-    // 1. EMAIL TO MECHANIC (If requested)
+    // 1. EMAIL TO MECHANIC (Unbranded & Professional)
     if (notifyMx && aircraft.mx_contact_email) {
       const mxCc = aircraft.main_contact_email ? [aircraft.main_contact_email] :[];
+      
       await resend.emails.send({
-        from: `Skyward Maintenance <${FROM_EMAIL}>`,
+        from: `Skyward Operations <${FROM_EMAIL}>`,
         to:[aircraft.mx_contact_email],
         cc: mxCc,
         subject: `Service Request: ${aircraft.tail_number} Squawk`,
         html: `
-          <div style="font-family: Arial, sans-serif; max-w: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; border-radius: 8px;">
-            <h2 style="color: #1B4869; text-transform: uppercase; letter-spacing: 2px; border-bottom: 2px solid #1B4869; padding-bottom: 10px;">Skyward Society</h2>
-            <p style="color: #525659; font-size: 16px;">Hello ${aircraft.mx_contact || 'Maintenance Team'},</p>
-            <p style="color: #525659; font-size: 16px;">A new squawk has been reported for <strong>${aircraft.tail_number}</strong>. Please let us know when you are able to accommodate this aircraft in your schedule to address the issue.</p>
+          <div style="font-family: Arial, sans-serif; font-size: 14px; color: #333333; line-height: 1.6; max-w: 600px;">
+            <p>Hello ${aircraft.mx_contact || 'Maintenance Team'},</p>
+            <p>A new squawk has been reported for ${aircraft.tail_number}. Please let us know when you are able to accommodate this aircraft in your schedule to address the issue.</p>
             
-            <div style="background-color: #FDFCF4; padding: 20px; border-left: 4px solid #CE3732; margin: 25px 0; border-radius: 4px;">
-              <p style="margin: 0 0 10px 0; color: #1B4869;"><strong>Location:</strong> ${squawk.location}</p>
-              <p style="margin: 0 0 10px 0; color: #1B4869;"><strong>Status:</strong> <span style="color: ${squawk.affects_airworthiness ? '#CE3732' : '#F08B46'}; font-weight: bold;">${squawk.affects_airworthiness ? 'AOG / GROUNDED' : 'Monitor'}</span></p>
-              <p style="margin: 0; color: #1B4869;"><strong>Description:</strong><br/><span style="color: #525659; line-height: 1.5;">${squawk.description}</span></p>
-            </div>
-
-            <div style="margin: 30px 0;">
-              <a href="${new URL(req.url).origin}/squawk/${squawk.id}" style="background-color: #1B4869; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: bold; text-transform: uppercase; font-size: 14px;">View Full Report & Photos</a>
-            </div>
-            <p style="color: #9ca3af; font-size: 12px; margin-top: 30px;">This is an automated service request from the Skyward Aircraft Tracker.</p>
+            <p style="margin-top: 20px;"><strong>Squawk Details:</strong><br/>
+            Location: ${squawk.location}<br/>
+            Status: ${squawk.affects_airworthiness ? 'AOG / GROUNDED' : 'Monitor'}<br/>
+            Description: ${squawk.description}</p>
+            
+            <p style="margin-top: 20px;">You can view the full report and attached photos securely here:<br/>
+            <a href="${new URL(req.url).origin}/squawk/${squawk.id}">${new URL(req.url).origin}/squawk/${squawk.id}</a></p>
+            
+            <p style="margin-top: 20px;">Thank you,<br/>Skyward Operations</p>
           </div>
         `
       });
     }
 
-    // 2. EMAIL TO INTERNAL TEAM (Pilots & Admins)
+    // 2. EMAIL TO INTERNAL TEAM (Unbranded)
     if (internalEmails.length > 0) {
       await resend.emails.send({
         from: `Skyward Alerts <${FROM_EMAIL}>`,
         to: internalEmails,
         subject: `New Squawk: ${aircraft.tail_number}`,
         html: `
-          <div style="font-family: Arial, sans-serif; max-w: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; border-radius: 8px;">
-            <h2 style="color: #1B4869; text-transform: uppercase; letter-spacing: 2px; border-bottom: 2px solid #1B4869; padding-bottom: 10px;">Skyward Fleet Alert</h2>
-            <p style="color: #525659; font-size: 16px;">A new squawk was reported on <strong>${aircraft.tail_number}</strong> by <strong>${squawk.reporter_initials || 'a pilot'}</strong>.</p>
+          <div style="font-family: Arial, sans-serif; font-size: 14px; color: #333333; line-height: 1.6; max-w: 600px;">
+            <p>A new squawk was reported on ${aircraft.tail_number} by ${squawk.reporter_initials || 'a pilot'}.</p>
             
-            <div style="background-color: #FDFCF4; padding: 20px; border-left: 4px solid ${squawk.affects_airworthiness ? '#CE3732' : '#F08B46'}; margin: 25px 0; border-radius: 4px;">
-              <p style="margin: 0 0 10px 0; color: #1B4869;"><strong>Location:</strong> ${squawk.location}</p>
-              <p style="margin: 0 0 10px 0; color: #1B4869;"><strong>Grounded:</strong> <span style="color: ${squawk.affects_airworthiness ? '#CE3732' : '#56B94A'}; font-weight: bold;">${squawk.affects_airworthiness ? 'YES' : 'NO'}</span></p>
-              <p style="margin: 0; color: #1B4869;"><strong>Description:</strong><br/><span style="color: #525659; line-height: 1.5;">${squawk.description}</span></p>
-            </div>
-
-            <p style="color: #9ca3af; font-size: 12px; margin-top: 30px;">Log in to the fleet portal to view full details.</p>
+            <p style="margin-top: 20px;"><strong>Squawk Details:</strong><br/>
+            Location: ${squawk.location}<br/>
+            Grounded: ${squawk.affects_airworthiness ? 'YES' : 'NO'}<br/>
+            Description: ${squawk.description}</p>
+            
+            <p style="margin-top: 20px;">Please log in to the fleet portal to view full details and any attached photos.</p>
           </div>
         `
       });
