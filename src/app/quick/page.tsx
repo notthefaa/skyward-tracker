@@ -2,46 +2,47 @@
 
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
-import { PlaneTakeoff, AlertTriangle, ChevronRight, CheckCircle, Camera, Clock, X, Eye, EyeOff, LogOut } from "lucide-react";
+import { AlertTriangle, ChevronRight, CheckCircle, Camera, Clock, X, Eye, EyeOff, LogOut, Info } from "lucide-react";
 import imageCompression from "browser-image-compression";
 
 export default function QuickLogCompanion() {
-  const[session, setSession] = useState<any>(null);
+  const [session, setSession] = useState<any>(null);
   const [userInitials, setUserInitials] = useState("");
-  const [aircraftList, setAircraftList] = useState<any[]>([]);
+  const[aircraftList, setAircraftList] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // --- LOGIN STATE ---
   const [authEmail, setAuthEmail] = useState("");
-  const [authPassword, setAuthPassword] = useState("");
+  const[authPassword, setAuthPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
   // --- WIZARD STATE ---
   type FlowType = 'flight' | 'squawk' | null;
   const [flow, setFlow] = useState<FlowType>(null);
-  const [step, setStep] = useState(0);
+  const[step, setStep] = useState(0);
   const [selectedAircraft, setSelectedAircraft] = useState<any>(null);
 
   // --- FLIGHT LOG STATE ---
-  const[logAftt, setLogAftt] = useState("");
+  const [logAftt, setLogAftt] = useState("");
   const [logFtt, setLogFtt] = useState("");
-  const [logHobbs, setLogHobbs] = useState("");
-  const[logTach, setLogTach] = useState("");
+  const[logHobbs, setLogHobbs] = useState("");
+  const [logTach, setLogTach] = useState("");
   const [logLandings, setLogLandings] = useState("");
-  const [logCycles, setLogCycles] = useState("");
-  const[logFuel, setLogFuel] = useState("");
+  const[logCycles, setLogCycles] = useState("");
+  const [logFuel, setLogFuel] = useState("");
   const [logFuelUnit, setLogFuelUnit] = useState<'gallons' | 'lbs'>('gallons');
   const [logInitials, setLogInitials] = useState("");
-  const [logReason, setLogReason] = useState("");
-  const[logPax, setLogPax] = useState("");
+  const[logReason, setLogReason] = useState("");
+  const [logPax, setLogPax] = useState("");
+  const [showLegend, setShowLegend] = useState(false);
 
   // --- SQUAWK STATE ---
-  const[sqLocation, setSqLocation] = useState("");
+  const [sqLocation, setSqLocation] = useState("");
   const [sqDescription, setSqDescription] = useState("");
-  const[sqAirworthy, setSqAirworthy] = useState<boolean | null>(null);
-  const[sqImages, setSqImages] = useState<File[]>([]);
-  const [sqNotifyMx, setSqNotifyMx] = useState(true);
+  const [sqAirworthy, setSqAirworthy] = useState<boolean | null>(null);
+  const [sqImages, setSqImages] = useState<File[]>([]);
+  const[sqNotifyMx, setSqNotifyMx] = useState(true);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -108,7 +109,6 @@ export default function QuickLogCompanion() {
     setLogAftt(""); setLogFtt(""); setLogHobbs(""); setLogTach("");
     setLogLandings(""); setLogCycles(""); setLogFuel(""); setLogPax(""); setLogReason("");
     setSqLocation(""); setSqDescription(""); setSqAirworthy(null); setSqImages([]); setSqNotifyMx(true);
-    // Re-fetch aircraft data to get latest times
     if (session) fetchUserData(session.user.id);
   };
 
@@ -162,7 +162,7 @@ export default function QuickLogCompanion() {
     await supabase.from('aft_flight_logs').insert(payload);
     await supabase.from('aft_aircraft').update(aircraftUpdate).eq('id', selectedAircraft.id);
     
-    setStep(99); // Success Screen
+    setStep(99); 
     setIsSubmitting(false);
   };
 
@@ -198,19 +198,18 @@ export default function QuickLogCompanion() {
       } catch (err) {}
     }
 
-    setStep(99); // Success Screen
+    setStep(99); 
     setIsSubmitting(false);
   };
 
-  if (isLoading) return <div className="h-[100dvh] bg-navy flex items-center justify-center text-white font-oswald text-2xl animate-pulse">LOADING...</div>;
+  if (isLoading) return <div className="h-[100dvh] bg-navy flex items-center justify-center text-[#3AB0FF] font-oswald tracking-widest text-2xl animate-pulse">LOADING...</div>;
 
   if (!session) {
     return (
-      <div className="flex flex-col items-center justify-center p-4 bg-[#3AB0FF] h-[100dvh] w-full overflow-hidden">
+      <div className="flex flex-col items-center justify-center p-4 bg-navy h-[100dvh] w-full overflow-hidden">
         <div className="bg-white shadow-2xl rounded-2xl p-8 w-full max-w-sm animate-slide-up">
           <div className="text-center mb-8">
-            <PlaneTakeoff size={48} className="mx-auto text-[#3AB0FF] mb-4" />
-            <h2 className="font-oswald text-3xl font-bold uppercase tracking-widest text-navy">Quick Pad</h2>
+            <h2 className="font-oswald text-4xl font-bold uppercase tracking-widest text-navy">Log It</h2>
             <p className="text-xs text-gray-500 font-bold uppercase mt-2">Sign in once to stay connected.</p>
           </div>
           <form onSubmit={handleLogin} className="space-y-4">
@@ -227,7 +226,7 @@ export default function QuickLogCompanion() {
                 </button>
               </div>
             </div>
-            <button disabled={isSubmitting} className="w-full bg-navy text-white font-oswald text-xl font-bold uppercase tracking-widest py-4 rounded-xl shadow-lg mt-6 active:scale-95 transition-transform disabled:opacity-50">
+            <button disabled={isSubmitting} className="w-full bg-[#3AB0FF] text-white font-oswald text-xl font-bold uppercase tracking-widest py-4 rounded-xl shadow-lg mt-6 active:scale-95 transition-transform disabled:opacity-50">
               {isSubmitting ? "LOGGING IN..." : "ACCESS"}
             </button>
           </form>
@@ -237,61 +236,79 @@ export default function QuickLogCompanion() {
   }
 
   return (
-    <div className="h-[100dvh] w-full bg-neutral-100 flex flex-col overflow-hidden relative selection:bg-none">
+    <div className="h-[100dvh] w-full bg-navy flex flex-col overflow-hidden relative selection:bg-none">
       
+      {/* REASON LEGEND MODAL */}
+      {showLegend && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/70 animate-fade-in" onClick={() => setShowLegend(false)}>
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-8 border-t-8 border-[#3AB0FF] animate-slide-up relative" onClick={(e) => e.stopPropagation()}>
+            <button type="button" onClick={() => setShowLegend(false)} className="absolute top-6 right-6 text-gray-400 hover:text-red-500 transition-colors">
+              <X size={24}/>
+            </button>
+            <h3 className="font-oswald text-2xl font-bold uppercase tracking-widest text-navy mb-6">Reason Codes</h3>
+            <ul className="text-lg text-navy font-roboto space-y-4">
+              <li><strong className="text-[#3AB0FF] w-12 inline-block">PE:</strong> Personal Ent.</li>
+              <li><strong className="text-[#3AB0FF] w-12 inline-block">BE:</strong> Business Ent.</li>
+              <li><strong className="text-[#3AB0FF] w-12 inline-block">MX:</strong> Maintenance</li>
+              <li><strong className="text-[#3AB0FF] w-12 inline-block">T:</strong> Training</li>
+            </ul>
+          </div>
+        </div>
+      )}
+
       {/* HEADER */}
-      <header className="bg-navy text-white px-4 py-5 shrink-0 shadow-md flex justify-between items-center z-20">
-        <h1 className="font-oswald text-2xl font-bold uppercase tracking-widest flex items-center gap-2">
-          <PlaneTakeoff size={24} className="text-[#3AB0FF]"/> Quick Pad
+      <header className="text-white px-4 py-6 shrink-0 flex justify-center items-center relative z-20">
+        <h1 className="font-oswald text-3xl font-bold uppercase tracking-widest">
+          Log It
         </h1>
         {flow && step !== 99 ? (
-          <button onClick={resetFlow} className="text-gray-300 hover:text-white p-2">
+          <button onClick={resetFlow} className="absolute right-4 text-gray-300 hover:text-white p-2">
             <X size={28} />
           </button>
         ) : (
-          <button onClick={handleLogout} className="text-gray-300 hover:text-white p-2" title="Logout">
+          <button onClick={handleLogout} className="absolute right-4 text-gray-300 hover:text-white p-2" title="Logout">
             <LogOut size={24} />
           </button>
         )}
       </header>
 
       {/* MAIN CONTENT AREA */}
-      <main className="flex-1 overflow-y-auto p-4 flex flex-col items-center pb-28" style={{ touchAction: 'auto' }}>
+      <main className="flex-1 overflow-y-auto p-4 flex flex-col items-center pb-40" style={{ touchAction: 'auto' }}>
         <div className="w-full max-w-md w-full animate-slide-up">
 
-          {/* HOME MENU */}
+          {/* HOME MENU (CIRCULAR BUTTONS) */}
           {!flow && (
-            <div className="flex flex-col gap-6 mt-4">
+            <div className="flex flex-col items-center justify-center gap-10 mt-8 h-full">
               <button 
                 onClick={() => startFlow('flight')}
-                className="bg-[#3AB0FF] text-white rounded-3xl p-8 shadow-xl flex flex-col items-center justify-center gap-4 active:scale-95 transition-transform border-4 border-transparent hover:border-blue-300"
+                className="w-64 h-64 bg-[#3AB0FF] text-white rounded-full shadow-2xl flex flex-col items-center justify-center gap-2 active:scale-95 transition-transform border-4 border-[#3AB0FF]/30 hover:border-white"
               >
-                <Clock size={72} className="opacity-90"/>
-                <h2 className="font-oswald text-4xl font-bold tracking-widest uppercase">Log Flight</h2>
+                <Clock size={64} className="opacity-90 mt-4"/>
+                <h2 className="font-oswald text-3xl font-bold tracking-widest uppercase mt-2">Log Flight</h2>
               </button>
               
               <button 
                 onClick={() => startFlow('squawk')}
-                className="bg-[#CE3732] text-white rounded-3xl p-8 shadow-xl flex flex-col items-center justify-center gap-4 active:scale-95 transition-transform border-4 border-transparent hover:border-red-300"
+                className="w-64 h-64 bg-[#CE3732] text-white rounded-full shadow-2xl flex flex-col items-center justify-center gap-2 active:scale-95 transition-transform border-4 border-[#CE3732]/30 hover:border-white"
               >
-                <AlertTriangle size={72} className="opacity-90"/>
-                <h2 className="font-oswald text-4xl font-bold tracking-widest uppercase">Log Squawk</h2>
+                <AlertTriangle size={64} className="opacity-90 mt-4"/>
+                <h2 className="font-oswald text-3xl font-bold tracking-widest uppercase mt-2">Log Squawk</h2>
               </button>
             </div>
           )}
 
-          {/* STEP 1: SELECT AIRCRAFT (Only shows if > 1 assigned) */}
+          {/* STEP 1: SELECT AIRCRAFT */}
           {flow && step === 1 && (
             <div className="flex flex-col gap-4">
-              <h3 className="font-oswald text-2xl font-bold text-navy uppercase text-center mb-2">Select Aircraft</h3>
+              <h3 className="font-oswald text-2xl font-bold text-white uppercase text-center mb-2 tracking-widest">Select Aircraft</h3>
               {aircraftList.length === 0 ? (
-                <p className="text-center text-gray-500 font-bold uppercase">No aircraft assigned to you.</p>
+                <p className="text-center text-gray-400 font-bold uppercase">No aircraft assigned to you.</p>
               ) : (
                 aircraftList.map(ac => (
                   <button 
                     key={ac.id} 
                     onClick={() => { setSelectedAircraft(ac); setStep(2); }}
-                    className="bg-white border-2 border-transparent hover:border-[#3AB0FF] p-6 rounded-2xl shadow-md flex justify-between items-center active:scale-95 transition-all"
+                    className="bg-white border-4 border-transparent hover:border-[#3AB0FF] p-6 rounded-3xl shadow-xl flex justify-between items-center active:scale-95 transition-all"
                   >
                     <div className="text-left">
                       <h4 className="font-oswald text-4xl font-bold text-navy uppercase leading-none">{ac.tail_number}</h4>
@@ -311,23 +328,23 @@ export default function QuickLogCompanion() {
             <div className="space-y-6">
               <div className="text-center mb-6">
                 <span className="text-xs font-bold uppercase tracking-widest text-[#3AB0FF] block mb-1">Flight Times</span>
-                <h3 className="font-oswald text-5xl font-bold text-navy uppercase">{selectedAircraft.tail_number}</h3>
+                <h3 className="font-oswald text-5xl font-bold text-white uppercase">{selectedAircraft.tail_number}</h3>
               </div>
               
-              <div className="bg-white p-6 rounded-3xl shadow-md border-t-8 border-[#3AB0FF] space-y-6">
+              <div className="bg-white p-6 rounded-3xl shadow-xl border-t-8 border-[#3AB0FF] space-y-6">
                 {isTurbine ? (
                   <>
                     <div>
                       <label className="flex justify-between text-xs font-bold uppercase tracking-widest text-gray-500 mb-2">
                         <span>AFTT</span> <span className="text-[#3AB0FF]">Last: {selectedAircraft.total_airframe_time?.toFixed(1) || 0}</span>
                       </label>
-                      <input type="number" step="0.1" value={logAftt} onChange={e=>setLogAftt(e.target.value)} className="w-full text-4xl font-roboto font-bold text-navy bg-gray-50 border-2 border-gray-200 rounded-xl p-4 text-center focus:border-[#3AB0FF] outline-none" placeholder="0.0" />
+                      <input type="number" step="0.1" value={logAftt} onChange={e=>setLogAftt(e.target.value)} className="w-full text-4xl font-roboto font-bold text-navy bg-gray-50 border-2 border-gray-200 rounded-2xl p-4 text-center focus:border-[#3AB0FF] outline-none" placeholder="0.0" />
                     </div>
                     <div>
                       <label className="flex justify-between text-xs font-bold uppercase tracking-widest text-gray-500 mb-2">
                         <span>FTT</span> <span className="text-[#3AB0FF]">Last: {selectedAircraft.total_engine_time?.toFixed(1) || 0}</span>
                       </label>
-                      <input type="number" step="0.1" value={logFtt} onChange={e=>setLogFtt(e.target.value)} className="w-full text-4xl font-roboto font-bold text-navy bg-gray-50 border-2 border-gray-200 rounded-xl p-4 text-center focus:border-[#3AB0FF] outline-none" placeholder="0.0" />
+                      <input type="number" step="0.1" value={logFtt} onChange={e=>setLogFtt(e.target.value)} className="w-full text-4xl font-roboto font-bold text-navy bg-gray-50 border-2 border-gray-200 rounded-2xl p-4 text-center focus:border-[#3AB0FF] outline-none" placeholder="0.0" />
                     </div>
                   </>
                 ) : (
@@ -336,26 +353,27 @@ export default function QuickLogCompanion() {
                       <label className="flex justify-between text-xs font-bold uppercase tracking-widest text-gray-500 mb-2">
                         <span>Tach</span> <span className="text-[#3AB0FF]">Last: {selectedAircraft.total_engine_time?.toFixed(1) || 0}</span>
                       </label>
-                      <input type="number" step="0.1" value={logTach} onChange={e=>setLogTach(e.target.value)} className="w-full text-4xl font-roboto font-bold text-navy bg-gray-50 border-2 border-gray-200 rounded-xl p-4 text-center focus:border-[#3AB0FF] outline-none" placeholder="0.0" />
+                      <input type="number" step="0.1" value={logTach} onChange={e=>setLogTach(e.target.value)} className="w-full text-4xl font-roboto font-bold text-navy bg-gray-50 border-2 border-gray-200 rounded-2xl p-4 text-center focus:border-[#3AB0FF] outline-none" placeholder="0.0" />
                     </div>
                     <div>
                       <label className="flex justify-between text-xs font-bold uppercase tracking-widest text-gray-500 mb-2">
                         <span>Hobbs (Opt)</span> <span className="text-[#3AB0FF]">Last: {selectedAircraft.total_airframe_time?.toFixed(1) || 0}</span>
                       </label>
-                      <input type="number" step="0.1" value={logHobbs} onChange={e=>setLogHobbs(e.target.value)} className="w-full text-4xl font-roboto font-bold text-navy bg-gray-50 border-2 border-gray-200 rounded-xl p-4 text-center focus:border-[#3AB0FF] outline-none" placeholder="0.0" />
+                      <input type="number" step="0.1" value={logHobbs} onChange={e=>setLogHobbs(e.target.value)} className="w-full text-4xl font-roboto font-bold text-navy bg-gray-50 border-2 border-gray-200 rounded-2xl p-4 text-center focus:border-[#3AB0FF] outline-none" placeholder="0.0" />
                     </div>
                   </>
                 )}
                 
-                <div className="grid grid-cols-2 gap-4 border-t-2 border-gray-100 pt-6">
-                  <div>
+                {/* STRICTLY CENTERED LANDINGS / CYCLES */}
+                <div className={`grid ${isTurbine ? 'grid-cols-2 gap-4' : 'grid-cols-1'} border-t-2 border-gray-100 pt-6`}>
+                  <div className="flex flex-col items-center justify-center">
                     <label className="block text-center text-xs font-bold uppercase tracking-widest text-gray-500 mb-2">Landings</label>
-                    <input type="number" value={logLandings} onChange={e=>setLogLandings(e.target.value)} className="w-full text-3xl font-roboto font-bold text-navy bg-gray-50 border-2 border-gray-200 rounded-xl p-3 text-center focus:border-[#3AB0FF] outline-none" placeholder="0" />
+                    <input type="number" value={logLandings} onChange={e=>setLogLandings(e.target.value)} className="w-32 text-3xl font-roboto font-bold text-navy bg-gray-50 border-2 border-gray-200 rounded-2xl p-3 text-center focus:border-[#3AB0FF] outline-none" placeholder="0" />
                   </div>
                   {isTurbine && (
-                    <div>
+                    <div className="flex flex-col items-center justify-center">
                       <label className="block text-center text-xs font-bold uppercase tracking-widest text-gray-500 mb-2">Cycles</label>
-                      <input type="number" value={logCycles} onChange={e=>setLogCycles(e.target.value)} className="w-full text-3xl font-roboto font-bold text-navy bg-gray-50 border-2 border-gray-200 rounded-xl p-3 text-center focus:border-[#3AB0FF] outline-none" placeholder="0" />
+                      <input type="number" value={logCycles} onChange={e=>setLogCycles(e.target.value)} className="w-32 text-3xl font-roboto font-bold text-navy bg-gray-50 border-2 border-gray-200 rounded-2xl p-3 text-center focus:border-[#3AB0FF] outline-none" placeholder="0" />
                     </div>
                   )}
                 </div>
@@ -365,12 +383,12 @@ export default function QuickLogCompanion() {
 
           {flow === 'flight' && step === 3 && (
             <div className="space-y-4">
-              <h3 className="font-oswald text-3xl font-bold text-navy uppercase text-center mb-6">Final Details</h3>
-              <div className="bg-white p-6 rounded-3xl shadow-md border-t-8 border-[#3AB0FF] space-y-6">
+              <h3 className="font-oswald text-3xl font-bold text-white uppercase text-center mb-6 tracking-widest">Final Details</h3>
+              <div className="bg-white p-6 rounded-3xl shadow-xl border-t-8 border-[#3AB0FF] space-y-6">
                 
                 <div className="grid grid-cols-3 gap-3 border-b-2 border-gray-100 pb-6">
                   <div className="col-span-2">
-                    <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-2">Fuel Added / State (Opt)</label>
+                    <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-2">Current Fuel State (Opt)</label>
                     <input type="number" step="0.1" value={logFuel} onChange={e=>setLogFuel(e.target.value)} className="w-full text-xl font-bold bg-gray-50 border-2 border-gray-200 rounded-xl p-4 focus:border-[#3AB0FF] outline-none" placeholder="Quantity" />
                   </div>
                   <div>
@@ -388,7 +406,12 @@ export default function QuickLogCompanion() {
                     <input type="text" maxLength={3} value={logInitials} onChange={e=>setLogInitials(e.target.value.toUpperCase())} className="w-full text-xl font-bold bg-gray-50 border-2 border-gray-200 rounded-xl p-4 focus:border-[#3AB0FF] outline-none uppercase text-center" placeholder="ABC" />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-2">Reason</label>
+                    <div className="flex justify-between items-center mb-2">
+                      <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-500">Reason</label>
+                      <button type="button" onClick={() => setShowLegend(true)} className="text-[10px] text-[#3AB0FF] hover:text-blue-600 flex items-center gap-1 font-bold uppercase">
+                        <Info size={12} /> Legend
+                      </button>
+                    </div>
                     <select value={logReason} onChange={e=>setLogReason(e.target.value)} className="w-full text-lg font-bold bg-gray-50 border-2 border-gray-200 rounded-xl p-4 focus:border-[#3AB0FF] outline-none">
                       <option value="">Select...</option>
                       <option value="PE">PE</option>
@@ -414,10 +437,10 @@ export default function QuickLogCompanion() {
             <div className="space-y-6">
               <div className="text-center mb-6">
                 <span className="text-xs font-bold uppercase tracking-widest text-[#CE3732] block mb-1">Airworthiness</span>
-                <h3 className="font-oswald text-5xl font-bold text-navy uppercase">{selectedAircraft.tail_number}</h3>
+                <h3 className="font-oswald text-5xl font-bold text-white uppercase">{selectedAircraft.tail_number}</h3>
               </div>
               
-              <div className="bg-white p-6 rounded-3xl shadow-md border-t-8 border-[#CE3732] space-y-6 text-center">
+              <div className="bg-white p-6 rounded-3xl shadow-xl border-t-8 border-[#CE3732] space-y-6 text-center">
                 <p className="font-oswald tracking-widest text-2xl text-navy mb-4 uppercase font-bold">Is the aircraft safe to fly?</p>
                 <div className="grid grid-cols-2 gap-4">
                   <button 
@@ -439,8 +462,8 @@ export default function QuickLogCompanion() {
 
           {flow === 'squawk' && step === 3 && (
             <div className="space-y-4">
-              <h3 className="font-oswald text-3xl font-bold text-navy uppercase text-center mb-6">Discrepancy</h3>
-              <div className="bg-white p-6 rounded-3xl shadow-md border-t-8 border-[#CE3732] space-y-6">
+              <h3 className="font-oswald text-3xl font-bold text-white uppercase text-center mb-6 tracking-widest">Discrepancy</h3>
+              <div className="bg-white p-6 rounded-3xl shadow-xl border-t-8 border-[#CE3732] space-y-6">
                 <div>
                   <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-2">Location (Airport) *</label>
                   <input type="text" value={sqLocation} onChange={e=>setSqLocation(e.target.value)} className="w-full text-xl font-bold bg-gray-50 border-2 border-gray-200 rounded-xl p-4 focus:border-[#CE3732] outline-none" placeholder="e.g. KDFW" />
@@ -455,8 +478,8 @@ export default function QuickLogCompanion() {
 
           {flow === 'squawk' && step === 4 && (
             <div className="space-y-4">
-              <h3 className="font-oswald text-3xl font-bold text-navy uppercase text-center mb-6">Attach Media</h3>
-              <div className="bg-white p-6 rounded-3xl shadow-md border-t-8 border-[#CE3732] space-y-6">
+              <h3 className="font-oswald text-3xl font-bold text-white uppercase text-center mb-6 tracking-widest">Attach Media</h3>
+              <div className="bg-white p-6 rounded-3xl shadow-xl border-t-8 border-[#CE3732] space-y-6">
                 
                 <div className="border-4 border-dashed border-gray-300 rounded-2xl p-10 text-center bg-gray-50 relative hover:bg-gray-100 transition-colors">
                   <Camera size={64} className="mx-auto text-[#CE3732] mb-4"/>
@@ -487,15 +510,15 @@ export default function QuickLogCompanion() {
 
           {/* SUCCESS SCREEN */}
           {step === 99 && (
-            <div className="flex flex-col items-center justify-center py-24 animate-fade-in text-center px-4">
+            <div className="flex flex-col items-center justify-center py-20 animate-fade-in text-center px-4">
               <div className="bg-white p-8 rounded-full shadow-2xl mb-8">
                 <CheckCircle size={100} className="text-success" />
               </div>
-              <h2 className="font-oswald text-5xl font-bold text-navy uppercase mb-4 leading-none">Success!</h2>
-              <p className="text-lg text-gray-500 font-bold uppercase tracking-widest mb-10">
+              <h2 className="font-oswald text-5xl font-bold text-white uppercase mb-4 leading-none tracking-widest">Success!</h2>
+              <p className="text-lg text-gray-300 font-bold uppercase tracking-widest mb-10">
                 {flow === 'flight' ? 'Flight securely logged.' : 'Squawk securely reported.'}
               </p>
-              <button onClick={resetFlow} className="w-full max-w-xs bg-navy text-white font-oswald text-2xl font-bold uppercase tracking-widest px-8 py-6 rounded-2xl shadow-xl active:scale-95 transition-transform">
+              <button onClick={resetFlow} className="w-full max-w-xs bg-white text-navy font-oswald text-2xl font-bold uppercase tracking-widest px-8 py-6 rounded-2xl shadow-xl active:scale-95 transition-transform border-4 border-transparent hover:border-gray-200">
                 DONE
               </button>
             </div>
@@ -504,21 +527,21 @@ export default function QuickLogCompanion() {
         </div>
       </main>
 
-      {/* FLOATING ACTION BAR */}
+      {/* FLOATING ACTION BAR - Lifted securely off the bottom */}
       {flow && step > 1 && step < 99 && (
-        <div className="absolute bottom-0 left-0 right-0 p-4 bg-white border-t border-gray-200 shadow-[0_-10px_20px_-5px_rgba(0,0,0,0.1)] z-30 pb-safe">
+        <div className="absolute bottom-8 left-4 right-4 z-30 pb-safe">
           <div className="max-w-md mx-auto flex gap-4">
-            <button onClick={() => setStep(s => s - 1)} disabled={isSubmitting} className="flex-1 bg-gray-100 text-gray-600 font-oswald text-2xl font-bold uppercase tracking-widest py-5 rounded-2xl active:scale-95 transition-transform">
+            <button onClick={() => setStep(s => s - 1)} disabled={isSubmitting} className="flex-1 bg-white text-navy font-oswald text-2xl font-bold uppercase tracking-widest py-5 rounded-2xl active:scale-95 transition-transform shadow-2xl border border-gray-200">
               BACK
             </button>
             
             {flow === 'flight' && (
               step === 3 ? (
-                <button onClick={submitFlightLog} disabled={isSubmitting || !logInitials} className="flex-[2] bg-success text-white font-oswald text-2xl font-bold uppercase tracking-widest py-5 rounded-2xl shadow-xl active:scale-95 transition-transform disabled:opacity-50 flex justify-center items-center">
+                <button onClick={submitFlightLog} disabled={isSubmitting || !logInitials} className="flex-[2] bg-success text-white font-oswald text-2xl font-bold uppercase tracking-widest py-5 rounded-2xl shadow-2xl active:scale-95 transition-transform disabled:opacity-50 flex justify-center items-center border border-green-600">
                   {isSubmitting ? "SAVING..." : "SUBMIT LOG"}
                 </button>
               ) : (
-                <button onClick={handleNext} className="flex-[2] bg-[#3AB0FF] text-white font-oswald text-2xl font-bold uppercase tracking-widest py-5 rounded-2xl shadow-xl active:scale-95 transition-transform flex justify-center items-center">
+                <button onClick={handleNext} className="flex-[2] bg-[#3AB0FF] text-white font-oswald text-2xl font-bold uppercase tracking-widest py-5 rounded-2xl shadow-2xl active:scale-95 transition-transform flex justify-center items-center border border-blue-400">
                   NEXT
                 </button>
               )
@@ -526,11 +549,11 @@ export default function QuickLogCompanion() {
 
             {flow === 'squawk' && (
               step === 4 ? (
-                <button onClick={submitSquawk} disabled={isSubmitting} className="flex-[2] bg-success text-white font-oswald text-2xl font-bold uppercase tracking-widest py-5 rounded-2xl shadow-xl active:scale-95 transition-transform disabled:opacity-50 flex justify-center items-center">
+                <button onClick={submitSquawk} disabled={isSubmitting} className="flex-[2] bg-success text-white font-oswald text-2xl font-bold uppercase tracking-widest py-5 rounded-2xl shadow-2xl active:scale-95 transition-transform disabled:opacity-50 flex justify-center items-center border border-green-600">
                   {isSubmitting ? "SAVING..." : "SUBMIT ISSUE"}
                 </button>
               ) : (
-                <button onClick={handleNext} className="flex-[2] bg-[#CE3732] text-white font-oswald text-2xl font-bold uppercase tracking-widest py-5 rounded-2xl shadow-xl active:scale-95 transition-transform flex justify-center items-center">
+                <button onClick={handleNext} className="flex-[2] bg-[#CE3732] text-white font-oswald text-2xl font-bold uppercase tracking-widest py-5 rounded-2xl shadow-2xl active:scale-95 transition-transform flex justify-center items-center border border-red-500">
                   NEXT
                 </button>
               )
@@ -540,7 +563,7 @@ export default function QuickLogCompanion() {
       )}
 
       {/* Safe Area Padding for iOS */}
-      <style dangerouslySetInnerHTML={{__html: ` .pb-safe { padding-bottom: env(safe-area-inset-bottom, 1.5rem); } `}} />
+      <style dangerouslySetInnerHTML={{__html: ` .pb-safe { padding-bottom: env(safe-area-inset-bottom, 1rem); } `}} />
     </div>
   );
 }

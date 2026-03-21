@@ -22,23 +22,23 @@ import FleetSummary from "@/components/tabs/FleetSummary";
 export default function FleetTrackerApp() {
   const [session, setSession] = useState<any>(null);
   const [role, setRole] = useState<'admin' | 'pilot'>('pilot');
-  const[userInitials, setUserInitials] = useState("");
+  const [userInitials, setUserInitials] = useState("");
   
   // Login State
-  const[authEmail, setAuthEmail] = useState("");
-  const [authPassword, setAuthPassword] = useState("");
+  const [authEmail, setAuthEmail] = useState("");
+  const[authPassword, setAuthPassword] = useState("");
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
   // App State
-  const [aircraftList, setAircraftList] = useState<any[]>([]);
+  const[aircraftList, setAircraftList] = useState<any[]>([]);
   const [activeTail, setActiveTail] = useState<string>("");
-  const[activeTab, setActiveTab] = useState<'fleet' | 'summary' | 'times' | 'mx' | 'squawks' | 'notes'>('fleet');
+  const [activeTab, setActiveTab] = useState<'fleet' | 'summary' | 'times' | 'mx' | 'squawks' | 'notes'>('fleet');
   const [aircraftStatus, setAircraftStatus] = useState<'airworthy' | 'issues' | 'grounded'>('airworthy');
   const[unreadNotes, setUnreadNotes] = useState(0);
 
   // Global Settings State
-  const[sysSettings, setSysSettings] = useState({
+  const [sysSettings, setSysSettings] = useState({
     reminder_1: 30,
     reminder_2: 15,
     reminder_3: 5,
@@ -54,37 +54,37 @@ export default function FleetTrackerApp() {
   const [emailPreviewType, setEmailPreviewType] = useState<'squawk_mx' | 'squawk_internal' | 'mx_schedule' | 'mx_reminder'>('squawk_mx');
 
   // Invite User State
-  const[showInviteModal, setShowInviteModal] = useState(false);
+  const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteRole, setInviteRole] = useState<'admin'|'pilot'>('pilot');
-  const [inviteAircraftIds, setInviteAircraftIds] = useState<string[]>([]);
+  const[inviteRole, setInviteRole] = useState<'admin'|'pilot'>('pilot');
+  const[inviteAircraftIds, setInviteAircraftIds] = useState<string[]>([]);
 
   // Aircraft Access State
-  const [showAccessModal, setShowAccessModal] = useState(false);
-  const[allUsers, setAllUsers] = useState<any[]>([]);
+  const[showAccessModal, setShowAccessModal] = useState(false);
+  const [allUsers, setAllUsers] = useState<any[]>([]);
   const [selectedAccessUserId, setSelectedAccessUserId] = useState<string>("");
-  const [userAccessList, setUserAccessList] = useState<string[]>([]);
+  const[userAccessList, setUserAccessList] = useState<string[]>([]);
 
   // Aircraft Modal State
-  const [showAircraftModal, setShowAircraftModal] = useState(false);
+  const[showAircraftModal, setShowAircraftModal] = useState(false);
   const [editingAircraftId, setEditingAircraftId] = useState<string | null>(null);
-  const[newTail, setNewTail] = useState("");
-  const [newSerial, setNewSerial] = useState("");
+  const [newTail, setNewTail] = useState("");
+  const[newSerial, setNewSerial] = useState("");
   const [newModel, setNewModel] = useState("");
   const [newType, setNewType] = useState<'Piston' | 'Turbine'>('Piston');
-  const[newAirframeTime, setNewAirframeTime] = useState("");
-  const [newEngineTime, setNewEngineTime] = useState("");
-  const[newHomeAirport, setNewHomeAirport] = useState("");
+  const [newAirframeTime, setNewAirframeTime] = useState("");
+  const[newEngineTime, setNewEngineTime] = useState("");
+  const [newHomeAirport, setNewHomeAirport] = useState("");
   const [newMainContact, setNewMainContact] = useState("");
-  const [newMainContactPhone, setNewMainContactPhone] = useState(""); 
-  const[newMainContactEmail, setNewMainContactEmail] = useState(""); 
-  const[newMxContact, setNewMxContact] = useState(""); 
-  const [newMxContactPhone, setNewMxContactPhone] = useState(""); 
+  const[newMainContactPhone, setNewMainContactPhone] = useState(""); 
+  const [newMainContactEmail, setNewMainContactEmail] = useState(""); 
+  const [newMxContact, setNewMxContact] = useState(""); 
+  const[newMxContactPhone, setNewMxContactPhone] = useState(""); 
   const [newMxContactEmail, setNewMxContactEmail] = useState(""); 
-  const[isSubmitting, setIsSubmitting] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Cropper State
-  const[avatarSrc, setAvatarSrc] = useState<string>("");
+  const [avatarSrc, setAvatarSrc] = useState<string>("");
   const [crop, setCrop] = useState<Crop>({ unit: '%', width: 100, height: 56.25, x: 0, y: 0 }); // 16:9
   const imageRef = useRef<HTMLImageElement>(null);
 
@@ -107,7 +107,7 @@ export default function FleetTrackerApp() {
       checkGroundedStatus(activeTail); 
       fetchUnreadNotes(activeTail, session.user.id); 
     } 
-  },[activeTail, aircraftList, session]);
+  }, [activeTail, aircraftList, session]);
 
   const fetchAircraftData = async (userId: string) => {
     // Fetch global settings
@@ -1126,15 +1126,21 @@ export default function FleetTrackerApp() {
           </div>
           
           <div className="flex gap-4">
-            <button onClick={() => setActiveTab('fleet')} className={`hover:text-white transition-colors flex flex-col items-center active:scale-95 shrink-0 ${activeTab === 'fleet' ? 'text-[#F5B05B]' : 'text-gray-300'}`}>
+            <button onClick={() => setActiveTab('fleet')} className={`hover:text-white transition-colors flex flex-col items-center active:scale-95 shrink-0 ${activeTab === 'fleet' ? 'text-[#3AB0FF]' : 'text-gray-300'}`}>
               <LayoutGrid size={18} />
               <span className="text-[8px] font-bold uppercase tracking-widest mt-1">Fleet</span>
             </button>
 
-            <button onClick={() => window.location.href = '/quick'} className="text-gray-300 hover:text-[#3AB0FF] transition-colors flex flex-col items-center active:scale-95 shrink-0">
+            {/* LOG IT COMPANION APP LINK */}
+            <a 
+              href="/quick" 
+              target="_blank" 
+              rel="noopener noreferrer" 
+              className="text-gray-300 hover:text-[#3AB0FF] transition-colors flex flex-col items-center active:scale-95 shrink-0"
+            >
               <Send size={18} />
               <span className="text-[8px] font-bold uppercase tracking-widest mt-1">Log It</span>
-            </button>
+            </a>
 
             {role === 'admin' && (
               <button onClick={() => setShowAdminMenu(true)} className="text-gray-300 hover:text-white transition-colors flex flex-col items-center active:scale-95 shrink-0">

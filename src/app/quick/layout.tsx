@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 
 // This overrides the main app's icon and manifest when on the /quick route
 export const metadata: Metadata = {
-  title: "Quick Pad",
+  title: "Log It",
   description: "Fast flight and squawk logging.",
   icons: {
     icon: '/quick-icon.png',
