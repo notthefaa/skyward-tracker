@@ -20,25 +20,28 @@ import NotesTab from "@/components/tabs/NotesTab";
 import FleetSummary from "@/components/tabs/FleetSummary";
 
 export default function FleetTrackerApp() {
-  const [session, setSession] = useState<any>(null);
+  const[session, setSession] = useState<any>(null);
   const [role, setRole] = useState<'admin' | 'pilot'>('pilot');
   const [userInitials, setUserInitials] = useState("");
   
+  // App Origin for PWA Breakout
+  const [appOrigin, setAppOrigin] = useState("");
+
   // Login State
   const [authEmail, setAuthEmail] = useState("");
-  const[authPassword, setAuthPassword] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
   const [showForgotPassword, setShowForgotPassword] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
+  const[showPassword, setShowPassword] = useState(false);
 
   // App State
-  const[aircraftList, setAircraftList] = useState<any[]>([]);
+  const [aircraftList, setAircraftList] = useState<any[]>([]);
   const [activeTail, setActiveTail] = useState<string>("");
   const [activeTab, setActiveTab] = useState<'fleet' | 'summary' | 'times' | 'mx' | 'squawks' | 'notes'>('fleet');
-  const [aircraftStatus, setAircraftStatus] = useState<'airworthy' | 'issues' | 'grounded'>('airworthy');
+  const[aircraftStatus, setAircraftStatus] = useState<'airworthy' | 'issues' | 'grounded'>('airworthy');
   const[unreadNotes, setUnreadNotes] = useState(0);
 
   // Global Settings State
-  const [sysSettings, setSysSettings] = useState({
+  const[sysSettings, setSysSettings] = useState({
     reminder_1: 30,
     reminder_2: 15,
     reminder_3: 5,
@@ -47,40 +50,40 @@ export default function FleetTrackerApp() {
   });
 
   // --- ADMIN CONTROL CENTER STATE ---
-  const[showAdminMenu, setShowAdminMenu] = useState(false);
-  const [showToolsMenu, setShowToolsMenu] = useState(false);
+  const [showAdminMenu, setShowAdminMenu] = useState(false);
+  const[showToolsMenu, setShowToolsMenu] = useState(false);
   const [showEmailPreview, setShowEmailPreview] = useState(false);
-  const[showSettingsModal, setShowSettingsModal] = useState(false);
-  const [emailPreviewType, setEmailPreviewType] = useState<'squawk_mx' | 'squawk_internal' | 'mx_schedule' | 'mx_reminder'>('squawk_mx');
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const[emailPreviewType, setEmailPreviewType] = useState<'squawk_mx' | 'squawk_internal' | 'mx_schedule' | 'mx_reminder'>('squawk_mx');
 
   // Invite User State
-  const [showInviteModal, setShowInviteModal] = useState(false);
+  const[showInviteModal, setShowInviteModal] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
-  const[inviteRole, setInviteRole] = useState<'admin'|'pilot'>('pilot');
+  const [inviteRole, setInviteRole] = useState<'admin'|'pilot'>('pilot');
   const[inviteAircraftIds, setInviteAircraftIds] = useState<string[]>([]);
 
   // Aircraft Access State
-  const[showAccessModal, setShowAccessModal] = useState(false);
-  const [allUsers, setAllUsers] = useState<any[]>([]);
+  const [showAccessModal, setShowAccessModal] = useState(false);
+  const[allUsers, setAllUsers] = useState<any[]>([]);
   const [selectedAccessUserId, setSelectedAccessUserId] = useState<string>("");
-  const[userAccessList, setUserAccessList] = useState<string[]>([]);
+  const [userAccessList, setUserAccessList] = useState<string[]>([]);
 
   // Aircraft Modal State
-  const[showAircraftModal, setShowAircraftModal] = useState(false);
-  const [editingAircraftId, setEditingAircraftId] = useState<string | null>(null);
+  const [showAircraftModal, setShowAircraftModal] = useState(false);
+  const[editingAircraftId, setEditingAircraftId] = useState<string | null>(null);
   const [newTail, setNewTail] = useState("");
-  const[newSerial, setNewSerial] = useState("");
-  const [newModel, setNewModel] = useState("");
+  const [newSerial, setNewSerial] = useState("");
+  const[newModel, setNewModel] = useState("");
   const [newType, setNewType] = useState<'Piston' | 'Turbine'>('Piston');
   const [newAirframeTime, setNewAirframeTime] = useState("");
-  const[newEngineTime, setNewEngineTime] = useState("");
-  const [newHomeAirport, setNewHomeAirport] = useState("");
+  const [newEngineTime, setNewEngineTime] = useState("");
+  const[newHomeAirport, setNewHomeAirport] = useState("");
   const [newMainContact, setNewMainContact] = useState("");
   const[newMainContactPhone, setNewMainContactPhone] = useState(""); 
-  const [newMainContactEmail, setNewMainContactEmail] = useState(""); 
+  const[newMainContactEmail, setNewMainContactEmail] = useState(""); 
   const [newMxContact, setNewMxContact] = useState(""); 
-  const[newMxContactPhone, setNewMxContactPhone] = useState(""); 
-  const [newMxContactEmail, setNewMxContactEmail] = useState(""); 
+  const [newMxContactPhone, setNewMxContactPhone] = useState(""); 
+  const[newMxContactEmail, setNewMxContactEmail] = useState(""); 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Cropper State
@@ -89,6 +92,11 @@ export default function FleetTrackerApp() {
   const imageRef = useRef<HTMLImageElement>(null);
 
   useEffect(() => { 
+    // Capture the absolute origin (e.g. https://your-domain.com) client-side
+    if (typeof window !== "undefined") {
+      setAppOrigin(window.location.origin);
+    }
+
     supabase.auth.getSession().then(({ data: { session } }) => { 
       setSession(session); 
       if (session) fetchAircraftData(session.user.id); 
@@ -110,7 +118,6 @@ export default function FleetTrackerApp() {
   }, [activeTail, aircraftList, session]);
 
   const fetchAircraftData = async (userId: string) => {
-    // Fetch global settings
     const { data: settingsData } = await supabase.from('aft_system_settings').select('*').eq('id', 1).single();
     if (settingsData) setSysSettings(settingsData);
 
@@ -175,7 +182,6 @@ export default function FleetTrackerApp() {
     else setAircraftStatus('airworthy');
   };
 
-  // --- ADMIN CONTROL CENTER FUNCTIONS ---
   const handleDatabaseCleanup = async () => {
     if (!confirm("Run Health Check?\n\nThis will safely purge old read-receipts (older than 30 days) to keep the database fast and optimized.")) return;
     setIsSubmitting(true);
@@ -183,11 +189,7 @@ export default function FleetTrackerApp() {
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
       
-      const { error } = await supabase
-        .from('aft_note_reads')
-        .delete()
-        .lt('read_at', thirtyDaysAgo.toISOString());
-        
+      const { error } = await supabase.from('aft_note_reads').delete().lt('read_at', thirtyDaysAgo.toISOString());
       if (error) throw error;
       alert("Database health check & cleanup completed successfully!");
     } catch (e: any) {
@@ -251,7 +253,6 @@ export default function FleetTrackerApp() {
     return "";
   };
 
-  // --- ACCESS MANAGEMENT FUNCTIONS ---
   const openAccessModal = async () => {
     setIsSubmitting(true);
     const { data } = await supabase.from('aft_user_roles').select('*').eq('role', 'pilot');
@@ -271,12 +272,11 @@ export default function FleetTrackerApp() {
 
   const toggleAccess = async (aircraftId: string, hasAccess: boolean) => {
     if (!selectedAccessUserId) return;
-    
     if (hasAccess) {
       setUserAccessList(prev => prev.filter(id => id !== aircraftId));
       await supabase.from('aft_user_aircraft_access').delete().match({ user_id: selectedAccessUserId, aircraft_id: aircraftId });
     } else {
-      setUserAccessList(prev => [...prev, aircraftId]);
+      setUserAccessList(prev =>[...prev, aircraftId]);
       await supabase.from('aft_user_aircraft_access').insert({ user_id: selectedAccessUserId, aircraft_id: aircraftId });
     }
   };
@@ -285,11 +285,9 @@ export default function FleetTrackerApp() {
     setInviteAircraftIds(prev => prev.includes(id) ? prev.filter(a => a !== id) : [...prev, id]);
   };
 
-  // --- USER MANAGEMENT (RESET & DELETE) ---
   const handleAdminResetPassword = async () => {
     const selectedUserEmail = allUsers.find(u => u.user_id === selectedAccessUserId)?.email;
     if (!selectedUserEmail) return;
-    
     if (!confirm(`Are you sure you want to send a password reset email to ${selectedUserEmail}?`)) return;
     
     setIsSubmitting(true);
@@ -305,7 +303,6 @@ export default function FleetTrackerApp() {
   const handleDeleteUser = async () => {
     const selectedUserEmail = allUsers.find(u => u.user_id === selectedAccessUserId)?.email;
     if (!selectedUserEmail) return;
-    
     if (!confirm(`CRITICAL WARNING: Are you absolutely sure you want to permanently delete ${selectedUserEmail} and revoke all their access?`)) return;
     
     setIsSubmitting(true);
@@ -329,7 +326,6 @@ export default function FleetTrackerApp() {
     setIsSubmitting(false);
   };
 
-  // --- AUTHENTICATION FUNCTIONS ---
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault(); 
     setIsSubmitting(true);
@@ -343,9 +339,8 @@ export default function FleetTrackerApp() {
     setIsSubmitting(true);
     const { error } = await supabase.auth.resetPasswordForEmail(authEmail, { redirectTo: `${window.location.origin}/update-password` });
     setIsSubmitting(false);
-    if (error) {
-      alert("Error: " + error.message);
-    } else {
+    if (error) alert("Error: " + error.message);
+    else {
       alert("Password reset link sent to your email!");
       setShowForgotPassword(false);
     }
@@ -363,15 +358,9 @@ export default function FleetTrackerApp() {
       const res = await fetch('/api/invite', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          email: inviteEmail, 
-          role: inviteRole,
-          aircraftIds: inviteAircraftIds 
-        })
+        body: JSON.stringify({ email: inviteEmail, role: inviteRole, aircraftIds: inviteAircraftIds })
       });
-      
       if (!res.ok) throw new Error(await res.text());
-      
       alert(`Invitation successfully sent to ${inviteEmail}!`);
       setShowInviteModal(false); 
       setInviteEmail("");
@@ -382,7 +371,6 @@ export default function FleetTrackerApp() {
     setIsSubmitting(false);
   };
 
-  // --- CROPPER FUNCTIONS ---
   const onSelectFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       const reader = new FileReader();
@@ -403,17 +391,7 @@ export default function FleetTrackerApp() {
     const ctx = canvas.getContext('2d');
 
     if (!ctx) return null;
-    ctx.drawImage(
-      image, 
-      crop.x * scaleX, 
-      crop.y * scaleY, 
-      crop.width * scaleX, 
-      crop.height * scaleY, 
-      0, 
-      0, 
-      canvas.width, 
-      canvas.height
-    );
+    ctx.drawImage(image, crop.x * scaleX, crop.y * scaleY, crop.width * scaleX, crop.height * scaleY, 0, 0, canvas.width, canvas.height);
 
     return new Promise((resolve) => {
       canvas.toBlob((blob) => {
@@ -423,37 +401,18 @@ export default function FleetTrackerApp() {
     });
   };
 
-  // --- AIRCRAFT FORM ---
   const openAircraftForm = (aircraft: any = null) => {
     if (aircraft) { 
-      setEditingAircraftId(aircraft.id); 
-      setNewTail(aircraft.tail_number); 
-      setNewSerial(aircraft.serial_number || ""); 
-      setNewModel(aircraft.aircraft_type); 
-      setNewType(aircraft.engine_type); 
-      setNewAirframeTime(aircraft.total_airframe_time || ""); 
-      setNewEngineTime(aircraft.total_engine_time || ""); 
-      setNewHomeAirport(aircraft.home_airport || ""); 
-      setNewMainContact(aircraft.main_contact || ""); 
-      setNewMainContactPhone(aircraft.main_contact_phone || ""); 
-      setNewMainContactEmail(aircraft.main_contact_email || ""); 
-      setNewMxContact(aircraft.mx_contact || ""); 
-      setNewMxContactPhone(aircraft.mx_contact_phone || ""); 
-      setNewMxContactEmail(aircraft.mx_contact_email || ""); 
+      setEditingAircraftId(aircraft.id); setNewTail(aircraft.tail_number); setNewSerial(aircraft.serial_number || ""); 
+      setNewModel(aircraft.aircraft_type); setNewType(aircraft.engine_type); setNewAirframeTime(aircraft.total_airframe_time || ""); 
+      setNewEngineTime(aircraft.total_engine_time || ""); setNewHomeAirport(aircraft.home_airport || ""); 
+      setNewMainContact(aircraft.main_contact || ""); setNewMainContactPhone(aircraft.main_contact_phone || ""); 
+      setNewMainContactEmail(aircraft.main_contact_email || ""); setNewMxContact(aircraft.mx_contact || ""); 
+      setNewMxContactPhone(aircraft.mx_contact_phone || ""); setNewMxContactEmail(aircraft.mx_contact_email || ""); 
     } else { 
-      setEditingAircraftId(null); 
-      setNewTail(""); 
-      setNewSerial(""); 
-      setNewModel(""); 
-      setNewType('Piston'); 
-      setNewAirframeTime(""); 
-      setNewEngineTime(""); 
-      setNewHomeAirport(""); 
-      setNewMainContact(""); 
-      setNewMainContactPhone(""); 
-      setNewMainContactEmail(""); 
-      setNewMxContact(""); 
-      setNewMxContactPhone(""); 
+      setEditingAircraftId(null); setNewTail(""); setNewSerial(""); setNewModel(""); setNewType('Piston'); 
+      setNewAirframeTime(""); setNewEngineTime(""); setNewHomeAirport(""); setNewMainContact(""); 
+      setNewMainContactPhone(""); setNewMainContactEmail(""); setNewMxContact(""); setNewMxContactPhone(""); 
       setNewMxContactEmail(""); 
     }
     setAvatarSrc(""); 
@@ -463,7 +422,6 @@ export default function FleetTrackerApp() {
   const handleSaveAircraft = async (e: React.FormEvent) => {
     e.preventDefault(); 
     setIsSubmitting(true);
-    
     let avatarUrl = aircraftList.find(a => a.id === editingAircraftId)?.avatar_url || null;
 
     if (avatarSrc) {
@@ -477,34 +435,19 @@ export default function FleetTrackerApp() {
             const { data: urlData } = supabase.storage.from('aft_aircraft_avatars').getPublicUrl(data.path);
             avatarUrl = urlData.publicUrl;
           }
-        } catch (err) { 
-          console.error("Avatar upload failed:", err); 
-        }
+        } catch (err) { console.error(err); }
       }
     }
 
     const payload = { 
-      tail_number: newTail.toUpperCase(), 
-      serial_number: newSerial, 
-      aircraft_type: newModel, 
-      engine_type: newType, 
-      total_airframe_time: parseFloat(newAirframeTime) || 0, 
-      total_engine_time: parseFloat(newEngineTime) || 0, 
-      home_airport: newHomeAirport, 
-      main_contact: newMainContact, 
-      main_contact_phone: newMainContactPhone, 
-      main_contact_email: newMainContactEmail, 
-      mx_contact: newMxContact, 
-      mx_contact_phone: newMxContactPhone, 
-      mx_contact_email: newMxContactEmail, 
-      avatar_url: avatarUrl
+      tail_number: newTail.toUpperCase(), serial_number: newSerial, aircraft_type: newModel, engine_type: newType, 
+      total_airframe_time: parseFloat(newAirframeTime) || 0, total_engine_time: parseFloat(newEngineTime) || 0, 
+      home_airport: newHomeAirport, main_contact: newMainContact, main_contact_phone: newMainContactPhone, main_contact_email: newMainContactEmail, 
+      mx_contact: newMxContact, mx_contact_phone: newMxContactPhone, mx_contact_email: newMxContactEmail, avatar_url: avatarUrl
     };
     
-    if (editingAircraftId) {
-      await supabase.from('aft_aircraft').update(payload).eq('id', editingAircraftId);
-    } else {
-      await supabase.from('aft_aircraft').insert(payload);
-    }
+    if (editingAircraftId) await supabase.from('aft_aircraft').update(payload).eq('id', editingAircraftId);
+    else await supabase.from('aft_aircraft').insert(payload);
     
     await fetchAircraftData(session.user.id); 
     setActiveTail(newTail.toUpperCase()); 
@@ -515,16 +458,11 @@ export default function FleetTrackerApp() {
   const handleDeleteAircraft = async (id: string) => {
     setIsSubmitting(true);
     await supabase.from('aft_aircraft').delete().eq('id', id);
-    
     const { data: aircraftData } = await supabase.from('aft_aircraft').select('*').order('tail_number');
     if (aircraftData && aircraftData.length > 0) {
-      setAircraftList(aircraftData);
-      setActiveTail(aircraftData[0].tail_number);
-      setActiveTab('fleet');
+      setAircraftList(aircraftData); setActiveTail(aircraftData[0].tail_number); setActiveTab('fleet');
     } else {
-      setAircraftList([]);
-      setActiveTail("");
-      setActiveTab('fleet');
+      setAircraftList([]); setActiveTail(""); setActiveTab('fleet');
     }
     setIsSubmitting(false);
   };
@@ -552,7 +490,6 @@ export default function FleetTrackerApp() {
     }
   };
 
-  // --- LOGIN SCREEN ---
   if (!session) {
     return (
       <div className="flex flex-col items-center justify-center p-4 bg-slateGray h-[100dvh] w-full overflow-hidden">
@@ -568,71 +505,35 @@ export default function FleetTrackerApp() {
             <form onSubmit={handleLogin} className="space-y-4 animate-fade-in">
               <div>
                 <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Email</label>
-                <input 
-                  type="email" 
-                  required 
-                  value={authEmail} 
-                  onChange={(e) => setAuthEmail(e.target.value)} 
-                  className="w-full border border-gray-300 rounded p-3 text-sm mt-1 bg-white focus:border-navy outline-none" 
-                />
+                <input type="email" required value={authEmail} onChange={(e) => setAuthEmail(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 bg-white focus:border-navy outline-none" />
               </div>
               <div>
                 <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Password</label>
                 <div className="relative mt-1">
-                  <input 
-                    type={showPassword ? "text" : "password"} 
-                    required 
-                    value={authPassword} 
-                    onChange={(e) => setAuthPassword(e.target.value)} 
-                    className="w-full border border-gray-300 rounded p-3 text-sm bg-white focus:border-navy outline-none pr-10" 
-                  />
-                  <button 
-                    type="button" 
-                    onClick={() => setShowPassword(!showPassword)} 
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-navy transition-colors"
-                  >
+                  <input type={showPassword ? "text" : "password"} required value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm bg-white focus:border-navy outline-none pr-10" />
+                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-navy transition-colors">
                     {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                   </button>
                 </div>
               </div>
               <div className="pt-4">
-                <PrimaryButton disabled={isSubmitting}>
-                  {isSubmitting ? "Logging in..." : "Access Portal"}
-                </PrimaryButton>
+                <PrimaryButton disabled={isSubmitting}>{isSubmitting ? "Logging in..." : "Access Portal"}</PrimaryButton>
               </div>
-              <button 
-                type="button" 
-                onClick={() => setShowForgotPassword(true)} 
-                className="w-full text-center text-xs text-gray-500 mt-4 hover:text-navy underline"
-              >
+              <button type="button" onClick={() => setShowForgotPassword(true)} className="w-full text-center text-xs text-gray-500 mt-4 hover:text-navy underline">
                 Forgot Password?
               </button>
             </form>
           ) : (
             <form onSubmit={handleForgotPassword} className="space-y-4 animate-fade-in">
-              <p className="text-xs text-gray-500 text-center mb-4">
-                Enter your email and we will send you a secure link to set a new password.
-              </p>
+              <p className="text-xs text-gray-500 text-center mb-4">Enter your email and we will send you a secure link to set a new password.</p>
               <div>
                 <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Email Address</label>
-                <input 
-                  type="email" 
-                  required 
-                  value={authEmail} 
-                  onChange={(e) => setAuthEmail(e.target.value)} 
-                  className="w-full border border-gray-300 rounded p-3 text-sm mt-1 bg-white focus:border-navy outline-none" 
-                />
+                <input type="email" required value={authEmail} onChange={(e) => setAuthEmail(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 bg-white focus:border-navy outline-none" />
               </div>
               <div className="pt-4">
-                <PrimaryButton disabled={isSubmitting}>
-                  {isSubmitting ? "Sending..." : "Send Reset Link"}
-                </PrimaryButton>
+                <PrimaryButton disabled={isSubmitting}>{isSubmitting ? "Sending..." : "Send Reset Link"}</PrimaryButton>
               </div>
-              <button 
-                type="button" 
-                onClick={() => setShowForgotPassword(false)} 
-                className="w-full text-center text-xs text-gray-500 mt-4 hover:text-navy underline"
-              >
+              <button type="button" onClick={() => setShowForgotPassword(false)} className="w-full text-center text-xs text-gray-500 mt-4 hover:text-navy underline">
                 Back to Login
               </button>
             </form>
@@ -656,9 +557,7 @@ export default function FleetTrackerApp() {
               <h2 className="font-oswald text-xl font-bold uppercase text-navy flex items-center gap-2">
                 <ShieldCheck size={20}/> Admin Center
               </h2>
-              <button onClick={() => setShowAdminMenu(false)} className="text-gray-400 hover:text-red-500">
-                <X size={24}/>
-              </button>
+              <button onClick={() => setShowAdminMenu(false)} className="text-gray-400 hover:text-red-500"><X size={24}/></button>
             </div>
             
             <div className="space-y-3">
@@ -700,9 +599,7 @@ export default function FleetTrackerApp() {
               <h2 className="font-oswald text-xl font-bold uppercase text-navy flex items-center gap-2">
                 <Settings size={20}/> System Tools
               </h2>
-              <button onClick={() => setShowToolsMenu(false)} className="text-gray-400 hover:text-red-500">
-                <X size={24}/>
-              </button>
+              <button onClick={() => setShowToolsMenu(false)} className="text-gray-400 hover:text-red-500"><X size={24}/></button>
             </div>
             
             <div className="space-y-4">
@@ -742,9 +639,7 @@ export default function FleetTrackerApp() {
               <h2 className="font-oswald text-xl font-bold uppercase text-navy flex items-center gap-2">
                 <Sliders size={20}/> Maintenance Triggers
               </h2>
-              <button onClick={() => setShowSettingsModal(false)} className="text-gray-400 hover:text-red-500">
-                <X size={24}/>
-              </button>
+              <button onClick={() => setShowSettingsModal(false)} className="text-gray-400 hover:text-red-500"><X size={24}/></button>
             </div>
             
             <form onSubmit={handleSaveSettings} className="space-y-4">
@@ -793,9 +688,7 @@ export default function FleetTrackerApp() {
               <h2 className="font-oswald text-xl font-bold uppercase text-navy flex items-center gap-2">
                 <MailOpen size={20}/> Email Previewer
               </h2>
-              <button onClick={() => setShowEmailPreview(false)} className="text-gray-400 hover:text-red-500">
-                <X size={24}/>
-              </button>
+              <button onClick={() => setShowEmailPreview(false)} className="text-gray-400 hover:text-red-500"><X size={24}/></button>
             </div>
             
             <div className="mb-4">
@@ -832,24 +725,16 @@ export default function FleetTrackerApp() {
               <h2 className="font-oswald text-2xl font-bold uppercase text-[#1B4869]">
                 {editingAircraftId ? 'Edit Aircraft' : 'Add Aircraft'}
               </h2>
-              <button onClick={() => setShowAircraftModal(false)} className="text-gray-400 hover:text-red-500 transition-colors">
-                <X size={24}/>
-              </button>
+              <button onClick={() => setShowAircraftModal(false)} className="text-gray-400 hover:text-red-500 transition-colors"><X size={24}/></button>
             </div>
             
             <form onSubmit={handleSaveAircraft} className="space-y-4">
-              
               <div className="border border-dashed border-gray-300 bg-gray-50 rounded p-4 text-center">
                 <label className="text-[10px] font-bold uppercase tracking-widest text-navy block mb-2 cursor-pointer">
                   {avatarSrc ? 'Adjust Photo Alignment' : 'Upload Aircraft Photo (Avatar)'}
                 </label>
                 {!avatarSrc ? (
-                  <input 
-                    type="file" 
-                    accept="image/*" 
-                    onChange={onSelectFile} 
-                    className="text-xs text-gray-500 w-full cursor-pointer" 
-                  />
+                  <input type="file" accept="image/*" onChange={onSelectFile} className="text-xs text-gray-500 w-full cursor-pointer" />
                 ) : (
                   <div className="w-full h-auto flex justify-center bg-black rounded overflow-hidden">
                     <ReactCrop crop={crop} onChange={c => setCrop(c)} aspect={16 / 9}>
@@ -889,57 +774,28 @@ export default function FleetTrackerApp() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 gap-4">
-                <div>
-                  <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">Home Airport</label>
-                  <input type="text" value={newHomeAirport} onChange={e=>setNewHomeAirport(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 uppercase focus:border-[#F08B46] outline-none" placeholder="KDFW" />
-                </div>
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">Home Airport</label>
+                <input type="text" value={newHomeAirport} onChange={e=>setNewHomeAirport(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 uppercase focus:border-[#F08B46] outline-none" placeholder="KDFW" />
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">Main Contact</label>
-                  <input type="text" value={newMainContact} onChange={e=>setNewMainContact(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" placeholder="John Doe" />
-                </div>
-                <div>
-                  <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">Phone</label>
-                  <input type="tel" value={newMainContactPhone} onChange={e=>setNewMainContactPhone(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" placeholder="(555) 123-4567" />
-                </div>
-                <div>
-                  <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">Email</label>
-                  <input type="email" value={newMainContactEmail} onChange={e=>setNewMainContactEmail(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" placeholder="john@doe.com" />
-                </div>
+                <div><label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">Main Contact</label><input type="text" value={newMainContact} onChange={e=>setNewMainContact(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" /></div>
+                <div><label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">Phone</label><input type="tel" value={newMainContactPhone} onChange={e=>setNewMainContactPhone(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" /></div>
+                <div><label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">Email</label><input type="email" value={newMainContactEmail} onChange={e=>setNewMainContactEmail(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" /></div>
               </div>
               
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">MX Contact</label>
-                  <input type="text" value={newMxContact} onChange={e=>setNewMxContact(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" placeholder="Jane Smith" />
-                </div>
-                <div>
-                  <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">MX Phone</label>
-                  <input type="tel" value={newMxContactPhone} onChange={e=>setNewMxContactPhone(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" placeholder="(555) 987-6543" />
-                </div>
-                <div>
-                  <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">MX Email</label>
-                  <input type="email" value={newMxContactEmail} onChange={e=>setNewMxContactEmail(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" placeholder="mx@shop.com" />
-                </div>
+                <div><label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">MX Contact</label><input type="text" value={newMxContact} onChange={e=>setNewMxContact(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" /></div>
+                <div><label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">MX Phone</label><input type="tel" value={newMxContactPhone} onChange={e=>setNewMxContactPhone(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" /></div>
+                <div><label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">MX Email</label><input type="email" value={newMxContactEmail} onChange={e=>setNewMxContactEmail(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" /></div>
               </div>
 
               <div className="grid grid-cols-2 gap-4 border-t border-gray-200 pt-4 mt-2">
-                <div>
-                  <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">Current {newType === 'Turbine' ? 'AFTT' : 'Hobbs'}</label>
-                  <input type="number" step="0.1" required value={newAirframeTime} onChange={e=>setNewAirframeTime(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" />
-                </div>
-                <div>
-                  <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">Current {newType === 'Turbine' ? 'FTT' : 'Tach'}</label>
-                  <input type="number" step="0.1" required value={newEngineTime} onChange={e=>setNewEngineTime(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" />
-                </div>
+                <div><label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">Current {newType === 'Turbine' ? 'AFTT' : 'Hobbs'}</label><input type="number" step="0.1" required value={newAirframeTime} onChange={e=>setNewAirframeTime(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" /></div>
+                <div><label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">Current {newType === 'Turbine' ? 'FTT' : 'Tach'}</label><input type="number" step="0.1" required value={newEngineTime} onChange={e=>setNewEngineTime(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" /></div>
               </div>
-              
-              <div className="pt-4">
-                <PrimaryButton disabled={isSubmitting}>{isSubmitting ? "Saving..." : "Save Aircraft"}</PrimaryButton>
-              </div>
+              <div className="pt-4"><PrimaryButton disabled={isSubmitting}>{isSubmitting ? "Saving..." : "Save Aircraft"}</PrimaryButton></div>
             </form>
           </div>
         </div>
@@ -951,26 +807,16 @@ export default function FleetTrackerApp() {
           <div className="bg-white rounded shadow-2xl w-full max-w-md p-6 border-t-4 border-navy animate-slide-up max-h-[90vh] overflow-y-auto">
             
             <div className="flex justify-between items-center mb-6">
-              <h2 className="font-oswald text-2xl font-bold uppercase text-navy flex items-center gap-2">
-                <ShieldCheck size={20}/> Assign Aircraft
-              </h2>
-              <button onClick={() => setShowAccessModal(false)} className="text-gray-400 hover:text-red-500">
-                <X size={24}/>
-              </button>
+              <h2 className="font-oswald text-2xl font-bold uppercase text-navy flex items-center gap-2"><ShieldCheck size={20}/> Assign Aircraft</h2>
+              <button onClick={() => setShowAccessModal(false)} className="text-gray-400 hover:text-red-500"><X size={24}/></button>
             </div>
 
             <div className="space-y-6">
               <div>
                 <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Select Pilot</label>
-                <select 
-                  className="w-full border border-gray-300 rounded p-3 text-sm mt-1 bg-white focus:border-navy outline-none"
-                  value={selectedAccessUserId}
-                  onChange={(e) => fetchUserAccess(e.target.value)}
-                >
+                <select className="w-full border border-gray-300 rounded p-3 text-sm mt-1 bg-white focus:border-navy outline-none" value={selectedAccessUserId} onChange={(e) => fetchUserAccess(e.target.value)}>
                   <option value="">-- Choose a Pilot --</option>
-                  {allUsers.map(u => (
-                    <option key={u.user_id} value={u.user_id}>{u.email || u.user_id}</option>
-                  ))}
+                  {allUsers.map(u => <option key={u.user_id} value={u.user_id}>{u.email || u.user_id}</option>)}
                 </select>
               </div>
 
@@ -983,12 +829,7 @@ export default function FleetTrackerApp() {
                         const hasAccess = userAccessList.includes(ac.id);
                         return (
                           <label key={ac.id} className="flex items-center gap-3 cursor-pointer">
-                            <input 
-                              type="checkbox" 
-                              checked={hasAccess} 
-                              onChange={() => toggleAccess(ac.id, hasAccess)} 
-                              className="w-4 h-4 text-navy border-gray-300 rounded"
-                            />
+                            <input type="checkbox" checked={hasAccess} onChange={() => toggleAccess(ac.id, hasAccess)} className="w-4 h-4 text-navy border-gray-300 rounded" />
                             <span className="font-bold text-sm text-navy uppercase">{ac.tail_number}</span>
                             <span className="text-[10px] text-gray-500 uppercase">{ac.aircraft_type}</span>
                           </label>
@@ -998,28 +839,13 @@ export default function FleetTrackerApp() {
                   </div>
 
                   <div className="flex gap-2 pt-4 border-t border-gray-200 mt-4">
-                    <button 
-                      type="button" 
-                      onClick={handleAdminResetPassword} 
-                      className="flex-1 border border-brandOrange text-brandOrange text-[10px] font-bold uppercase tracking-widest py-2 rounded hover:bg-orange-50 transition-colors"
-                    >
-                      Reset Password
-                    </button>
-                    <button 
-                      type="button" 
-                      onClick={handleDeleteUser} 
-                      className="flex-1 border border-[#CE3732] text-[#CE3732] text-[10px] font-bold uppercase tracking-widest py-2 rounded hover:bg-red-50 transition-colors"
-                    >
-                      Delete User
-                    </button>
+                    <button type="button" onClick={handleAdminResetPassword} className="flex-1 border border-brandOrange text-brandOrange text-[10px] font-bold uppercase tracking-widest py-2 rounded hover:bg-orange-50 transition-colors">Reset Password</button>
+                    <button type="button" onClick={handleDeleteUser} className="flex-1 border border-[#CE3732] text-[#CE3732] text-[10px] font-bold uppercase tracking-widest py-2 rounded hover:bg-red-50 transition-colors">Delete User</button>
                   </div>
                 </>
               )}
             </div>
-            
-            <div className="pt-6">
-              <PrimaryButton onClick={() => setShowAccessModal(false)}>Done</PrimaryButton>
-            </div>
+            <div className="pt-6"><PrimaryButton onClick={() => setShowAccessModal(false)}>Done</PrimaryButton></div>
           </div>
         </div>
       )}
@@ -1030,33 +856,19 @@ export default function FleetTrackerApp() {
           <div className="bg-white rounded shadow-2xl w-full max-w-sm p-6 border-t-4 border-navy animate-slide-up">
             
             <div className="flex justify-between items-center mb-6">
-              <h2 className="font-oswald text-2xl font-bold uppercase text-navy flex items-center gap-2">
-                <Users size={20}/> Invite User
-              </h2>
-              <button onClick={() => { setShowInviteModal(false); setInviteAircraftIds([]); }} className="text-gray-400 hover:text-red-500">
-                <X size={24}/>
-              </button>
+              <h2 className="font-oswald text-2xl font-bold uppercase text-navy flex items-center gap-2"><Users size={20}/> Invite User</h2>
+              <button onClick={() => { setShowInviteModal(false); setInviteAircraftIds([]); }} className="text-gray-400 hover:text-red-500"><X size={24}/></button>
             </div>
             
             <form onSubmit={handleInviteUser} className="space-y-4">
               <div>
                 <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Email Address</label>
-                <input 
-                  type="email" 
-                  required 
-                  value={inviteEmail} 
-                  onChange={e=>setInviteEmail(e.target.value)} 
-                  className="w-full border border-gray-300 rounded p-3 text-sm mt-1 outline-none focus:border-navy" 
-                />
+                <input type="email" required value={inviteEmail} onChange={e=>setInviteEmail(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 outline-none focus:border-navy" />
               </div>
               
               <div>
                 <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Role</label>
-                <select 
-                  value={inviteRole} 
-                  onChange={e=>setInviteRole(e.target.value as any)} 
-                  className="w-full border border-gray-300 rounded p-3 text-sm mt-1 bg-white outline-none focus:border-navy"
-                >
+                <select value={inviteRole} onChange={e=>setInviteRole(e.target.value as any)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 bg-white outline-none focus:border-navy">
                   <option value="pilot">Pilot</option>
                   <option value="admin">Administrator</option>
                 </select>
@@ -1068,22 +880,14 @@ export default function FleetTrackerApp() {
                   <div className="space-y-2">
                     {aircraftList.map(ac => (
                       <label key={ac.id} className="flex items-center gap-3 cursor-pointer">
-                        <input 
-                          type="checkbox" 
-                          checked={inviteAircraftIds.includes(ac.id)} 
-                          onChange={() => toggleInviteAircraft(ac.id)} 
-                          className="w-4 h-4 text-navy border-gray-300 rounded" 
-                        />
+                        <input type="checkbox" checked={inviteAircraftIds.includes(ac.id)} onChange={() => toggleInviteAircraft(ac.id)} className="w-4 h-4 text-navy border-gray-300 rounded" />
                         <span className="font-bold text-xs text-navy uppercase">{ac.tail_number}</span>
                       </label>
                     ))}
                   </div>
                 </div>
               )}
-
-              <div className="pt-4">
-                <PrimaryButton disabled={isSubmitting}>{isSubmitting ? "Sending..." : "Send Invite Email"}</PrimaryButton>
-              </div>
+              <div className="pt-4"><PrimaryButton disabled={isSubmitting}>{isSubmitting ? "Sending..." : "Send Invite Email"}</PrimaryButton></div>
             </form>
           </div>
         </div>
@@ -1105,21 +909,15 @@ export default function FleetTrackerApp() {
                   value={activeTail} 
                   onChange={(e) => setActiveTail(e.target.value)}
                 >
-                  {aircraftList.map(a => (
-                    <option key={a.id} value={a.tail_number} className="text-white">{a.tail_number}</option>
-                  ))}
+                  {aircraftList.map(a => <option key={a.id} value={a.tail_number} className="text-white">{a.tail_number}</option>)}
                 </select>
                 <ChevronDown size={18} className="absolute right-1 text-white pointer-events-none opacity-80" />
               </div>
               
               {role === 'admin' && (
                 <div className="flex gap-1 ml-1 shrink-0">
-                  <button onClick={() => openAircraftForm()} className="bg-[#F08B46] text-white rounded-full p-1.5 hover:bg-[#E45D3E] transition-colors active:scale-95">
-                    <Plus size={14} />
-                  </button>
-                  <button onClick={() => openAircraftForm(selectedAircraftData)} className="bg-slateGray text-white rounded-full p-1.5 hover:bg-gray-500 transition-colors active:scale-95">
-                    <Edit2 size={14} />
-                  </button>
+                  <button onClick={() => openAircraftForm()} className="bg-[#F08B46] text-white rounded-full p-1.5 hover:bg-[#E45D3E] transition-colors active:scale-95"><Plus size={14} /></button>
+                  <button onClick={() => openAircraftForm(selectedAircraftData)} className="bg-slateGray text-white rounded-full p-1.5 hover:bg-gray-500 transition-colors active:scale-95"><Edit2 size={14} /></button>
                 </div>
               )}
             </div>
@@ -1131,14 +929,16 @@ export default function FleetTrackerApp() {
               <span className="text-[8px] font-bold uppercase tracking-widest mt-1">Fleet</span>
             </button>
 
-            {/* LOG IT COMPANION APP LINK */}
-            <button 
-              onClick={() => window.open('/quick', '_blank')}
+            {/* LOG IT COMPANION APP LINK (FORCES NATIVE BROWSER OPEN) */}
+            <a 
+              href={appOrigin ? `${appOrigin}/quick` : "/quick"} 
+              target="_blank" 
+              rel="noopener noreferrer" 
               className="text-gray-300 hover:text-[#3AB0FF] transition-colors flex flex-col items-center active:scale-95 shrink-0"
             >
               <Send size={18} />
               <span className="text-[8px] font-bold uppercase tracking-widest mt-1">Log It</span>
-            </button>
+            </a>
 
             {role === 'admin' && (
               <button onClick={() => setShowAdminMenu(true)} className="text-gray-300 hover:text-white transition-colors flex flex-col items-center active:scale-95 shrink-0">
@@ -1169,10 +969,7 @@ export default function FleetTrackerApp() {
       <main className="flex-1 overflow-y-auto p-4 flex justify-center w-full" style={{ touchAction: 'auto' }}>
         <div className="w-full max-w-3xl flex flex-col gap-6">
           {activeTab === 'fleet' && <FleetSummary aircraftList={aircraftList} onSelectAircraft={(tail) => { setActiveTail(tail); setActiveTab('summary'); }} />}
-          
-          {/* SAFE BYPASS FOR VERCEL BUILD ERROR TS2322 */}
           {activeTab === 'summary' && <SummaryTab aircraft={selectedAircraftData} setActiveTab={(tab: any) => setActiveTab(tab)} role={role} onDeleteAircraft={handleDeleteAircraft} />}
-          
           {activeTab === 'times' && <TimesTab aircraft={selectedAircraftData} session={session} role={role} userInitials={userInitials} onUpdate={() => fetchAircraftData(session.user.id)} />}
           {activeTab === 'mx' && <MaintenanceTab aircraft={selectedAircraftData} role={role} onGroundedStatusChange={() => checkGroundedStatus(activeTail)} sysSettings={sysSettings} />}
           {activeTab === 'squawks' && <SquawksTab aircraft={selectedAircraftData} session={session} role={role} userInitials={userInitials} onGroundedStatusChange={() => checkGroundedStatus(activeTail)} />}
@@ -1191,7 +988,6 @@ export default function FleetTrackerApp() {
             { id: 'notes', icon: FileText, label: 'Notes', badge: unreadNotes }
           ].map((tab) => (
             <button key={tab.id} onClick={() => setActiveTab(tab.id as any)} className={`flex-1 py-3 md:py-4 flex flex-col items-center justify-center transition-all relative active:scale-95 ${getTabColor(tab.id)}`}>
-              
               <div className="relative mb-1">
                 <tab.icon size={20} />
                 {tab.badge > 0 && (
@@ -1201,7 +997,6 @@ export default function FleetTrackerApp() {
                   </span>
                 )}
               </div>
-              
               <span className="text-[10px] font-bold uppercase tracking-widest">{tab.label}</span>
               {activeTab === tab.id && <div className={`absolute top-0 w-12 h-1 rounded-b-full ${getIndicatorColor(tab.id)}`}></div>}
             </button>
