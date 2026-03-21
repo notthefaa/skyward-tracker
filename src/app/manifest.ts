@@ -14,7 +14,7 @@ export default function manifest(): MetadataRoute.Manifest {
         src: '/icon.png',
         sizes: 'any',
         type: 'image/png',
-        purpose: 'any', // Fixed TypeScript error here
+        purpose: 'any',
       },
     ],
   }

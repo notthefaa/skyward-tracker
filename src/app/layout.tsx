@@ -5,7 +5,7 @@ import "./globals.css";
 const oswald = Oswald({ 
   subsets: ["latin"], 
   variable: "--font-oswald",
-  weight:["400", "700"] 
+  weight: ["400", "700"] 
 });
 
 const roboto = Roboto({ 
