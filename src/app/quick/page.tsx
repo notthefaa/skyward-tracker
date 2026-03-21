@@ -2,38 +2,44 @@
 
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
-import { AlertTriangle, ChevronRight, CheckCircle, Camera, Clock, X, Eye, EyeOff, LogOut, Info } from "lucide-react";
+import { AlertTriangle, ChevronRight, CheckCircle, Camera, Clock, X, Eye, EyeOff, LogOut, Info, Download, Share } from "lucide-react";
 import imageCompression from "browser-image-compression";
+import { PrimaryButton } from "@/components/AppButtons";
 
 export default function QuickLogCompanion() {
   const [session, setSession] = useState<any>(null);
-  const [userInitials, setUserInitials] = useState("");
-  const[aircraftList, setAircraftList] = useState<any[]>([]);
+  const[userInitials, setUserInitials] = useState("");
+  const [aircraftList, setAircraftList] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // --- LOGIN STATE ---
   const [authEmail, setAuthEmail] = useState("");
-  const[authPassword, setAuthPassword] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
   // --- WIZARD STATE ---
   type FlowType = 'flight' | 'squawk' | null;
-  const [flow, setFlow] = useState<FlowType>(null);
-  const[step, setStep] = useState(0);
+  const[flow, setFlow] = useState<FlowType>(null);
+  const [step, setStep] = useState(0);
   const [selectedAircraft, setSelectedAircraft] = useState<any>(null);
 
+  // --- INSTALL PROMPT STATE ---
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [showIosInstruction, setShowIosInstruction] = useState(false);
+  const[isIos, setIsIos] = useState(false);
+
   // --- FLIGHT LOG STATE ---
-  const [logAftt, setLogAftt] = useState("");
-  const [logFtt, setLogFtt] = useState("");
-  const[logHobbs, setLogHobbs] = useState("");
-  const [logTach, setLogTach] = useState("");
-  const [logLandings, setLogLandings] = useState("");
-  const[logCycles, setLogCycles] = useState("");
-  const [logFuel, setLogFuel] = useState("");
+  const[logAftt, setLogAftt] = useState("");
+  const[logFtt, setLogFtt] = useState("");
+  const [logHobbs, setLogHobbs] = useState("");
+  const[logTach, setLogTach] = useState("");
+  const[logLandings, setLogLandings] = useState("");
+  const [logCycles, setLogCycles] = useState("");
+  const[logFuel, setLogFuel] = useState("");
   const [logFuelUnit, setLogFuelUnit] = useState<'gallons' | 'lbs'>('gallons');
   const [logInitials, setLogInitials] = useState("");
-  const[logReason, setLogReason] = useState("");
+  const [logReason, setLogReason] = useState("");
   const [logPax, setLogPax] = useState("");
   const [showLegend, setShowLegend] = useState(false);
 
@@ -56,6 +62,16 @@ export default function QuickLogCompanion() {
       if (session) fetchUserData(session.user.id);
       else setIsLoading(false);
     });
+
+    // Detect iOS and Android Install Prompts
+    const userAgent = window.navigator.userAgent.toLowerCase();
+    if (/iphone|ipad|ipod/.test(userAgent)) setIsIos(true);
+
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    });
+
     return () => subscription.unsubscribe();
   },[]);
 
@@ -92,29 +108,46 @@ export default function QuickLogCompanion() {
     setIsLoading(false);
   };
 
+  const handleInstallClick = () => {
+    if (isIos) {
+      setShowIosInstruction(true);
+    } else if (deferredPrompt) {
+      deferredPrompt.prompt();
+      deferredPrompt.userChoice.then(() => setDeferredPrompt(null));
+    } else {
+      alert("To install, use your browser's menu to 'Add to Home Screen'.");
+    }
+  };
+
   const startFlow = (type: FlowType) => {
     setFlow(type);
     if (aircraftList.length === 1) {
       setSelectedAircraft(aircraftList[0]);
-      setStep(2); // Skip selection if they only have 1 plane!
+      setStep(2);
     } else {
-      setStep(1); // Show aircraft selector
+      setStep(1);
     }
   };
 
+  // FULL CACHE & STATE CLEAR
   const resetFlow = () => {
     setFlow(null);
     setStep(0);
     setSelectedAircraft(null);
+    
+    // Zero out all flight state
     setLogAftt(""); setLogFtt(""); setLogHobbs(""); setLogTach("");
     setLogLandings(""); setLogCycles(""); setLogFuel(""); setLogPax(""); setLogReason("");
+    
+    // Zero out all squawk state & wipe image cache
     setSqLocation(""); setSqDescription(""); setSqAirworthy(null); setSqImages([]); setSqNotifyMx(true);
-    if (session) fetchUserData(session.user.id);
+    
+    window.scrollTo(0, 0); // Reset scroll position to top
+    if (session) fetchUserData(session.user.id); // Refresh aircraft times from DB
   };
 
   const isTurbine = selectedAircraft?.engine_type === 'Turbine';
 
-  // --- VALIDATION & NAVIGATION ---
   const handleNext = () => {
     if (flow === 'flight' && step === 2) {
       if (isTurbine) {
@@ -134,7 +167,6 @@ export default function QuickLogCompanion() {
     setStep(s => s + 1);
   };
 
-  // --- SUBMISSIONS ---
   const submitFlightLog = async () => {
     setIsSubmitting(true);
     let fuelGallons = logFuel ? parseFloat(logFuel) : null;
@@ -226,7 +258,7 @@ export default function QuickLogCompanion() {
                 </button>
               </div>
             </div>
-            <button disabled={isSubmitting} className="w-full bg-[#3AB0FF] text-white font-oswald text-xl font-bold uppercase tracking-widest py-4 rounded-xl shadow-lg mt-6 active:scale-95 transition-transform disabled:opacity-50">
+            <button disabled={isSubmitting} className="w-full bg-[#3AB0FF] text-white font-oswald text-xl font-bold uppercase tracking-widest py-4 rounded-xl shadow-[0_10px_20px_rgba(58,176,255,0.3)] mt-6 active:scale-95 transition-transform disabled:opacity-50">
               {isSubmitting ? "LOGGING IN..." : "ACCESS"}
             </button>
           </form>
@@ -236,8 +268,24 @@ export default function QuickLogCompanion() {
   }
 
   return (
-    <div className="h-[100dvh] w-full bg-navy flex flex-col overflow-hidden relative selection:bg-none">
+    <div className="min-h-[100dvh] w-full bg-navy flex flex-col overflow-x-hidden relative selection:bg-none">
       
+      {/* iOS INSTALL INSTRUCTIONS MODAL */}
+      {showIosInstruction && (
+        <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/80 animate-fade-in" onClick={() => setShowIosInstruction(false)}>
+          <div className="bg-white w-full rounded-t-3xl p-8 pb-12 animate-slide-up text-center" onClick={e => e.stopPropagation()}>
+            <h3 className="font-oswald text-2xl font-bold uppercase text-navy mb-4">Add to Home Screen</h3>
+            <p className="text-gray-600 font-roboto mb-6">To install the Log It app on your iPhone or iPad:</p>
+            <ol className="text-left text-navy font-bold space-y-4 mb-8 max-w-xs mx-auto">
+              <li className="flex items-center gap-3"><span className="bg-gray-100 p-2 rounded text-xl"><Share size={18} className="text-blue-500"/></span> Tap the <strong>Share</strong> button below.</li>
+              <li className="flex items-center gap-3"><span className="bg-gray-100 p-2 rounded text-xl">➕</span> Scroll down and tap <strong>Add to Home Screen</strong>.</li>
+              <li className="flex items-center gap-3"><span className="bg-gray-100 p-2 rounded text-xl">✔️</span> Tap <strong>Add</strong> in the top right corner.</li>
+            </ol>
+            <PrimaryButton onClick={() => setShowIosInstruction(false)}>Got it!</PrimaryButton>
+          </div>
+        </div>
+      )}
+
       {/* REASON LEGEND MODAL */}
       {showLegend && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/70 animate-fade-in" onClick={() => setShowLegend(false)}>
@@ -258,9 +306,7 @@ export default function QuickLogCompanion() {
 
       {/* HEADER */}
       <header className="text-white px-4 py-6 shrink-0 flex justify-center items-center relative z-20">
-        <h1 className="font-oswald text-3xl font-bold uppercase tracking-widest">
-          Log It
-        </h1>
+        <h1 className="font-oswald text-3xl font-bold uppercase tracking-widest">Log It</h1>
         {flow && step !== 99 ? (
           <button onClick={resetFlow} className="absolute right-4 text-gray-300 hover:text-white p-2">
             <X size={28} />
@@ -273,26 +319,32 @@ export default function QuickLogCompanion() {
       </header>
 
       {/* MAIN CONTENT AREA */}
-      <main className="flex-1 overflow-y-auto p-4 flex flex-col items-center pb-40" style={{ touchAction: 'auto' }}>
+      <main className="flex-1 p-4 flex flex-col items-center pb-40" style={{ touchAction: 'auto' }}>
         <div className="w-full max-w-md w-full animate-slide-up">
 
-          {/* HOME MENU (CIRCULAR BUTTONS) */}
+          {/* HOME MENU (PREMIUM 3D CIRCULAR BUTTONS) */}
           {!flow && (
-            <div className="flex flex-col items-center justify-center gap-10 mt-8 h-full">
+            <div className="flex flex-col items-center justify-center gap-10 mt-4 h-full">
+              
               <button 
                 onClick={() => startFlow('flight')}
-                className="w-64 h-64 bg-[#3AB0FF] text-white rounded-full shadow-2xl flex flex-col items-center justify-center gap-2 active:scale-95 transition-transform border-4 border-[#3AB0FF]/30 hover:border-white"
+                className="w-64 h-64 bg-gradient-to-b from-[#3AB0FF] to-[#1A85D6] text-white rounded-full shadow-[0_20px_40px_rgba(0,0,0,0.4),inset_0_4px_0_rgba(255,255,255,0.3)] flex flex-col items-center justify-center gap-3 active:scale-95 active:translate-y-2 transition-all"
               >
-                <Clock size={64} className="opacity-90 mt-4"/>
-                <h2 className="font-oswald text-3xl font-bold tracking-widest uppercase mt-2">Log Flight</h2>
+                <Clock size={64} className="opacity-95 drop-shadow-md"/>
+                <h2 className="font-oswald text-3xl font-bold tracking-widest uppercase drop-shadow-md">Log Flight</h2>
               </button>
               
               <button 
                 onClick={() => startFlow('squawk')}
-                className="w-64 h-64 bg-[#CE3732] text-white rounded-full shadow-2xl flex flex-col items-center justify-center gap-2 active:scale-95 transition-transform border-4 border-[#CE3732]/30 hover:border-white"
+                className="w-64 h-64 bg-gradient-to-b from-[#CE3732] to-[#9E201C] text-white rounded-full shadow-[0_20px_40px_rgba(0,0,0,0.4),inset_0_4px_0_rgba(255,255,255,0.3)] flex flex-col items-center justify-center gap-3 active:scale-95 active:translate-y-2 transition-all"
               >
-                <AlertTriangle size={64} className="opacity-90 mt-4"/>
-                <h2 className="font-oswald text-3xl font-bold tracking-widest uppercase mt-2">Log Squawk</h2>
+                <AlertTriangle size={64} className="opacity-95 drop-shadow-md"/>
+                <h2 className="font-oswald text-3xl font-bold tracking-widest uppercase drop-shadow-md">Log Squawk</h2>
+              </button>
+
+              {/* Add to Home Screen Link */}
+              <button onClick={handleInstallClick} className="mt-6 text-[#3AB0FF] text-sm font-bold uppercase tracking-widest flex items-center justify-center gap-2 hover:text-white transition-colors bg-white/10 px-6 py-3 rounded-full active:scale-95">
+                <Download size={16} /> Add to Home Screen
               </button>
             </div>
           )}
@@ -510,8 +562,8 @@ export default function QuickLogCompanion() {
 
           {/* SUCCESS SCREEN */}
           {step === 99 && (
-            <div className="flex flex-col items-center justify-center py-20 animate-fade-in text-center px-4">
-              <div className="bg-white p-8 rounded-full shadow-2xl mb-8">
+            <div className="flex flex-col items-center justify-center py-24 animate-fade-in text-center px-4">
+              <div className="bg-white p-8 rounded-full shadow-[0_20px_40px_rgba(0,0,0,0.4)] mb-8">
                 <CheckCircle size={100} className="text-success" />
               </div>
               <h2 className="font-oswald text-5xl font-bold text-white uppercase mb-4 leading-none tracking-widest">Success!</h2>
@@ -527,21 +579,21 @@ export default function QuickLogCompanion() {
         </div>
       </main>
 
-      {/* FLOATING ACTION BAR - Lifted securely off the bottom */}
+      {/* FLOATING ACTION BAR - LIFTED HIGHER */}
       {flow && step > 1 && step < 99 && (
-        <div className="absolute bottom-8 left-4 right-4 z-30 pb-safe">
-          <div className="max-w-md mx-auto flex gap-4">
-            <button onClick={() => setStep(s => s - 1)} disabled={isSubmitting} className="flex-1 bg-white text-navy font-oswald text-2xl font-bold uppercase tracking-widest py-5 rounded-2xl active:scale-95 transition-transform shadow-2xl border border-gray-200">
+        <div className="fixed bottom-12 left-4 right-4 z-30 pb-safe pointer-events-none">
+          <div className="max-w-md mx-auto flex gap-4 pointer-events-auto">
+            <button onClick={() => setStep(s => s - 1)} disabled={isSubmitting} className="flex-1 bg-white text-navy font-oswald text-2xl font-bold uppercase tracking-widest py-5 rounded-2xl active:scale-95 transition-transform shadow-[0_10px_20px_rgba(0,0,0,0.5)] border border-gray-200">
               BACK
             </button>
             
             {flow === 'flight' && (
               step === 3 ? (
-                <button onClick={submitFlightLog} disabled={isSubmitting || !logInitials} className="flex-[2] bg-success text-white font-oswald text-2xl font-bold uppercase tracking-widest py-5 rounded-2xl shadow-2xl active:scale-95 transition-transform disabled:opacity-50 flex justify-center items-center border border-green-600">
+                <button onClick={submitFlightLog} disabled={isSubmitting || !logInitials} className="flex-[2] bg-gradient-to-b from-success to-green-600 text-white font-oswald text-2xl font-bold uppercase tracking-widest py-5 rounded-2xl shadow-[0_10px_20px_rgba(0,0,0,0.5)] active:scale-95 transition-transform disabled:opacity-50 flex justify-center items-center border border-green-600">
                   {isSubmitting ? "SAVING..." : "SUBMIT LOG"}
                 </button>
               ) : (
-                <button onClick={handleNext} className="flex-[2] bg-[#3AB0FF] text-white font-oswald text-2xl font-bold uppercase tracking-widest py-5 rounded-2xl shadow-2xl active:scale-95 transition-transform flex justify-center items-center border border-blue-400">
+                <button onClick={handleNext} className="flex-[2] bg-gradient-to-b from-[#3AB0FF] to-[#1A85D6] text-white font-oswald text-2xl font-bold uppercase tracking-widest py-5 rounded-2xl shadow-[0_10px_20px_rgba(0,0,0,0.5)] active:scale-95 transition-transform flex justify-center items-center border border-blue-400">
                   NEXT
                 </button>
               )
@@ -549,11 +601,11 @@ export default function QuickLogCompanion() {
 
             {flow === 'squawk' && (
               step === 4 ? (
-                <button onClick={submitSquawk} disabled={isSubmitting} className="flex-[2] bg-success text-white font-oswald text-2xl font-bold uppercase tracking-widest py-5 rounded-2xl shadow-2xl active:scale-95 transition-transform disabled:opacity-50 flex justify-center items-center border border-green-600">
+                <button onClick={submitSquawk} disabled={isSubmitting} className="flex-[2] bg-gradient-to-b from-success to-green-600 text-white font-oswald text-2xl font-bold uppercase tracking-widest py-5 rounded-2xl shadow-[0_10px_20px_rgba(0,0,0,0.5)] active:scale-95 transition-transform disabled:opacity-50 flex justify-center items-center border border-green-600">
                   {isSubmitting ? "SAVING..." : "SUBMIT ISSUE"}
                 </button>
               ) : (
-                <button onClick={handleNext} className="flex-[2] bg-[#CE3732] text-white font-oswald text-2xl font-bold uppercase tracking-widest py-5 rounded-2xl shadow-2xl active:scale-95 transition-transform flex justify-center items-center border border-red-500">
+                <button onClick={handleNext} className="flex-[2] bg-gradient-to-b from-[#CE3732] to-[#9E201C] text-white font-oswald text-2xl font-bold uppercase tracking-widest py-5 rounded-2xl shadow-[0_10px_20px_rgba(0,0,0,0.5)] active:scale-95 transition-transform flex justify-center items-center border border-red-500">
                   NEXT
                 </button>
               )

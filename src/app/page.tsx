@@ -1132,15 +1132,13 @@ export default function FleetTrackerApp() {
             </button>
 
             {/* LOG IT COMPANION APP LINK */}
-            <a 
-              href="/quick" 
-              target="_blank" 
-              rel="noopener noreferrer" 
+            <button 
+              onClick={() => window.open('/quick', '_blank')}
               className="text-gray-300 hover:text-[#3AB0FF] transition-colors flex flex-col items-center active:scale-95 shrink-0"
             >
               <Send size={18} />
               <span className="text-[8px] font-bold uppercase tracking-widest mt-1">Log It</span>
-            </a>
+            </button>
 
             {role === 'admin' && (
               <button onClick={() => setShowAdminMenu(true)} className="text-gray-300 hover:text-white transition-colors flex flex-col items-center active:scale-95 shrink-0">
