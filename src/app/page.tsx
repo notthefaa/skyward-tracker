@@ -1133,7 +1133,7 @@ export default function FleetTrackerApp() {
 
             <button onClick={() => window.location.href = '/quick'} className="text-gray-300 hover:text-[#3AB0FF] transition-colors flex flex-col items-center active:scale-95 shrink-0">
               <Send size={18} />
-              <span className="text-[8px] font-bold uppercase tracking-widest mt-1">Quick Pad</span>
+              <span className="text-[8px] font-bold uppercase tracking-widest mt-1">Log It</span>
             </button>
 
             {role === 'admin' && (
