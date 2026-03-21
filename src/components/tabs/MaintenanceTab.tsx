@@ -386,7 +386,7 @@ export default function MaintenanceTab({
                       className="mt-0.5 w-4 h-4 text-[#F08B46] border-gray-300 rounded focus:ring-[#F08B46] cursor-pointer" 
                     />
                     <span className="flex flex-col">
-                      <span>Automate MX Scheduling</span>
+                      <span>Automate MX Communication</span>
                       <span className="text-[10px] text-gray-500 font-normal mt-1 leading-tight">
                         Emails the MX contact when the item is {mxTrackingType === 'time' ? `${sysSettings.sched_time} hours` : `${sysSettings.sched_days} days`} from becoming due. The primary aircraft contact will be cc'd.
                       </span>

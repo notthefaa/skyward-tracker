@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { 
   PlaneTakeoff, Wrench, AlertTriangle, FileText, Clock, LogOut, 
   Plus, X, Edit2, ChevronDown, Home, Users, LayoutGrid, 
-  ShieldCheck, Settings, MailOpen, Database, Eye, EyeOff, Sliders 
+  ShieldCheck, Settings, MailOpen, Database, Eye, EyeOff, Sliders, Send 
 } from "lucide-react";
 import { PrimaryButton } from "@/components/AppButtons";
 import imageCompression from "browser-image-compression";
@@ -1129,6 +1129,11 @@ export default function FleetTrackerApp() {
             <button onClick={() => setActiveTab('fleet')} className={`hover:text-white transition-colors flex flex-col items-center active:scale-95 shrink-0 ${activeTab === 'fleet' ? 'text-[#F5B05B]' : 'text-gray-300'}`}>
               <LayoutGrid size={18} />
               <span className="text-[8px] font-bold uppercase tracking-widest mt-1">Fleet</span>
+            </button>
+
+            <button onClick={() => window.location.href = '/quick'} className="text-gray-300 hover:text-[#3AB0FF] transition-colors flex flex-col items-center active:scale-95 shrink-0">
+              <Send size={18} />
+              <span className="text-[8px] font-bold uppercase tracking-widest mt-1">Quick Pad</span>
             </button>
 
             {role === 'admin' && (
