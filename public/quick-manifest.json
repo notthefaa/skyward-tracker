@@ -1,0 +1,23 @@
+{
+  "name": "Log It",
+  "short_name": "Log It",
+  "description": "Aviation Fleet Tracker Companion App",
+  "start_url": "/quick",
+  "display": "standalone",
+  "background_color": "#091F3C",
+  "theme_color": "#091F3C",
+  "icons":[
+    {
+      "src": "/quick-icon.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/quick-icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
