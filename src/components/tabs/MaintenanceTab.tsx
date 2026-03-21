@@ -6,26 +6,28 @@ import { PrimaryButton } from "@/components/AppButtons";
 export default function MaintenanceTab({ 
   aircraft, 
   role, 
-  onGroundedStatusChange 
+  onGroundedStatusChange,
+  sysSettings 
 }: { 
   aircraft: any, 
   role: string, 
-  onGroundedStatusChange: (isGrounded: boolean) => void 
+  onGroundedStatusChange: (isGrounded: boolean) => void,
+  sysSettings: any
 }) {
   const [mxItems, setMxItems] = useState<any[]>([]);
-  const [showMxModal, setShowMxModal] = useState(false);
-  const[isSubmitting, setIsSubmitting] = useState(false);
+  const[showMxModal, setShowMxModal] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [mxName, setMxName] = useState("");
-  const[mxIsRequired, setMxIsRequired] = useState(true);
+  const [mxIsRequired, setMxIsRequired] = useState(true);
   const [mxTrackingType, setMxTrackingType] = useState<'time' | 'date'>('time');
   const [mxLastTime, setMxLastTime] = useState("");
-  const[mxIntervalTime, setMxIntervalTime] = useState("");
+  const [mxIntervalTime, setMxIntervalTime] = useState("");
   const[mxDueTime, setMxDueTime] = useState("");
   const [mxLastDate, setMxLastDate] = useState("");
-  const[mxIntervalDays, setMxIntervalDays] = useState("");
-  const [mxDueDate, setMxDueDate] = useState("");
+  const [mxIntervalDays, setMxIntervalDays] = useState("");
+  const[mxDueDate, setMxDueDate] = useState("");
   
   const [automateScheduling, setAutomateScheduling] = useState(false);
 
@@ -200,14 +202,12 @@ export default function MaintenanceTab({
                 ? (item.is_required ? 'bg-red-50 border-red-200' : 'bg-orange-50 border-orange-200') 
                 : 'bg-white border-gray-200';
 
-              // Exact Logic: Red if <= 10, Orange if <= 30, Green if > 45
+              // Using dynamic global settings for the UI colors
               let dueTextColor = "text-success"; 
-              if (isExpired || remaining <= 10) {
+              if (isExpired || remaining <= sysSettings.reminder_3) {
                 dueTextColor = "text-[#CE3732]"; 
-              } else if (remaining <= 30) {
+              } else if (remaining <= sysSettings.reminder_1) {
                 dueTextColor = "text-[#F08B46]"; 
-              } else if (remaining > 45) {
-                dueTextColor = "text-success"; 
               } else {
                 dueTextColor = "text-success"; 
               }
@@ -388,7 +388,7 @@ export default function MaintenanceTab({
                     <span className="flex flex-col">
                       <span>Automate MX Scheduling</span>
                       <span className="text-[10px] text-gray-500 font-normal mt-1 leading-tight">
-                        Emails the MX contact when the item is {mxTrackingType === 'time' ? '10 hours' : '30 days'} from becoming due. The primary aircraft contact will be cc'd.
+                        Emails the MX contact when the item is {mxTrackingType === 'time' ? `${sysSettings.sched_time} hours` : `${sysSettings.sched_days} days`} from becoming due. The primary aircraft contact will be cc'd.
                       </span>
                     </span>
                   </label>

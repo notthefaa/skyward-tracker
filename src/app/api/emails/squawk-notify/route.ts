@@ -37,16 +37,30 @@ export async function POST(req: Request) {
 
     // 1. EMAIL TO MECHANIC (Unbranded & Professional)
     if (notifyMx && aircraft.mx_contact_email) {
-      const mxCc = aircraft.main_contact_email ? [aircraft.main_contact_email] :[];
+      const mxCc = aircraft.main_contact_email ?[aircraft.main_contact_email] :[];
       
+      const mxGreeting = aircraft.mx_contact 
+        ? `<p style="margin-bottom: 20px;">Hello ${aircraft.mx_contact},</p>` 
+        : `<p style="margin-bottom: 20px;">Hello,</p>`;
+
+      const mxSignature = `
+        <p style="margin-top: 20px;">
+          Thank you,<br/>
+          <strong>${aircraft.main_contact || 'Skyward Operations'}</strong><br/>
+          ${aircraft.main_contact_phone ? `${aircraft.main_contact_phone}<br/>` : ''}
+          ${aircraft.main_contact_email ? `<a href="mailto:${aircraft.main_contact_email}" style="color: #333333;">${aircraft.main_contact_email}</a>` : ''}
+        </p>
+      `;
+
       await resend.emails.send({
         from: `Skyward Operations <${FROM_EMAIL}>`,
-        to:[aircraft.mx_contact_email],
+        to: [aircraft.mx_contact_email],
         cc: mxCc,
         subject: `Service Request: ${aircraft.tail_number} Squawk`,
         html: `
           <div style="font-family: Arial, sans-serif; font-size: 14px; color: #333333; line-height: 1.6; max-w: 600px;">
-            <p>Hello ${aircraft.mx_contact || 'Maintenance Team'},</p>
+            ${mxGreeting}
+            
             <p>A new squawk has been reported for ${aircraft.tail_number}. Please let us know when you are able to accommodate this aircraft in your schedule to address the issue.</p>
             
             <p style="margin-top: 20px;"><strong>Squawk Details:</strong><br/>
@@ -57,7 +71,7 @@ export async function POST(req: Request) {
             <p style="margin-top: 20px;">You can view the full report and attached photos securely here:<br/>
             <a href="${new URL(req.url).origin}/squawk/${squawk.id}">${new URL(req.url).origin}/squawk/${squawk.id}</a></p>
             
-            <p style="margin-top: 20px;">Thank you,<br/>Skyward Operations</p>
+            ${mxSignature}
           </div>
         `
       });

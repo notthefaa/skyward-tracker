@@ -11,8 +11,16 @@ export async function GET(req: Request) {
 
     const { data: aircraftList } = await supabaseAdmin.from('aft_aircraft').select('*');
     const { data: mxItems } = await supabaseAdmin.from('aft_maintenance_items').select('*').eq('is_required', true);
-
+    
     if (!aircraftList || !mxItems) return NextResponse.json({ success: true, note: "No data" });
+
+    // Fetch Global Settings for Dynamic Triggers
+    const { data: settings } = await supabaseAdmin.from('aft_system_settings').select('*').eq('id', 1).single();
+    const reminder1 = settings?.reminder_1 ?? 30;
+    const reminder2 = settings?.reminder_2 ?? 15;
+    const reminder3 = settings?.reminder_3 ?? 5;
+    const schedTime = settings?.sched_time ?? 10;
+    const schedDays = settings?.sched_days ?? 30;
 
     const { data: allRoles } = await supabaseAdmin.from('aft_user_roles').select('*');
     const { data: allAccess } = await supabaseAdmin.from('aft_user_aircraft_access').select('*');
@@ -35,30 +43,44 @@ export async function GET(req: Request) {
       let internalTriggerTemplate = null;
 
       // ---------------------------------------------------------
-      // 1. AUTOMATED MECHANIC SCHEDULING (10 Hours OR 30 Days)
+      // 1. AUTOMATED MECHANIC SCHEDULING (Dynamic Triggers)
       // ---------------------------------------------------------
-      const mxThresholdHit = (mx.tracking_type === 'time' && remaining <= 10) || (mx.tracking_type === 'date' && remaining <= 30);
+      const mxThresholdHit = (mx.tracking_type === 'time' && remaining <= schedTime) || (mx.tracking_type === 'date' && remaining <= schedDays);
       
       if (mx.automate_scheduling && mxThresholdHit && !mx.mx_schedule_sent && aircraft.mx_contact_email) {
         
         const mxCc = aircraft.main_contact_email ? [aircraft.main_contact_email] :[];
         const dueString = mx.tracking_type === 'time' ? `at ${mx.due_time} hours` : `on ${mx.due_date}`;
 
+        const mxGreeting = aircraft.mx_contact 
+          ? `<p style="color: #525659; font-size: 16px; margin-bottom: 20px;">Hello ${aircraft.mx_contact},</p>` 
+          : `<p style="color: #525659; font-size: 16px; margin-bottom: 20px;">Hello,</p>`;
+
+        const mxSignature = `
+          <p style="color: #525659; font-size: 16px; margin-top: 20px;">
+            Thank you,<br/>
+            <strong>${aircraft.main_contact || 'Skyward Operations'}</strong><br/>
+            ${aircraft.main_contact_phone ? `${aircraft.main_contact_phone}<br/>` : ''}
+            ${aircraft.main_contact_email ? `<a href="mailto:${aircraft.main_contact_email}" style="color: #525659;">${aircraft.main_contact_email}</a>` : ''}
+          </p>
+        `;
+
         await resend.emails.send({
           from: `Skyward Operations <${FROM_EMAIL}>`,
-          to: [aircraft.mx_contact_email],
+          to:[aircraft.mx_contact_email],
           cc: mxCc,
           subject: `Scheduling Request: ${aircraft.tail_number} Maintenance`,
           html: `
             <div style="font-family: Arial, sans-serif; font-size: 14px; color: #333333; line-height: 1.6; max-w: 600px;">
-              <p>Hello ${aircraft.mx_contact || 'Maintenance Team'},</p>
+              ${mxGreeting}
+              
               <p>The following maintenance item is coming due for ${aircraft.tail_number}. Please let us know when you are able to add this aircraft to your schedule.</p>
               
               <p style="margin-top: 20px;"><strong>Maintenance Details:</strong><br/>
               Item: ${mx.item_name}<br/>
               Due: ${dueString}</p>
               
-              <p style="margin-top: 20px;">Thank you,<br/>Skyward Operations</p>
+              ${mxSignature}
             </div>
           `
         });
@@ -67,15 +89,15 @@ export async function GET(req: Request) {
       }
 
       // ---------------------------------------------------------
-      // 2. INTERNAL PILOT/ADMIN ALERTS (5, 15, 30 Days/Hours)
+      // 2. INTERNAL PILOT/ADMIN ALERTS (Dynamic Triggers)
       // ---------------------------------------------------------
-      if (remaining <= 5 && !mx.reminder_5_sent) {
+      if (remaining <= reminder3 && !mx.reminder_5_sent) {
         internalTriggerTemplate = `DUE IN ${remaining.toFixed(1)} ${mx.tracking_type === 'time' ? 'HOURS' : 'DAYS'}`;
         flagToUpdate.reminder_5_sent = true; flagToUpdate.reminder_15_sent = true; flagToUpdate.reminder_30_sent = true;
-      } else if (remaining <= 15 && !mx.reminder_15_sent) {
+      } else if (remaining <= reminder2 && !mx.reminder_15_sent) {
         internalTriggerTemplate = `DUE IN ${remaining.toFixed(1)} ${mx.tracking_type === 'time' ? 'HOURS' : 'DAYS'}`;
         flagToUpdate.reminder_15_sent = true; flagToUpdate.reminder_30_sent = true;
-      } else if (remaining <= 30 && !mx.reminder_30_sent) {
+      } else if (remaining <= reminder1 && !mx.reminder_30_sent) {
         internalTriggerTemplate = `DUE IN ${remaining.toFixed(1)} ${mx.tracking_type === 'time' ? 'HOURS' : 'DAYS'}`;
         flagToUpdate.reminder_30_sent = true;
       }

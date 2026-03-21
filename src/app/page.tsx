@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { 
   PlaneTakeoff, Wrench, AlertTriangle, FileText, Clock, LogOut, 
   Plus, X, Edit2, ChevronDown, Home, Users, LayoutGrid, 
-  ShieldCheck, Settings, MailOpen, Database, Eye, EyeOff 
+  ShieldCheck, Settings, MailOpen, Database, Eye, EyeOff, Sliders 
 } from "lucide-react";
 import { PrimaryButton } from "@/components/AppButtons";
 import imageCompression from "browser-image-compression";
@@ -22,32 +22,42 @@ import FleetSummary from "@/components/tabs/FleetSummary";
 export default function FleetTrackerApp() {
   const [session, setSession] = useState<any>(null);
   const [role, setRole] = useState<'admin' | 'pilot'>('pilot');
-  const [userInitials, setUserInitials] = useState("");
+  const[userInitials, setUserInitials] = useState("");
   
   // Login State
-  const [authEmail, setAuthEmail] = useState("");
+  const[authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
   const [showForgotPassword, setShowForgotPassword] = useState(false);
-  const[showPassword, setShowPassword] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   // App State
   const [aircraftList, setAircraftList] = useState<any[]>([]);
   const [activeTail, setActiveTail] = useState<string>("");
-  const [activeTab, setActiveTab] = useState<'fleet' | 'summary' | 'times' | 'mx' | 'squawks' | 'notes'>('fleet');
+  const[activeTab, setActiveTab] = useState<'fleet' | 'summary' | 'times' | 'mx' | 'squawks' | 'notes'>('fleet');
   const [aircraftStatus, setAircraftStatus] = useState<'airworthy' | 'issues' | 'grounded'>('airworthy');
-  const [unreadNotes, setUnreadNotes] = useState(0);
+  const[unreadNotes, setUnreadNotes] = useState(0);
+
+  // Global Settings State
+  const[sysSettings, setSysSettings] = useState({
+    reminder_1: 30,
+    reminder_2: 15,
+    reminder_3: 5,
+    sched_time: 10,
+    sched_days: 30
+  });
 
   // --- ADMIN CONTROL CENTER STATE ---
   const[showAdminMenu, setShowAdminMenu] = useState(false);
   const [showToolsMenu, setShowToolsMenu] = useState(false);
   const [showEmailPreview, setShowEmailPreview] = useState(false);
-  const[emailPreviewType, setEmailPreviewType] = useState<'squawk_mx' | 'squawk_internal' | 'mx_schedule' | 'mx_reminder'>('squawk_mx');
+  const[showSettingsModal, setShowSettingsModal] = useState(false);
+  const [emailPreviewType, setEmailPreviewType] = useState<'squawk_mx' | 'squawk_internal' | 'mx_schedule' | 'mx_reminder'>('squawk_mx');
 
   // Invite User State
   const[showInviteModal, setShowInviteModal] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<'admin'|'pilot'>('pilot');
-  const[inviteAircraftIds, setInviteAircraftIds] = useState<string[]>([]);
+  const [inviteAircraftIds, setInviteAircraftIds] = useState<string[]>([]);
 
   // Aircraft Access State
   const [showAccessModal, setShowAccessModal] = useState(false);
@@ -57,24 +67,24 @@ export default function FleetTrackerApp() {
 
   // Aircraft Modal State
   const [showAircraftModal, setShowAircraftModal] = useState(false);
-  const[editingAircraftId, setEditingAircraftId] = useState<string | null>(null);
-  const [newTail, setNewTail] = useState("");
+  const [editingAircraftId, setEditingAircraftId] = useState<string | null>(null);
+  const[newTail, setNewTail] = useState("");
   const [newSerial, setNewSerial] = useState("");
-  const[newModel, setNewModel] = useState("");
+  const [newModel, setNewModel] = useState("");
   const [newType, setNewType] = useState<'Piston' | 'Turbine'>('Piston');
-  const [newAirframeTime, setNewAirframeTime] = useState("");
+  const[newAirframeTime, setNewAirframeTime] = useState("");
   const [newEngineTime, setNewEngineTime] = useState("");
   const[newHomeAirport, setNewHomeAirport] = useState("");
   const [newMainContact, setNewMainContact] = useState("");
-  const[newMainContactPhone, setNewMainContactPhone] = useState(""); 
+  const [newMainContactPhone, setNewMainContactPhone] = useState(""); 
   const[newMainContactEmail, setNewMainContactEmail] = useState(""); 
-  const [newMxContact, setNewMxContact] = useState(""); 
+  const[newMxContact, setNewMxContact] = useState(""); 
   const [newMxContactPhone, setNewMxContactPhone] = useState(""); 
-  const[newMxContactEmail, setNewMxContactEmail] = useState(""); 
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [newMxContactEmail, setNewMxContactEmail] = useState(""); 
+  const[isSubmitting, setIsSubmitting] = useState(false);
 
   // Cropper State
-  const [avatarSrc, setAvatarSrc] = useState<string>("");
+  const[avatarSrc, setAvatarSrc] = useState<string>("");
   const [crop, setCrop] = useState<Crop>({ unit: '%', width: 100, height: 56.25, x: 0, y: 0 }); // 16:9
   const imageRef = useRef<HTMLImageElement>(null);
 
@@ -97,9 +107,13 @@ export default function FleetTrackerApp() {
       checkGroundedStatus(activeTail); 
       fetchUnreadNotes(activeTail, session.user.id); 
     } 
-  }, [activeTail, aircraftList, session]);
+  },[activeTail, aircraftList, session]);
 
   const fetchAircraftData = async (userId: string) => {
+    // Fetch global settings
+    const { data: settingsData } = await supabase.from('aft_system_settings').select('*').eq('id', 1).single();
+    if (settingsData) setSysSettings(settingsData);
+
     const { data: roleData } = await supabase.from('aft_user_roles').select('role, initials').eq('user_id', userId).single();
     if (roleData) {
       setRole(roleData.role);
@@ -182,17 +196,27 @@ export default function FleetTrackerApp() {
     setIsSubmitting(false);
   };
 
+  const handleSaveSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    await supabase.from('aft_system_settings').upsert({ id: 1, ...sysSettings });
+    setIsSubmitting(false);
+    setShowSettingsModal(false);
+    alert("Global maintenance triggers updated!");
+  };
+
   const getEmailPreviewHtml = () => {
     const baseStyle = `font-family: Arial, sans-serif; font-size: 14px; color: #333333; line-height: 1.6; max-w: 600px;`;
+    const contactInfo = `<strong>John Doe</strong><br/>(555) 123-4567<br/><a href="#" style="color: #333333;">john@doe.com</a>`;
     
     if (emailPreviewType === 'squawk_mx') {
       return `
         <div style="${baseStyle}">
-          <p>Hello Maintenance Team,</p>
+          <p style="margin-bottom: 20px;">Hello Bob's Maintenance,</p>
           <p>A new squawk has been reported for N12345. Please let us know when you are able to accommodate this aircraft in your schedule to address the issue.</p>
           <p style="margin-top: 20px;"><strong>Squawk Details:</strong><br/>Location: KDFW<br/>Status: AOG / GROUNDED<br/>Description: Left Main tire showing cords.</p>
           <p style="margin-top: 20px;">You can view the full report and attached photos securely here:<br/><a href="#">https://your-app.com/squawk/12345</a></p>
-          <p style="margin-top: 20px;">Thank you,<br/>Skyward Operations</p>
+          <p style="margin-top: 20px;">Thank you,<br/>${contactInfo}</p>
         </div>
       `;
     }
@@ -208,10 +232,10 @@ export default function FleetTrackerApp() {
     if (emailPreviewType === 'mx_schedule') {
       return `
         <div style="${baseStyle}">
-          <p>Hello Maintenance Team,</p>
+          <p style="margin-bottom: 20px;">Hello Bob's Maintenance,</p>
           <p>The following maintenance item is coming due for N12345. Please let us know when you are able to add this aircraft to your schedule.</p>
           <p style="margin-top: 20px;"><strong>Maintenance Details:</strong><br/>Item: 100 Hour Inspection<br/>Due: at 1500.5 hours</p>
-          <p style="margin-top: 20px;">Thank you,<br/>Skyward Operations</p>
+          <p style="margin-top: 20px;">Thank you,<br/>${contactInfo}</p>
         </div>
       `;
     }
@@ -258,7 +282,7 @@ export default function FleetTrackerApp() {
   };
 
   const toggleInviteAircraft = (id: string) => {
-    setInviteAircraftIds(prev => prev.includes(id) ? prev.filter(a => a !== id) :[...prev, id]);
+    setInviteAircraftIds(prev => prev.includes(id) ? prev.filter(a => a !== id) : [...prev, id]);
   };
 
   // --- USER MANAGEMENT (RESET & DELETE) ---
@@ -295,7 +319,6 @@ export default function FleetTrackerApp() {
       
       alert("User successfully deleted.");
       
-      // Refetch the active users and reset the UI
       const { data } = await supabase.from('aft_user_roles').select('*').eq('role', 'pilot');
       if (data) setAllUsers(data);
       setSelectedAccessUserId("");
@@ -510,7 +533,7 @@ export default function FleetTrackerApp() {
     if (activeTab !== tabId) return 'text-gray-400 hover:bg-gray-50';
     switch(tabId) { 
       case 'summary': return 'text-navy'; 
-      case 'times': return 'text-[#F5B05B]'; 
+      case 'times': return 'text-[#3AB0FF]'; 
       case 'mx': return 'text-[#F08B46]'; 
       case 'squawks': return 'text-[#CE3732]'; 
       case 'notes': return 'text-[#525659]'; 
@@ -521,7 +544,7 @@ export default function FleetTrackerApp() {
   const getIndicatorColor = (tabId: string) => {
     switch(tabId) { 
       case 'summary': return 'bg-navy'; 
-      case 'times': return 'bg-[#F5B05B]'; 
+      case 'times': return 'bg-[#3AB0FF]'; 
       case 'mx': return 'bg-[#F08B46]'; 
       case 'squawks': return 'bg-[#CE3732]'; 
       case 'notes': return 'bg-[#525659]'; 
@@ -659,7 +682,7 @@ export default function FleetTrackerApp() {
                 <Settings size={18} className="text-navy" />
                 <div>
                   <span className="block font-bold text-navy text-sm uppercase">System Tools</span>
-                  <span className="block text-[10px] text-gray-500 uppercase tracking-widest mt-0.5">Database health & email previews</span>
+                  <span className="block text-[10px] text-gray-500 uppercase tracking-widest mt-0.5">Database health & triggers</span>
                 </div>
               </button>
             </div>
@@ -687,6 +710,10 @@ export default function FleetTrackerApp() {
                 <MailOpen size={16} /> Preview Automated Emails
               </button>
 
+              <button onClick={() => { setShowToolsMenu(false); setShowSettingsModal(true); }} className="w-full border border-gray-300 text-navy font-bold py-3 px-4 rounded hover:bg-gray-50 active:scale-95 transition-all flex justify-center items-center gap-2 text-xs uppercase tracking-widest">
+                <Sliders size={16} /> Maintenance Triggers
+              </button>
+
               <div className="border-t border-gray-200 pt-4">
                 <p className="text-[10px] text-gray-500 uppercase tracking-widest mb-3 text-center">Database Maintenance</p>
                 <button 
@@ -702,6 +729,57 @@ export default function FleetTrackerApp() {
               </div>
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* GLOBAL SETTINGS MODAL */}
+      {showSettingsModal && role === 'admin' && (
+        <div className="fixed inset-0 bg-black/60 z-[70] flex items-center justify-center p-4 animate-fade-in" onClick={() => setShowSettingsModal(false)}>
+          <div className="bg-white rounded shadow-2xl w-full max-w-sm p-6 border-t-4 border-navy animate-slide-up" onClick={(e) => e.stopPropagation()}>
+            
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="font-oswald text-xl font-bold uppercase text-navy flex items-center gap-2">
+                <Sliders size={20}/> Maintenance Triggers
+              </h2>
+              <button onClick={() => setShowSettingsModal(false)} className="text-gray-400 hover:text-red-500">
+                <X size={24}/>
+              </button>
+            </div>
+            
+            <form onSubmit={handleSaveSettings} className="space-y-4">
+              <p className="text-[10px] text-gray-500 uppercase tracking-widest border-b pb-1">Internal Alerts (Sent to Pilots/Admins)</p>
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <label className="text-[10px] font-bold uppercase text-navy">Alert 1</label>
+                  <input type="number" value={sysSettings.reminder_1} onChange={e=>setSysSettings({...sysSettings, reminder_1: parseInt(e.target.value)})} className="w-full border rounded p-2 text-sm mt-1 focus:border-navy outline-none" />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold uppercase text-navy">Alert 2</label>
+                  <input type="number" value={sysSettings.reminder_2} onChange={e=>setSysSettings({...sysSettings, reminder_2: parseInt(e.target.value)})} className="w-full border rounded p-2 text-sm mt-1 focus:border-navy outline-none" />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold uppercase text-navy">Alert 3</label>
+                  <input type="number" value={sysSettings.reminder_3} onChange={e=>setSysSettings({...sysSettings, reminder_3: parseInt(e.target.value)})} className="w-full border rounded p-2 text-sm mt-1 focus:border-navy outline-none" />
+                </div>
+              </div>
+              
+              <p className="text-[10px] text-gray-500 uppercase tracking-widest border-b pb-1 mt-4">Mechanic Scheduling Requests (To MX)</p>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[10px] font-bold uppercase text-navy">Hours Trigger</label>
+                  <input type="number" value={sysSettings.sched_time} onChange={e=>setSysSettings({...sysSettings, sched_time: parseInt(e.target.value)})} className="w-full border rounded p-2 text-sm mt-1 focus:border-navy outline-none" />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold uppercase text-navy">Days Trigger</label>
+                  <input type="number" value={sysSettings.sched_days} onChange={e=>setSysSettings({...sysSettings, sched_days: parseInt(e.target.value)})} className="w-full border rounded p-2 text-sm mt-1 focus:border-navy outline-none" />
+                </div>
+              </div>
+
+              <div className="pt-4">
+                <PrimaryButton disabled={isSubmitting}>{isSubmitting ? "Saving..." : "Save Globally"}</PrimaryButton>
+              </div>
+            </form>
           </div>
         </div>
       )}
@@ -1087,7 +1165,7 @@ export default function FleetTrackerApp() {
           {activeTab === 'summary' && <SummaryTab aircraft={selectedAircraftData} setActiveTab={(tab: any) => setActiveTab(tab)} role={role} onDeleteAircraft={handleDeleteAircraft} />}
           
           {activeTab === 'times' && <TimesTab aircraft={selectedAircraftData} session={session} role={role} userInitials={userInitials} onUpdate={() => fetchAircraftData(session.user.id)} />}
-          {activeTab === 'mx' && <MaintenanceTab aircraft={selectedAircraftData} role={role} onGroundedStatusChange={() => checkGroundedStatus(activeTail)} />}
+          {activeTab === 'mx' && <MaintenanceTab aircraft={selectedAircraftData} role={role} onGroundedStatusChange={() => checkGroundedStatus(activeTail)} sysSettings={sysSettings} />}
           {activeTab === 'squawks' && <SquawksTab aircraft={selectedAircraftData} session={session} role={role} userInitials={userInitials} onGroundedStatusChange={() => checkGroundedStatus(activeTail)} />}
           {activeTab === 'notes' && <NotesTab aircraft={selectedAircraftData} session={session} role={role} userInitials={userInitials} onNotesRead={() => setUnreadNotes(0)} />}
         </div>

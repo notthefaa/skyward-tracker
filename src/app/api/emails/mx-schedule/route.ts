@@ -15,6 +15,19 @@ export async function POST(req: Request) {
         ? `at ${mxItem.due_time} hours` 
         : `on ${mxItem.due_date}`;
 
+      const mxGreeting = aircraft.mx_contact 
+        ? `<p style="color: #525659; font-size: 16px; margin-bottom: 20px;">Hello ${aircraft.mx_contact},</p>` 
+        : `<p style="color: #525659; font-size: 16px; margin-bottom: 20px;">Hello,</p>`;
+
+      const mxSignature = `
+        <p style="color: #525659; font-size: 16px; margin-top: 20px;">
+          Thank you,<br/>
+          <strong>${aircraft.main_contact || 'Skyward Operations'}</strong><br/>
+          ${aircraft.main_contact_phone ? `${aircraft.main_contact_phone}<br/>` : ''}
+          ${aircraft.main_contact_email ? `<a href="mailto:${aircraft.main_contact_email}" style="color: #525659;">${aircraft.main_contact_email}</a>` : ''}
+        </p>
+      `;
+
       await resend.emails.send({
         from: `Skyward Maintenance <${FROM_EMAIL}>`,
         to: [aircraft.mx_contact_email],
@@ -23,7 +36,9 @@ export async function POST(req: Request) {
         html: `
           <div style="font-family: Arial, sans-serif; max-w: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; border-radius: 8px;">
             <h2 style="color: #1B4869; text-transform: uppercase; letter-spacing: 2px; border-bottom: 2px solid #1B4869; padding-bottom: 10px;">Skyward Society</h2>
-            <p style="color: #525659; font-size: 16px;">Hello ${aircraft.mx_contact || 'Maintenance Team'},</p>
+            
+            ${mxGreeting}
+            
             <p style="color: #525659; font-size: 16px;">The following maintenance item is coming due for <strong>${aircraft.tail_number}</strong>. Please let us know when you are able to add this aircraft to your schedule.</p>
             
             <div style="background-color: #FDFCF4; padding: 20px; border-left: 4px solid #F08B46; margin: 25px 0; border-radius: 4px;">
@@ -31,7 +46,8 @@ export async function POST(req: Request) {
               <p style="margin: 0; color: #1B4869; font-size: 16px;"><strong>Due:</strong> ${dueString}</p>
             </div>
 
-            <p style="color: #525659; font-size: 16px;">Thank you,<br/><strong>Skyward Society</strong></p>
+            ${mxSignature}
+            
             <p style="color: #9ca3af; font-size: 12px; margin-top: 30px;">This is an automated scheduling request from the Skyward Aircraft Tracker.</p>
           </div>
         `
