@@ -30,14 +30,14 @@ export default function FleetTrackerApp() {
 
   // Login State
   const [authEmail, setAuthEmail] = useState("");
-  const[authPassword, setAuthPassword] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
   // App State
-  const[allAircraftList, setAllAircraftList] = useState<any[]>([]); // GLOBAL LIST
-  const[aircraftList, setAircraftList] = useState<any[]>([]); // ASSIGNED LIST
-  const [activeTail, setActiveTail] = useState<string>("");
+  const [allAircraftList, setAllAircraftList] = useState<any[]>([]); // GLOBAL LIST
+  const [aircraftList, setAircraftList] = useState<any[]>([]); // ASSIGNED LIST
+  const[activeTail, setActiveTail] = useState<string>("");
   const [activeTab, setActiveTab] = useState<'fleet' | 'summary' | 'times' | 'mx' | 'squawks' | 'notes'>('fleet');
   const [aircraftStatus, setAircraftStatus] = useState<'airworthy' | 'issues' | 'grounded'>('airworthy');
   const [unreadNotes, setUnreadNotes] = useState(0);
@@ -76,22 +76,22 @@ export default function FleetTrackerApp() {
   const[userAccessList, setUserAccessList] = useState<string[]>([]);
 
   // Aircraft Modal / Onboarding State
-  const [showAircraftModal, setShowAircraftModal] = useState(false);
+  const[showAircraftModal, setShowAircraftModal] = useState(false);
   const [editingAircraftId, setEditingAircraftId] = useState<string | null>(null);
   const [newTail, setNewTail] = useState("");
-  const[newSerial, setNewSerial] = useState("");
+  const [newSerial, setNewSerial] = useState("");
   const [newModel, setNewModel] = useState("");
-  const[newType, setNewType] = useState<'Piston' | 'Turbine'>('Piston');
+  const [newType, setNewType] = useState<'Piston' | 'Turbine'>('Piston');
   const[newAirframeTime, setNewAirframeTime] = useState("");
   const [newEngineTime, setNewEngineTime] = useState("");
   const [newHomeAirport, setNewHomeAirport] = useState("");
-  const [newMainContact, setNewMainContact] = useState("");
+  const[newMainContact, setNewMainContact] = useState("");
   const [newMainContactPhone, setNewMainContactPhone] = useState(""); 
   const [newMainContactEmail, setNewMainContactEmail] = useState(""); 
   const[newMxContact, setNewMxContact] = useState(""); 
   const [newMxContactPhone, setNewMxContactPhone] = useState(""); 
-  const [newMxContactEmail, setNewMxContactEmail] = useState(""); 
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const[newMxContactEmail, setNewMxContactEmail] = useState(""); 
+  const[isSubmitting, setIsSubmitting] = useState(false);
 
   // Cropper State
   const [avatarSrc, setAvatarSrc] = useState<string>("");
@@ -679,7 +679,7 @@ export default function FleetTrackerApp() {
           <div className="text-center mb-8">
             <img src="/logo.png" alt="Alis Grave Nil" className="mx-auto h-32 object-contain mb-4" />
             <h2 className="font-oswald text-xl font-bold uppercase tracking-widest text-navy">
-              {showForgotPassword ? 'Reset Password' : 'Aircraft Tracker'}
+              {showForgotPassword ? 'Reset Password' : 'Aircraft Manager'}
             </h2>
           </div>
           
@@ -771,13 +771,19 @@ export default function FleetTrackerApp() {
   if (role === 'pilot' && aircraftList.length === 0) {
     return (
       <div className="flex flex-col bg-slateGray min-h-[100dvh] w-full overflow-y-auto">
-        <header className="bg-navy text-white px-4 py-6 shrink-0 flex justify-center items-center relative shadow-md">
-          <h1 className="font-oswald text-2xl font-bold uppercase tracking-widest text-center flex items-center gap-2">
-            <PlaneTakeoff size={24} className="text-[#3AB0FF]"/> Welcome to Skyward
-          </h1>
-          <button onClick={handleLogout} className="absolute right-4 text-gray-300 hover:text-white p-2" title="Logout">
-            <LogOut size={24} />
-          </button>
+        <header className="bg-navy text-white shadow-md z-20 shrink-0 w-full">
+          <div className="max-w-3xl mx-auto px-4 py-3 flex justify-between items-center w-full">
+            <div className="flex items-center gap-3">
+              <PlaneTakeoff size={24} className="text-[#3AB0FF]"/>
+              <h1 className="font-oswald text-xl font-bold uppercase tracking-widest text-white m-0 leading-none">
+                Skyward Aircraft Manager
+              </h1>
+            </div>
+            <button onClick={handleLogout} className="text-gray-300 hover:text-white transition-colors flex flex-col items-center active:scale-95 shrink-0" title="Logout">
+              <LogOut size={18} />
+              <span className="text-[8px] font-bold uppercase tracking-widest mt-1">Logout</span>
+            </button>
+          </div>
         </header>
 
         <div className="flex-1 p-4 flex justify-center items-start pt-8 pb-20">
@@ -802,7 +808,7 @@ export default function FleetTrackerApp() {
                     type="file" 
                     accept="image/*" 
                     onChange={onSelectFile} 
-                    className="text-xs text-gray-500 w-full cursor-pointer" 
+                    className="text-xs text-gray-500 w-full cursor-pointer bg-white" 
                   />
                 ) : (
                   <div className="w-full h-auto flex justify-center bg-black rounded overflow-hidden">
@@ -828,7 +834,7 @@ export default function FleetTrackerApp() {
                     required 
                     value={newTail} 
                     onChange={e => setNewTail(e.target.value)} 
-                    className="w-full border border-gray-300 rounded p-3 text-sm mt-1 uppercase focus:border-[#F08B46] outline-none" 
+                    className="w-full border border-gray-300 rounded p-3 text-sm mt-1 uppercase focus:border-[#F08B46] outline-none bg-white" 
                   />
                 </div>
                 <div>
@@ -839,7 +845,7 @@ export default function FleetTrackerApp() {
                     type="text" 
                     value={newSerial} 
                     onChange={e => setNewSerial(e.target.value)} 
-                    className="w-full border border-gray-300 rounded p-3 text-sm mt-1 uppercase focus:border-[#F08B46] outline-none" 
+                    className="w-full border border-gray-300 rounded p-3 text-sm mt-1 uppercase focus:border-[#F08B46] outline-none bg-white" 
                   />
                 </div>
               </div>
@@ -854,7 +860,7 @@ export default function FleetTrackerApp() {
                     required 
                     value={newModel} 
                     onChange={e => setNewModel(e.target.value)} 
-                    className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" 
+                    className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none bg-white" 
                   />
                 </div>
                 <div>
@@ -864,7 +870,7 @@ export default function FleetTrackerApp() {
                   <select 
                     value={newType} 
                     onChange={e => setNewType(e.target.value as 'Piston'|'Turbine')} 
-                    className="w-full border border-gray-300 rounded p-3 text-sm mt-1 bg-white focus:border-[#F08B46] outline-none"
+                    className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none bg-white"
                   >
                     <option value="Piston">Piston</option>
                     <option value="Turbine">Turbine</option>
@@ -880,8 +886,8 @@ export default function FleetTrackerApp() {
                   type="text" 
                   value={newHomeAirport} 
                   onChange={e => setNewHomeAirport(e.target.value)} 
-                  className="w-full border border-gray-300 rounded p-3 text-sm mt-1 uppercase focus:border-[#F08B46] outline-none" 
-                  placeholder="KDFW" 
+                  className="w-full border border-gray-300 rounded p-3 text-sm mt-1 uppercase focus:border-[#F08B46] outline-none bg-white" 
+                  placeholder="ICAO" 
                 />
               </div>
 
@@ -894,7 +900,7 @@ export default function FleetTrackerApp() {
                     type="text" 
                     value={newMainContact} 
                     onChange={e => setNewMainContact(e.target.value)} 
-                    className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" 
+                    className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none bg-white" 
                   />
                 </div>
                 <div>
@@ -905,7 +911,7 @@ export default function FleetTrackerApp() {
                     type="tel" 
                     value={newMainContactPhone} 
                     onChange={e => setNewMainContactPhone(e.target.value)} 
-                    className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" 
+                    className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none bg-white" 
                   />
                 </div>
                 <div>
@@ -916,7 +922,7 @@ export default function FleetTrackerApp() {
                     type="email" 
                     value={newMainContactEmail} 
                     onChange={e => setNewMainContactEmail(e.target.value)} 
-                    className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" 
+                    className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none bg-white" 
                   />
                 </div>
               </div>
@@ -930,7 +936,7 @@ export default function FleetTrackerApp() {
                     type="text" 
                     value={newMxContact} 
                     onChange={e => setNewMxContact(e.target.value)} 
-                    className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" 
+                    className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none bg-white" 
                   />
                 </div>
                 <div>
@@ -941,7 +947,7 @@ export default function FleetTrackerApp() {
                     type="tel" 
                     value={newMxContactPhone} 
                     onChange={e => setNewMxContactPhone(e.target.value)} 
-                    className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" 
+                    className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none bg-white" 
                   />
                 </div>
                 <div>
@@ -952,7 +958,7 @@ export default function FleetTrackerApp() {
                     type="email" 
                     value={newMxContactEmail} 
                     onChange={e => setNewMxContactEmail(e.target.value)} 
-                    className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" 
+                    className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none bg-white" 
                   />
                 </div>
               </div>
@@ -968,7 +974,7 @@ export default function FleetTrackerApp() {
                     required 
                     value={newAirframeTime} 
                     onChange={e => setNewAirframeTime(e.target.value)} 
-                    className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" 
+                    className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none bg-white" 
                   />
                 </div>
                 <div>
@@ -981,7 +987,7 @@ export default function FleetTrackerApp() {
                     required 
                     value={newEngineTime} 
                     onChange={e => setNewEngineTime(e.target.value)} 
-                    className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" 
+                    className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none bg-white" 
                   />
                 </div>
               </div>
@@ -1331,7 +1337,7 @@ export default function FleetTrackerApp() {
                     type="file" 
                     accept="image/*" 
                     onChange={onSelectFile} 
-                    className="text-xs text-gray-500 w-full cursor-pointer" 
+                    className="text-xs text-gray-500 w-full cursor-pointer bg-white" 
                   />
                 ) : (
                   <div className="w-full h-auto flex justify-center bg-black rounded overflow-hidden">
@@ -1357,7 +1363,7 @@ export default function FleetTrackerApp() {
                     required 
                     value={newTail} 
                     onChange={e => setNewTail(e.target.value)} 
-                    className="w-full border border-gray-300 rounded p-3 text-sm mt-1 uppercase focus:border-[#F08B46] outline-none" 
+                    className="w-full border border-gray-300 rounded p-3 text-sm mt-1 uppercase focus:border-[#F08B46] outline-none bg-white" 
                   />
                 </div>
                 <div>
@@ -1368,7 +1374,7 @@ export default function FleetTrackerApp() {
                     type="text" 
                     value={newSerial} 
                     onChange={e => setNewSerial(e.target.value)} 
-                    className="w-full border border-gray-300 rounded p-3 text-sm mt-1 uppercase focus:border-[#F08B46] outline-none" 
+                    className="w-full border border-gray-300 rounded p-3 text-sm mt-1 uppercase focus:border-[#F08B46] outline-none bg-white" 
                   />
                 </div>
               </div>
@@ -1383,7 +1389,7 @@ export default function FleetTrackerApp() {
                     required 
                     value={newModel} 
                     onChange={e => setNewModel(e.target.value)} 
-                    className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" 
+                    className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none bg-white" 
                   />
                 </div>
                 <div>
@@ -1393,7 +1399,7 @@ export default function FleetTrackerApp() {
                   <select 
                     value={newType} 
                     onChange={e => setNewType(e.target.value as 'Piston'|'Turbine')} 
-                    className="w-full border border-gray-300 rounded p-3 text-sm mt-1 bg-white focus:border-[#F08B46] outline-none"
+                    className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none bg-white"
                   >
                     <option value="Piston">Piston</option>
                     <option value="Turbine">Turbine</option>
@@ -1409,8 +1415,8 @@ export default function FleetTrackerApp() {
                   type="text" 
                   value={newHomeAirport} 
                   onChange={e => setNewHomeAirport(e.target.value)} 
-                  className="w-full border border-gray-300 rounded p-3 text-sm mt-1 uppercase focus:border-[#F08B46] outline-none" 
-                  placeholder="KDFW" 
+                  className="w-full border border-gray-300 rounded p-3 text-sm mt-1 uppercase focus:border-[#F08B46] outline-none bg-white" 
+                  placeholder="ICAO" 
                 />
               </div>
 
@@ -1423,7 +1429,7 @@ export default function FleetTrackerApp() {
                     type="text" 
                     value={newMainContact} 
                     onChange={e => setNewMainContact(e.target.value)} 
-                    className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" 
+                    className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none bg-white" 
                   />
                 </div>
                 <div>
@@ -1434,7 +1440,7 @@ export default function FleetTrackerApp() {
                     type="tel" 
                     value={newMainContactPhone} 
                     onChange={e => setNewMainContactPhone(e.target.value)} 
-                    className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" 
+                    className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none bg-white" 
                   />
                 </div>
                 <div>
@@ -1445,7 +1451,7 @@ export default function FleetTrackerApp() {
                     type="email" 
                     value={newMainContactEmail} 
                     onChange={e => setNewMainContactEmail(e.target.value)} 
-                    className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" 
+                    className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none bg-white" 
                   />
                 </div>
               </div>
@@ -1459,7 +1465,7 @@ export default function FleetTrackerApp() {
                     type="text" 
                     value={newMxContact} 
                     onChange={e => setNewMxContact(e.target.value)} 
-                    className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" 
+                    className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none bg-white" 
                   />
                 </div>
                 <div>
@@ -1470,7 +1476,7 @@ export default function FleetTrackerApp() {
                     type="tel" 
                     value={newMxContactPhone} 
                     onChange={e => setNewMxContactPhone(e.target.value)} 
-                    className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" 
+                    className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none bg-white" 
                   />
                 </div>
                 <div>
@@ -1481,7 +1487,7 @@ export default function FleetTrackerApp() {
                     type="email" 
                     value={newMxContactEmail} 
                     onChange={e => setNewMxContactEmail(e.target.value)} 
-                    className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" 
+                    className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none bg-white" 
                   />
                 </div>
               </div>
@@ -1489,7 +1495,7 @@ export default function FleetTrackerApp() {
               <div className="grid grid-cols-2 gap-4 border-t border-gray-200 pt-4 mt-2">
                 <div>
                   <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">
-                    Current {newType === 'Turbine' ? 'AFTT' : 'Hobbs'}
+                    Current {newType === 'Turbine' ? 'AFTT' : 'Hobbs'} *
                   </label>
                   <input 
                     type="number" 
@@ -1497,12 +1503,12 @@ export default function FleetTrackerApp() {
                     required 
                     value={newAirframeTime} 
                     onChange={e => setNewAirframeTime(e.target.value)} 
-                    className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" 
+                    className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none bg-white" 
                   />
                 </div>
                 <div>
                   <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">
-                    Current {newType === 'Turbine' ? 'FTT' : 'Tach'}
+                    Current {newType === 'Turbine' ? 'FTT' : 'Tach'} *
                   </label>
                   <input 
                     type="number" 
@@ -1510,7 +1516,7 @@ export default function FleetTrackerApp() {
                     required 
                     value={newEngineTime} 
                     onChange={e => setNewEngineTime(e.target.value)} 
-                    className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" 
+                    className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none bg-white" 
                   />
                 </div>
               </div>
@@ -1692,7 +1698,7 @@ export default function FleetTrackerApp() {
                   value={activeTail} 
                   onChange={(e) => setActiveTail(e.target.value)}
                 >
-                  {aircraftList.map(a => (
+                  {dropdownOptions.map(a => (
                     <option key={a.id} value={a.tail_number} className="text-white">{a.tail_number}</option>
                   ))}
                 </select>
