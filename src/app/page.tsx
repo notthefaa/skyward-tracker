@@ -21,27 +21,28 @@ import FleetSummary from "@/components/tabs/FleetSummary";
 
 export default function FleetTrackerApp() {
   const [session, setSession] = useState<any>(null);
-  const [role, setRole] = useState<'admin' | 'pilot'>('pilot');
-  const [userInitials, setUserInitials] = useState("");
+  const[role, setRole] = useState<'admin' | 'pilot'>('pilot');
+  const[userInitials, setUserInitials] = useState("");
   
+  // Companion App URL (Fallback to string if env var isn't set yet)
   const companionUrl = process.env.NEXT_PUBLIC_COMPANION_URL || "https://your-logit-app.vercel.app";
 
   // Login State
-  const [authEmail, setAuthEmail] = useState("");
-  const[authPassword, setAuthPassword] = useState("");
+  const[authEmail, setAuthEmail] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
   const [showForgotPassword, setShowForgotPassword] = useState(false);
-  const[showPassword, setShowPassword] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   // App State
-  const[allAircraftList, setAllAircraftList] = useState<any[]>([]); // GLOBAL LIST
+  const [allAircraftList, setAllAircraftList] = useState<any[]>([]); // GLOBAL LIST
   const [aircraftList, setAircraftList] = useState<any[]>([]); // ASSIGNED LIST
   const [activeTail, setActiveTail] = useState<string>("");
   const [activeTab, setActiveTab] = useState<'fleet' | 'summary' | 'times' | 'mx' | 'squawks' | 'notes'>('fleet');
-  const[aircraftStatus, setAircraftStatus] = useState<'airworthy' | 'issues' | 'grounded'>('airworthy');
+  const [aircraftStatus, setAircraftStatus] = useState<'airworthy' | 'issues' | 'grounded'>('airworthy');
   const[unreadNotes, setUnreadNotes] = useState(0);
 
   // Global Settings State
-  const[sysSettings, setSysSettings] = useState({
+  const [sysSettings, setSysSettings] = useState({
     reminder_1: 30,
     reminder_2: 15,
     reminder_3: 5,
@@ -50,19 +51,20 @@ export default function FleetTrackerApp() {
   });
 
   // --- ADMIN CONTROL CENTER STATE ---
-  const [showAdminMenu, setShowAdminMenu] = useState(false);
-  const[showToolsMenu, setShowToolsMenu] = useState(false);
+  const[showAdminMenu, setShowAdminMenu] = useState(false);
+  const [showToolsMenu, setShowToolsMenu] = useState(false);
   const [showEmailPreview, setShowEmailPreview] = useState(false);
-  const [showSettingsModal, setShowSettingsModal] = useState(false);
-  const[showGlobalFleetModal, setShowGlobalFleetModal] = useState(false);
-  const [emailPreviewType, setEmailPreviewType] = useState<'squawk_mx' | 'squawk_internal' | 'mx_schedule' | 'mx_reminder'>('squawk_mx');
+  const[showSettingsModal, setShowSettingsModal] = useState(false);
+  const [showGlobalFleetModal, setShowGlobalFleetModal] = useState(false);
+  const [globalFleetSearch, setGlobalFleetSearch] = useState(""); // Search state for the fleet modal
+  const[emailPreviewType, setEmailPreviewType] = useState<'squawk_mx' | 'squawk_internal' | 'mx_schedule' | 'mx_reminder'>('squawk_mx');
   
   // Log It Breakout Modal State
   const[showLogItModal, setShowLogItModal] = useState(false);
 
   // Invite User State
-  const[showInviteModal, setShowInviteModal] = useState(false);
-  const [inviteEmail, setInviteEmail] = useState("");
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const[inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<'admin'|'pilot'>('pilot');
   const[inviteAircraftIds, setInviteAircraftIds] = useState<string[]>([]);
 
@@ -95,6 +97,8 @@ export default function FleetTrackerApp() {
   const [crop, setCrop] = useState<Crop>({ unit: '%', width: 100, height: 56.25, x: 0, y: 0 });
   const imageRef = useRef<HTMLImageElement>(null);
 
+  const [appOrigin, setAppOrigin] = useState("");
+
   useEffect(() => { 
     if (typeof window !== "undefined") {
       setAppOrigin(window.location.origin);
@@ -112,8 +116,6 @@ export default function FleetTrackerApp() {
     
     return () => subscription.unsubscribe();
   },[]);
-
-  const [appOrigin, setAppOrigin] = useState("");
 
   // PERSISTENCE EFFECT - Save selected aircraft to device memory
   useEffect(() => { 
@@ -213,6 +215,7 @@ export default function FleetTrackerApp() {
     else setAircraftStatus('airworthy');
   };
 
+  // --- LOG IT BREAKOUT LOGIC ---
   const handleLogItClick = () => {
     setShowLogItModal(true);
   };
@@ -235,6 +238,7 @@ export default function FleetTrackerApp() {
     try {
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      
       const { error } = await supabase.from('aft_note_reads').delete().lt('read_at', thirtyDaysAgo.toISOString());
       if (error) throw error;
       alert("Database health check & cleanup completed successfully!");
@@ -682,7 +686,6 @@ export default function FleetTrackerApp() {
     if (outOfScopePlane) dropdownOptions.push(outOfScopePlane);
   }
 
-  // Ensure selected Aircraft resolves against the Global list for Admins
   const selectedAircraftData = allAircraftList.find(a => a.tail_number === activeTail);
 
   return (
@@ -703,9 +706,9 @@ export default function FleetTrackerApp() {
             </div>
             
             <div className="space-y-3">
-              {/* NEW GLOBAL FLEET BUTTON */}
-              <button onClick={() => { setShowAdminMenu(false); setShowGlobalFleetModal(true); }} className="w-full bg-gray-50 border border-gray-200 p-4 rounded text-left flex items-center gap-3 hover:border-[#3AB0FF] hover:bg-blue-50 transition-colors active:scale-95">
-                <Globe size={18} className="text-[#3AB0FF]" />
+              {/* GLOBAL FLEET BUTTON */}
+              <button onClick={() => { setShowAdminMenu(false); setShowGlobalFleetModal(true); }} className="w-full bg-gray-50 border border-gray-200 p-4 rounded text-left flex items-center gap-3 hover:border-navy hover:bg-blue-50 transition-colors active:scale-95">
+                <Globe size={18} className="text-navy" />
                 <div>
                   <span className="block font-bold text-navy text-sm uppercase">Global Fleet</span>
                   <span className="block text-[10px] text-gray-500 uppercase tracking-widest mt-0.5">View all aircraft in system</span>
@@ -741,38 +744,53 @@ export default function FleetTrackerApp() {
         </div>
       )}
 
-      {/* GLOBAL FLEET MODAL */}
+      {/* GLOBAL FLEET MODAL (Searchable) */}
       {showGlobalFleetModal && role === 'admin' && (
-        <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 animate-fade-in" onClick={() => setShowGlobalFleetModal(false)}>
-          <div className="bg-white rounded shadow-2xl w-full max-w-md p-6 border-t-4 border-[#3AB0FF] animate-slide-up max-h-[90vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 animate-fade-in" onClick={() => { setShowGlobalFleetModal(false); setGlobalFleetSearch(""); }}>
+          <div className="bg-white rounded shadow-2xl w-full max-w-md p-6 border-t-4 border-navy animate-slide-up flex flex-col max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
             
             <div className="flex justify-between items-center mb-6 shrink-0">
               <h2 className="font-oswald text-2xl font-bold uppercase text-navy flex items-center gap-2">
-                <Globe size={20} className="text-[#3AB0FF]"/> Global Fleet
+                <Globe size={20} className="text-navy"/> Global Fleet
               </h2>
-              <button onClick={() => setShowGlobalFleetModal(false)} className="text-gray-400 hover:text-red-500">
+              <button onClick={() => { setShowGlobalFleetModal(false); setGlobalFleetSearch(""); }} className="text-gray-400 hover:text-red-500">
                 <X size={24}/>
               </button>
             </div>
+
+            <div className="mb-4 shrink-0">
+              <input 
+                type="text" 
+                placeholder="Search Tail Number..." 
+                value={globalFleetSearch}
+                onChange={(e) => setGlobalFleetSearch(e.target.value.toUpperCase())}
+                className="w-full border border-gray-300 rounded p-3 text-sm focus:border-navy outline-none uppercase font-bold"
+              />
+            </div>
             
-            <div className="overflow-y-auto space-y-3 pr-2">
-              {allAircraftList.map(ac => (
-                <button 
-                  key={ac.id} 
-                  onClick={() => {
-                    setActiveTail(ac.tail_number);
-                    setActiveTab('summary');
-                    setShowGlobalFleetModal(false);
-                  }}
-                  className="w-full bg-gray-50 border border-gray-200 p-4 rounded text-left flex justify-between items-center hover:border-[#3AB0FF] hover:bg-blue-50 transition-colors active:scale-95"
-                >
-                  <div>
-                    <span className="font-oswald text-xl font-bold text-navy uppercase block leading-none">{ac.tail_number}</span>
-                    <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1 block">{ac.aircraft_type}</span>
-                  </div>
-                  <ChevronRight size={20} className="text-gray-400" />
-                </button>
-              ))}
+            <div className="overflow-y-auto space-y-2 pr-2 flex-1">
+              {allAircraftList.filter(ac => ac.tail_number.includes(globalFleetSearch)).length === 0 ? (
+                <p className="text-center text-sm text-gray-400 italic py-4">No aircraft found.</p>
+              ) : (
+                allAircraftList.filter(ac => ac.tail_number.includes(globalFleetSearch)).map(ac => (
+                  <button 
+                    key={ac.id} 
+                    onClick={() => {
+                      setActiveTail(ac.tail_number);
+                      setActiveTab('summary');
+                      setShowGlobalFleetModal(false);
+                      setGlobalFleetSearch("");
+                    }}
+                    className="w-full bg-gray-50 border border-gray-200 p-3 rounded text-left flex justify-between items-center hover:border-navy hover:bg-blue-50 transition-colors active:scale-95"
+                  >
+                    <div>
+                      <span className="font-oswald text-lg font-bold text-navy uppercase block leading-none">{ac.tail_number}</span>
+                      <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1 block">{ac.aircraft_type}</span>
+                    </div>
+                    <ChevronRight size={18} className="text-gray-400" />
+                  </button>
+                ))
+              )}
             </div>
 
           </div>
@@ -1309,7 +1327,7 @@ export default function FleetTrackerApp() {
                 </select>
               </div>
 
-              {/* NEW: Checklist displays for both Pilots and Admins so you can assign planes on creation! */}
+              {/* Checklist displays for both Pilots and Admins so you can assign planes on creation! */}
               <div className="border border-gray-200 rounded p-3 bg-gray-50 mt-2 max-h-[30vh] overflow-y-auto">
                 <h3 className="text-[10px] font-bold uppercase tracking-widest text-navy mb-2">Assign Aircraft Access</h3>
                 <div className="space-y-2">
@@ -1420,7 +1438,6 @@ export default function FleetTrackerApp() {
         <div className="w-full max-w-3xl flex flex-col gap-6">
           {activeTab === 'fleet' && <FleetSummary aircraftList={aircraftList} onSelectAircraft={(tail) => { setActiveTail(tail); setActiveTab('summary'); }} />}
           
-          {/* SAFE BYPASS FOR VERCEL BUILD ERROR TS2322 */}
           {activeTab === 'summary' && <SummaryTab aircraft={selectedAircraftData} setActiveTab={(tab: any) => setActiveTab(tab)} role={role} onDeleteAircraft={handleDeleteAircraft} sysSettings={sysSettings} />}
           
           {activeTab === 'times' && <TimesTab aircraft={selectedAircraftData} session={session} role={role} userInitials={userInitials} onUpdate={() => fetchAircraftData(session.user.id)} />}
