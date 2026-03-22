@@ -466,11 +466,11 @@ export default function TimesTab({
               <div className="grid grid-cols-2 gap-4 border-b border-gray-100 pb-4 mb-2">
                 <div>
                   <label className="block text-[10px] font-bold uppercase tracking-widest text-navy mb-1">POD (Depart)</label>
-                  <input type="text" maxLength={4} value={logPod} onChange={e=>setLogPod(e.target.value.toUpperCase())} className="w-full border border-gray-300 rounded p-3 text-sm uppercase focus:border-[#3AB0FF] outline-none text-center font-bold" placeholder="KDFW" />
+                  <input type="text" maxLength={4} value={logPod} onChange={e=>setLogPod(e.target.value.toUpperCase())} className="w-full border border-gray-300 rounded p-3 text-sm uppercase focus:border-[#3AB0FF] outline-none text-center font-bold" placeholder="ICAO" />
                 </div>
                 <div>
                   <label className="block text-[10px] font-bold uppercase tracking-widest text-navy mb-1">POA (Arrive)</label>
-                  <input type="text" maxLength={4} value={logPoa} onChange={e=>setLogPoa(e.target.value.toUpperCase())} className="w-full border border-gray-300 rounded p-3 text-sm uppercase focus:border-[#3AB0FF] outline-none text-center font-bold" placeholder="KLAX" />
+                  <input type="text" maxLength={4} value={logPoa} onChange={e=>setLogPoa(e.target.value.toUpperCase())} className="w-full border border-gray-300 rounded p-3 text-sm uppercase focus:border-[#3AB0FF] outline-none text-center font-bold" placeholder="ICAO" />
                 </div>
               </div>
 
