@@ -20,30 +20,30 @@ import NotesTab from "@/components/tabs/NotesTab";
 import FleetSummary from "@/components/tabs/FleetSummary";
 
 export default function FleetTrackerApp() {
-  const[session, setSession] = useState<any>(null);
+  const [session, setSession] = useState<any>(null);
   const [role, setRole] = useState<'admin' | 'pilot'>('pilot');
   const [userInitials, setUserInitials] = useState("");
-  const [isInitialLoad, setIsInitialLoad] = useState(true);
+  const[isInitialLoad, setIsInitialLoad] = useState(true);
   
   // Companion App URL
   const companionUrl = process.env.NEXT_PUBLIC_COMPANION_URL || "https://your-logit-app.vercel.app";
 
   // Login State
   const [authEmail, setAuthEmail] = useState("");
-  const [authPassword, setAuthPassword] = useState("");
+  const[authPassword, setAuthPassword] = useState("");
   const [showForgotPassword, setShowForgotPassword] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
+  const[showPassword, setShowPassword] = useState(false);
 
   // App State
-  const [allAircraftList, setAllAircraftList] = useState<any[]>([]); // GLOBAL LIST
+  const[allAircraftList, setAllAircraftList] = useState<any[]>([]); // GLOBAL LIST
   const [aircraftList, setAircraftList] = useState<any[]>([]); // ASSIGNED LIST
-  const[activeTail, setActiveTail] = useState<string>("");
+  const [activeTail, setActiveTail] = useState<string>("");
   const [activeTab, setActiveTab] = useState<'fleet' | 'summary' | 'times' | 'mx' | 'squawks' | 'notes'>('fleet');
-  const [aircraftStatus, setAircraftStatus] = useState<'airworthy' | 'issues' | 'grounded'>('airworthy');
+  const[aircraftStatus, setAircraftStatus] = useState<'airworthy' | 'issues' | 'grounded'>('airworthy');
   const [unreadNotes, setUnreadNotes] = useState(0);
 
   // Global Settings State
-  const[sysSettings, setSysSettings] = useState({
+  const [sysSettings, setSysSettings] = useState({
     reminder_1: 30,
     reminder_2: 15,
     reminder_3: 5,
@@ -58,40 +58,40 @@ export default function FleetTrackerApp() {
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const[showGlobalFleetModal, setShowGlobalFleetModal] = useState(false);
   const [globalFleetSearch, setGlobalFleetSearch] = useState("");
-  const [emailPreviewType, setEmailPreviewType] = useState<'squawk_mx' | 'squawk_internal' | 'mx_schedule' | 'mx_reminder'>('squawk_mx');
+  const[emailPreviewType, setEmailPreviewType] = useState<'squawk_mx' | 'squawk_internal' | 'mx_schedule' | 'mx_reminder'>('squawk_mx');
   
   // Log It Breakout Modal State
-  const [showLogItModal, setShowLogItModal] = useState(false);
+  const[showLogItModal, setShowLogItModal] = useState(false);
 
   // Invite User State
   const [showInviteModal, setShowInviteModal] = useState(false);
-  const [inviteEmail, setInviteEmail] = useState("");
+  const[inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<'admin'|'pilot'>('pilot');
   const[inviteAircraftIds, setInviteAircraftIds] = useState<string[]>([]);
 
   // Aircraft Access State
-  const[showAccessModal, setShowAccessModal] = useState(false);
-  const [allUsers, setAllUsers] = useState<any[]>([]);
+  const [showAccessModal, setShowAccessModal] = useState(false);
+  const[allUsers, setAllUsers] = useState<any[]>([]);
   const [selectedAccessUserId, setSelectedAccessUserId] = useState<string>("");
-  const[userAccessList, setUserAccessList] = useState<string[]>([]);
+  const [userAccessList, setUserAccessList] = useState<string[]>([]);
 
   // Aircraft Modal / Onboarding State
-  const[showAircraftModal, setShowAircraftModal] = useState(false);
-  const [editingAircraftId, setEditingAircraftId] = useState<string | null>(null);
+  const [showAircraftModal, setShowAircraftModal] = useState(false);
+  const[editingAircraftId, setEditingAircraftId] = useState<string | null>(null);
   const [newTail, setNewTail] = useState("");
   const [newSerial, setNewSerial] = useState("");
   const [newModel, setNewModel] = useState("");
   const [newType, setNewType] = useState<'Piston' | 'Turbine'>('Piston');
-  const[newAirframeTime, setNewAirframeTime] = useState("");
-  const [newEngineTime, setNewEngineTime] = useState("");
+  const [newAirframeTime, setNewAirframeTime] = useState("");
+  const[newEngineTime, setNewEngineTime] = useState("");
   const [newHomeAirport, setNewHomeAirport] = useState("");
   const[newMainContact, setNewMainContact] = useState("");
   const [newMainContactPhone, setNewMainContactPhone] = useState(""); 
   const [newMainContactEmail, setNewMainContactEmail] = useState(""); 
   const[newMxContact, setNewMxContact] = useState(""); 
   const [newMxContactPhone, setNewMxContactPhone] = useState(""); 
-  const[newMxContactEmail, setNewMxContactEmail] = useState(""); 
-  const[isSubmitting, setIsSubmitting] = useState(false);
+  const [newMxContactEmail, setNewMxContactEmail] = useState(""); 
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Cropper State
   const [avatarSrc, setAvatarSrc] = useState<string>("");
@@ -342,7 +342,7 @@ export default function FleetTrackerApp() {
   };
 
   const toggleInviteAircraft = (id: string) => {
-    setInviteAircraftIds(prev => prev.includes(id) ? prev.filter(a => a !== id) :[...prev, id]);
+    setInviteAircraftIds(prev => prev.includes(id) ? prev.filter(a => a !== id) : [...prev, id]);
   };
 
   const handleAdminResetPassword = async () => {
@@ -548,7 +548,6 @@ export default function FleetTrackerApp() {
       avatar_url: avatarUrl
     };
     
-    // ONLY ADD SETUP TIMES IF CREATING A NEW AIRCRAFT
     if (!editingAircraftId) {
       Object.assign(payload, {
         setup_aftt: newType === 'Turbine' ? (parseFloat(newAirframeTime) || 0) : 0,
@@ -570,7 +569,6 @@ export default function FleetTrackerApp() {
     setIsSubmitting(false);
   };
 
-  // --- PILOT ONBOARDING SUBMIT ---
   const handlePilotOnboardingSubmit = async (e: React.FormEvent) => {
     e.preventDefault(); 
     setIsSubmitting(true);
@@ -770,16 +768,14 @@ export default function FleetTrackerApp() {
   // --- PILOT ONBOARDING SCREEN ---
   if (role === 'pilot' && aircraftList.length === 0) {
     return (
-      <div className="flex flex-col bg-slateGray min-h-[100dvh] w-full overflow-y-auto">
+      <div className="flex flex-col bg-neutral-100 min-h-[100dvh] w-full overflow-y-auto">
         <header className="bg-navy text-white shadow-md z-20 shrink-0 w-full">
-          <div className="max-w-3xl mx-auto px-4 py-3 flex justify-between items-center w-full">
-            <div className="flex items-center gap-3">
-              <PlaneTakeoff size={24} className="text-[#3AB0FF]"/>
-              <h1 className="font-oswald text-xl font-bold uppercase tracking-widest text-white m-0 leading-none">
-                Skyward Aircraft Manager
-              </h1>
-            </div>
-            <button onClick={handleLogout} className="text-gray-300 hover:text-white transition-colors flex flex-col items-center active:scale-95 shrink-0" title="Logout">
+          <div className="max-w-3xl mx-auto px-4 py-3 flex justify-end items-center w-full min-h-[60px]">
+            <button 
+              onClick={handleLogout} 
+              className="text-gray-300 hover:text-white transition-colors flex flex-col items-center active:scale-95 shrink-0" 
+              title="Logout"
+            >
               <LogOut size={18} />
               <span className="text-[8px] font-bold uppercase tracking-widest mt-1">Logout</span>
             </button>
@@ -1005,7 +1001,7 @@ export default function FleetTrackerApp() {
   }
 
   // Inject out-of-scope aircraft into dropdown if Admin selected it from Global Fleet
-  const dropdownOptions = [...aircraftList];
+  const dropdownOptions =[...aircraftList];
   if (activeTail && !dropdownOptions.some(a => a.tail_number === activeTail)) {
     const outOfScopePlane = allAircraftList.find(a => a.tail_number === activeTail);
     if (outOfScopePlane) dropdownOptions.push(outOfScopePlane);
@@ -1399,7 +1395,7 @@ export default function FleetTrackerApp() {
                   <select 
                     value={newType} 
                     onChange={e => setNewType(e.target.value as 'Piston'|'Turbine')} 
-                    className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none bg-white"
+                    className="w-full border border-gray-300 rounded p-3 text-sm mt-1 bg-white focus:border-[#F08B46] outline-none"
                   >
                     <option value="Piston">Piston</option>
                     <option value="Turbine">Turbine</option>
