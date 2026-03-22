@@ -4,8 +4,8 @@ import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import { 
   PlaneTakeoff, Wrench, AlertTriangle, FileText, Clock, LogOut, 
-  Plus, X, Edit2, ChevronDown, Home, Users, LayoutGrid, 
-  ShieldCheck, Settings, MailOpen, Database, Eye, EyeOff, Sliders, Send, Copy, Share 
+  Plus, X, Edit2, ChevronDown, ChevronRight, Home, Users, LayoutGrid, 
+  ShieldCheck, Settings, MailOpen, Database, Eye, EyeOff, Sliders, Send, Copy, Share, Globe 
 } from "lucide-react";
 import { PrimaryButton } from "@/components/AppButtons";
 import imageCompression from "browser-image-compression";
@@ -24,21 +24,21 @@ export default function FleetTrackerApp() {
   const [role, setRole] = useState<'admin' | 'pilot'>('pilot');
   const [userInitials, setUserInitials] = useState("");
   
-  // Companion App URL
   const companionUrl = process.env.NEXT_PUBLIC_COMPANION_URL || "https://your-logit-app.vercel.app";
 
   // Login State
   const [authEmail, setAuthEmail] = useState("");
   const[authPassword, setAuthPassword] = useState("");
   const [showForgotPassword, setShowForgotPassword] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
+  const[showPassword, setShowPassword] = useState(false);
 
   // App State
-  const[aircraftList, setAircraftList] = useState<any[]>([]);
+  const[allAircraftList, setAllAircraftList] = useState<any[]>([]); // GLOBAL LIST
+  const [aircraftList, setAircraftList] = useState<any[]>([]); // ASSIGNED LIST
   const [activeTail, setActiveTail] = useState<string>("");
   const [activeTab, setActiveTab] = useState<'fleet' | 'summary' | 'times' | 'mx' | 'squawks' | 'notes'>('fleet');
-  const [aircraftStatus, setAircraftStatus] = useState<'airworthy' | 'issues' | 'grounded'>('airworthy');
-  const [unreadNotes, setUnreadNotes] = useState(0);
+  const[aircraftStatus, setAircraftStatus] = useState<'airworthy' | 'issues' | 'grounded'>('airworthy');
+  const[unreadNotes, setUnreadNotes] = useState(0);
 
   // Global Settings State
   const[sysSettings, setSysSettings] = useState({
@@ -54,39 +54,40 @@ export default function FleetTrackerApp() {
   const[showToolsMenu, setShowToolsMenu] = useState(false);
   const [showEmailPreview, setShowEmailPreview] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
-  const[emailPreviewType, setEmailPreviewType] = useState<'squawk_mx' | 'squawk_internal' | 'mx_schedule' | 'mx_reminder'>('squawk_mx');
+  const[showGlobalFleetModal, setShowGlobalFleetModal] = useState(false);
+  const [emailPreviewType, setEmailPreviewType] = useState<'squawk_mx' | 'squawk_internal' | 'mx_schedule' | 'mx_reminder'>('squawk_mx');
   
   // Log It Breakout Modal State
-  const [showLogItModal, setShowLogItModal] = useState(false);
+  const[showLogItModal, setShowLogItModal] = useState(false);
 
   // Invite User State
   const[showInviteModal, setShowInviteModal] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
-  const[inviteRole, setInviteRole] = useState<'admin'|'pilot'>('pilot');
+  const [inviteRole, setInviteRole] = useState<'admin'|'pilot'>('pilot');
   const[inviteAircraftIds, setInviteAircraftIds] = useState<string[]>([]);
 
   // Aircraft Access State
-  const[showAccessModal, setShowAccessModal] = useState(false);
-  const [allUsers, setAllUsers] = useState<any[]>([]);
+  const [showAccessModal, setShowAccessModal] = useState(false);
+  const[allUsers, setAllUsers] = useState<any[]>([]);
   const [selectedAccessUserId, setSelectedAccessUserId] = useState<string>("");
-  const[userAccessList, setUserAccessList] = useState<string[]>([]);
+  const [userAccessList, setUserAccessList] = useState<string[]>([]);
 
   // Aircraft Modal State
-  const[showAircraftModal, setShowAircraftModal] = useState(false);
-  const [editingAircraftId, setEditingAircraftId] = useState<string | null>(null);
+  const [showAircraftModal, setShowAircraftModal] = useState(false);
+  const[editingAircraftId, setEditingAircraftId] = useState<string | null>(null);
   const [newTail, setNewTail] = useState("");
-  const[newSerial, setNewSerial] = useState("");
-  const [newModel, setNewModel] = useState("");
+  const [newSerial, setNewSerial] = useState("");
+  const[newModel, setNewModel] = useState("");
   const [newType, setNewType] = useState<'Piston' | 'Turbine'>('Piston');
   const [newAirframeTime, setNewAirframeTime] = useState("");
-  const[newEngineTime, setNewEngineTime] = useState("");
-  const [newHomeAirport, setNewHomeAirport] = useState("");
+  const [newEngineTime, setNewEngineTime] = useState("");
+  const[newHomeAirport, setNewHomeAirport] = useState("");
   const [newMainContact, setNewMainContact] = useState("");
   const[newMainContactPhone, setNewMainContactPhone] = useState(""); 
-  const [newMainContactEmail, setNewMainContactEmail] = useState(""); 
+  const[newMainContactEmail, setNewMainContactEmail] = useState(""); 
   const [newMxContact, setNewMxContact] = useState(""); 
-  const[newMxContactPhone, setNewMxContactPhone] = useState(""); 
-  const [newMxContactEmail, setNewMxContactEmail] = useState(""); 
+  const [newMxContactPhone, setNewMxContactPhone] = useState(""); 
+  const[newMxContactEmail, setNewMxContactEmail] = useState(""); 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Cropper State
@@ -95,6 +96,10 @@ export default function FleetTrackerApp() {
   const imageRef = useRef<HTMLImageElement>(null);
 
   useEffect(() => { 
+    if (typeof window !== "undefined") {
+      setAppOrigin(window.location.origin);
+    }
+
     supabase.auth.getSession().then(({ data: { session } }) => { 
       setSession(session); 
       if (session) fetchAircraftData(session.user.id); 
@@ -108,6 +113,8 @@ export default function FleetTrackerApp() {
     return () => subscription.unsubscribe();
   },[]);
 
+  const [appOrigin, setAppOrigin] = useState("");
+
   // PERSISTENCE EFFECT - Save selected aircraft to device memory
   useEffect(() => { 
     if (activeTail) {
@@ -116,11 +123,11 @@ export default function FleetTrackerApp() {
   }, [activeTail]);
 
   useEffect(() => { 
-    if (activeTail && aircraftList.length > 0 && session) { 
+    if (activeTail && allAircraftList.length > 0 && session) { 
       checkGroundedStatus(activeTail); 
       fetchUnreadNotes(activeTail, session.user.id); 
     } 
-  },[activeTail, aircraftList, session]);
+  },[activeTail, allAircraftList, session]);
 
   const fetchAircraftData = async (userId: string) => {
     const { data: settingsData } = await supabase.from('aft_system_settings').select('*').eq('id', 1).single();
@@ -132,24 +139,34 @@ export default function FleetTrackerApp() {
       setUserInitials(roleData.initials || "");
     }
     
-    const { data: aircraftData } = await supabase.from('aft_aircraft').select('*').order('tail_number');
-    if (aircraftData && aircraftData.length > 0) {
-      setAircraftList(aircraftData); 
+    // Fetch ALL aircraft (Global List)
+    const { data: allPlanesData } = await supabase.from('aft_aircraft').select('*').order('tail_number');
+    const allPlanes = allPlanesData ||[];
+    setAllAircraftList(allPlanes);
 
-      // Check device memory for last viewed aircraft
-      const savedTail = localStorage.getItem('aft_active_tail');
-      const isValidSavedTail = savedTail && aircraftData.some(a => a.tail_number === savedTail);
-      
-      if (isValidSavedTail) {
-        setActiveTail(savedTail);
-      } else if (!activeTail) {
-        setActiveTail(aircraftData[0].tail_number);
-      }
+    // Fetch Explicit Access (Assigned List)
+    const { data: accessData } = await supabase.from('aft_user_aircraft_access').select('aircraft_id').eq('user_id', userId);
+    const assignedIds = accessData?.map(a => a.aircraft_id) ||[];
+    
+    // Filter the full list down to just what the user is assigned
+    const assignedPlanes = allPlanes.filter(a => assignedIds.includes(a.id));
+    setAircraftList(assignedPlanes);
+
+    // Check device memory
+    const savedTail = localStorage.getItem('aft_active_tail');
+    const isValidSavedTail = savedTail && allPlanes.some(a => a.tail_number === savedTail);
+    
+    if (isValidSavedTail) {
+      setActiveTail(savedTail);
+    } else if (assignedPlanes.length > 0 && !activeTail) {
+      setActiveTail(assignedPlanes[0].tail_number);
+    } else if (!activeTail) {
+      setActiveTail("");
     }
   };
 
   const fetchUnreadNotes = async (tail: string, userId: string) => {
-    const aircraft = aircraftList.find(a => a.tail_number === tail);
+    const aircraft = allAircraftList.find(a => a.tail_number === tail);
     if (!aircraft) return;
     
     const { data: notes } = await supabase.from('aft_notes').select('id').eq('aircraft_id', aircraft.id);
@@ -166,7 +183,7 @@ export default function FleetTrackerApp() {
   };
 
   const checkGroundedStatus = async (tail: string) => {
-    const aircraft = aircraftList.find(a => a.tail_number === tail);
+    const aircraft = allAircraftList.find(a => a.tail_number === tail);
     if (!aircraft) return;
     
     let isGrounded = false; 
@@ -196,6 +213,10 @@ export default function FleetTrackerApp() {
     else setAircraftStatus('airworthy');
   };
 
+  const handleLogItClick = () => {
+    setShowLogItModal(true);
+  };
+
   const handleCopyQuickLink = () => {
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(companionUrl).then(() => {
@@ -214,12 +235,7 @@ export default function FleetTrackerApp() {
     try {
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-      
-      const { error } = await supabase
-        .from('aft_note_reads')
-        .delete()
-        .lt('read_at', thirtyDaysAgo.toISOString());
-        
+      const { error } = await supabase.from('aft_note_reads').delete().lt('read_at', thirtyDaysAgo.toISOString());
       if (error) throw error;
       alert("Database health check & cleanup completed successfully!");
     } catch (e: any) { 
@@ -285,7 +301,8 @@ export default function FleetTrackerApp() {
 
   const openAccessModal = async () => {
     setIsSubmitting(true);
-    const { data } = await supabase.from('aft_user_roles').select('*').eq('role', 'pilot');
+    // Fetch ALL users (admins and pilots) to allow cross-assignment
+    const { data } = await supabase.from('aft_user_roles').select('*').order('role').order('email');
     if (data) setAllUsers(data);
     setSelectedAccessUserId("");
     setUserAccessList([]);
@@ -319,7 +336,6 @@ export default function FleetTrackerApp() {
   const handleAdminResetPassword = async () => {
     const selectedUserEmail = allUsers.find(u => u.user_id === selectedAccessUserId)?.email;
     if (!selectedUserEmail) return;
-    
     if (!confirm(`Are you sure you want to send a password reset email to ${selectedUserEmail}?`)) return;
     
     setIsSubmitting(true);
@@ -335,7 +351,6 @@ export default function FleetTrackerApp() {
   const handleDeleteUser = async () => {
     const selectedUserEmail = allUsers.find(u => u.user_id === selectedAccessUserId)?.email;
     if (!selectedUserEmail) return;
-    
     if (!confirm(`CRITICAL WARNING: Are you absolutely sure you want to permanently delete ${selectedUserEmail} and revoke all their access?`)) return;
     
     setIsSubmitting(true);
@@ -485,7 +500,7 @@ export default function FleetTrackerApp() {
   const handleSaveAircraft = async (e: React.FormEvent) => {
     e.preventDefault(); 
     setIsSubmitting(true);
-    let avatarUrl = aircraftList.find(a => a.id === editingAircraftId)?.avatar_url || null;
+    let avatarUrl = allAircraftList.find(a => a.id === editingAircraftId)?.avatar_url || null;
 
     if (avatarSrc) {
       const croppedFile = await getCroppedImg();
@@ -536,17 +551,8 @@ export default function FleetTrackerApp() {
   const handleDeleteAircraft = async (id: string) => {
     setIsSubmitting(true);
     await supabase.from('aft_aircraft').delete().eq('id', id);
-    const { data: aircraftData } = await supabase.from('aft_aircraft').select('*').order('tail_number');
-    
-    if (aircraftData && aircraftData.length > 0) {
-      setAircraftList(aircraftData); 
-      setActiveTail(aircraftData[0].tail_number); 
-      setActiveTab('fleet');
-    } else {
-      setAircraftList([]); 
-      setActiveTail(""); 
-      setActiveTab('fleet');
-    }
+    await fetchAircraftData(session.user.id);
+    setActiveTab('fleet');
     setIsSubmitting(false);
   };
 
@@ -669,7 +675,15 @@ export default function FleetTrackerApp() {
     );
   }
 
-  const selectedAircraftData = aircraftList.find(a => a.tail_number === activeTail);
+  // Inject out-of-scope aircraft into dropdown if Admin selected it from Global Fleet
+  const dropdownOptions = [...aircraftList];
+  if (activeTail && !dropdownOptions.some(a => a.tail_number === activeTail)) {
+    const outOfScopePlane = allAircraftList.find(a => a.tail_number === activeTail);
+    if (outOfScopePlane) dropdownOptions.push(outOfScopePlane);
+  }
+
+  // Ensure selected Aircraft resolves against the Global list for Admins
+  const selectedAircraftData = allAircraftList.find(a => a.tail_number === activeTail);
 
   return (
     <div className="flex flex-col bg-neutral-100 h-[100dvh] w-full overflow-hidden relative">
@@ -689,6 +703,15 @@ export default function FleetTrackerApp() {
             </div>
             
             <div className="space-y-3">
+              {/* NEW GLOBAL FLEET BUTTON */}
+              <button onClick={() => { setShowAdminMenu(false); setShowGlobalFleetModal(true); }} className="w-full bg-gray-50 border border-gray-200 p-4 rounded text-left flex items-center gap-3 hover:border-[#3AB0FF] hover:bg-blue-50 transition-colors active:scale-95">
+                <Globe size={18} className="text-[#3AB0FF]" />
+                <div>
+                  <span className="block font-bold text-navy text-sm uppercase">Global Fleet</span>
+                  <span className="block text-[10px] text-gray-500 uppercase tracking-widest mt-0.5">View all aircraft in system</span>
+                </div>
+              </button>
+
               <button onClick={() => { setShowAdminMenu(false); setShowInviteModal(true); }} className="w-full bg-gray-50 border border-gray-200 p-4 rounded text-left flex items-center gap-3 hover:border-navy hover:bg-blue-50 transition-colors active:scale-95">
                 <Users size={18} className="text-navy" />
                 <div>
@@ -701,7 +724,7 @@ export default function FleetTrackerApp() {
                 <PlaneTakeoff size={18} className="text-navy" />
                 <div>
                   <span className="block font-bold text-navy text-sm uppercase">Aircraft Access</span>
-                  <span className="block text-[10px] text-gray-500 uppercase tracking-widest mt-0.5">Assign planes to pilots</span>
+                  <span className="block text-[10px] text-gray-500 uppercase tracking-widest mt-0.5">Assign planes to pilots & admins</span>
                 </div>
               </button>
 
@@ -712,6 +735,44 @@ export default function FleetTrackerApp() {
                   <span className="block text-[10px] text-gray-500 uppercase tracking-widest mt-0.5">Database health & triggers</span>
                 </div>
               </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* GLOBAL FLEET MODAL */}
+      {showGlobalFleetModal && role === 'admin' && (
+        <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 animate-fade-in" onClick={() => setShowGlobalFleetModal(false)}>
+          <div className="bg-white rounded shadow-2xl w-full max-w-md p-6 border-t-4 border-[#3AB0FF] animate-slide-up max-h-[90vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+            
+            <div className="flex justify-between items-center mb-6 shrink-0">
+              <h2 className="font-oswald text-2xl font-bold uppercase text-navy flex items-center gap-2">
+                <Globe size={20} className="text-[#3AB0FF]"/> Global Fleet
+              </h2>
+              <button onClick={() => setShowGlobalFleetModal(false)} className="text-gray-400 hover:text-red-500">
+                <X size={24}/>
+              </button>
+            </div>
+            
+            <div className="overflow-y-auto space-y-3 pr-2">
+              {allAircraftList.map(ac => (
+                <button 
+                  key={ac.id} 
+                  onClick={() => {
+                    setActiveTail(ac.tail_number);
+                    setActiveTab('summary');
+                    setShowGlobalFleetModal(false);
+                  }}
+                  className="w-full bg-gray-50 border border-gray-200 p-4 rounded text-left flex justify-between items-center hover:border-[#3AB0FF] hover:bg-blue-50 transition-colors active:scale-95"
+                >
+                  <div>
+                    <span className="font-oswald text-xl font-bold text-navy uppercase block leading-none">{ac.tail_number}</span>
+                    <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1 block">{ac.aircraft_type}</span>
+                  </div>
+                  <ChevronRight size={20} className="text-gray-400" />
+                </button>
+              ))}
             </div>
 
           </div>
@@ -1151,7 +1212,7 @@ export default function FleetTrackerApp() {
                 >
                   <option value="">-- Choose a Pilot --</option>
                   {allUsers.map(u => (
-                    <option key={u.user_id} value={u.user_id}>{u.email || u.user_id}</option>
+                    <option key={u.user_id} value={u.user_id}>{u.email || u.user_id} ({u.role})</option>
                   ))}
                 </select>
               </div>
@@ -1161,7 +1222,7 @@ export default function FleetTrackerApp() {
                   <div className="border border-gray-200 rounded p-4 bg-gray-50">
                     <h3 className="text-[10px] font-bold uppercase tracking-widest text-navy mb-3">Allowed Aircraft</h3>
                     <div className="space-y-3 max-h-[40vh] overflow-y-auto">
-                      {aircraftList.map(ac => {
+                      {allAircraftList.map(ac => {
                         const hasAccess = userAccessList.includes(ac.id);
                         return (
                           <label key={ac.id} className="flex items-center gap-3 cursor-pointer">
@@ -1248,24 +1309,23 @@ export default function FleetTrackerApp() {
                 </select>
               </div>
 
-              {inviteRole === 'pilot' && (
-                <div className="border border-gray-200 rounded p-3 bg-gray-50 mt-2 max-h-[30vh] overflow-y-auto">
-                  <h3 className="text-[10px] font-bold uppercase tracking-widest text-navy mb-2">Assign Aircraft Access</h3>
-                  <div className="space-y-2">
-                    {aircraftList.map(ac => (
-                      <label key={ac.id} className="flex items-center gap-3 cursor-pointer">
-                        <input 
-                          type="checkbox" 
-                          checked={inviteAircraftIds.includes(ac.id)} 
-                          onChange={() => toggleInviteAircraft(ac.id)} 
-                          className="w-4 h-4 text-navy border-gray-300 rounded" 
-                        />
-                        <span className="font-bold text-xs text-navy uppercase">{ac.tail_number}</span>
-                      </label>
-                    ))}
-                  </div>
+              {/* NEW: Checklist displays for both Pilots and Admins so you can assign planes on creation! */}
+              <div className="border border-gray-200 rounded p-3 bg-gray-50 mt-2 max-h-[30vh] overflow-y-auto">
+                <h3 className="text-[10px] font-bold uppercase tracking-widest text-navy mb-2">Assign Aircraft Access</h3>
+                <div className="space-y-2">
+                  {allAircraftList.map(ac => (
+                    <label key={ac.id} className="flex items-center gap-3 cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        checked={inviteAircraftIds.includes(ac.id)} 
+                        onChange={() => toggleInviteAircraft(ac.id)} 
+                        className="w-4 h-4 text-navy border-gray-300 rounded" 
+                      />
+                      <span className="font-bold text-xs text-navy uppercase">{ac.tail_number}</span>
+                    </label>
+                  ))}
                 </div>
-              )}
+              </div>
               
               <div className="pt-4">
                 <PrimaryButton disabled={isSubmitting}>
@@ -1295,7 +1355,7 @@ export default function FleetTrackerApp() {
                   value={activeTail} 
                   onChange={(e) => setActiveTail(e.target.value)}
                 >
-                  {aircraftList.map(a => (
+                  {dropdownOptions.map(a => (
                     <option key={a.id} value={a.tail_number} className="text-white">{a.tail_number}</option>
                   ))}
                 </select>
@@ -1323,7 +1383,7 @@ export default function FleetTrackerApp() {
 
             {/* LOG IT COMPANION APP LINK (TRIGGERS INSTRUCTION MODAL) */}
             <button 
-              onClick={() => setShowLogItModal(true)}
+              onClick={handleLogItClick}
               className="text-gray-300 hover:text-[#3AB0FF] transition-colors flex flex-col items-center active:scale-95 shrink-0"
             >
               <Send size={18} />
@@ -1360,6 +1420,7 @@ export default function FleetTrackerApp() {
         <div className="w-full max-w-3xl flex flex-col gap-6">
           {activeTab === 'fleet' && <FleetSummary aircraftList={aircraftList} onSelectAircraft={(tail) => { setActiveTail(tail); setActiveTab('summary'); }} />}
           
+          {/* SAFE BYPASS FOR VERCEL BUILD ERROR TS2322 */}
           {activeTab === 'summary' && <SummaryTab aircraft={selectedAircraftData} setActiveTab={(tab: any) => setActiveTab(tab)} role={role} onDeleteAircraft={handleDeleteAircraft} sysSettings={sysSettings} />}
           
           {activeTab === 'times' && <TimesTab aircraft={selectedAircraftData} session={session} role={role} userInitials={userInitials} onUpdate={() => fetchAircraftData(session.user.id)} />}
