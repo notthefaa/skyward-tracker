@@ -20,7 +20,7 @@ export default function SquawksTab({
 }) {
   const [squawks, setSquawks] = useState<any[]>([]);
   const [showModal, setShowModal] = useState(false);
-  const[isSubmitting, setIsSubmitting] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const sigCanvas = useRef<SignatureCanvas>(null);
 
   // Lightbox State
@@ -29,14 +29,17 @@ export default function SquawksTab({
 
   // PDF Export State
   const [showExportModal, setShowExportModal] = useState(false);
-  const[selectedForExport, setSelectedForExport] = useState<string[]>([]);
-  const [isExportingPdf, setIsExportingPdf] = useState(false);
+  const [selectedForExport, setSelectedForExport] = useState<string[]>([]);
+  const[isExportingPdf, setIsExportingPdf] = useState(false);
+
+  // Pagination State for Archived Squawks
+  const[visibleArchivedCount, setVisibleArchivedCount] = useState(10);
 
   // Form State
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const[location, setLocation] = useState("");
+  const[editingId, setEditingId] = useState<string | null>(null);
+  const [location, setLocation] = useState("");
   const [description, setDescription] = useState("");
-  const[affectsAirworthiness, setAffectsAirworthiness] = useState(false);
+  const [affectsAirworthiness, setAffectsAirworthiness] = useState(false);
   const [isDeferred, setIsDeferred] = useState(false);
   const [status, setStatus] = useState<'open'|'resolved'>('open');
   const [selectedImages, setSelectedImages] = useState<File[]>([]);
@@ -44,9 +47,9 @@ export default function SquawksTab({
   
   // Deferral State
   const [mel, setMel] = useState(""); 
-  const [cdl, setCdl] = useState(""); 
+  const[cdl, setCdl] = useState(""); 
   const [nef, setNef] = useState(""); 
-  const[mdl, setMdl] = useState("");
+  const [mdl, setMdl] = useState("");
   const [melControl, setMelControl] = useState(""); 
   const[category, setCategory] = useState("");
   const [procCompleted, setProcCompleted] = useState(false); 
@@ -133,7 +136,7 @@ export default function SquawksTab({
     setIsSubmitting(true);
     
     const uploadedUrls = await uploadImages(); 
-    const allPictures =[...existingImages, ...uploadedUrls];
+    const allPictures = [...existingImages, ...uploadedUrls];
     
     let signatureData = null; 
     let sigDate = null;
@@ -321,6 +324,7 @@ export default function SquawksTab({
 
   const activeSquawks = squawks.filter(sq => sq.status === 'open');
   const resolvedSquawks = squawks.filter(sq => sq.status === 'resolved');
+  const displayedResolved = resolvedSquawks.slice(0, visibleArchivedCount);
 
   return (
     <>
@@ -405,10 +409,10 @@ export default function SquawksTab({
         </h2>
         
         <div className="space-y-4">
-          {resolvedSquawks.length === 0 ? (
+          {displayedResolved.length === 0 ? (
             <p className="text-center text-sm text-gray-400 italic py-4">No archived history.</p>
           ) : (
-            resolvedSquawks.map(sq => (
+            displayedResolved.map(sq => (
               <div key={sq.id} className="p-4 border border-gray-300 bg-white rounded opacity-70 hover:opacity-100 transition-opacity">
                 
                 <div className="flex justify-between items-start mb-2">
@@ -435,8 +439,31 @@ export default function SquawksTab({
                   </p>
                   <p className="text-sm text-gray-700 mt-1 font-roboto whitespace-pre-wrap">{sq.description}</p>
                 </div>
+
+                {/* PHOTO GALLERY FOR ARCHIVED SQUAWKS */}
+                {sq.pictures && sq.pictures.length > 0 && (
+                  <div className="mt-3 flex gap-2 overflow-x-auto pb-2">
+                    {sq.pictures.map((pic: string, i: number) => (
+                      <button key={i} onClick={() => { setPreviewImages(sq.pictures); setPreviewIndex(i); }} className="active:scale-95 transition-transform shrink-0">
+                        <img src={pic} loading="lazy" alt="Archived Squawk Photo" className="h-16 w-16 object-cover rounded border border-gray-300 shadow-sm" />
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             ))
+          )}
+
+          {/* LOAD MORE BUTTON */}
+          {resolvedSquawks.length > visibleArchivedCount && (
+            <div className="pt-4 text-center">
+              <button 
+                onClick={() => setVisibleArchivedCount(prev => prev + 10)} 
+                className="text-[10px] font-bold uppercase tracking-widest text-gray-500 hover:text-navy transition-colors underline active:scale-95"
+              >
+                Load More Archived
+              </button>
+            </div>
           )}
         </div>
       </div>
@@ -561,7 +588,6 @@ export default function SquawksTab({
                 </div>
               </div>
 
-              {/* FIX: Form label updated from "Location on Aircraft" to "Location (Airport)" */}
               <div>
                 <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Location (Airport) *</label>
                 <input type="text" required value={location} onChange={e=>setLocation(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#CE3732] outline-none" placeholder="e.g. KDFW" />
