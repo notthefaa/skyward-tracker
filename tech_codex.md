@@ -1,12 +1,10 @@
 # 📖 Technical Codex: Skyward Fleet Tracker
 
 ## 1. System Architecture Overview
-The application is a **Monolithic Serverless Web App** designed with a mobile-first, Progressive Web App (PWA) architecture. 
-*   **Frontend Framework:** Next.js 16 (App Router) using React and Tailwind CSS v4.
-*   **Backend/Database:** Supabase (PostgreSQL).
-*   **Authentication:** Supabase Auth (Email/Password) with custom Role-Based Access Control (RBAC).
-*   **Hosting & Execution:** Vercel (Hosts frontend, Serverless API routes, and CRON jobs).
-*   **Email Provider:** Resend API.
+The platform utilizes a **Dual-App Serverless Architecture** to bypass iOS Progressive Web App (PWA) domain-caching limitations and provide targeted user experiences.
+*   **Main App (`skyward-tracker`):** The heavy-duty administrative dashboard for deep fleet management.
+*   **Companion App (`skyward-logit`):** A streamlined, mobile-first PWA designed solely for rapid data entry (flight logs and squawks) on the ramp.
+*   **Backend:** Both Vercel apps point to the identical Supabase (PostgreSQL) database, allowing for instant, real-time data syncing between the two platforms.
 
 To prevent collisions with other company apps sharing the same Supabase project, **all database tables, storage buckets, and RLS policies are strictly prefixed with `aft_` (Aviation Fleet Tracker).**
 
@@ -16,11 +14,15 @@ To prevent collisions with other company apps sharing the same Supabase project,
 
 ### A. Core Tables
 *   **`aft_user_roles`**: Maps a Supabase `auth.users(id)` to an app-specific role (`'admin'` or `'pilot'`). Also stores the user's `email` and `initials`.
-*   **`aft_aircraft`**: The master record for each tail number. Tracks master times (`total_airframe_time`, `total_engine_time`), `current_fuel_gallons`, `fuel_last_updated`, `engine_type` ('Piston' or 'Turbine'), and contact details.
-*   **`aft_user_aircraft_access`**: A junction table (`user_id`, `aircraft_id`). Used to explicitly grant a specific pilot visibility to a specific aircraft.
+*   **`aft_aircraft`**: The master record for each tail number. 
+    *   *Tracking:* Tracks master times (`total_airframe_time`, `total_engine_time`), `current_fuel_gallons`, `fuel_last_updated`, `engine_type` ('Piston' or 'Turbine').
+    *   *Baseline Math:* `setup_aftt`, `setup_ftt`, `setup_hobbs`, and `setup_tach` permanently store the starting times of the aircraft upon creation to allow the first flight log duration to calculate perfectly.
+    *   *Ownership:* `created_by` maps to `auth.users(id)`. Used in the frontend to grant standard Pilots edit-rights to aircraft they personally onboarded.
+*   **`aft_user_aircraft_access`**: A junction table (`user_id`, `aircraft_id`). Explicitly dictates which specific aircraft a Pilot or Admin is allowed to see and interact with.
+*   **`aft_system_settings`**: A single-row configuration table (`id = 1`) managing global integer configurations for MX Email triggers (`reminder_1`, `reminder_2`, `reminder_3`, `sched_time`, `sched_days`).
 
 ### B. Relational Data Tables
-*   **`aft_flight_logs`**: Tracks individual flights. Columns structurally adapt based on aircraft type (e.g., `hobbs`/`tach` vs `aftt`/`ftt`/`engine_cycles`).
+*   **`aft_flight_logs`**: Tracks individual flights. Includes `pod` (Point of Departure) and `poa` (Point of Arrival) using ICAO strings. Columns structurally adapt based on aircraft type (`hobbs`/`tach` vs `aftt`/`ftt`/`engine_cycles`).
 *   **`aft_maintenance_items`**: Tracks maintenance compliance. Uses `tracking_type` ('time' or 'date') to determine if the trigger uses `due_time` or `due_date`.
 *   **`aft_squawks`**: Tracks discrepancies. Includes boolean flags (`affects_airworthiness`, `is_deferred`), array columns for `pictures`, and text strings for signature data and MEL/CDL tracking.
 *   **`aft_notes`**: General pilot chatter. Contains an array column for `pictures` and `edited_at` timestamps.
@@ -37,7 +39,7 @@ The database is heavily locked down using Supabase RLS. The frontend UI hiding a
 
 **1. Aircraft Visibility (`aft_aircraft`):**
 *   *Admins:* `SELECT`, `INSERT`, `UPDATE`, `DELETE` on all rows.
-*   *Pilots:* Can `SELECT` and `UPDATE` (to save fuel/flight times) **only if** their `auth.uid()` exists in the `aft_user_aircraft_access` table for that specific `aircraft_id`.
+*   *Pilots:* Can `SELECT` and `UPDATE` (to save fuel/flight times) **only if** their `auth.uid()` exists in the `aft_user_aircraft_access` table for that specific `aircraft_id`. They can only freely edit the master profile if `created_by` matches their `auth.uid()`.
 
 **2. Flight Logs (`aft_flight_logs`):**
 *   *Pilots:* Can `INSERT` a log, but the `user_id` must match their `auth.uid()`. They **cannot** `UPDATE` or `DELETE` historical logs (prevents rolling back master aircraft times maliciously or accidentally).
@@ -66,47 +68,52 @@ The application uses 3 public Supabase Storage buckets:
 ## 5. Server-Side API Routes (Next.js)
 To bypass RLS for administrative tasks or hide secret API keys (like Resend), the app uses Next.js serverless API routes located in `src/app/api/`. These utilize the `SUPABASE_SERVICE_ROLE_KEY` to act as a super-admin.
 
+*   **`POST /api/aircraft/create`**: The Pilot Onboarding interceptor. Pilots submit their new aircraft to this route, which securely creates the plane as a super-admin and immediately maps it to their `aft_user_aircraft_access` list.
 *   **`POST /api/invite`**: Uses the Supabase Admin Auth API to generate a secure invite link, emails the user, and writes their email and role to `aft_user_roles`.
+*   **`POST /api/resend-invite`**: Used on the Link Expired page. Re-triggers `admin.inviteUserByEmail()` for a specific address to generate a fresh token without overwriting their previously assigned aircraft access.
 *   **`DELETE /api/users`**: Securely deletes a user from the Supabase Auth system entirely.
 *   **`POST /api/admin/db-health`**: A maintenance script that forcefully purges `aft_note_reads` older than 30 days, `aft_notes` older than 6 months, and iterates through all 3 Storage Buckets to permanently delete orphaned images that no longer have a matching database row.
-*   **`POST /api/emails/*`**: Handles HTML compilation and dispatches Resend emails for Squawk alerts and Maintenance scheduling.
-*   **`GET /api/cron/mx-reminders`**: Triggered by Vercel's CRON engine (via `vercel.json`). Iterates through all aircraft. If an item is <= 30, 15, or 5 days/hours away, it compiles a deduped array of authorized pilot and admin emails, dispatches alerts, and sets a boolean flag (e.g., `reminder_30_sent = true`) in the database to prevent duplicate firing the next day.
-
-> ⚠️ **TypeScript Nuance in API Routes:** Due to Vercel's strict ES5 compilation targets, modern ES6 array deduplication (`[...new Set(array)]`) will throw a `TS2802` build crash. All API routes rely on standard ES5 `for` loops and `Array.concat()` methods to manipulate data.
+*   **`POST /api/emails/*`**: Handles HTML compilation and dispatches Resend emails for Squawk alerts and Maintenance scheduling. Uses the `Reply-To` trick to prevent spam bouncing (detailed below).
+*   **`GET /api/cron/mx-reminders`**: Triggered by Vercel's CRON engine (via `vercel.json`). Iterates through all aircraft, fetches the dynamic `aft_system_settings`, cross-references due times/dates, and automatically dispatches warning emails to the assigned pilots and admins while flipping boolean flags (e.g., `reminder_30_sent = true`) to prevent spamming.
 
 ---
 
-## 6. Frontend Component Architecture
+## 6. Frontend Component Architecture & Extraction
 
-### A. The App Shell (`page.tsx`)
-The app utilizes a "Locked Flex" layout (`h-[100dvh]`, `overflow-hidden`, `touch-action: none` applied via `globals.css`). This perfectly mimics a native mobile application, preventing iOS Safari from triggering the "pull-to-refresh" bounce or hiding the top/bottom navigation toolbars on scroll.
+To prevent the main `page.tsx` from bloating, massive UI forms were modularized into `src/components/`, leaving `page.tsx` to act purely as a "Traffic Cop" to route the user.
 
-`page.tsx` manages all master state: `session`, `aircraftList`, `activeTail`, `activeTab`, and `aircraftStatus`. It passes these down as props to the modular tab components.
-
-### B. The Tabs (`src/components/tabs/`)
-1.  **`FleetSummary.tsx`**: Renders the high-level grid view.
-2.  **`SummaryTab.tsx`**: The dashboard. Performs dynamic math on mount to calculate Fuel Lbs (using the engine type coefficient) and sorts maintenance arrays to find the single closest due item.
-3.  **`TimesTab.tsx`**: Handles flight logging. 
-    *   *Math Note:* Fetches 11 records from the database instead of 10, allowing the frontend to subtract record 10 from record 11 to calculate the exact `Flt Hrs` duration for the UI.
-4.  **`MaintenanceTab.tsx`**: Evaluates all due items. Items > 45 days/hrs turn `text-success` (Green). Items <= 30 turn `#F08B46` (Orange). Items <= 10 or expired turn `#CE3732` (Red).
-5.  **`SquawksTab.tsx`**: Splits data into `activeSquawks` and `resolvedSquawks`.
-6.  **`NotesTab.tsx`**: Evaluates the `aft_note_reads` table against the `aft_notes` table to calculate unread badges.
-
-### C. The Mechanic Portal (`squawk/[id]/page.tsx`)
-A completely isolated, unauthenticated public web page. Sent via `mailto:` links, it allows third-party mechanics to securely view squawk details and access the React Image Lightbox without creating an account.
+1.  **`AuthScreen.tsx`**: Encapsulates Login/Forgot Password.
+2.  **`PilotOnboarding.tsx`**: Encapsulates the "Setup Your Aircraft" flow. Collects initial `setup_` times and triggers the `/api/aircraft/create` route.
+3.  **`modals/AircraftModal.tsx`**: Encapsulates the Add/Edit Aircraft forms and the React Image Cropper logic. Prevents running totals (`total_`) from being overwritten during edits.
+4.  **`modals/AdminModals.tsx`**: Manages all 6 admin overlays (Global Fleet, Invite, Access, Settings, DB Health, Email Previewer) keeping the root file incredibly lean.
+5.  **`tabs/TimesTab.tsx`**: Handles flight logging. Fetches 11 records from the database instead of 10, allowing the frontend to subtract record 10 from record 11 to calculate the exact `Flt Hrs` duration. The absolute oldest log calculates against the aircraft's `setup_` times.
 
 ---
 
-## 7. Crucial Next.js & Vercel Specifics
+## 7. Advanced PWA & Mobile Quirks
 
-### A. Image Compression
+### A. The iOS "Standalone App Trap"
+When a user adds a PWA to their iOS home screen, Apple places the app into a strict, chromeless sandbox. iOS actively overrides `target="_blank"` and `window.open()` commands for links sharing the same root domain to prevent the app from "escaping." 
+*   **The Fix:** The "Log It" companion app was moved to a completely separate Vercel repository and URL. The Main App features a "Breakout Modal" utilizing `navigator.clipboard` and `navigator.share` to instruct iOS users to manually open native Safari to install the secondary app.
+
+### B. Vercel Automated Cache-Busting
+PWAs cache Javascript aggressively. To ensure updates reach all iPads/Phones instantly:
+*   The `NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA` environment variable is checked on the initial React mount. If the device's `localStorage` string doesn't match the live Vercel commit hash, the app forcibly wipes its memory and executes a `window.location.reload()`.
+
+### C. Image Compression
 Users upload multi-megabyte photos from their phones. The frontend relies on `browser-image-compression` to resize images (Max 1MB, Max 1920px) inside the browser *before* transmitting to Supabase. This keeps storage costs negligible and load times instantaneous.
 
-### B. The `jsPDF` Turbopack Crash
-The `jspdf` library relies on a Node.js binary (`fflate/lib/node.cjs`). If Vercel's Turbopack attempts to compile this during Server-Side Rendering (SSR), the build will fatally crash.
-*   **Fix 1:** `jsPDF` is loaded using an asynchronous dynamic import (`await import('jspdf')`) inside the button click handler, preventing it from executing during the page load.
-*   **Fix 2:** `next.config.mjs` explicitly flags `jspdf` inside the `serverExternalPackages` array to force Turbopack to ignore it.
+### D. The `jsPDF` Turbopack Crash
+The `jspdf` library relies on a Node.js binary. If Vercel's Turbopack attempts to compile this during Server-Side Rendering (SSR), the build fatally crashes. `next.config.mjs` explicitly flags `jspdf` inside the `serverExternalPackages` array to force Turbopack to ignore it.
 
-### C. PWA Manifest & Icons
-The app relies on a dynamically generated `src/app/manifest.ts` and a single `public/icon.png`. Next.js automatically maps these to Apple Touch Icons and Favicons, allowing users to "Add to Home Screen" and run the app in standalone mode. The `layout.tsx` specifically enforces `userScalable: false` to prevent iOS Safari from breaking the UI when input fields are focused.
-```
+---
+
+## 8. Security & Authentication Engineering
+
+### A. Enterprise Email Scanner Bypass (SafeLinks)
+Corporate email providers (Microsoft 365, Mimecast) utilize bots that click links in incoming emails to check for phishing. When using Supabase's default Auto-Verify endpoints, these bots were "burning" the one-time-use invite tokens before the human pilot ever saw the email, resulting in "Auth Session Missing" errors.
+*   **The Fix:** Supabase Email Templates were rewritten to point to `/update-password?token_hash={{ .TokenHash }}&type=invite`. The email bots download the HTML but cannot execute the complex React `useEffect` hooks. When the actual human opens the link in a real browser, the client-side code extracts the hash, fires `supabase.auth.verifyOtp()`, and successfully establishes the session.
+
+### B. Email Spoofing Prevention (The `Reply-To` Trick)
+Resend APIs will bounce any email attempting to send "from" an unverified domain (e.g., `john.doe@gmail.com`). 
+*   **The Fix:** All automated system emails are securely dispatched from the verified `notifications@skywardsociety.com` domain. The backend dynamically manipulates the email headers, inserting the aircraft's `main_contact` as the Display Name, and the `main_contact_email` into the `Reply-To` header. This ensures 100% deliverability while allowing mechanics to simply hit "Reply" to talk directly to the human manager.
