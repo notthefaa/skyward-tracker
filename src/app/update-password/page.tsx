@@ -11,8 +11,14 @@ export default function UpdatePassword() {
   const[isSubmitting, setIsSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   
+  // Security Verification State
   const [session, setSession] = useState<any>(null);
   const[isVerifying, setIsVerifying] = useState(true);
+
+  // New Link Request State
+  const[requestEmail, setRequestEmail] = useState("");
+  const [isRequesting, setIsRequesting] = useState(false);
+  const [requestSent, setRequestSent] = useState(false);
 
   useEffect(() => {
     const verifyToken = async () => {
@@ -85,6 +91,30 @@ export default function UpdatePassword() {
     window.location.href = "/";
   };
 
+  const handleRequestNewLink = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsRequesting(true);
+    
+    try {
+      const res = await fetch('/api/resend-invite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: requestEmail })
+      });
+      
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error || "Failed to send new invite link.");
+      }
+      
+      setRequestSent(true);
+    } catch (error: any) {
+      alert(error.message);
+    }
+    
+    setIsRequesting(false);
+  };
+
   if (isVerifying) {
     return (
       <div className="flex flex-col items-center justify-center p-4 bg-slateGray h-[100dvh] w-full text-white font-oswald text-2xl tracking-widest uppercase animate-pulse">
@@ -101,12 +131,50 @@ export default function UpdatePassword() {
           <h2 className="font-oswald text-2xl font-bold uppercase tracking-widest text-[#CE3732] mb-4">
             Link Expired
           </h2>
-          <p className="text-sm text-gray-600 font-roboto mb-8 leading-relaxed">
-            This setup link is invalid or has already been used. Please ask your administrator to resend the invite.
-          </p>
-          <PrimaryButton onClick={() => window.location.href = "/"}>
-            Return to Login
-          </PrimaryButton>
+          
+          {!requestSent ? (
+            <>
+              <p className="text-sm text-gray-600 font-roboto mb-6 leading-relaxed">
+                The invite link has expired. Please request a new one by entering your email and clicking "Request new link".
+              </p>
+              
+              <form onSubmit={handleRequestNewLink} className="space-y-4 text-left">
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-navy">
+                    Email Address
+                  </label>
+                  <input 
+                    type="email" 
+                    required 
+                    value={requestEmail} 
+                    onChange={(e) => setRequestEmail(e.target.value)} 
+                    className="w-full border border-gray-300 rounded p-3 text-sm mt-1 bg-white focus:border-navy outline-none" 
+                  />
+                </div>
+                <PrimaryButton disabled={isRequesting}>
+                  {isRequesting ? "Sending..." : "Request new link"}
+                </PrimaryButton>
+              </form>
+              
+              <button 
+                type="button" 
+                onClick={() => window.location.href = "/"} 
+                className="w-full text-center text-xs text-gray-500 mt-6 hover:text-navy underline"
+              >
+                Return to Login
+              </button>
+            </>
+          ) : (
+            <>
+              <p className="text-sm text-gray-600 font-roboto mb-8 leading-relaxed">
+                A new invite link has been sent to <strong>{requestEmail}</strong>. Please check your inbox.
+              </p>
+              <PrimaryButton onClick={() => window.location.href = "/"}>
+                Return to Login
+              </PrimaryButton>
+            </>
+          )}
+          
         </div>
       </div>
     );
@@ -115,6 +183,7 @@ export default function UpdatePassword() {
   return (
     <div className="flex flex-col items-center justify-center p-4 bg-slateGray h-[100dvh] w-full overflow-hidden">
       <div className="bg-cream shadow-2xl rounded-sm p-8 w-full max-w-md animate-slide-up border-t-4 border-navy">
+        
         <div className="text-center mb-8">
           <h2 className="font-oswald text-3xl font-bold uppercase tracking-widest text-navy">
             Complete Setup
@@ -125,6 +194,7 @@ export default function UpdatePassword() {
         </div>
         
         <form onSubmit={handleUpdate} className="space-y-4">
+          
           <div>
             <label className="text-[10px] font-bold uppercase tracking-widest text-navy">
               Your Initials
@@ -169,6 +239,7 @@ export default function UpdatePassword() {
               {isSubmitting ? "Saving..." : "Save & Enter Portal"}
             </PrimaryButton>
           </div>
+
         </form>
       </div>
     </div>
