@@ -8,23 +8,49 @@ import { Eye, EyeOff, AlertTriangle } from "lucide-react";
 export default function UpdatePassword() {
   const [password, setPassword] = useState("");
   const [initials, setInitials] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const[isSubmitting, setIsSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   
-  // NEW: Security Verification State
   const [session, setSession] = useState<any>(null);
-  const [isVerifying, setIsVerifying] = useState(true);
+  const[isVerifying, setIsVerifying] = useState(true);
 
-  // Automatically parse the secure link and wait for the session
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
+    const verifyToken = async () => {
+      // 1. OUTLOOK/SAFELINKS FIX: Look for the raw token hash in the URL
+      const params = new URLSearchParams(window.location.search);
+      const token_hash = params.get('token_hash');
+      const type = params.get('type') as any; // 'invite' or 'recovery'
+
+      if (token_hash && type) {
+        const { data, error } = await supabase.auth.verifyOtp({
+          token_hash,
+          type,
+        });
+        
+        if (data?.session) {
+          setSession(data.session);
+          // Clean the URL so the token doesn't linger in the address bar
+          window.history.replaceState({}, document.title, window.location.pathname);
+        }
+        setIsVerifying(false);
+        return;
+      }
+
+      // 2. Standard Fallback Check
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+         setSession(session);
+      }
       setIsVerifying(false);
-    });
+    };
+
+    verifyToken();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      setIsVerifying(false);
+      if (session) {
+        setSession(session);
+        setIsVerifying(false);
+      }
     });
 
     return () => subscription.unsubscribe();
@@ -34,7 +60,6 @@ export default function UpdatePassword() {
     e.preventDefault();
     setIsSubmitting(true);
     
-    // Safety check just in case
     if (!session) {
       alert("Security session lost. Please close this window and click your invite link again.");
       setIsSubmitting(false);
@@ -60,7 +85,6 @@ export default function UpdatePassword() {
     window.location.href = "/";
   };
 
-  // 1. Show a loading screen while processing the email link
   if (isVerifying) {
     return (
       <div className="flex flex-col items-center justify-center p-4 bg-slateGray h-[100dvh] w-full text-white font-oswald text-2xl tracking-widest uppercase animate-pulse">
@@ -69,7 +93,6 @@ export default function UpdatePassword() {
     );
   }
 
-  // 2. If the link is expired, already used, or invalid, show a friendly error
   if (!session) {
     return (
       <div className="flex flex-col items-center justify-center p-4 bg-slateGray h-[100dvh] w-full overflow-hidden">
@@ -89,11 +112,9 @@ export default function UpdatePassword() {
     );
   }
 
-  // 3. If everything is secure, show the setup form!
   return (
     <div className="flex flex-col items-center justify-center p-4 bg-slateGray h-[100dvh] w-full overflow-hidden">
       <div className="bg-cream shadow-2xl rounded-sm p-8 w-full max-w-md animate-slide-up border-t-4 border-navy">
-        
         <div className="text-center mb-8">
           <h2 className="font-oswald text-3xl font-bold uppercase tracking-widest text-navy">
             Complete Setup
@@ -104,7 +125,6 @@ export default function UpdatePassword() {
         </div>
         
         <form onSubmit={handleUpdate} className="space-y-4">
-          
           <div>
             <label className="text-[10px] font-bold uppercase tracking-widest text-navy">
               Your Initials
@@ -149,7 +169,6 @@ export default function UpdatePassword() {
               {isSubmitting ? "Saving..." : "Save & Enter Portal"}
             </PrimaryButton>
           </div>
-
         </form>
       </div>
     </div>
