@@ -22,20 +22,20 @@ import FleetSummary from "@/components/tabs/FleetSummary";
 export default function FleetTrackerApp() {
   const [session, setSession] = useState<any>(null);
   const [role, setRole] = useState<'admin' | 'pilot'>('pilot');
-  const [userInitials, setUserInitials] = useState("");
+  const[userInitials, setUserInitials] = useState("");
   const [isInitialLoad, setIsInitialLoad] = useState(true);
-  const[isNetworkTimeout, setIsNetworkTimeout] = useState(false);
+  const [isNetworkTimeout, setIsNetworkTimeout] = useState(false);
   
   const companionUrl = process.env.NEXT_PUBLIC_COMPANION_URL || "https://your-logit-app.vercel.app";
 
   const [allAircraftList, setAllAircraftList] = useState<any[]>([]);
-  const[aircraftList, setAircraftList] = useState<any[]>([]);
+  const [aircraftList, setAircraftList] = useState<any[]>([]);
   const [activeTail, setActiveTail] = useState<string>("");
   const [activeTab, setActiveTab] = useState<'fleet' | 'summary' | 'times' | 'mx' | 'squawks' | 'notes'>('fleet');
-  const[aircraftStatus, setAircraftStatus] = useState<'airworthy' | 'issues' | 'grounded'>('airworthy');
+  const [aircraftStatus, setAircraftStatus] = useState<'airworthy' | 'issues' | 'grounded'>('airworthy');
   const [unreadNotes, setUnreadNotes] = useState(0);
 
-  const[sysSettings, setSysSettings] = useState({
+  const [sysSettings, setSysSettings] = useState({
     reminder_1: 30,
     reminder_2: 15,
     reminder_3: 5,
@@ -43,10 +43,10 @@ export default function FleetTrackerApp() {
     sched_days: 30
   });
 
-  const [showAdminMenu, setShowAdminMenu] = useState(false);
-  const [showLogItModal, setShowLogItModal] = useState(false);
+  const[showAdminMenu, setShowAdminMenu] = useState(false);
+  const[showLogItModal, setShowLogItModal] = useState(false);
   const [showAircraftModal, setShowAircraftModal] = useState(false);
-  const[editingAircraftId, setEditingAircraftId] = useState<string | null>(null);
+  const [editingAircraftId, setEditingAircraftId] = useState<string | null>(null);
 
   useEffect(() => { 
     // --- FEATURE 1: AUTO VERSION TRACKER ---
@@ -55,16 +55,11 @@ export default function FleetTrackerApp() {
       const localVersion = localStorage.getItem('aft_app_version');
       if (localVersion && localVersion !== appVersion) {
         localStorage.setItem('aft_app_version', appVersion);
-        window.location.reload(); // Force reload to fetch the newest code
+        window.location.reload(); 
       } else if (!localVersion) {
         localStorage.setItem('aft_app_version', appVersion);
       }
     }
-
-    // --- FEATURE 2: NETWORK GUARD (12 Sec Timeout) ---
-    const timeoutTimer = setTimeout(() => {
-      setIsNetworkTimeout(true);
-    }, 12000);
 
     // Initial Auth Fetch
     supabase.auth.getSession().then(({ data: { session } }) => { 
@@ -81,10 +76,21 @@ export default function FleetTrackerApp() {
     });
     
     return () => {
-      clearTimeout(timeoutTimer); // Clean up the timer
       subscription.unsubscribe();
     };
   },[]);
+
+  // --- FEATURE 2: NETWORK GUARD (Only ticks while loading) ---
+  useEffect(() => {
+    let timeoutTimer: NodeJS.Timeout;
+    if (isInitialLoad) {
+      timeoutTimer = setTimeout(() => setIsNetworkTimeout(true), 12000);
+    }
+    return () => {
+      clearTimeout(timeoutTimer);
+      setIsNetworkTimeout(false);
+    };
+  }, [isInitialLoad]);
 
   useEffect(() => { 
     if (activeTail) localStorage.setItem('aft_active_tail', activeTail);
@@ -98,6 +104,9 @@ export default function FleetTrackerApp() {
   },[activeTail, allAircraftList, session]);
 
   const fetchAircraftData = async (userId: string) => {
+    // Force loading screen ON to prevent flashing UI during login handoff
+    setIsInitialLoad(true);
+
     const { data: settingsData } = await supabase.from('aft_system_settings').select('*').eq('id', 1).single();
     if (settingsData) setSysSettings(settingsData);
 
