@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { 
   PlaneTakeoff, Wrench, AlertTriangle, FileText, Clock, LogOut, 
-  Plus, Edit2, ChevronDown, Home, LayoutGrid, Send, ShieldCheck, X, Share, Copy
+  Plus, Edit2, ChevronDown, Home, LayoutGrid, Send, ShieldCheck, X, Share, Copy, WifiOff
 } from "lucide-react";
 
 import AuthScreen from "@/components/AuthScreen";
@@ -23,18 +23,19 @@ export default function FleetTrackerApp() {
   const [session, setSession] = useState<any>(null);
   const [role, setRole] = useState<'admin' | 'pilot'>('pilot');
   const [userInitials, setUserInitials] = useState("");
-  const[isInitialLoad, setIsInitialLoad] = useState(true);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
+  const[isNetworkTimeout, setIsNetworkTimeout] = useState(false);
   
   const companionUrl = process.env.NEXT_PUBLIC_COMPANION_URL || "https://your-logit-app.vercel.app";
 
-  const[allAircraftList, setAllAircraftList] = useState<any[]>([]);
-  const [aircraftList, setAircraftList] = useState<any[]>([]);
+  const [allAircraftList, setAllAircraftList] = useState<any[]>([]);
+  const[aircraftList, setAircraftList] = useState<any[]>([]);
   const [activeTail, setActiveTail] = useState<string>("");
   const [activeTab, setActiveTab] = useState<'fleet' | 'summary' | 'times' | 'mx' | 'squawks' | 'notes'>('fleet');
   const[aircraftStatus, setAircraftStatus] = useState<'airworthy' | 'issues' | 'grounded'>('airworthy');
-  const[unreadNotes, setUnreadNotes] = useState(0);
+  const [unreadNotes, setUnreadNotes] = useState(0);
 
-  const [sysSettings, setSysSettings] = useState({
+  const[sysSettings, setSysSettings] = useState({
     reminder_1: 30,
     reminder_2: 15,
     reminder_3: 5,
@@ -44,23 +45,45 @@ export default function FleetTrackerApp() {
 
   const [showAdminMenu, setShowAdminMenu] = useState(false);
   const [showLogItModal, setShowLogItModal] = useState(false);
-  const[showAircraftModal, setShowAircraftModal] = useState(false);
-  const [editingAircraftId, setEditingAircraftId] = useState<string | null>(null);
+  const [showAircraftModal, setShowAircraftModal] = useState(false);
+  const[editingAircraftId, setEditingAircraftId] = useState<string | null>(null);
 
   useEffect(() => { 
+    // --- FEATURE 1: AUTO VERSION TRACKER ---
+    const appVersion = process.env.NEXT_PUBLIC_APP_VERSION;
+    if (appVersion) {
+      const localVersion = localStorage.getItem('aft_app_version');
+      if (localVersion && localVersion !== appVersion) {
+        localStorage.setItem('aft_app_version', appVersion);
+        window.location.reload(); // Force reload to fetch the newest code
+      } else if (!localVersion) {
+        localStorage.setItem('aft_app_version', appVersion);
+      }
+    }
+
+    // --- FEATURE 2: NETWORK GUARD (12 Sec Timeout) ---
+    const timeoutTimer = setTimeout(() => {
+      setIsNetworkTimeout(true);
+    }, 12000);
+
+    // Initial Auth Fetch
     supabase.auth.getSession().then(({ data: { session } }) => { 
       setSession(session); 
       if (session) fetchAircraftData(session.user.id); 
       else setIsInitialLoad(false);
     }); 
     
+    // Auth Listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session); 
       if (session) fetchAircraftData(session.user.id);
       else setIsInitialLoad(false);
     });
     
-    return () => subscription.unsubscribe();
+    return () => {
+      clearTimeout(timeoutTimer); // Clean up the timer
+      subscription.unsubscribe();
+    };
   },[]);
 
   useEffect(() => { 
@@ -203,6 +226,23 @@ export default function FleetTrackerApp() {
   };
 
   if (isInitialLoad) {
+    if (isNetworkTimeout) {
+      return (
+        <div className="flex flex-col items-center justify-center p-4 bg-slateGray h-[100dvh] w-full text-white text-center selection:bg-none">
+          <WifiOff size={64} className="mb-6 text-brandOrange animate-pulse" />
+          <h2 className="font-oswald text-3xl tracking-widest uppercase mb-4">Connection Timeout</h2>
+          <p className="text-sm font-roboto text-gray-300 mb-8 max-w-xs leading-relaxed">
+            We are having trouble connecting to the database. You may be experiencing spotty cell or WiFi coverage.
+          </p>
+          <button 
+            onClick={() => window.location.reload()} 
+            className="w-full max-w-xs bg-brandOrange text-white font-oswald text-xl tracking-widest uppercase py-4 rounded-xl shadow-lg active:scale-95 transition-transform"
+          >
+            Refresh App
+          </button>
+        </div>
+      );
+    }
     return <div className="flex flex-col items-center justify-center p-4 bg-slateGray h-[100dvh] w-full text-white font-oswald text-2xl tracking-widest uppercase animate-pulse">Loading...</div>;
   }
 
