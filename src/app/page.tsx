@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabase";
 import dynamic from "next/dynamic";
 import { 
   PlaneTakeoff, Wrench, AlertTriangle, FileText, Clock, LogOut, 
-  Plus, Edit2, ChevronDown, Home, LayoutGrid, Send, ShieldCheck, X, Share, Copy, WifiOff
+  Plus, Edit2, ChevronDown, Home, LayoutGrid, Send, ShieldCheck, X, Share, Copy, WifiOff, RefreshCw
 } from "lucide-react";
 
 // --- DYNAMIC IMPORTS FOR CODE SPLITTING ---
@@ -24,10 +24,11 @@ const FleetSummary = dynamic(() => import("@/components/tabs/FleetSummary"));
 export default function FleetTrackerApp() {
   // --- BULLETPROOF STATE MANAGEMENT ---
   const [session, setSession] = useState<any>(null);
-  const[isAuthChecking, setIsAuthChecking] = useState(true);
-  const [isDataLoaded, setIsDataLoaded] = useState(false);
+  const [isAuthChecking, setIsAuthChecking] = useState(true);
+  const[isDataLoaded, setIsDataLoaded] = useState(false);
   const [isNetworkTimeout, setIsNetworkTimeout] = useState(false);
-  const dataFetchTriggeredRef = useRef(false); // Prevents double-fetching
+  const [newDataAvailable, setNewDataAvailable] = useState(false); // <-- NEW REALTIME STATE
+  const dataFetchTriggeredRef = useRef(false); 
   
   const [role, setRole] = useState<'admin' | 'pilot'>('pilot');
   const [userInitials, setUserInitials] = useState("");
@@ -36,7 +37,7 @@ export default function FleetTrackerApp() {
   const [allAircraftList, setAllAircraftList] = useState<any[]>([]);
   const [aircraftList, setAircraftList] = useState<any[]>([]);
   const [activeTail, setActiveTail] = useState<string>("");
-  const[activeTab, setActiveTab] = useState<'fleet' | 'summary' | 'times' | 'mx' | 'squawks' | 'notes'>('fleet');
+  const [activeTab, setActiveTab] = useState<'fleet' | 'summary' | 'times' | 'mx' | 'squawks' | 'notes'>('fleet');
   const [aircraftStatus, setAircraftStatus] = useState<'airworthy' | 'issues' | 'grounded'>('airworthy');
   const [unreadNotes, setUnreadNotes] = useState(0);
 
@@ -44,10 +45,10 @@ export default function FleetTrackerApp() {
     reminder_1: 30, reminder_2: 15, reminder_3: 5, sched_time: 10, sched_days: 30
   });
 
-  const[showAdminMenu, setShowAdminMenu] = useState(false);
-  const [showLogItModal, setShowLogItModal] = useState(false);
+  const [showAdminMenu, setShowAdminMenu] = useState(false);
+  const[showLogItModal, setShowLogItModal] = useState(false);
   const [showAircraftModal, setShowAircraftModal] = useState(false);
-  const[editingAircraftId, setEditingAircraftId] = useState<string | null>(null);
+  const [editingAircraftId, setEditingAircraftId] = useState<string | null>(null);
 
   useEffect(() => { 
     // --- AUTO VERSION TRACKER ---
@@ -88,7 +89,6 @@ export default function FleetTrackerApp() {
       }
     });
     
-    // Note: Empty dependency array ensures this effect strictly runs ONCE.
     return () => subscription.unsubscribe();
   },[]);
 
@@ -103,6 +103,36 @@ export default function FleetTrackerApp() {
       setIsNetworkTimeout(false);
     };
   }, [isAuthChecking, session, isDataLoaded]);
+
+  // --- SUPABASE REALTIME LISTENER (THE PILL) ---
+  useEffect(() => {
+    if (!session) return;
+
+    const handleRealtimeEvent = (payload: any) => {
+      // Smart Filter: Prevent the popup from showing if the CURRENT user made the change!
+      const newRow = payload.new;
+      if (newRow) {
+        if (newRow.user_id === session.user.id) return;
+        if (newRow.reported_by === session.user.id) return;
+        if (newRow.author_id === session.user.id) return;
+      }
+      setNewDataAvailable(true);
+    };
+
+    // Subscribes to live changes on the 4 major tables
+    const channel = supabase
+      .channel('fleet-updates')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'aft_flight_logs' }, handleRealtimeEvent)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'aft_squawks' }, handleRealtimeEvent)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'aft_squawks' }, handleRealtimeEvent)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'aft_maintenance_items' }, handleRealtimeEvent)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'aft_notes' }, handleRealtimeEvent)
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [session]);
 
   useEffect(() => { 
     if (activeTail) localStorage.setItem('aft_active_tail', activeTail);
@@ -142,7 +172,6 @@ export default function FleetTrackerApp() {
     else if (assignedPlanes.length > 0 && !activeTail) setActiveTail(assignedPlanes[0].tail_number);
     else if (!activeTail) setActiveTail("");
     
-    // Data is fully loaded. Tell UI to render.
     setIsDataLoaded(true);
   };
 
@@ -273,7 +302,7 @@ export default function FleetTrackerApp() {
     return <PilotOnboarding session={session} handleLogout={handleLogout} onSuccess={() => fetchAircraftData(session.user.id)} />;
   }
 
-  const dropdownOptions = [...aircraftList];
+  const dropdownOptions =[...aircraftList];
   if (activeTail && !dropdownOptions.some(a => a.tail_number === activeTail)) {
     const outOfScopePlane = allAircraftList.find(a => a.tail_number === activeTail);
     if (outOfScopePlane) dropdownOptions.push(outOfScopePlane);
@@ -283,6 +312,18 @@ export default function FleetTrackerApp() {
 
   return (
     <div className="flex flex-col bg-neutral-100 h-[100dvh] w-full overflow-hidden relative">
+
+      {/* --- NEW DATA AVAILABLE PILL --- */}
+      {newDataAvailable && (
+        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-[100] animate-fade-in">
+          <button 
+            onClick={() => window.location.reload()} 
+            className="bg-[#F08B46] text-white font-oswald text-sm font-bold tracking-widest uppercase px-6 py-3 rounded-full shadow-[0_10px_20px_rgba(0,0,0,0.4)] flex items-center gap-2 active:scale-95 transition-transform border-2 border-white"
+          >
+            <RefreshCw size={16} /> New Data Available
+          </button>
+        </div>
+      )}
       
       {showAdminMenu && (
         <AdminModals 
