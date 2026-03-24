@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import dynamic from "next/dynamic";
 import { 
@@ -9,7 +9,6 @@ import {
 } from "lucide-react";
 
 // --- DYNAMIC IMPORTS FOR CODE SPLITTING ---
-// These components will only be downloaded to the user's browser when they are actually rendered on screen.
 const AuthScreen = dynamic(() => import("@/components/AuthScreen"));
 const PilotOnboarding = dynamic(() => import("@/components/PilotOnboarding"));
 const AircraftModal = dynamic(() => import("@/components/modals/AircraftModal"));
@@ -23,27 +22,26 @@ const NotesTab = dynamic(() => import("@/components/tabs/NotesTab"));
 const FleetSummary = dynamic(() => import("@/components/tabs/FleetSummary"));
 
 export default function FleetTrackerApp() {
+  // --- BULLETPROOF STATE MANAGEMENT ---
   const [session, setSession] = useState<any>(null);
+  const[isAuthChecking, setIsAuthChecking] = useState(true);
+  const [isDataLoaded, setIsDataLoaded] = useState(false);
+  const [isNetworkTimeout, setIsNetworkTimeout] = useState(false);
+  const dataFetchTriggeredRef = useRef(false); // Prevents double-fetching
+  
   const [role, setRole] = useState<'admin' | 'pilot'>('pilot');
   const [userInitials, setUserInitials] = useState("");
-  const[isInitialLoad, setIsInitialLoad] = useState(true);
-  const [isNetworkTimeout, setIsNetworkTimeout] = useState(false);
-  
   const companionUrl = process.env.NEXT_PUBLIC_COMPANION_URL || "https://your-logit-app.vercel.app";
 
-  const[allAircraftList, setAllAircraftList] = useState<any[]>([]);
+  const [allAircraftList, setAllAircraftList] = useState<any[]>([]);
   const [aircraftList, setAircraftList] = useState<any[]>([]);
   const [activeTail, setActiveTail] = useState<string>("");
-  const [activeTab, setActiveTab] = useState<'fleet' | 'summary' | 'times' | 'mx' | 'squawks' | 'notes'>('fleet');
+  const[activeTab, setActiveTab] = useState<'fleet' | 'summary' | 'times' | 'mx' | 'squawks' | 'notes'>('fleet');
   const [aircraftStatus, setAircraftStatus] = useState<'airworthy' | 'issues' | 'grounded'>('airworthy');
   const [unreadNotes, setUnreadNotes] = useState(0);
 
   const [sysSettings, setSysSettings] = useState({
-    reminder_1: 30,
-    reminder_2: 15,
-    reminder_3: 5,
-    sched_time: 10,
-    sched_days: 30
+    reminder_1: 30, reminder_2: 15, reminder_3: 5, sched_time: 10, sched_days: 30
   });
 
   const[showAdminMenu, setShowAdminMenu] = useState(false);
@@ -52,57 +50,63 @@ export default function FleetTrackerApp() {
   const[editingAircraftId, setEditingAircraftId] = useState<string | null>(null);
 
   useEffect(() => { 
-    // --- FEATURE 1: AUTO VERSION TRACKER ---
+    // --- AUTO VERSION TRACKER ---
     const appVersion = process.env.NEXT_PUBLIC_APP_VERSION;
     if (appVersion) {
       const localVersion = localStorage.getItem('aft_app_version');
       if (localVersion && localVersion !== appVersion) {
         localStorage.setItem('aft_app_version', appVersion);
-        window.location.reload(); // Force reload to fetch the newest code
+        window.location.reload(); 
       } else if (!localVersion) {
         localStorage.setItem('aft_app_version', appVersion);
       }
     }
 
-    // Initial Auth Fetch (Handles first app load)
+    // 1. Initial Session Check
     supabase.auth.getSession().then(({ data: { session } }) => { 
       setSession(session); 
-      if (session) fetchAircraftData(session.user.id); 
-      else setIsInitialLoad(false);
+      setIsAuthChecking(false);
+      if (session && !dataFetchTriggeredRef.current) {
+        dataFetchTriggeredRef.current = true;
+        fetchAircraftData(session.user.id); 
+      }
     }); 
     
-    // Auth Listener (Only triggers loading screen on a hard login)
+    // 2. Auth Listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session); 
+      setIsAuthChecking(false);
+      
       if (event === 'SIGNED_IN' && session) {
-        setIsInitialLoad(true);
-        fetchAircraftData(session.user.id);
+        if (!dataFetchTriggeredRef.current) {
+          dataFetchTriggeredRef.current = true;
+          fetchAircraftData(session.user.id);
+        }
       } else if (event === 'SIGNED_OUT') {
-        setIsInitialLoad(false);
+        dataFetchTriggeredRef.current = false;
+        setIsDataLoaded(false);
       }
-      // Note: We deliberately ignore 'TOKEN_REFRESHED' events on tab focus to prevent UI flashes!
     });
     
-    return () => {
-      subscription.unsubscribe();
-    };
+    // Note: Empty dependency array ensures this effect strictly runs ONCE.
+    return () => subscription.unsubscribe();
   },[]);
 
-  // --- FEATURE 2: NETWORK GUARD (Only ticks while loading) ---
+  // --- NETWORK GUARD ---
   useEffect(() => {
     let timeoutTimer: NodeJS.Timeout;
-    if (isInitialLoad) {
+    if (isAuthChecking || (session && !isDataLoaded)) {
       timeoutTimer = setTimeout(() => setIsNetworkTimeout(true), 12000);
     }
     return () => {
       clearTimeout(timeoutTimer);
       setIsNetworkTimeout(false);
     };
-  },[isInitialLoad]);
+  }, [isAuthChecking, session, isDataLoaded]);
 
   useEffect(() => { 
     if (activeTail) localStorage.setItem('aft_active_tail', activeTail);
-  }, [activeTail]);
+  },[activeTail]);
 
   useEffect(() => { 
     if (activeTail && allAircraftList.length > 0 && session) { 
@@ -112,9 +116,6 @@ export default function FleetTrackerApp() {
   },[activeTail, allAircraftList, session]);
 
   const fetchAircraftData = async (userId: string) => {
-    // Note: No setIsInitialLoad(true) here! The auth listener handles the initial state.
-    // This allows silent background updates if the function is called later.
-
     const { data: settingsData } = await supabase.from('aft_system_settings').select('*').eq('id', 1).single();
     if (settingsData) setSysSettings(settingsData);
 
@@ -141,16 +142,15 @@ export default function FleetTrackerApp() {
     else if (assignedPlanes.length > 0 && !activeTail) setActiveTail(assignedPlanes[0].tail_number);
     else if (!activeTail) setActiveTail("");
     
-    setIsInitialLoad(false);
+    // Data is fully loaded. Tell UI to render.
+    setIsDataLoaded(true);
   };
 
   const fetchUnreadNotes = async (tail: string, userId: string) => {
     const aircraft = allAircraftList.find(a => a.tail_number === tail);
     if (!aircraft) return;
-    
     const { data: notes } = await supabase.from('aft_notes').select('id').eq('aircraft_id', aircraft.id);
     if (!notes || notes.length === 0) return setUnreadNotes(0); 
-    
     const noteIds = notes.map(n => n.id);
     const { data: reads } = await supabase.from('aft_note_reads').select('note_id').eq('user_id', userId).in('note_id', noteIds);
     setUnreadNotes(noteIds.length - (reads ? reads.length : 0));
@@ -159,7 +159,6 @@ export default function FleetTrackerApp() {
   const checkGroundedStatus = async (tail: string) => {
     const aircraft = allAircraftList.find(a => a.tail_number === tail);
     if (!aircraft) return;
-    
     let isGrounded = false; 
     let hasOpenSquawks = false;
 
@@ -207,7 +206,6 @@ export default function FleetTrackerApp() {
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    setSession(null);
   };
 
   const openAircraftForm = (aircraft: any = null) => {
@@ -242,7 +240,11 @@ export default function FleetTrackerApp() {
     }
   };
 
-  if (isInitialLoad) {
+  // =========================================
+  // STRICT RENDER SEQUENCE
+  // =========================================
+
+  if (isAuthChecking || (session && !isDataLoaded)) {
     if (isNetworkTimeout) {
       return (
         <div className="flex flex-col items-center justify-center p-4 bg-slateGray h-[100dvh] w-full text-white text-center selection:bg-none">
@@ -308,39 +310,28 @@ export default function FleetTrackerApp() {
         />
       )}
 
-      {/* LOG IT COMPANION APP INSTRUCTION MODAL */}
       {showLogItModal && (
         <div className="fixed inset-0 bg-black/80 z-[80] flex items-center justify-center p-4 animate-fade-in" onClick={() => setShowLogItModal(false)}>
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 border-t-8 border-[#3AB0FF] animate-slide-up relative" onClick={(e) => e.stopPropagation()}>
             <button onClick={() => setShowLogItModal(false)} className="absolute top-4 right-4 text-gray-400 hover:text-red-500">
               <X size={24}/>
             </button>
-            
-            <h3 className="font-oswald text-2xl font-bold uppercase tracking-widest text-navy mb-4">
-              Install Log It
-            </h3>
-            
+            <h3 className="font-oswald text-2xl font-bold uppercase tracking-widest text-navy mb-4">Install Log It</h3>
             <p className="text-sm text-gray-600 font-roboto mb-4 leading-relaxed">
               Log It is a companion app that is designed to make logging times and squawks easy on the go. To install it on your device, follow these steps:
             </p>
-            
             <ol className="text-left text-sm text-gray-600 font-roboto mb-8 space-y-2 max-w-xs mx-auto list-decimal pl-4">
               <li>Tap below to copy the app link.</li>
               <li>Open your phone's browser and paste the link.</li>
               <li>Use the Share menu <Share size={14} className="inline text-blue-500 mb-1"/> to Add to Home Screen.</li>
             </ol>
-            
-            <button 
-              onClick={handleCopyQuickLink} 
-              className="w-full bg-[#3AB0FF] text-white font-oswald text-xl font-bold uppercase tracking-widest py-4 rounded-xl shadow-lg active:scale-95 transition-transform flex items-center justify-center gap-2"
-            >
+            <button onClick={handleCopyQuickLink} className="w-full bg-[#3AB0FF] text-white font-oswald text-xl font-bold uppercase tracking-widest py-4 rounded-xl shadow-lg active:scale-95 transition-transform flex items-center justify-center gap-2">
               <Copy size={20} /> Copy App Link
             </button>
           </div>
         </div>
       )}
 
-      {/* TOP HEADER */}
       <header className="bg-navy text-white shadow-md z-20 shrink-0 w-full">
         <div className="max-w-3xl mx-auto px-4 py-3 flex justify-between items-center w-full min-h-[60px]">
           
@@ -374,19 +365,16 @@ export default function FleetTrackerApp() {
               <LayoutGrid size={18} />
               <span className="text-[8px] font-bold uppercase tracking-widest mt-1">Fleet</span>
             </button>
-
             <button onClick={() => setShowLogItModal(true)} className="text-gray-300 hover:text-[#3AB0FF] transition-colors flex flex-col items-center active:scale-95 shrink-0">
               <Send size={18} />
               <span className="text-[8px] font-bold uppercase tracking-widest mt-1">Log It</span>
             </button>
-
             {role === 'admin' && (
               <button onClick={() => setShowAdminMenu(true)} className="text-gray-300 hover:text-white transition-colors flex flex-col items-center active:scale-95 shrink-0">
                 <ShieldCheck size={18} />
                 <span className="text-[8px] font-bold uppercase tracking-widest mt-1">Admin</span>
               </button>
             )}
-
             <button onClick={handleLogout} className="text-gray-300 hover:text-white transition-colors flex flex-col items-center active:scale-95 shrink-0">
               <LogOut size={18} />
               <span className="text-[8px] font-bold uppercase tracking-widest mt-1">Logout</span>
@@ -396,7 +384,6 @@ export default function FleetTrackerApp() {
         </div>
       </header>
 
-      {/* GROUNDED BANNER */}
       {aircraftStatus === 'grounded' && (
         <div className="bg-[#CE3732] text-white text-center py-2 px-4 shadow-md z-10 flex justify-center items-center gap-2 animate-pulse shrink-0 w-full">
           <AlertTriangle size={18} />
@@ -405,7 +392,6 @@ export default function FleetTrackerApp() {
         </div>
       )}
 
-      {/* MAIN SCROLLABLE CONTENT */}
       <main className="flex-1 overflow-y-auto p-4 flex justify-center w-full" style={{ touchAction: 'auto' }}>
         <div className="w-full max-w-3xl flex flex-col gap-6">
           {activeTab === 'fleet' && <FleetSummary aircraftList={aircraftList} onSelectAircraft={(tail) => { setActiveTail(tail); setActiveTab('summary'); }} />}
@@ -417,7 +403,6 @@ export default function FleetTrackerApp() {
         </div>
       </main>
 
-      {/* BOTTOM NAVIGATION BAR */}
       <nav className="bg-white border-t border-gray-200 w-full z-20 shrink-0 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
         <div className="max-w-3xl mx-auto flex justify-around">
           {[
