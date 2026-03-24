@@ -107,8 +107,11 @@ export default function FleetTrackerApp() {
   },[activeTail, allAircraftList, session]);
 
   const fetchAircraftData = async (userId: string) => {
-    // Force loading screen ON to prevent flashing UI during login handoff
-    setIsInitialLoad(true);
+    // FIX: Only force the loading screen ON during the initial login handoff.
+    // If we already have planes in memory, let it update silently in the background!
+    if (allAircraftList.length === 0) {
+      setIsInitialLoad(true);
+    }
 
     const { data: settingsData } = await supabase.from('aft_system_settings').select('*').eq('id', 1).single();
     if (settingsData) setSysSettings(settingsData);
