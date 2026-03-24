@@ -25,14 +25,14 @@ const FleetSummary = dynamic(() => import("@/components/tabs/FleetSummary"));
 export default function FleetTrackerApp() {
   const [session, setSession] = useState<any>(null);
   const [role, setRole] = useState<'admin' | 'pilot'>('pilot');
-  const[userInitials, setUserInitials] = useState("");
-  const [isInitialLoad, setIsInitialLoad] = useState(true);
+  const [userInitials, setUserInitials] = useState("");
+  const[isInitialLoad, setIsInitialLoad] = useState(true);
   const [isNetworkTimeout, setIsNetworkTimeout] = useState(false);
   
   const companionUrl = process.env.NEXT_PUBLIC_COMPANION_URL || "https://your-logit-app.vercel.app";
 
-  const [allAircraftList, setAllAircraftList] = useState<any[]>([]);
-  const[aircraftList, setAircraftList] = useState<any[]>([]);
+  const[allAircraftList, setAllAircraftList] = useState<any[]>([]);
+  const [aircraftList, setAircraftList] = useState<any[]>([]);
   const [activeTail, setActiveTail] = useState<string>("");
   const [activeTab, setActiveTab] = useState<'fleet' | 'summary' | 'times' | 'mx' | 'squawks' | 'notes'>('fleet');
   const [aircraftStatus, setAircraftStatus] = useState<'airworthy' | 'issues' | 'grounded'>('airworthy');
@@ -46,10 +46,10 @@ export default function FleetTrackerApp() {
     sched_days: 30
   });
 
-  const [showAdminMenu, setShowAdminMenu] = useState(false);
+  const[showAdminMenu, setShowAdminMenu] = useState(false);
   const [showLogItModal, setShowLogItModal] = useState(false);
-  const[showAircraftModal, setShowAircraftModal] = useState(false);
-  const [editingAircraftId, setEditingAircraftId] = useState<string | null>(null);
+  const [showAircraftModal, setShowAircraftModal] = useState(false);
+  const[editingAircraftId, setEditingAircraftId] = useState<string | null>(null);
 
   useEffect(() => { 
     // --- FEATURE 1: AUTO VERSION TRACKER ---
@@ -58,24 +58,29 @@ export default function FleetTrackerApp() {
       const localVersion = localStorage.getItem('aft_app_version');
       if (localVersion && localVersion !== appVersion) {
         localStorage.setItem('aft_app_version', appVersion);
-        window.location.reload(); 
+        window.location.reload(); // Force reload to fetch the newest code
       } else if (!localVersion) {
         localStorage.setItem('aft_app_version', appVersion);
       }
     }
 
-    // Initial Auth Fetch
+    // Initial Auth Fetch (Handles first app load)
     supabase.auth.getSession().then(({ data: { session } }) => { 
       setSession(session); 
       if (session) fetchAircraftData(session.user.id); 
       else setIsInitialLoad(false);
     }); 
     
-    // Auth Listener
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    // Auth Listener (Only triggers loading screen on a hard login)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session); 
-      if (session) fetchAircraftData(session.user.id);
-      else setIsInitialLoad(false);
+      if (event === 'SIGNED_IN' && session) {
+        setIsInitialLoad(true);
+        fetchAircraftData(session.user.id);
+      } else if (event === 'SIGNED_OUT') {
+        setIsInitialLoad(false);
+      }
+      // Note: We deliberately ignore 'TOKEN_REFRESHED' events on tab focus to prevent UI flashes!
     });
     
     return () => {
@@ -93,7 +98,7 @@ export default function FleetTrackerApp() {
       clearTimeout(timeoutTimer);
       setIsNetworkTimeout(false);
     };
-  }, [isInitialLoad]);
+  },[isInitialLoad]);
 
   useEffect(() => { 
     if (activeTail) localStorage.setItem('aft_active_tail', activeTail);
@@ -107,11 +112,8 @@ export default function FleetTrackerApp() {
   },[activeTail, allAircraftList, session]);
 
   const fetchAircraftData = async (userId: string) => {
-    // FIX: Only force the loading screen ON during the initial login handoff.
-    // If we already have planes in memory, let it update silently in the background!
-    if (allAircraftList.length === 0) {
-      setIsInitialLoad(true);
-    }
+    // Note: No setIsInitialLoad(true) here! The auth listener handles the initial state.
+    // This allows silent background updates if the function is called later.
 
     const { data: settingsData } = await supabase.from('aft_system_settings').select('*').eq('id', 1).single();
     if (settingsData) setSysSettings(settingsData);
@@ -416,7 +418,7 @@ export default function FleetTrackerApp() {
       </main>
 
       {/* BOTTOM NAVIGATION BAR */}
-      <nav className="bg-white border-t border-gray-200 w-full z-20 shrink-0 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]" style={{ paddingBottom: 'env(safe-area-bottom)' }}>
+      <nav className="bg-white border-t border-gray-200 w-full z-20 shrink-0 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
         <div className="max-w-3xl mx-auto flex justify-around">
           {[
             { id: 'summary', icon: Home, label: 'Home', badge: 0 },
