@@ -1,58 +1,55 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { supabase } from "@/lib/supabase";
+import useSWR from "swr";
 import { FileText, Plus, X, Upload, Edit2, ChevronLeft, ChevronRight, Trash2 } from "lucide-react";
 import { PrimaryButton } from "@/components/AppButtons";
 import imageCompression from "browser-image-compression";
 
 export default function NotesTab({ aircraft, session, role, userInitials, onNotesRead }: { aircraft: any, session: any, role: string, userInitials: string, onNotesRead: () => void }) {
-  const [notes, setNotes] = useState<any[]>([]);
-  const [showModal, setShowModal] = useState(false);
+  
+  // --- SWR CACHING MAGIC ---
+  const { data: notes =[], mutate } = useSWR(
+    aircraft ? `notes-${aircraft.id}` : null,
+    async () => {
+      const { data: notesData } = await supabase
+        .from('aft_notes')
+        .select('*')
+        .eq('aircraft_id', aircraft.id)
+        .order('created_at', { ascending: false });
+      
+      if (notesData && notesData.length > 0) {
+        const { data: readsData } = await supabase
+          .from('aft_note_reads')
+          .select('note_id')
+          .eq('user_id', session.user.id)
+          .in('note_id', notesData.map(n => n.id));
+          
+        const readIds = readsData ? readsData.map(r => r.note_id) :[];
+        const unreadIds = notesData.filter(n => !readIds.includes(n.id)).map(n => n.id);
+        
+        // Safely insert read receipts only if unread notes exist
+        if (unreadIds.length > 0) {
+          const inserts = unreadIds.map(id => ({ note_id: id, user_id: session.user.id }));
+          await supabase.from('aft_note_reads').upsert(inserts, { onConflict: 'note_id,user_id' });
+          onNotesRead(); // Clear the red badge in the main shell
+        }
+      }
+      return notesData ||[];
+    }
+  );
+
+  const[showModal, setShowModal] = useState(false);
   const[isSubmitting, setIsSubmitting] = useState(false);
 
   // Form State
   const [editingId, setEditingId] = useState<string | null>(null);
   const [content, setContent] = useState("");
-  const [selectedImages, setSelectedImages] = useState<File[]>([]);
-  const [existingImages, setExistingImages] = useState<string[]>([]);
+  const[selectedImages, setSelectedImages] = useState<File[]>([]);
+  const[existingImages, setExistingImages] = useState<string[]>([]);
 
   // Lightbox State
-  const [previewImages, setPreviewImages] = useState<string[] | null>(null);
+  const[previewImages, setPreviewImages] = useState<string[] | null>(null);
   const [previewIndex, setPreviewIndex] = useState<number>(0);
-
-  useEffect(() => {
-    if (aircraft) fetchNotes();
-  }, [aircraft?.id]);
-
-  const fetchNotes = async () => {
-    // 1. Get Notes
-    const { data: notesData } = await supabase
-      .from('aft_notes')
-      .select('*')
-      .eq('aircraft_id', aircraft.id)
-      .order('created_at', { ascending: false });
-    
-    if (notesData && notesData.length > 0) {
-      setNotes(notesData);
-
-      // 2. Mark unread notes as read for this user instantly
-      const { data: readsData } = await supabase
-        .from('aft_note_reads')
-        .select('note_id')
-        .eq('user_id', session.user.id)
-        .in('note_id', notesData.map(n => n.id));
-        
-      const readIds = readsData ? readsData.map(r => r.note_id) :[];
-      const unreadIds = notesData.filter(n => !readIds.includes(n.id)).map(n => n.id);
-      
-      if (unreadIds.length > 0) {
-        const inserts = unreadIds.map(id => ({ note_id: id, user_id: session.user.id }));
-        await supabase.from('aft_note_reads').upsert(inserts, { onConflict: 'note_id,user_id' });
-        onNotesRead(); // Tell the main app shell to turn off the red badge!
-      }
-    } else {
-      setNotes([]);
-    }
-  };
 
   const openForm = (note: any = null) => {
     if (note) {
@@ -109,11 +106,11 @@ export default function NotesTab({ aircraft, session, role, userInitials, onNote
     } else {
       noteData.author_id = session.user.id;
       noteData.author_email = session.user.email;
-      noteData.author_initials = userInitials; // Permanently stamps their initials
+      noteData.author_initials = userInitials; 
       await supabase.from('aft_notes').insert(noteData);
     }
 
-    await fetchNotes();
+    await mutate(); // Refresh SWR Cache
     setShowModal(false);
     setIsSubmitting(false);
   };
@@ -121,7 +118,7 @@ export default function NotesTab({ aircraft, session, role, userInitials, onNote
   const deleteNote = async (id: string) => {
     if (!confirm("Are you sure you want to permanently delete this note?")) return;
     await supabase.from('aft_notes').delete().eq('id', id);
-    await fetchNotes();
+    await mutate();
   };
 
   if (!aircraft) return null;
@@ -145,7 +142,6 @@ export default function NotesTab({ aircraft, session, role, userInitials, onNote
                 <div className="flex justify-between items-start mb-3 border-b border-gray-100 pb-2">
                   <div>
                     <span className="text-[10px] font-bold uppercase tracking-widest text-navy block">
-                      {/* Displays the stamped initials next to the email */}
                       {note.author_initials ? `${note.author_initials} (${note.author_email})` : note.author_email || 'Pilot'}
                     </span>
                     <span className="text-[10px] uppercase text-gray-400 font-bold">
@@ -185,7 +181,6 @@ export default function NotesTab({ aircraft, session, role, userInitials, onNote
         </div>
       </div>
 
-      {/* FULLSCREEN LIGHTBOX */}
       {previewImages && (
         <div className="fixed inset-0 z-[60] bg-black/95 flex items-center justify-center animate-fade-in" onClick={() => setPreviewImages(null)}>
           <button className="absolute top-4 right-4 text-gray-400 hover:text-white z-50 p-2">
@@ -214,7 +209,6 @@ export default function NotesTab({ aircraft, session, role, userInitials, onNote
         </div>
       )}
 
-      {/* ADD/EDIT NOTE MODAL */}
       {showModal && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-fade-in">
           <div className="bg-white rounded shadow-2xl w-full max-w-md p-6 border-t-4 border-navy animate-slide-up max-h-[90vh] overflow-y-auto">

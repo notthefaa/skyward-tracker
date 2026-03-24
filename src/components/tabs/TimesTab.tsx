@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { supabase } from "@/lib/supabase";
+import useSWR from "swr";
 import { Download, ChevronLeft, ChevronRight, Plus, X, Edit2, Trash2, Info, MapPin } from "lucide-react";
 import { PrimaryButton } from "@/components/AppButtons";
 
@@ -16,27 +17,49 @@ export default function TimesTab({
   userInitials: string, 
   onUpdate: () => void 
 }) {
-  const[flightLogs, setFlightLogs] = useState<any[]>([]);
   const[logPage, setLogPage] = useState(1);
-  const [hasMoreLogs, setHasMoreLogs] = useState(false);
   
-  const[showLogModal, setShowLogModal] = useState(false);
-  const[isSubmitting, setIsSubmitting] = useState(false);
+  // --- SWR CACHING MAGIC ---
+  const { data, mutate } = useSWR(
+    aircraft ? `times-${aircraft.id}-${logPage}` : null,
+    async () => {
+      const pageSize = 10;
+      const from = (logPage - 1) * pageSize;
+      const to = from + pageSize;
+      // Supabase range is inclusive, so this safely fetches 11 items for the math logic
+      const { data: fetchLogs, count } = await supabase
+        .from('aft_flight_logs')
+        .select('*', { count: 'exact' })
+        .eq('aircraft_id', aircraft.id)
+        .order('created_at', { ascending: false })
+        .range(from, to);
+      return { 
+        logs: fetchLogs ||[], 
+        hasMore: count !== null && count > from + pageSize 
+      };
+    }
+  );
+
+  const flightLogs = data?.logs || [];
+  const hasMoreLogs = data?.hasMore || false;
+  
+  const [showLogModal, setShowLogModal] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
 
-  const [viewPax, setViewPax] = useState<string | null>(null);
-  const[viewRouting, setViewRouting] = useState<{pod: string, poa: string} | null>(null);
+  const[viewPax, setViewPax] = useState<string | null>(null);
+  const [viewRouting, setViewRouting] = useState<{pod: string, poa: string} | null>(null);
   const[showLegend, setShowLegend] = useState(false);
 
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [logPod, setLogPod] = useState("");
+  const[logPod, setLogPod] = useState("");
   const[logPoa, setLogPoa] = useState("");
-  const [logAftt, setLogAftt] = useState("");
-  const [logFtt, setLogFtt] = useState("");
-  const[logHobbs, setLogHobbs] = useState("");
+  const[logAftt, setLogAftt] = useState("");
+  const[logFtt, setLogFtt] = useState("");
+  const [logHobbs, setLogHobbs] = useState("");
   const [logTach, setLogTach] = useState("");
   const[logCycles, setLogCycles] = useState("");
-  const[logLandings, setLogLandings] = useState("");
+  const [logLandings, setLogLandings] = useState("");
   const[logInitials, setLogInitials] = useState("");
   const [logPax, setLogPax] = useState("");
   const[logReason, setLogReason] = useState("");
@@ -45,35 +68,6 @@ export default function TimesTab({
   const[logFuelUnit, setLogFuelUnit] = useState<'gallons' | 'lbs'>('gallons');
 
   const isTurbine = aircraft?.engine_type === 'Turbine';
-
-  useEffect(() => { 
-    if (aircraft) { 
-      setLogPage(1); 
-      fetchFlightLogs(aircraft.id, 1); 
-    } 
-  }, [aircraft?.id]);
-
-  useEffect(() => { 
-    if (aircraft) fetchFlightLogs(aircraft.id, logPage); 
-  }, [logPage]);
-
-  const fetchFlightLogs = async (aircraftId: string, page: number) => {
-    const pageSize = 10; 
-    const from = (page - 1) * pageSize; 
-    const to = from + pageSize; 
-    
-    const { data, count } = await supabase
-      .from('aft_flight_logs')
-      .select('*', { count: 'exact' })
-      .eq('aircraft_id', aircraftId)
-      .order('created_at', { ascending: false })
-      .range(from, to);
-      
-    if (data) { 
-      setFlightLogs(data); 
-      setHasMoreLogs(count !== null && count > from + pageSize); 
-    }
-  };
 
   const openLogForm = (log: any = null) => {
     if (log) {
@@ -140,20 +134,20 @@ export default function TimesTab({
     await supabase.from('aft_aircraft').update(updateData).eq('id', aircraft.id);
 
     setLogPage(1);
-    await fetchFlightLogs(aircraft.id, 1);
+    await mutate(); 
     onUpdate();
     setIsSubmitting(false);
   };
 
   const exportCSV = async () => {
     setIsExporting(true);
-    const { data } = await supabase
+    const { data: exportData } = await supabase
       .from('aft_flight_logs')
       .select('*')
       .eq('aircraft_id', aircraft.id)
       .order('created_at', { ascending: false });
 
-    if (!data || data.length === 0) { 
+    if (!exportData || exportData.length === 0) { 
       alert("No logs to export."); 
       setIsExporting(false); 
       return; 
@@ -163,10 +157,10 @@ export default function TimesTab({
     if (isTurbine) headers.push('Engine Cycles');
     headers.push('Fuel (Gal)', 'Reason', 'Passengers');
 
-    const csvRows =[headers.join(',')];
+    const csvRows = [headers.join(',')];
 
-    const rowsWithMath = data.map((log, index) => {
-      const prevLog = data[index + 1];
+    const rowsWithMath = exportData.map((log, index) => {
+      const prevLog = exportData[index + 1];
       let fltTime = "-";
       
       const prevAftt = prevLog ? (prevLog.aftt || 0) : (aircraft.setup_aftt || 0);
@@ -273,7 +267,7 @@ export default function TimesTab({
 
     await supabase.from('aft_aircraft').update(aircraftUpdate).eq('id', aircraft.id);
 
-    await fetchFlightLogs(aircraft.id, logPage); 
+    await mutate(); 
     onUpdate(); 
     setShowLogModal(false); 
     setIsSubmitting(false);
@@ -281,7 +275,7 @@ export default function TimesTab({
 
   if (!aircraft) return null;
 
-  const logsWithMath = flightLogs.slice(0, 10).map((log, index) => {
+  const logsWithMath = flightLogs.slice(0, 10).map((log: any, index: number) => {
     const prevLog = flightLogs[index + 1];
     let fltTime = "-";
     
@@ -299,7 +293,7 @@ export default function TimesTab({
     return { ...log, fltTime }; 
   });
 
-  const displayLogsReversed = [...logsWithMath].reverse();
+  const displayLogsReversed =[...logsWithMath].reverse();
 
   return (
     <>

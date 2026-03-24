@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
+import useSWR from "swr";
 import { PlaneTakeoff, Wrench, AlertTriangle, Droplet, Clock } from "lucide-react";
 
 export default function FleetSummary({ 
@@ -9,65 +9,61 @@ export default function FleetSummary({
   aircraftList: any[], 
   onSelectAircraft: (tail: string) => void 
 }) {
-  const [fleetData, setFleetData] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    if (aircraftList.length > 0) fetchFleetStatus();
-  }, [aircraftList]);
-
-  const fetchFleetStatus = async () => {
-    setIsLoading(true);
-    
-    // Fetch all MX and Squawks for all accessible aircraft simultaneously
-    const aircraftIds = aircraftList.map(a => a.id);
-    const { data: mxData } = await supabase.from('aft_maintenance_items').select('*').in('aircraft_id', aircraftIds);
-    const { data: sqData } = await supabase.from('aft_squawks').select('*').in('aircraft_id', aircraftIds).eq('status', 'open');
-
-    const enrichedFleet = aircraftList.map(ac => {
-      const acMx = mxData?.filter(m => m.aircraft_id === ac.id) ||[];
-      const acSq = sqData?.filter(s => s.aircraft_id === ac.id) ||[];
-
-      // Calculate Airworthiness
-      let isGrounded = false;
-      let hasIssues = acSq.length > 0;
-
-      acMx.forEach(item => {
-        if (!item.is_required) return;
-        if (item.tracking_type === 'time' && item.due_time <= (ac.total_engine_time || 0)) isGrounded = true;
-        if (item.tracking_type === 'date' && new Date(item.due_date + 'T00:00:00') < new Date(new Date().setHours(0,0,0,0))) isGrounded = true;
-      });
-
-      if (acSq.some(sq => sq.affects_airworthiness)) isGrounded = true;
-
-      // Find Next MX
-      const processedMx = acMx.map(item => {
-        let remaining = 0;
-        if (item.tracking_type === 'time') {
-          remaining = item.due_time - (ac.total_engine_time || 0);
-        } else {
-          const diffTime = new Date(item.due_date + 'T00:00:00').getTime() - new Date(new Date().setHours(0,0,0,0)).getTime();
-          remaining = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        }
-        return { ...item, remaining };
-      });
+  
+  // --- SWR CACHING MAGIC ---
+  const { data: fleetData =[], isLoading } = useSWR(
+    aircraftList.length > 0 ? `fleet-${aircraftList.map(a => a.id).join('-')}` : null,
+    async () => {
+      const aircraftIds = aircraftList.map(a => a.id);
       
-      processedMx.sort((a, b) => a.remaining - b.remaining);
-      const nextMx = processedMx[0];
+      const[mxRes, sqRes] = await Promise.all([
+        supabase.from('aft_maintenance_items').select('*').in('aircraft_id', aircraftIds),
+        supabase.from('aft_squawks').select('*').in('aircraft_id', aircraftIds).eq('status', 'open')
+      ]);
 
-      return {
-        ...ac,
-        status: isGrounded ? 'grounded' : (hasIssues ? 'issues' : 'airworthy'),
-        squawkCount: acSq.length,
-        nextMxName: nextMx ? nextMx.item_name : 'No MX Tracked'
-      };
-    });
+      const mxData = mxRes.data ||[];
+      const sqData = sqRes.data ||[];
 
-    setFleetData(enrichedFleet);
-    setIsLoading(false);
-  };
+      return aircraftList.map(ac => {
+        const acMx = mxData.filter(m => m.aircraft_id === ac.id);
+        const acSq = sqData.filter(s => s.aircraft_id === ac.id);
 
-  if (isLoading) {
+        let isGrounded = false;
+        let hasIssues = acSq.length > 0;
+
+        acMx.forEach(item => {
+          if (!item.is_required) return;
+          if (item.tracking_type === 'time') return item.due_time <= (ac.total_engine_time || 0);
+          if (item.tracking_type === 'date') return new Date(item.due_date + 'T00:00:00') < new Date(new Date().setHours(0,0,0,0));
+        });
+
+        if (acSq.some(sq => sq.affects_airworthiness)) isGrounded = true;
+
+        const processedMx = acMx.map(item => {
+          let remaining = 0;
+          if (item.tracking_type === 'time') {
+            remaining = item.due_time - (ac.total_engine_time || 0);
+          } else {
+            const diffTime = new Date(item.due_date + 'T00:00:00').getTime() - new Date(new Date().setHours(0,0,0,0)).getTime();
+            remaining = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+          }
+          return { ...item, remaining };
+        });
+        
+        processedMx.sort((a, b) => a.remaining - b.remaining);
+        const nextMx = processedMx[0];
+
+        return {
+          ...ac,
+          status: isGrounded ? 'grounded' : (hasIssues ? 'issues' : 'airworthy'),
+          squawkCount: acSq.length,
+          nextMxName: nextMx ? nextMx.item_name : 'No MX Tracked'
+        };
+      });
+    }
+  );
+
+  if (isLoading && fleetData.length === 0) {
     return (
       <div className="p-8 text-center text-sm font-bold uppercase tracking-widest text-gray-400 animate-pulse">
         Loading Fleet Dashboard...
@@ -77,7 +73,6 @@ export default function FleetSummary({
 
   return (
     <div className="flex flex-col gap-6 animate-fade-in">
-      
       <div className="bg-navy p-6 rounded-sm shadow-lg text-white border-t-4 border-[#F5B05B]">
         <h2 className="font-oswald text-3xl md:text-4xl font-bold uppercase tracking-widest leading-none mb-2">
           Fleet Summary
@@ -89,11 +84,7 @@ export default function FleetSummary({
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pb-4">
         {fleetData.map(ac => {
-          const isTurbine = ac.engine_type === 'Turbine';
-          const weightPerGal = isTurbine ? 6.7 : 6.0;
           const fuelGals = ac.current_fuel_gallons || 0;
-          const fuelLbs = Math.round(fuelGals * weightPerGal);
-
           const statusColor = ac.status === 'grounded' ? 'bg-[#CE3732]' : ac.status === 'issues' ? 'bg-[#F08B46]' : 'bg-success';
           const borderColor = ac.status === 'grounded' ? 'border-[#CE3732]' : ac.status === 'issues' ? 'border-[#F08B46]' : 'border-success';
 
@@ -103,7 +94,6 @@ export default function FleetSummary({
               onClick={() => onSelectAircraft(ac.tail_number)}
               className={`bg-white shadow-md rounded-sm border-t-4 ${borderColor} overflow-hidden cursor-pointer hover:shadow-xl transition-all active:scale-[0.98] flex flex-col`}
             >
-              
               <div className="flex justify-between items-center p-4 border-b border-gray-100 bg-gray-50">
                 <div className="flex items-center gap-4">
                   {ac.avatar_url ? (
@@ -153,7 +143,6 @@ export default function FleetSummary({
                   </span>
                 )}
               </div>
-
             </div>
           );
         })}

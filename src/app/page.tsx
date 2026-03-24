@@ -2,22 +2,25 @@
 
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
+import dynamic from "next/dynamic";
 import { 
   PlaneTakeoff, Wrench, AlertTriangle, FileText, Clock, LogOut, 
   Plus, Edit2, ChevronDown, Home, LayoutGrid, Send, ShieldCheck, X, Share, Copy, WifiOff
 } from "lucide-react";
 
-import AuthScreen from "@/components/AuthScreen";
-import PilotOnboarding from "@/components/PilotOnboarding";
-import AircraftModal from "@/components/modals/AircraftModal";
-import AdminModals from "@/components/modals/AdminModals";
+// --- DYNAMIC IMPORTS FOR CODE SPLITTING ---
+// These components will only be downloaded to the user's browser when they are actually rendered on screen.
+const AuthScreen = dynamic(() => import("@/components/AuthScreen"));
+const PilotOnboarding = dynamic(() => import("@/components/PilotOnboarding"));
+const AircraftModal = dynamic(() => import("@/components/modals/AircraftModal"));
+const AdminModals = dynamic(() => import("@/components/modals/AdminModals"));
 
-import SummaryTab from "@/components/tabs/SummaryTab";
-import TimesTab from "@/components/tabs/TimesTab";
-import MaintenanceTab from "@/components/tabs/MaintenanceTab";
-import SquawksTab from "@/components/tabs/SquawksTab"; 
-import NotesTab from "@/components/tabs/NotesTab";
-import FleetSummary from "@/components/tabs/FleetSummary";
+const SummaryTab = dynamic(() => import("@/components/tabs/SummaryTab"));
+const TimesTab = dynamic(() => import("@/components/tabs/TimesTab"));
+const MaintenanceTab = dynamic(() => import("@/components/tabs/MaintenanceTab"));
+const SquawksTab = dynamic(() => import("@/components/tabs/SquawksTab")); 
+const NotesTab = dynamic(() => import("@/components/tabs/NotesTab"));
+const FleetSummary = dynamic(() => import("@/components/tabs/FleetSummary"));
 
 export default function FleetTrackerApp() {
   const [session, setSession] = useState<any>(null);
@@ -29,7 +32,7 @@ export default function FleetTrackerApp() {
   const companionUrl = process.env.NEXT_PUBLIC_COMPANION_URL || "https://your-logit-app.vercel.app";
 
   const [allAircraftList, setAllAircraftList] = useState<any[]>([]);
-  const [aircraftList, setAircraftList] = useState<any[]>([]);
+  const[aircraftList, setAircraftList] = useState<any[]>([]);
   const [activeTail, setActiveTail] = useState<string>("");
   const [activeTab, setActiveTab] = useState<'fleet' | 'summary' | 'times' | 'mx' | 'squawks' | 'notes'>('fleet');
   const [aircraftStatus, setAircraftStatus] = useState<'airworthy' | 'issues' | 'grounded'>('airworthy');
@@ -43,9 +46,9 @@ export default function FleetTrackerApp() {
     sched_days: 30
   });
 
-  const[showAdminMenu, setShowAdminMenu] = useState(false);
-  const[showLogItModal, setShowLogItModal] = useState(false);
-  const [showAircraftModal, setShowAircraftModal] = useState(false);
+  const [showAdminMenu, setShowAdminMenu] = useState(false);
+  const [showLogItModal, setShowLogItModal] = useState(false);
+  const[showAircraftModal, setShowAircraftModal] = useState(false);
   const [editingAircraftId, setEditingAircraftId] = useState<string | null>(null);
 
   useEffect(() => { 
@@ -274,16 +277,18 @@ export default function FleetTrackerApp() {
   return (
     <div className="flex flex-col bg-neutral-100 h-[100dvh] w-full overflow-hidden relative">
       
-      <AdminModals 
-        showAdminMenu={showAdminMenu} 
-        setShowAdminMenu={setShowAdminMenu} 
-        allAircraftList={allAircraftList} 
-        setActiveTail={setActiveTail} 
-        setActiveTab={setActiveTab} 
-        sysSettings={sysSettings} 
-        setSysSettings={setSysSettings} 
-        refreshData={() => fetchAircraftData(session.user.id)}
-      />
+      {showAdminMenu && (
+        <AdminModals 
+          showAdminMenu={showAdminMenu} 
+          setShowAdminMenu={setShowAdminMenu} 
+          allAircraftList={allAircraftList} 
+          setActiveTail={setActiveTail} 
+          setActiveTab={setActiveTab} 
+          sysSettings={sysSettings} 
+          setSysSettings={setSysSettings} 
+          refreshData={() => fetchAircraftData(session.user.id)}
+        />
+      )}
 
       {showAircraftModal && (
         <AircraftModal 
@@ -408,7 +413,7 @@ export default function FleetTrackerApp() {
       </main>
 
       {/* BOTTOM NAVIGATION BAR */}
-      <nav className="bg-white border-t border-gray-200 w-full z-20 shrink-0 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+      <nav className="bg-white border-t border-gray-200 w-full z-20 shrink-0 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]" style={{ paddingBottom: 'env(safe-area-bottom)' }}>
         <div className="max-w-3xl mx-auto flex justify-around">
           {[
             { id: 'summary', icon: Home, label: 'Home', badge: 0 },

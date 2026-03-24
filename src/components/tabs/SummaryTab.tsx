@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { supabase } from "@/lib/supabase";
+import useSWR from "swr";
 import { PlaneTakeoff, MapPin, Droplet, Phone, Mail, Wrench, AlertTriangle, FileText, Clock, X, Trash2 } from "lucide-react";
 
 export default function SummaryTab({ 
@@ -15,60 +16,53 @@ export default function SummaryTab({
   onDeleteAircraft: (id: string) => void,
   sysSettings: any
 }) {
-  const [nextMx, setNextMx] = useState<any>(null);
-  const[activeSquawks, setActiveSquawks] = useState<any[]>([]);
-  const [latestNote, setLatestNote] = useState<any>(null);
-  const [isLoading, setIsLoading] = useState(true);
   
-  const[showNoteModal, setShowNoteModal] = useState(false);
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  // --- SWR CACHING MAGIC (Parallel Fetching) ---
+  const { data, isLoading } = useSWR(
+    aircraft ? `summary-${aircraft.id}` : null,
+    async () => {
+      // Promise.all fetches all 3 datasets simultaneously to speed up load times
+      const [mxRes, sqRes, noteRes] = await Promise.all([
+        supabase.from('aft_maintenance_items').select('*').eq('aircraft_id', aircraft.id),
+        supabase.from('aft_squawks').select('*').eq('aircraft_id', aircraft.id).eq('status', 'open').order('created_at', { ascending: false }),
+        supabase.from('aft_notes').select('*').eq('aircraft_id', aircraft.id).order('created_at', { ascending: false }).limit(1)
+      ]);
 
-  useEffect(() => {
-    if (aircraft) fetchSummaryData();
-  }, [aircraft]);
+      let nextMx = null;
+      if (mxRes.data && mxRes.data.length > 0) {
+        const currentEngineTime = aircraft.total_engine_time || 0;
+        const processedMx = mxRes.data.map(item => {
+          let remaining = 0;
+          let isExpired = false;
+          let dueText = "";
 
-  const fetchSummaryData = async () => {
-    setIsLoading(true);
-    
-    // 1. FETCH & CALCULATE NEXT MAINTENANCE
-    const { data: mxData } = await supabase.from('aft_maintenance_items').select('*').eq('aircraft_id', aircraft.id);
-    if (mxData && mxData.length > 0) {
-      const currentEngineTime = aircraft.total_engine_time || 0;
-      
-      const processedMx = mxData.map(item => {
-        let remaining = 0;
-        let isExpired = false;
-        let dueText = "";
+          if (item.tracking_type === 'time') {
+            remaining = item.due_time - currentEngineTime;
+            isExpired = remaining <= 0;
+            dueText = isExpired ? `Expired by ${Math.abs(remaining).toFixed(1)} hrs` : `Due in ${remaining.toFixed(1)} hrs (@ ${item.due_time})`;
+          } else {
+            const diffTime = new Date(item.due_date + 'T00:00:00').getTime() - new Date(new Date().setHours(0,0,0,0)).getTime();
+            remaining = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            isExpired = remaining < 0;
+            dueText = isExpired ? `Expired ${Math.abs(remaining)} days ago` : `Due in ${remaining} days (${item.due_date})`;
+          }
+          return { ...item, remaining, isExpired, dueText };
+        });
 
-        if (item.tracking_type === 'time') {
-          remaining = item.due_time - currentEngineTime;
-          isExpired = remaining <= 0;
-          dueText = isExpired ? `Expired by ${Math.abs(remaining).toFixed(1)} hrs` : `Due in ${remaining.toFixed(1)} hrs (@ ${item.due_time})`;
-        } else {
-          const diffTime = new Date(item.due_date + 'T00:00:00').getTime() - new Date(new Date().setHours(0,0,0,0)).getTime();
-          remaining = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-          isExpired = remaining < 0;
-          dueText = isExpired ? `Expired ${Math.abs(remaining)} days ago` : `Due in ${remaining} days (${item.due_date})`;
-        }
-        return { ...item, remaining, isExpired, dueText };
-      });
+        processedMx.sort((a, b) => a.remaining - b.remaining);
+        nextMx = processedMx[0];
+      }
 
-      processedMx.sort((a, b) => a.remaining - b.remaining);
-      setNextMx(processedMx[0]);
-    } else {
-      setNextMx(null);
+      return {
+        nextMx,
+        activeSquawks: sqRes.data || [],
+        latestNote: noteRes.data?.[0] || null
+      };
     }
+  );
 
-    // 2. FETCH ACTIVE SQUAWKS
-    const { data: sqData } = await supabase.from('aft_squawks').select('*').eq('aircraft_id', aircraft.id).eq('status', 'open').order('created_at', { ascending: false });
-    setActiveSquawks(sqData ||[]);
-
-    // 3. FETCH LATEST NOTE
-    const { data: noteData } = await supabase.from('aft_notes').select('*').eq('aircraft_id', aircraft.id).order('created_at', { ascending: false }).limit(1);
-    setLatestNote(noteData?.[0] || null);
-
-    setIsLoading(false);
-  };
+  const [showNoteModal, setShowNoteModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   if (!aircraft) return null;
 
@@ -77,27 +71,29 @@ export default function SummaryTab({
   const fuelGals = aircraft.current_fuel_gallons || 0;
   const fuelLbs = Math.round(fuelGals * weightPerGal);
 
+  const activeSquawks = data?.activeSquawks ||[];
+  const nextMx = data?.nextMx;
+  const latestNote = data?.latestNote;
+
   const isGrounded = nextMx?.isExpired || activeSquawks.some(sq => sq.affects_airworthiness);
   const hasIssues = activeSquawks.length > 0;
   const statusBorderColor = isGrounded ? 'border-[#CE3732]' : hasIssues ? 'border-[#F08B46]' : 'border-success';
   const statusIconColor = isGrounded ? 'text-[#CE3732]' : hasIssues ? 'text-[#F08B46]' : 'text-success';
 
-  // Dynamic MX Colors based on global system settings
   let mxTextColor = "text-gray-500";
   if (nextMx) {
     if (nextMx.isExpired || nextMx.remaining <= (sysSettings?.reminder_3 || 5)) {
-      mxTextColor = "text-[#CE3732]"; // RED
+      mxTextColor = "text-[#CE3732]"; 
     } else if (nextMx.remaining <= (sysSettings?.reminder_1 || 30)) {
-      mxTextColor = "text-[#F08B46]"; // ORANGE
+      mxTextColor = "text-[#F08B46]"; 
     } else {
-      mxTextColor = "text-success"; // GREEN
+      mxTextColor = "text-success"; 
     }
   }
 
   return (
     <div className="flex flex-col gap-4 animate-fade-in relative">
       
-      {/* DELETE AIRCRAFT MODAL */}
       {showDeleteModal && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/80 animate-fade-in" onClick={() => setShowDeleteModal(false)}>
           <div className="bg-white rounded shadow-2xl w-full max-w-sm p-6 border-t-4 border-[#CE3732] animate-slide-up relative" onClick={(e) => e.stopPropagation()}>
@@ -123,7 +119,6 @@ export default function SummaryTab({
         </div>
       )}
 
-      {/* 1. HEADER CARD: Avatar & Details */}
       <div className="bg-white shadow-lg rounded-sm overflow-hidden">
         <div className="relative h-40 md:h-56 bg-slateGray flex items-center justify-center">
           {aircraft.avatar_url ? (
@@ -144,7 +139,6 @@ export default function SummaryTab({
           </div>
         </div>
 
-        {/* COMPACT CONTACT GRID */}
         <div className="bg-cream px-4 py-3 flex flex-col gap-3">
           <div className="flex items-center justify-between border-b border-gray-200 pb-3">
             <div className="flex items-center gap-3 text-navy">
@@ -181,7 +175,6 @@ export default function SummaryTab({
         </div>
       </div>
 
-      {/* 2. FLIGHT TIMES CARD */}
       <div className={`bg-white shadow-lg rounded-sm p-4 border-t-4 ${statusBorderColor} flex flex-col`}>
         <div className="flex justify-between items-center mb-3 border-b border-gray-100 pb-3">
           <div className="flex items-center gap-2">
@@ -207,7 +200,6 @@ export default function SummaryTab({
         </div>
       </div>
 
-      {/* 3. FUEL STATE CARD WITH TIMESTAMP */}
       <div className="bg-white shadow-lg rounded-sm p-4 border-t-4 border-blue-500 flex flex-col">
         <div className="flex justify-between items-start mb-3 border-b border-gray-100 pb-3">
           <div className="flex flex-col gap-1">
@@ -240,11 +232,8 @@ export default function SummaryTab({
         </div>
       </div>
 
-      {/* 4. QUICK GLANCE DASHBOARD */}
       {!isLoading && (
         <div className="grid grid-cols-1 gap-3 mb-6">
-          
-          {/* NEXT MX DUE */}
           <div onClick={() => setActiveTab('mx')} className={`bg-white border shadow-sm rounded-sm p-4 flex gap-4 items-center transition-colors cursor-pointer active:scale-[0.98] ${nextMx ? 'border-gray-200 hover:bg-orange-50' : 'border-gray-200 opacity-70 hover:bg-gray-50'}`}>
             <div className={`p-3 rounded-full shrink-0 ${nextMx ? 'bg-orange-50 text-[#F08B46]' : 'bg-gray-100 text-gray-400'}`}><Wrench size={20}/></div>
             <div className="flex-1">
@@ -260,7 +249,6 @@ export default function SummaryTab({
             </div>
           </div>
 
-          {/* ACTIVE SQUAWKS */}
           <div onClick={() => setActiveTab('squawks')} className={`bg-white border shadow-sm rounded-sm p-4 flex gap-4 items-center transition-colors cursor-pointer active:scale-[0.98] ${activeSquawks.length > 0 ? 'border-red-200 hover:bg-red-50' : 'border-gray-200 opacity-70 hover:bg-gray-50'}`}>
             <div className={`p-3 rounded-full shrink-0 ${activeSquawks.length > 0 ? 'bg-red-50 text-[#CE3732]' : 'bg-gray-100 text-gray-400'}`}><AlertTriangle size={20}/></div>
             <div className="flex-1">
@@ -276,7 +264,6 @@ export default function SummaryTab({
             </div>
           </div>
 
-          {/* LATEST NOTE */}
           {latestNote && (
             <>
               <div onClick={() => setShowNoteModal(true)} className="bg-white border border-gray-200 shadow-sm rounded-sm p-4 flex gap-4 items-center cursor-pointer hover:bg-blue-50 transition-colors active:scale-[0.98]">

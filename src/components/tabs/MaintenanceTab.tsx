@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { supabase } from "@/lib/supabase";
+import useSWR from "swr";
 import { Wrench, Trash2, Plus, X, Edit2 } from "lucide-react";
 import { PrimaryButton } from "@/components/AppButtons";
 
@@ -11,10 +12,33 @@ export default function MaintenanceTab({
 }: { 
   aircraft: any, 
   role: string, 
-  onGroundedStatusChange: (isGrounded: boolean) => void,
+  onGroundedStatusChange: () => void, // CORRECTED: No arguments expected
   sysSettings: any
 }) {
-  const [mxItems, setMxItems] = useState<any[]>([]);
+  const currentEngineTime = aircraft?.total_engine_time || 0;
+
+  // --- SWR CACHING MAGIC ---
+  const { data: mxItems =[], mutate } = useSWR(
+    aircraft ? `mx-${aircraft.id}` : null,
+    async () => {
+      const { data } = await supabase
+        .from('aft_maintenance_items')
+        .select('*')
+        .eq('aircraft_id', aircraft.id)
+        .order('due_date')
+        .order('due_time');
+      return data ||[];
+    }
+  );
+
+  // Derived state to control the local UI border color safely (NO useEffect attached!)
+  const isGroundedLocally = mxItems.some((item: any) => {
+    if (!item.is_required) return false;
+    if (item.tracking_type === 'time') return item.due_time <= currentEngineTime;
+    if (item.tracking_type === 'date') return new Date(item.due_date + 'T00:00:00') < new Date(new Date().setHours(0,0,0,0));
+    return false;
+  });
+
   const [showMxModal, setShowMxModal] = useState(false);
   const[isSubmitting, setIsSubmitting] = useState(false);
 
@@ -28,39 +52,9 @@ export default function MaintenanceTab({
   const [mxLastDate, setMxLastDate] = useState("");
   const [mxIntervalDays, setMxIntervalDays] = useState("");
   const[mxDueDate, setMxDueDate] = useState("");
-  
   const [automateScheduling, setAutomateScheduling] = useState(false);
 
   const isTurbine = aircraft?.engine_type === 'Turbine';
-  const currentEngineTime = aircraft?.total_engine_time || 0;
-
-  useEffect(() => { 
-    if (aircraft) fetchMxItems(aircraft.id); 
-  }, [aircraft?.id]);
-
-  const fetchMxItems = async (aircraftId: string) => {
-    const { data } = await supabase
-      .from('aft_maintenance_items')
-      .select('*')
-      .eq('aircraft_id', aircraftId)
-      .order('due_date')
-      .order('due_time');
-      
-    if (data) { 
-      setMxItems(data); 
-      checkCompliance(data); 
-    }
-  };
-
-  const checkCompliance = (items: any[]) => {
-    const isGrounded = items.some(item => {
-      if (!item.is_required) return false;
-      if (item.tracking_type === 'time') return item.due_time <= currentEngineTime;
-      if (item.tracking_type === 'date') return new Date(item.due_date + 'T00:00:00') < new Date(new Date().setHours(0,0,0,0));
-      return false;
-    });
-    onGroundedStatusChange(isGrounded);
-  };
 
   const openMxForm = (item: any = null) => {
     if (item) {
@@ -142,7 +136,8 @@ export default function MaintenanceTab({
       }
     }
 
-    await fetchMxItems(aircraft.id);
+    await mutate(); // Refresh the SWR cache!
+    onGroundedStatusChange(); // CORRECTED: Safely alert parent to check status
     setShowMxModal(false); 
     setIsSubmitting(false);
   };
@@ -150,18 +145,12 @@ export default function MaintenanceTab({
   const deleteMxItem = async (id: string) => {
     if (confirm("Delete this maintenance item?")) { 
       await supabase.from('aft_maintenance_items').delete().eq('id', id); 
-      fetchMxItems(aircraft.id); 
+      await mutate(); 
+      onGroundedStatusChange(); // CORRECTED: Safely alert parent to check status
     }
   };
 
   if (!aircraft) return null;
-  
-  const isGroundedLocally = mxItems.some(item => {
-    if (!item.is_required) return false;
-    if (item.tracking_type === 'time') return item.due_time <= currentEngineTime;
-    if (item.tracking_type === 'date') return new Date(item.due_date + 'T00:00:00') < new Date(new Date().setHours(0,0,0,0));
-    return false;
-  });
 
   return (
     <>
@@ -182,7 +171,7 @@ export default function MaintenanceTab({
           {mxItems.length === 0 ? (
             <p className="text-center text-sm text-gray-400 italic py-4">No maintenance items tracked.</p>
           ) : (
-            mxItems.map(item => {
+            mxItems.map((item: any) => {
               let isExpired = false; 
               let remaining = 0;
               let dueText = "";
@@ -202,7 +191,6 @@ export default function MaintenanceTab({
                 ? (item.is_required ? 'bg-red-50 border-red-200' : 'bg-orange-50 border-orange-200') 
                 : 'bg-white border-gray-200';
 
-              // Using dynamic global settings for the UI colors
               let dueTextColor = "text-success"; 
               if (isExpired || remaining <= sysSettings.reminder_3) {
                 dueTextColor = "text-[#CE3732]"; 
@@ -307,7 +295,6 @@ export default function MaintenanceTab({
                 </div>
               </div>
               
-              {/* FIXED GREY BOX - SAFELY STACKED TO PREVENT BLOWOUTS */}
               {mxTrackingType === 'time' ? (
                 <div className="bg-gray-50 p-3 md:p-4 rounded border border-gray-200 flex flex-col gap-4">
                   <div className="w-full min-w-0">

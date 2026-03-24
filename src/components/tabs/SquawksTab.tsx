@@ -1,5 +1,6 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useRef } from "react";
 import { supabase } from "@/lib/supabase";
+import useSWR from "swr";
 import { AlertTriangle, Plus, X, Upload, Mail, Edit2, ChevronLeft, ChevronRight, Download, CheckSquare, Trash2, CheckCircle } from "lucide-react";
 import { PrimaryButton } from "@/components/AppButtons";
 import SignatureCanvas from "react-signature-canvas";
@@ -18,9 +19,21 @@ export default function SquawksTab({
   userInitials: string, 
   onGroundedStatusChange: () => void 
 }) {
-  const [squawks, setSquawks] = useState<any[]>([]);
+  // --- SWR CACHING MAGIC ---
+  const { data: squawks =[], mutate } = useSWR(
+    aircraft ? `squawks-${aircraft.id}` : null,
+    async () => {
+      const { data } = await supabase
+        .from('aft_squawks')
+        .select('*')
+        .eq('aircraft_id', aircraft.id)
+        .order('created_at', { ascending: false });
+      return data ||[];
+    }
+  );
+
   const [showModal, setShowModal] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const[isSubmitting, setIsSubmitting] = useState(false);
   const sigCanvas = useRef<SignatureCanvas>(null);
 
   // Lightbox State
@@ -29,14 +42,14 @@ export default function SquawksTab({
 
   // PDF Export State
   const [showExportModal, setShowExportModal] = useState(false);
-  const [selectedForExport, setSelectedForExport] = useState<string[]>([]);
-  const[isExportingPdf, setIsExportingPdf] = useState(false);
+  const[selectedForExport, setSelectedForExport] = useState<string[]>([]);
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
 
   // Pagination State for Archived Squawks
-  const[visibleArchivedCount, setVisibleArchivedCount] = useState(10);
+  const [visibleArchivedCount, setVisibleArchivedCount] = useState(10);
 
   // Form State
-  const[editingId, setEditingId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [location, setLocation] = useState("");
   const [description, setDescription] = useState("");
   const [affectsAirworthiness, setAffectsAirworthiness] = useState(false);
@@ -60,21 +73,6 @@ export default function SquawksTab({
   const [notifyMx, setNotifyMx] = useState(false);
 
   const isTurbine = aircraft?.engine_type === 'Turbine';
-  const reporterEmail = session?.user?.email || "Unknown Pilot";
-
-  useEffect(() => { 
-    if (aircraft) fetchSquawks(); 
-  }, [aircraft?.id]);
-
-  const fetchSquawks = async () => {
-    const { data } = await supabase
-      .from('aft_squawks')
-      .select('*')
-      .eq('aircraft_id', aircraft.id)
-      .order('created_at', { ascending: false });
-      
-    if (data) setSquawks(data);
-  };
 
   const openForm = (squawk: any = null) => {
     if (squawk) {
@@ -136,7 +134,7 @@ export default function SquawksTab({
     setIsSubmitting(true);
     
     const uploadedUrls = await uploadImages(); 
-    const allPictures = [...existingImages, ...uploadedUrls];
+    const allPictures =[...existingImages, ...uploadedUrls];
     
     let signatureData = null; 
     let sigDate = null;
@@ -172,8 +170,6 @@ export default function SquawksTab({
       await supabase.from('aft_squawks').update(squawkData).eq('id', editingId);
     } else {
       const { data: newSquawk } = await supabase.from('aft_squawks').insert(squawkData).select().single();
-      
-      // Trigger the Automated Email Alert API if this is a new squawk!
       if (newSquawk) {
         try {
           await fetch('/api/emails/squawk-notify', {
@@ -187,7 +183,7 @@ export default function SquawksTab({
       }
     }
 
-    await fetchSquawks(); 
+    await mutate(); // Instantly update SWR cache!
     onGroundedStatusChange(); 
     setShowModal(false); 
     setIsSubmitting(false);
@@ -196,14 +192,14 @@ export default function SquawksTab({
   const deleteSquawk = async (id: string) => {
     if (!confirm("Are you sure you want to permanently delete this squawk?")) return;
     await supabase.from('aft_squawks').delete().eq('id', id);
-    await fetchSquawks();
+    await mutate();
     onGroundedStatusChange();
   };
 
   const resolveSquawk = async (sq: any) => {
     if (!confirm("Mark this squawk as resolved?")) return;
     await supabase.from('aft_squawks').update({ status: 'resolved', affects_airworthiness: false }).eq('id', sq.id);
-    await fetchSquawks();
+    await mutate();
     onGroundedStatusChange();
   };
 
@@ -215,7 +211,6 @@ export default function SquawksTab({
     body += `Reported Date: ${new Date(sq.created_at).toLocaleDateString()}\n`;
     body += `Status: ${sq.status.toUpperCase()}\n`;
     body += `Airworthiness Affected: ${sq.affects_airworthiness ? 'YES (GROUNDED)' : 'NO'}\n\n`;
-    
     body += `Location: ${sq.location}\n`;
     body += `Description: ${sq.description}\n\n`;
     
@@ -235,12 +230,10 @@ export default function SquawksTab({
 
   const generatePDF = async () => {
     setIsExportingPdf(true);
-    
     try {
       const { jsPDF } = await import("jspdf");
-      
       const doc = new jsPDF();
-      const itemsToExport = squawks.filter(s => selectedForExport.includes(s.id));
+      const itemsToExport = squawks.filter((s: any) => selectedForExport.includes(s.id));
       let y = 20; 
       
       doc.setFont("helvetica", "bold"); 
@@ -307,7 +300,6 @@ export default function SquawksTab({
       console.error("Error generating PDF:", error);
       alert("There was an error generating the PDF.");
     }
-
     setIsExportingPdf(false); 
     setShowExportModal(false);
   };
@@ -322,8 +314,8 @@ export default function SquawksTab({
 
   if (!aircraft) return null;
 
-  const activeSquawks = squawks.filter(sq => sq.status === 'open');
-  const resolvedSquawks = squawks.filter(sq => sq.status === 'resolved');
+  const activeSquawks = squawks.filter((sq: any) => sq.status === 'open');
+  const resolvedSquawks = squawks.filter((sq: any) => sq.status === 'resolved');
   const displayedResolved = resolvedSquawks.slice(0, visibleArchivedCount);
 
   return (
@@ -334,7 +326,6 @@ export default function SquawksTab({
         </PrimaryButton>
       </div>
 
-      {/* ACTIVE SQUAWKS LIST */}
       <div className="bg-cream shadow-lg rounded-sm p-4 md:p-6 border-t-4 border-[#CE3732] mb-6">
         <div className="flex justify-between items-end mb-6">
           <h2 className="font-oswald text-2xl md:text-3xl font-bold uppercase text-navy m-0 leading-none">Active Squawks</h2>
@@ -345,7 +336,7 @@ export default function SquawksTab({
         
         <div className="space-y-4">
           {activeSquawks.length === 0 ? (<p className="text-center text-sm text-gray-400 italic py-4">No active squawks!</p>) : (
-            activeSquawks.map(sq => (
+            activeSquawks.map((sq: any) => (
               <div key={sq.id} className={`p-4 border rounded ${sq.affects_airworthiness ? 'border-[#CE3732]/30 bg-[#CE3732]/10' : 'border-[#F08B46]/30 bg-[#F08B46]/10'}`}>
                 
                 <div className="flex justify-between items-start mb-2">
@@ -402,7 +393,6 @@ export default function SquawksTab({
         </div>
       </div>
 
-      {/* ARCHIVED / RESOLVED SQUAWKS LIST */}
       <div className="bg-gray-100 shadow-inner rounded-sm p-4 md:p-6 border-t-4 border-gray-400 mb-6">
         <h2 className="font-oswald text-xl md:text-2xl font-bold uppercase text-gray-500 m-0 mb-6 leading-none">
           Archived History
@@ -412,7 +402,7 @@ export default function SquawksTab({
           {displayedResolved.length === 0 ? (
             <p className="text-center text-sm text-gray-400 italic py-4">No archived history.</p>
           ) : (
-            displayedResolved.map(sq => (
+            displayedResolved.map((sq: any) => (
               <div key={sq.id} className="p-4 border border-gray-300 bg-white rounded opacity-70 hover:opacity-100 transition-opacity">
                 
                 <div className="flex justify-between items-start mb-2">
@@ -440,7 +430,6 @@ export default function SquawksTab({
                   <p className="text-sm text-gray-700 mt-1 font-roboto whitespace-pre-wrap">{sq.description}</p>
                 </div>
 
-                {/* PHOTO GALLERY FOR ARCHIVED SQUAWKS */}
                 {sq.pictures && sq.pictures.length > 0 && (
                   <div className="mt-3 flex gap-2 overflow-x-auto pb-2">
                     {sq.pictures.map((pic: string, i: number) => (
@@ -454,7 +443,6 @@ export default function SquawksTab({
             ))
           )}
 
-          {/* LOAD MORE BUTTON */}
           {resolvedSquawks.length > visibleArchivedCount && (
             <div className="pt-4 text-center">
               <button 
@@ -468,11 +456,9 @@ export default function SquawksTab({
         </div>
       </div>
 
-      {/* PDF EXPORT SELECTION MODAL */}
       {showExportModal && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-fade-in">
           <div className="bg-white rounded shadow-2xl w-full max-w-md p-6 border-t-4 border-[#CE3732] max-h-[90vh] overflow-y-auto animate-slide-up flex flex-col">
-            
             <div className="flex justify-between items-center mb-4">
               <h2 className="font-oswald text-2xl font-bold uppercase text-navy flex items-center gap-2">
                 <CheckSquare size={20} className="text-[#CE3732]" /> Export to PDF
@@ -485,7 +471,7 @@ export default function SquawksTab({
             <p className="text-xs text-gray-500 mb-4">Select the squawks you wish to include in the formal PDF report.</p>
 
             <div className="flex justify-between items-center mb-2 pb-2 border-b border-gray-200">
-              <button onClick={() => setSelectedForExport(squawks.map(s => s.id))} className="text-[10px] font-bold uppercase tracking-widest text-[#CE3732] hover:opacity-80">
+              <button onClick={() => setSelectedForExport(squawks.map((s: any) => s.id))} className="text-[10px] font-bold uppercase tracking-widest text-[#CE3732] hover:opacity-80">
                 Select All
               </button>
               <button onClick={() => setSelectedForExport([])} className="text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:text-gray-600">
@@ -494,7 +480,7 @@ export default function SquawksTab({
             </div>
 
             <div className="space-y-2 mb-6 overflow-y-auto flex-1 max-h-[40vh]">
-              {squawks.map(sq => (
+              {squawks.map((sq: any) => (
                 <label key={sq.id} className="flex items-start gap-3 p-3 border border-gray-200 rounded cursor-pointer hover:bg-gray-50 transition-colors">
                   <input 
                     type="checkbox" 
@@ -521,7 +507,6 @@ export default function SquawksTab({
         </div>
       )}
 
-      {/* FULLSCREEN LIGHTBOX FOR PHOTOS */}
       {previewImages && (
         <div className="fixed inset-0 z-[60] bg-black/95 flex items-center justify-center animate-fade-in" onClick={() => setPreviewImages(null)}>
           <button className="absolute top-4 right-4 text-gray-400 hover:text-white z-50 p-2">
@@ -550,7 +535,6 @@ export default function SquawksTab({
         </div>
       )}
 
-      {/* SQUAWK REPORT & EDIT MODAL */}
       {showModal && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-fade-in">
           <div className="bg-white rounded shadow-2xl w-full max-w-lg p-6 border-t-4 border-[#CE3732] max-h-[90vh] overflow-y-auto animate-slide-up">
@@ -697,7 +681,6 @@ export default function SquawksTab({
                 </div>
               )}
 
-              {/* EMAIL ALERT CHECKBOX */}
               {!editingId && (
                 <div className="pt-2 pb-2">
                   <label className="flex items-start gap-2 text-xs font-bold text-navy cursor-pointer">
