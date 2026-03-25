@@ -13,6 +13,7 @@ const AuthScreen = dynamic(() => import("@/components/AuthScreen"));
 const PilotOnboarding = dynamic(() => import("@/components/PilotOnboarding"));
 const AircraftModal = dynamic(() => import("@/components/modals/AircraftModal"));
 const AdminModals = dynamic(() => import("@/components/modals/AdminModals"));
+const TutorialModal = dynamic(() => import("@/components/modals/TutorialModal")); // CORRECTED PATH
 
 const SummaryTab = dynamic(() => import("@/components/tabs/SummaryTab"));
 const TimesTab = dynamic(() => import("@/components/tabs/TimesTab"));
@@ -23,14 +24,14 @@ const FleetSummary = dynamic(() => import("@/components/tabs/FleetSummary"));
 
 export default function FleetTrackerApp() {
   // --- BULLETPROOF STATE MANAGEMENT ---
-  const [session, setSession] = useState<any>(null);
+  const[session, setSession] = useState<any>(null);
   const [isAuthChecking, setIsAuthChecking] = useState(true);
-  const[isDataLoaded, setIsDataLoaded] = useState(false);
-  const [isNetworkTimeout, setIsNetworkTimeout] = useState(false);
-  const [newDataAvailable, setNewDataAvailable] = useState(false); // <-- NEW REALTIME STATE
+  const [isDataLoaded, setIsDataLoaded] = useState(false);
+  const[isNetworkTimeout, setIsNetworkTimeout] = useState(false);
+  const [newDataAvailable, setNewDataAvailable] = useState(false); 
   const dataFetchTriggeredRef = useRef(false); 
   
-  const [role, setRole] = useState<'admin' | 'pilot'>('pilot');
+  const[role, setRole] = useState<'admin' | 'pilot'>('pilot');
   const [userInitials, setUserInitials] = useState("");
   const companionUrl = process.env.NEXT_PUBLIC_COMPANION_URL || "https://your-logit-app.vercel.app";
 
@@ -104,12 +105,11 @@ export default function FleetTrackerApp() {
     };
   }, [isAuthChecking, session, isDataLoaded]);
 
-  // --- SUPABASE REALTIME LISTENER (THE PILL) ---
+  // --- SUPABASE REALTIME LISTENER ---
   useEffect(() => {
     if (!session) return;
 
     const handleRealtimeEvent = (payload: any) => {
-      // Smart Filter: Prevent the popup from showing if the CURRENT user made the change!
       const newRow = payload.new;
       if (newRow) {
         if (newRow.user_id === session.user.id) return;
@@ -119,7 +119,6 @@ export default function FleetTrackerApp() {
       setNewDataAvailable(true);
     };
 
-    // Subscribes to live changes on the 4 major tables
     const channel = supabase
       .channel('fleet-updates')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'aft_flight_logs' }, handleRealtimeEvent)
@@ -302,7 +301,7 @@ export default function FleetTrackerApp() {
     return <PilotOnboarding session={session} handleLogout={handleLogout} onSuccess={() => fetchAircraftData(session.user.id)} />;
   }
 
-  const dropdownOptions =[...aircraftList];
+  const dropdownOptions = [...aircraftList];
   if (activeTail && !dropdownOptions.some(a => a.tail_number === activeTail)) {
     const outOfScopePlane = allAircraftList.find(a => a.tail_number === activeTail);
     if (outOfScopePlane) dropdownOptions.push(outOfScopePlane);
@@ -312,6 +311,9 @@ export default function FleetTrackerApp() {
 
   return (
     <div className="flex flex-col bg-neutral-100 h-[100dvh] w-full overflow-hidden relative">
+
+      {/* --- NEW TUTORIAL MODAL --- */}
+      <TutorialModal session={session} role={role} />
 
       {/* --- NEW DATA AVAILABLE PILL --- */}
       {newDataAvailable && (
