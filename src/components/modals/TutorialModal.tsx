@@ -44,8 +44,8 @@ export default function TutorialModal({ session, role }: { session: any, role: s
         <div className="space-y-4 text-left w-full">
           <p className="text-sm text-gray-600 font-roboto leading-relaxed text-center">
             {role === 'admin' 
-              ? "Welcome to the Skyward Aircraft Manager. As an Administrator, you have full control over fleet configuration, pilot access, maintenance schedules, and database health."
-              : "Welcome to the Skyward Fleet Tracker. This platform is designed to make logging flights, tracking maintenance, and reporting squawks seamless."}
+              ? "Welcome to the Skyward Aircraft Manager. As an Administrator, you have full control over fleet configuration, pilot access, maintenance schedules, and database health. You will also have the ability to log flights, track maintenance, and report squawks."
+              : "Welcome to the Skyward Fleet Manager. This platform is designed to make logging flights, tracking maintenance, and reporting squawks seamless."}
           </p>
         </div>
       )
@@ -56,7 +56,7 @@ export default function TutorialModal({ session, role }: { session: any, role: s
       content: (
         <div className="space-y-4 text-left w-full">
           <p className="text-sm text-gray-600 font-roboto leading-relaxed text-center mb-4">
-            The Fleet tab gives you a bird's-eye view of all assigned aircraft. The system automatically color-codes statuses:
+            The Fleet tab gives you a bird's-eye view of all of your aircraft. Clicking an aircraft on this page takes you directly to that aircraft's summary. The system automatically color-codes statuses:
           </p>
           <ul className="text-sm text-gray-600 font-roboto space-y-3 pl-2">
             <li className="flex items-center gap-3"><CheckCircle size={20} className="text-success shrink-0" /> <strong>Green:</strong> Airworthy & Ready</li>
@@ -72,7 +72,7 @@ export default function TutorialModal({ session, role }: { session: any, role: s
       content: (
         <div className="space-y-4 text-left w-full">
           <ul className="text-sm text-gray-600 font-roboto space-y-4 pl-2">
-            <li className="flex items-start gap-3"><Check size={18} className="text-[#3AB0FF] shrink-0 mt-0.5" /> <span>Dynamically adapts to Piston (Tach) or Turbine (AFTT/Cycles).</span></li>
+            <li className="flex items-start gap-3"><Check size={18} className="text-[#3AB0FF] shrink-0 mt-0.5" /> <span>The flight time tracking dynamically adapts to Piston (Tach) or Turbine (AFTT/Cycles) depending on aircraft setup.</span></li>
             <li className="flex items-start gap-3"><Check size={18} className="text-[#3AB0FF] shrink-0 mt-0.5" /> <span>Strict math validation prevents backward logging.</span></li>
             {role === 'admin' && (
               <li className="flex items-start gap-3"><RefreshCw size={18} className="text-[#3AB0FF] shrink-0 mt-0.5" /> <span><strong>Rollbacks:</strong> Safely delete the newest log to automatically roll aircraft master times backward.</span></li>
@@ -91,8 +91,8 @@ export default function TutorialModal({ session, role }: { session: any, role: s
             <li className="flex items-start gap-3"><Clock size={18} className="text-[#F08B46] shrink-0 mt-0.5" /> <span>Track items by Hours or Calendar Dates.</span></li>
             {role === 'admin' && (
               <>
-                <li className="flex items-start gap-3"><Bell size={18} className="text-[#F08B46] shrink-0 mt-0.5" /> <span><strong>Automated Alerts:</strong> System emails Admins/Pilots at global thresholds (e.g., 30/15/5 limits).</span></li>
-                <li className="flex items-start gap-3"><Send size={18} className="text-[#F08B46] shrink-0 mt-0.5" /> <span><strong>Auto-Scheduling:</strong> Enable 'Automate MX' to have the system automatically email your mechanic requesting schedule time when nearing limits.</span></li>
+                <li className="flex items-start gap-3"><Bell size={18} className="text-[#F08B46] shrink-0 mt-0.5" /> <span><strong>Automated Alerts:</strong> System emails Admins/Pilots at global thresholds (e.g., 30/15/5 limits) when items are coming due.</span></li>
+                <li className="flex items-start gap-3"><Send size={18} className="text-[#F08B46] shrink-0 mt-0.5" /> <span><strong>Auto-Scheduling:</strong> Click 'Automate MX' to have the system automatically email your mechanic (with you in cc) requesting schedule time when a maintenace item is approaching.</span></li>
               </>
             )}
             {role !== 'admin' && (
@@ -108,12 +108,12 @@ export default function TutorialModal({ session, role }: { session: any, role: s
       content: (
         <div className="space-y-4 text-left w-full">
           <ul className="text-sm text-gray-600 font-roboto space-y-4 pl-2">
-            <li className="flex items-start gap-3"><Camera size={18} className="text-[#CE3732] shrink-0 mt-0.5" /> <span>Report AOG or Monitor items with compressed photos.</span></li>
+            <li className="flex items-start gap-3"><Camera size={18} className="text-[#CE3732] shrink-0 mt-0.5" /> <span>Track squawks in detail with photos.</span></li>
             {role === 'admin' && (
               <>
-                <li className="flex items-start gap-3"><PenTool size={18} className="text-[#CE3732] shrink-0 mt-0.5" /> <span><strong>Legal Deferrals:</strong> Process MEL/CDL deferrals using the built-in digital signature pad.</span></li>
-                <li className="flex items-start gap-3"><Share size={18} className="text-[#CE3732] shrink-0 mt-0.5" /> <span><strong>Mechanic Portal:</strong> Email a secure web-link directly to mechanics to view high-res photos without logging in.</span></li>
-                <li className="flex items-start gap-3"><Download size={18} className="text-[#CE3732] shrink-0 mt-0.5" /> <span><strong>Export Summaries:</strong> Generate formal multi-page PDF reports with embedded photos.</span></li>
+                <li className="flex items-start gap-3"><PenTool size={18} className="text-[#CE3732] shrink-0 mt-0.5" /> <span><strong>Document Deferrals:</strong> Process MEL/CDL deferrals when appropriate and keep everyone in the loop.</span></li>
+                <li className="flex items-start gap-3"><Share size={18} className="text-[#CE3732] shrink-0 mt-0.5" /> <span><strong>Mechanic Portal:</strong> Email a secure link directly to your mechanic to view squawks with high-res photos.</span></li>
+                <li className="flex items-start gap-3"><Download size={18} className="text-[#CE3732] shrink-0 mt-0.5" /> <span><strong>Export Summaries:</strong> Generate PDF reports outlining active squawks with photos to aid maintenance visits.</span></li>
               </>
             )}
             {role !== 'admin' && (
@@ -143,7 +143,7 @@ export default function TutorialModal({ session, role }: { session: any, role: s
       content: (
         <div className="space-y-4 text-left w-full">
           <p className="text-sm text-gray-600 font-roboto leading-relaxed text-center">
-            We also offer a hyper-fast, mobile-only app called <strong>Log It</strong> designed exclusively for use on the ramp. Click the Paper Airplane icon in the top right menu to get instructions on how to install it directly to your phone's home screen.
+            We also offer a hyper-fast, mobile app called <strong>Log It</strong> designed exclusively for use on the ramp. Click the Paper Airplane icon in the top right menu to get instructions on how to install it directly to your phone's home screen.
           </p>
         </div>
       )
