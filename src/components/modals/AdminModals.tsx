@@ -281,23 +281,39 @@ export default function AdminModals({
 
       {showSettingsModal && (
         <div className="fixed inset-0 bg-black/60 z-[70] flex items-center justify-center p-4 animate-fade-in" onClick={() => setShowSettingsModal(false)}>
-          <div className="bg-white rounded shadow-2xl w-full max-w-sm p-6 border-t-4 border-navy animate-slide-up" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-white rounded shadow-2xl w-full max-w-sm p-6 border-t-4 border-navy animate-slide-up max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-6">
               <h2 className="font-oswald text-xl font-bold uppercase text-navy flex items-center gap-2"><Sliders size={20}/> Maintenance Triggers</h2>
               <button onClick={() => setShowSettingsModal(false)} className="text-gray-400 hover:text-red-500"><X size={24}/></button>
             </div>
             <form onSubmit={handleSaveSettings} className="space-y-4">
-              <p className="text-[10px] text-gray-500 uppercase tracking-widest border-b pb-1">Internal Alerts (Sent to Pilots/Admins)</p>
+              
+              <p className="text-[10px] text-gray-500 uppercase tracking-widest border-b pb-1">Internal Alerts - Date Based (Days)</p>
               <div className="grid grid-cols-3 gap-2">
-                <div><label className="text-[10px] font-bold uppercase text-navy">Alert 1</label><input type="number" value={sysSettings.reminder_1} onChange={e=>setSysSettings({...sysSettings, reminder_1: parseInt(e.target.value)})} className="w-full border rounded p-2 text-sm mt-1 focus:border-navy outline-none" /></div>
-                <div><label className="text-[10px] font-bold uppercase text-navy">Alert 2</label><input type="number" value={sysSettings.reminder_2} onChange={e=>setSysSettings({...sysSettings, reminder_2: parseInt(e.target.value)})} className="w-full border rounded p-2 text-sm mt-1 focus:border-navy outline-none" /></div>
-                <div><label className="text-[10px] font-bold uppercase text-navy">Alert 3</label><input type="number" value={sysSettings.reminder_3} onChange={e=>setSysSettings({...sysSettings, reminder_3: parseInt(e.target.value)})} className="w-full border rounded p-2 text-sm mt-1 focus:border-navy outline-none" /></div>
+                <div><label className="text-[10px] font-bold uppercase text-navy">Alert 1</label><input type="number" value={sysSettings.reminder_1 || 30} onChange={e=>setSysSettings({...sysSettings, reminder_1: parseInt(e.target.value)})} className="w-full border rounded p-2 text-sm mt-1 focus:border-navy outline-none" /></div>
+                <div><label className="text-[10px] font-bold uppercase text-navy">Alert 2</label><input type="number" value={sysSettings.reminder_2 || 15} onChange={e=>setSysSettings({...sysSettings, reminder_2: parseInt(e.target.value)})} className="w-full border rounded p-2 text-sm mt-1 focus:border-navy outline-none" /></div>
+                <div><label className="text-[10px] font-bold uppercase text-navy">Alert 3</label><input type="number" value={sysSettings.reminder_3 || 5} onChange={e=>setSysSettings({...sysSettings, reminder_3: parseInt(e.target.value)})} className="w-full border rounded p-2 text-sm mt-1 focus:border-navy outline-none" /></div>
               </div>
+
+              <p className="text-[10px] text-gray-500 uppercase tracking-widest border-b pb-1 mt-4">Internal Alerts - Time Based (Hours)</p>
+              <div className="grid grid-cols-3 gap-2">
+                <div><label className="text-[10px] font-bold uppercase text-navy">Alert 1</label><input type="number" value={sysSettings.reminder_hours_1 || 30} onChange={e=>setSysSettings({...sysSettings, reminder_hours_1: parseInt(e.target.value)})} className="w-full border rounded p-2 text-sm mt-1 focus:border-navy outline-none" /></div>
+                <div><label className="text-[10px] font-bold uppercase text-navy">Alert 2</label><input type="number" value={sysSettings.reminder_hours_2 || 15} onChange={e=>setSysSettings({...sysSettings, reminder_hours_2: parseInt(e.target.value)})} className="w-full border rounded p-2 text-sm mt-1 focus:border-navy outline-none" /></div>
+                <div><label className="text-[10px] font-bold uppercase text-navy">Alert 3</label><input type="number" value={sysSettings.reminder_hours_3 || 5} onChange={e=>setSysSettings({...sysSettings, reminder_hours_3: parseInt(e.target.value)})} className="w-full border rounded p-2 text-sm mt-1 focus:border-navy outline-none" /></div>
+              </div>
+
               <p className="text-[10px] text-gray-500 uppercase tracking-widest border-b pb-1 mt-4">Mechanic Scheduling Requests (To MX)</p>
               <div className="grid grid-cols-2 gap-2">
-                <div><label className="text-[10px] font-bold uppercase text-navy">Hours Trigger</label><input type="number" value={sysSettings.sched_time} onChange={e=>setSysSettings({...sysSettings, sched_time: parseInt(e.target.value)})} className="w-full border rounded p-2 text-sm mt-1 focus:border-navy outline-none" /></div>
-                <div><label className="text-[10px] font-bold uppercase text-navy">Days Trigger</label><input type="number" value={sysSettings.sched_days} onChange={e=>setSysSettings({...sysSettings, sched_days: parseInt(e.target.value)})} className="w-full border rounded p-2 text-sm mt-1 focus:border-navy outline-none" /></div>
+                <div><label className="text-[10px] font-bold uppercase text-navy">Hard Hour Limit</label><input type="number" value={sysSettings.sched_time || 10} onChange={e=>setSysSettings({...sysSettings, sched_time: parseInt(e.target.value)})} className="w-full border rounded p-2 text-sm mt-1 focus:border-navy outline-none" /></div>
+                <div><label className="text-[10px] font-bold uppercase text-navy">Hard Date Limit</label><input type="number" value={sysSettings.sched_days || 30} onChange={e=>setSysSettings({...sysSettings, sched_days: parseInt(e.target.value)})} className="w-full border rounded p-2 text-sm mt-1 focus:border-navy outline-none" /></div>
               </div>
+
+              <div>
+                <label className="text-[10px] font-bold uppercase text-navy">Predictive Time Scheduling (Days Out)</label>
+                <input type="number" value={sysSettings.predictive_sched_days || 45} onChange={e=>setSysSettings({...sysSettings, predictive_sched_days: parseInt(e.target.value)})} className="w-full border rounded p-2 text-sm mt-1 focus:border-navy outline-none" />
+                <p className="text-[10px] text-gray-400 mt-2 leading-tight">If an hour-based item is projected to hit its limit within this timeframe, the scheduling email will dispatch based on the flight history Confidence Score.</p>
+              </div>
+
               <div className="pt-4"><PrimaryButton disabled={isSubmitting}>{isSubmitting ? "Saving..." : "Save Globally"}</PrimaryButton></div>
             </form>
           </div>

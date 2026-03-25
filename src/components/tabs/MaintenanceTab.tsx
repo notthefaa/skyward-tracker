@@ -12,7 +12,7 @@ export default function MaintenanceTab({
 }: { 
   aircraft: any, 
   role: string, 
-  onGroundedStatusChange: () => void, // CORRECTED: No arguments expected
+  onGroundedStatusChange: () => void,
   sysSettings: any
 }) {
   const currentEngineTime = aircraft?.total_engine_time || 0;
@@ -39,22 +39,37 @@ export default function MaintenanceTab({
     return false;
   });
 
-  const [showMxModal, setShowMxModal] = useState(false);
-  const[isSubmitting, setIsSubmitting] = useState(false);
+  const[showMxModal, setShowMxModal] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [mxName, setMxName] = useState("");
+  const[mxName, setMxName] = useState("");
   const [mxIsRequired, setMxIsRequired] = useState(true);
   const [mxTrackingType, setMxTrackingType] = useState<'time' | 'date'>('time');
   const [mxLastTime, setMxLastTime] = useState("");
-  const [mxIntervalTime, setMxIntervalTime] = useState("");
-  const[mxDueTime, setMxDueTime] = useState("");
+  const[mxIntervalTime, setMxIntervalTime] = useState("");
+  const [mxDueTime, setMxDueTime] = useState("");
   const [mxLastDate, setMxLastDate] = useState("");
-  const [mxIntervalDays, setMxIntervalDays] = useState("");
-  const[mxDueDate, setMxDueDate] = useState("");
-  const [automateScheduling, setAutomateScheduling] = useState(false);
+  const[mxIntervalDays, setMxIntervalDays] = useState("");
+  const [mxDueDate, setMxDueDate] = useState("");
+  const[automateScheduling, setAutomateScheduling] = useState(false);
 
   const isTurbine = aircraft?.engine_type === 'Turbine';
+
+  const handleManualMxTrigger = async (item: any) => {
+    setIsSubmitting(true);
+    try {
+      await fetch('/api/emails/mx-schedule', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ aircraft, mxItem: item })
+      });
+      await mutate(); // Refresh the SWR cache to instantly hide the button
+    } catch (e) {
+      alert("Failed to send email");
+    }
+    setIsSubmitting(false);
+  };
 
   const openMxForm = (item: any = null) => {
     if (item) {
@@ -137,7 +152,7 @@ export default function MaintenanceTab({
     }
 
     await mutate(); // Refresh the SWR cache!
-    onGroundedStatusChange(); // CORRECTED: Safely alert parent to check status
+    onGroundedStatusChange(); // Safely alert parent to check status
     setShowMxModal(false); 
     setIsSubmitting(false);
   };
@@ -146,7 +161,7 @@ export default function MaintenanceTab({
     if (confirm("Delete this maintenance item?")) { 
       await supabase.from('aft_maintenance_items').delete().eq('id', id); 
       await mutate(); 
-      onGroundedStatusChange(); // CORRECTED: Safely alert parent to check status
+      onGroundedStatusChange(); // Safely alert parent to check status
     }
   };
 
@@ -172,37 +187,45 @@ export default function MaintenanceTab({
             <p className="text-center text-sm text-gray-400 italic py-4">No maintenance items tracked.</p>
           ) : (
             mxItems.map((item: any) => {
-              let isExpired = false; 
-              let remaining = 0;
-              let dueText = "";
               
+              // --- PREDICTIVE MATH ENGINE ---
+              let remaining = 0;
+              let isExpired = false;
+              let dueText = "";
+              let projectedDays = Infinity;
+
               if (item.tracking_type === 'time') {
-                remaining = item.due_time - currentEngineTime; 
+                remaining = item.due_time - currentEngineTime;
                 isExpired = remaining <= 0;
                 dueText = isExpired ? `Expired by ${Math.abs(remaining).toFixed(1)} hrs` : `Due in ${remaining.toFixed(1)} hrs (@ ${item.due_time})`;
+                
+                if (aircraft.burnRate && aircraft.burnRate > 0) {
+                   projectedDays = remaining / aircraft.burnRate;
+                   if (!isExpired) dueText += ` (~${Math.ceil(projectedDays)} days)`;
+                }
               } else {
                 const diffTime = new Date(item.due_date + 'T00:00:00').getTime() - new Date(new Date().setHours(0,0,0,0)).getTime();
-                remaining = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+                remaining = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
                 isExpired = remaining < 0;
+                projectedDays = remaining;
                 dueText = isExpired ? `Expired ${Math.abs(remaining)} days ago` : `Due in ${remaining} days (${item.due_date})`;
               }
-              
+
+              // --- DYNAMIC UI COLORS ---
+              let dueTextColor = "text-success"; 
+              if (isExpired || remaining <= (sysSettings?.reminder_hours_3 || 5) || projectedDays <= (sysSettings?.reminder_3 || 5)) {
+                dueTextColor = "text-[#CE3732]"; 
+              } else if (remaining <= (sysSettings?.reminder_hours_1 || 30) || projectedDays <= (sysSettings?.reminder_1 || 30)) {
+                dueTextColor = "text-[#F08B46]"; 
+              }
+
               const containerColorClass = isExpired 
                 ? (item.is_required ? 'bg-red-50 border-red-200' : 'bg-orange-50 border-orange-200') 
                 : 'bg-white border-gray-200';
 
-              let dueTextColor = "text-success"; 
-              if (isExpired || remaining <= sysSettings.reminder_3) {
-                dueTextColor = "text-[#CE3732]"; 
-              } else if (remaining <= sysSettings.reminder_1) {
-                dueTextColor = "text-[#F08B46]"; 
-              } else {
-                dueTextColor = "text-success"; 
-              }
-
               return (
                 <div key={item.id} className={`p-4 border rounded flex justify-between items-center ${containerColorClass}`}>
-                  <div>
+                  <div className="w-full">
                     <div className="flex items-center gap-2">
                       <h4 className={`font-oswald font-bold uppercase text-sm ${isExpired ? 'text-[#CE3732]' : 'text-navy'}`}>
                         {item.item_name}
@@ -213,12 +236,31 @@ export default function MaintenanceTab({
                         </span>
                       )}
                     </div>
+                    
                     <p className={`text-xs mt-1 font-roboto font-bold ${dueTextColor}`}>
                       {dueText}
                     </p>
+
+                    {/* --- MANUAL TRIGGER UI --- */}
+                    {item.primary_heads_up_sent && !item.mx_schedule_sent && (
+                      <div className="mt-3 bg-red-50 border border-red-200 p-3 rounded w-full max-w-sm">
+                        <p className="text-[10px] text-[#CE3732] font-bold uppercase mb-2 leading-tight">
+                          Action Required: Projected MX Due<br/>(System Confidence: {aircraft.confidenceScore || 0}%)
+                        </p>
+                        <button 
+                          onClick={() => handleManualMxTrigger(item)} 
+                          disabled={isSubmitting}
+                          className="w-full bg-[#CE3732] text-white text-[10px] font-bold uppercase px-3 py-2 rounded shadow active:scale-95 transition-transform disabled:opacity-50"
+                        >
+                          {isSubmitting ? "Processing..." : "Approve & Email Mechanic"}
+                        </button>
+                      </div>
+                    )}
+
                   </div>
+                  
                   {role === 'admin' && (
-                    <div className="flex gap-3">
+                    <div className="flex gap-3 pl-4">
                       <button onClick={() => openMxForm(item)} className="text-gray-400 hover:text-[#F08B46] transition-colors active:scale-95">
                         <Edit2 size={16}/>
                       </button>
@@ -380,7 +422,7 @@ export default function MaintenanceTab({
                     <span className="flex flex-col">
                       <span>Automate MX Communication</span>
                       <span className="text-[10px] text-gray-500 font-normal mt-1 leading-tight">
-                        Emails the MX contact when the item is {mxTrackingType === 'time' ? `${sysSettings.sched_time} hours` : `${sysSettings.sched_days} days`} from becoming due. The primary aircraft contact will be cc'd.
+                        Emails the MX contact when the item crosses global thresholds. Time-based items will use historical flight data to predict scheduling needs.
                       </span>
                     </span>
                   </label>

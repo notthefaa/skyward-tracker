@@ -22,7 +22,7 @@ export default function SummaryTab({
     aircraft ? `summary-${aircraft.id}` : null,
     async () => {
       // Promise.all fetches all 3 datasets simultaneously to speed up load times
-      const [mxRes, sqRes, noteRes] = await Promise.all([
+      const[mxRes, sqRes, noteRes] = await Promise.all([
         supabase.from('aft_maintenance_items').select('*').eq('aircraft_id', aircraft.id),
         supabase.from('aft_squawks').select('*').eq('aircraft_id', aircraft.id).eq('status', 'open').order('created_at', { ascending: false }),
         supabase.from('aft_notes').select('*').eq('aircraft_id', aircraft.id).order('created_at', { ascending: false }).limit(1)
@@ -31,22 +31,31 @@ export default function SummaryTab({
       let nextMx = null;
       if (mxRes.data && mxRes.data.length > 0) {
         const currentEngineTime = aircraft.total_engine_time || 0;
+        
+        // --- PREDICTIVE MATH ENGINE ---
         const processedMx = mxRes.data.map(item => {
           let remaining = 0;
           let isExpired = false;
           let dueText = "";
+          let projectedDays = Infinity;
 
           if (item.tracking_type === 'time') {
             remaining = item.due_time - currentEngineTime;
             isExpired = remaining <= 0;
             dueText = isExpired ? `Expired by ${Math.abs(remaining).toFixed(1)} hrs` : `Due in ${remaining.toFixed(1)} hrs (@ ${item.due_time})`;
+            
+            if (aircraft.burnRate && aircraft.burnRate > 0) {
+               projectedDays = remaining / aircraft.burnRate;
+               if (!isExpired) dueText += ` (~${Math.ceil(projectedDays)} days)`;
+            }
           } else {
             const diffTime = new Date(item.due_date + 'T00:00:00').getTime() - new Date(new Date().setHours(0,0,0,0)).getTime();
             remaining = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
             isExpired = remaining < 0;
+            projectedDays = remaining;
             dueText = isExpired ? `Expired ${Math.abs(remaining)} days ago` : `Due in ${remaining} days (${item.due_date})`;
           }
-          return { ...item, remaining, isExpired, dueText };
+          return { ...item, remaining, projectedDays, isExpired, dueText };
         });
 
         processedMx.sort((a, b) => a.remaining - b.remaining);
@@ -75,16 +84,17 @@ export default function SummaryTab({
   const nextMx = data?.nextMx;
   const latestNote = data?.latestNote;
 
-  const isGrounded = nextMx?.isExpired || activeSquawks.some(sq => sq.affects_airworthiness);
+  const isGrounded = nextMx?.isExpired || activeSquawks.some((sq: any) => sq.affects_airworthiness);
   const hasIssues = activeSquawks.length > 0;
   const statusBorderColor = isGrounded ? 'border-[#CE3732]' : hasIssues ? 'border-[#F08B46]' : 'border-success';
   const statusIconColor = isGrounded ? 'text-[#CE3732]' : hasIssues ? 'text-[#F08B46]' : 'text-success';
 
+  // --- DYNAMIC UI COLORS ---
   let mxTextColor = "text-gray-500";
   if (nextMx) {
-    if (nextMx.isExpired || nextMx.remaining <= (sysSettings?.reminder_3 || 5)) {
+    if (nextMx.isExpired || nextMx.remaining <= (sysSettings?.reminder_hours_3 || 5) || nextMx.projectedDays <= (sysSettings?.reminder_3 || 5)) {
       mxTextColor = "text-[#CE3732]"; 
-    } else if (nextMx.remaining <= (sysSettings?.reminder_1 || 30)) {
+    } else if (nextMx.remaining <= (sysSettings?.reminder_hours_1 || 30) || nextMx.projectedDays <= (sysSettings?.reminder_1 || 30)) {
       mxTextColor = "text-[#F08B46]"; 
     } else {
       mxTextColor = "text-success"; 
@@ -256,7 +266,7 @@ export default function SummaryTab({
               {activeSquawks.length > 0 ? (
                 <>
                   <p className="text-sm font-bold text-navy leading-tight">{activeSquawks.length} Open Issue{activeSquawks.length > 1 ? 's' : ''}</p>
-                  {activeSquawks.some(sq => sq.affects_airworthiness) && <p className="text-xs font-bold text-[#CE3732] mt-0.5">Aircraft Grounded</p>}
+                  {activeSquawks.some((sq: any) => sq.affects_airworthiness) && <p className="text-xs font-bold text-[#CE3732] mt-0.5">Aircraft Grounded</p>}
                 </>
               ) : (
                 <p className="text-sm font-bold text-gray-500 leading-tight">No Active Squawks</p>

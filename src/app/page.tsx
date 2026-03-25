@@ -144,7 +144,7 @@ export default function FleetTrackerApp() {
     } 
   },[activeTail, allAircraftList, session]);
 
-  const fetchAircraftData = async (userId: string) => {
+const fetchAircraftData = async (userId: string) => {
     const { data: settingsData } = await supabase.from('aft_system_settings').select('*').eq('id', 1).single();
     if (settingsData) setSysSettings(settingsData);
 
@@ -155,7 +155,50 @@ export default function FleetTrackerApp() {
     }
     
     const { data: allPlanesData } = await supabase.from('aft_aircraft').select('*').order('tail_number');
-    const allPlanes = allPlanesData ||[];
+    let allPlanes = allPlanesData ||[];
+
+    // --- CALCULATE BURN RATES & CONFIDENCE ---
+    const oneEightyDaysAgo = new Date();
+    oneEightyDaysAgo.setDate(oneEightyDaysAgo.getDate() - 180);
+    const { data: recentLogs } = await supabase
+      .from('aft_flight_logs')
+      .select('aircraft_id, ftt, tach, created_at')
+      .gte('created_at', oneEightyDaysAgo.toISOString())
+      .order('created_at', { ascending: true }); // Oldest first
+      
+    allPlanes = allPlanes.map(plane => {
+      const planeLogs = recentLogs?.filter(l => l.aircraft_id === plane.id) ||[];
+      let burnRate = 0;
+      let confidenceScore = 0;
+
+      if (planeLogs.length > 0) {
+        const isTurbine = plane.engine_type === 'Turbine';
+        const currentTime = plane.total_engine_time || 0;
+        
+        // 1. 60-Day Burn Rate
+        const sixtyDaysAgo = new Date();
+        sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
+        const logs60 = planeLogs.filter(l => new Date(l.created_at) >= sixtyDaysAgo);
+        if (logs60.length > 0) {
+          const oldest60 = logs60[0];
+          const oldestTime = isTurbine ? oldest60.ftt : oldest60.tach;
+          const daysElapsed = Math.max(1, (new Date().getTime() - new Date(oldest60.created_at).getTime()) / (1000 * 60 * 60 * 24));
+          if (oldestTime !== null && oldestTime !== undefined && currentTime > oldestTime) {
+            burnRate = (currentTime - oldestTime) / daysElapsed;
+          }
+        }
+
+        // 2. 180-Day Confidence Score
+        const oldestLog = planeLogs[0];
+        const daysSpan = Math.max(1, (new Date().getTime() - new Date(oldestLog.created_at).getTime()) / (1000 * 60 * 60 * 24));
+        const historyScore = Math.min(50, (daysSpan / 180) * 50); 
+        const targetLogs = (daysSpan / 30) * 4; 
+        const densityScore = targetLogs > 0 ? Math.min(50, (planeLogs.length / targetLogs) * 50) : 0; 
+        confidenceScore = Math.round(historyScore + densityScore);
+      }
+      return { ...plane, burnRate, confidenceScore }; 
+    });
+
     setAllAircraftList(allPlanes);
 
     const { data: accessData } = await supabase.from('aft_user_aircraft_access').select('aircraft_id').eq('user_id', userId);

@@ -16,7 +16,7 @@ export default function FleetSummary({
     async () => {
       const aircraftIds = aircraftList.map(a => a.id);
       
-      const[mxRes, sqRes] = await Promise.all([
+      const [mxRes, sqRes] = await Promise.all([
         supabase.from('aft_maintenance_items').select('*').in('aircraft_id', aircraftIds),
         supabase.from('aft_squawks').select('*').in('aircraft_id', aircraftIds).eq('status', 'open')
       ]);
@@ -33,21 +33,36 @@ export default function FleetSummary({
 
         acMx.forEach(item => {
           if (!item.is_required) return;
-          if (item.tracking_type === 'time') return item.due_time <= (ac.total_engine_time || 0);
-          if (item.tracking_type === 'date') return new Date(item.due_date + 'T00:00:00') < new Date(new Date().setHours(0,0,0,0));
+          if (item.tracking_type === 'time' && item.due_time <= (ac.total_engine_time || 0)) isGrounded = true;
+          if (item.tracking_type === 'date' && new Date(item.due_date + 'T00:00:00') < new Date(new Date().setHours(0,0,0,0))) isGrounded = true;
         });
 
         if (acSq.some(sq => sq.affects_airworthiness)) isGrounded = true;
 
+        // --- PREDICTIVE MATH ENGINE ---
         const processedMx = acMx.map(item => {
           let remaining = 0;
+          let isExpired = false;
+          let dueText = "";
+          let projectedDays = Infinity;
+
           if (item.tracking_type === 'time') {
             remaining = item.due_time - (ac.total_engine_time || 0);
+            isExpired = remaining <= 0;
+            dueText = isExpired ? `Expired by ${Math.abs(remaining).toFixed(1)} hrs` : `Due in ${remaining.toFixed(1)} hrs (@ ${item.due_time})`;
+            
+            if (ac.burnRate && ac.burnRate > 0) {
+               projectedDays = remaining / ac.burnRate;
+               if (!isExpired) dueText += ` (~${Math.ceil(projectedDays)} days)`;
+            }
           } else {
             const diffTime = new Date(item.due_date + 'T00:00:00').getTime() - new Date(new Date().setHours(0,0,0,0)).getTime();
             remaining = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            isExpired = remaining < 0;
+            projectedDays = remaining;
+            dueText = isExpired ? `Expired ${Math.abs(remaining)} days ago` : `Due in ${remaining} days (${item.due_date})`;
           }
-          return { ...item, remaining };
+          return { ...item, remaining, projectedDays, isExpired, dueText };
         });
         
         processedMx.sort((a, b) => a.remaining - b.remaining);
