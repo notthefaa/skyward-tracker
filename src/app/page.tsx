@@ -13,7 +13,7 @@ const AuthScreen = dynamic(() => import("@/components/AuthScreen"));
 const PilotOnboarding = dynamic(() => import("@/components/PilotOnboarding"));
 const AircraftModal = dynamic(() => import("@/components/modals/AircraftModal"));
 const AdminModals = dynamic(() => import("@/components/modals/AdminModals"));
-const TutorialModal = dynamic(() => import("@/components/modals/TutorialModal")); // CORRECTED PATH
+const TutorialModal = dynamic(() => import("@/components/modals/TutorialModal"));
 
 const SummaryTab = dynamic(() => import("@/components/tabs/SummaryTab"));
 const TimesTab = dynamic(() => import("@/components/tabs/TimesTab"));
@@ -24,20 +24,20 @@ const FleetSummary = dynamic(() => import("@/components/tabs/FleetSummary"));
 
 export default function FleetTrackerApp() {
   // --- BULLETPROOF STATE MANAGEMENT ---
-  const[session, setSession] = useState<any>(null);
+  const [session, setSession] = useState<any>(null);
   const [isAuthChecking, setIsAuthChecking] = useState(true);
-  const [isDataLoaded, setIsDataLoaded] = useState(false);
-  const[isNetworkTimeout, setIsNetworkTimeout] = useState(false);
+  const[isDataLoaded, setIsDataLoaded] = useState(false);
+  const [isNetworkTimeout, setIsNetworkTimeout] = useState(false);
   const [newDataAvailable, setNewDataAvailable] = useState(false); 
   const dataFetchTriggeredRef = useRef(false); 
   
-  const[role, setRole] = useState<'admin' | 'pilot'>('pilot');
+  const [role, setRole] = useState<'admin' | 'pilot'>('pilot');
   const [userInitials, setUserInitials] = useState("");
   const companionUrl = process.env.NEXT_PUBLIC_COMPANION_URL || "https://your-logit-app.vercel.app";
 
   const [allAircraftList, setAllAircraftList] = useState<any[]>([]);
   const [aircraftList, setAircraftList] = useState<any[]>([]);
-  const [activeTail, setActiveTail] = useState<string>("");
+  const[activeTail, setActiveTail] = useState<string>("");
   const [activeTab, setActiveTab] = useState<'fleet' | 'summary' | 'times' | 'mx' | 'squawks' | 'notes'>('fleet');
   const [aircraftStatus, setAircraftStatus] = useState<'airworthy' | 'issues' | 'grounded'>('airworthy');
   const [unreadNotes, setUnreadNotes] = useState(0);
@@ -144,7 +144,7 @@ export default function FleetTrackerApp() {
     } 
   },[activeTail, allAircraftList, session]);
 
-const fetchAircraftData = async (userId: string) => {
+  const fetchAircraftData = async (userId: string) => {
     const { data: settingsData } = await supabase.from('aft_system_settings').select('*').eq('id', 1).single();
     if (settingsData) setSysSettings(settingsData);
 
@@ -164,7 +164,7 @@ const fetchAircraftData = async (userId: string) => {
       .from('aft_flight_logs')
       .select('aircraft_id, ftt, tach, created_at')
       .gte('created_at', oneEightyDaysAgo.toISOString())
-      .order('created_at', { ascending: true }); // Oldest first
+      .order('created_at', { ascending: true }); 
       
     allPlanes = allPlanes.map(plane => {
       const planeLogs = recentLogs?.filter(l => l.aircraft_id === plane.id) ||[];
@@ -311,10 +311,6 @@ const fetchAircraftData = async (userId: string) => {
     }
   };
 
-  // =========================================
-  // STRICT RENDER SEQUENCE
-  // =========================================
-
   if (isAuthChecking || (session && !isDataLoaded)) {
     if (isNetworkTimeout) {
       return (
@@ -370,18 +366,17 @@ const fetchAircraftData = async (userId: string) => {
         </div>
       )}
       
-      {showAdminMenu && (
-        <AdminModals 
-          showAdminMenu={showAdminMenu} 
-          setShowAdminMenu={setShowAdminMenu} 
-          allAircraftList={allAircraftList} 
-          setActiveTail={setActiveTail} 
-          setActiveTab={setActiveTab} 
-          sysSettings={sysSettings} 
-          setSysSettings={setSysSettings} 
-          refreshData={() => fetchAircraftData(session.user.id)}
-        />
-      )}
+      {/* FIX: Removed the {showAdminMenu && ...} conditional wrapper to prevent component death */}
+      <AdminModals 
+        showAdminMenu={showAdminMenu} 
+        setShowAdminMenu={setShowAdminMenu} 
+        allAircraftList={allAircraftList} 
+        setActiveTail={setActiveTail} 
+        setActiveTab={setActiveTab} 
+        sysSettings={sysSettings} 
+        setSysSettings={setSysSettings} 
+        refreshData={() => fetchAircraftData(session.user.id)}
+      />
 
       {showAircraftModal && (
         <AircraftModal 
