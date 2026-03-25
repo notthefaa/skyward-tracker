@@ -1,15 +1,14 @@
-import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
+import { requireAuth, handleApiError } from '@/lib/auth';
 
 export async function POST(req: Request) {
   try {
-    const { payload, userId } = await req.json();
+    // Authenticate the caller — any logged-in user can create aircraft
+    const { user, supabaseAdmin } = await requireAuth(req);
+    const { payload } = await req.json();
 
-    // Use the Service Role Key to bypass RLS securely on the backend
-    const supabaseAdmin = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    );
+    // SECURITY: Derive the userId from the verified session, NOT the client body
+    const userId = user.id;
 
     // 1. Insert the new aircraft
     const { data: newAircraft, error: acError } = await supabaseAdmin
@@ -18,22 +17,20 @@ export async function POST(req: Request) {
       .select()
       .single();
 
-    if (acError) throw acError;
+    if (acError || !newAircraft) throw acError || new Error('Failed to create aircraft.');
 
     // 2. Immediately assign this new aircraft to the pilot who created it
-    if (userId) {
-      const { error: accessError } = await supabaseAdmin
-        .from('aft_user_aircraft_access')
-        .insert({
-          user_id: userId,
-          aircraft_id: newAircraft.id
-        });
-        
-      if (accessError) throw accessError;
-    }
+    const { error: accessError } = await supabaseAdmin
+      .from('aft_user_aircraft_access')
+      .insert({
+        user_id: userId,
+        aircraft_id: newAircraft.id
+      } as any);
+
+    if (accessError) throw accessError;
 
     return NextResponse.json({ success: true, aircraft: newAircraft });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 400 });
+  } catch (error) {
+    return handleApiError(error);
   }
 }

@@ -1,18 +1,31 @@
-import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 import { Resend } from 'resend';
+import { createAdminClient, handleApiError } from '@/lib/auth';
+import { env } from '@/lib/env';
+import { computeMetrics } from '@/lib/math';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+
+const resend = new Resend(env.RESEND_API_KEY);
 const FROM_EMAIL = 'notifications@skywardsociety.com';
 
 export async function GET(req: Request) {
   try {
-    const supabaseAdmin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+    // =====================================================
+    // SECURITY: Verify this is a legitimate Vercel CRON call
+    // =====================================================
+    if (env.CRON_SECRET) {
+      const authHeader = req.headers.get('authorization');
+      if (authHeader !== `Bearer ${env.CRON_SECRET}`) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      }
+    }
+
+    const supabaseAdmin = createAdminClient();
 
     const { data: aircraftList } = await supabaseAdmin.from('aft_aircraft').select('*');
     const { data: mxItems } = await supabaseAdmin.from('aft_maintenance_items').select('*').eq('is_required', true);
-    
-    if (!aircraftList || !mxItems) return NextResponse.json({ success: true, note: "No data" });
+
+    if (!aircraftList || !mxItems) return NextResponse.json({ success: true, note: 'No data' });
 
     // Fetch Global Settings
     const { data: settings } = await supabaseAdmin.from('aft_system_settings').select('*').eq('id', 1).single();
@@ -36,72 +49,45 @@ export async function GET(req: Request) {
       .from('aft_flight_logs')
       .select('aircraft_id, ftt, tach, created_at')
       .gte('created_at', oneEightyDaysAgo.toISOString())
-      .order('created_at', { ascending: true }); // Oldest first
+      .order('created_at', { ascending: true });
 
-    const admins = allRoles?.filter(r => r.role === 'admin').map(a => a.email).filter(Boolean) ||[];
+    const admins = allRoles?.filter(r => r.role === 'admin').map(a => a.email).filter(Boolean) || [];
 
-    for (const mx of mxItems) {
-      const aircraft = aircraftList.find(a => a.id === mx.aircraft_id);
+    for (const mx of mxItems as any[]) {
+      const aircraft = (aircraftList as any[]).find(a => a.id === mx.aircraft_id);
       if (!aircraft) continue;
+
+      // Use shared math utility instead of duplicated logic
+      const planeLogs = recentLogs?.filter(l => l.aircraft_id === aircraft.id) || [];
+      const { burnRate, confidenceScore } = computeMetrics(aircraft, planeLogs);
 
       let remaining = 0;
       let projectedDays = Infinity;
-      let burnRate = 0;
-      let confidenceScore = 0;
-
-      // 1. BURN RATE & CONFIDENCE ALGORITHM
-      const planeLogs = recentLogs?.filter(l => l.aircraft_id === aircraft.id) ||[];
-      if (planeLogs.length > 0) {
-        const isTurbine = aircraft.engine_type === 'Turbine';
-        const currentTime = aircraft.total_engine_time || 0;
-        
-        // A. 60-Day Adaptive Burn Rate
-        const sixtyDaysAgo = new Date();
-        sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
-        const logs60 = planeLogs.filter(l => new Date(l.created_at) >= sixtyDaysAgo);
-        if (logs60.length > 0) {
-          const oldest60 = logs60[0];
-          const oldestTime = isTurbine ? oldest60.ftt : oldest60.tach;
-          const daysElapsed = Math.max(1, (new Date().getTime() - new Date(oldest60.created_at).getTime()) / (1000 * 60 * 60 * 24));
-          if (oldestTime !== null && oldestTime !== undefined && currentTime > oldestTime) {
-            burnRate = (currentTime - oldestTime) / daysElapsed;
-          }
-        }
-
-        // B. 180-Day Reliability Score
-        const oldestLog = planeLogs[0];
-        const daysSpan = Math.max(1, (new Date().getTime() - new Date(oldestLog.created_at).getTime()) / (1000 * 60 * 60 * 24));
-        const historyScore = Math.min(50, (daysSpan / 180) * 50); // Max 50 pts for history span
-        const targetLogs = (daysSpan / 30) * 4; // Target 4 flights per month
-        const densityScore = targetLogs > 0 ? Math.min(50, (planeLogs.length / targetLogs) * 50) : 0; // Max 50 pts for consistency
-        confidenceScore = Math.round(historyScore + densityScore);
-      }
 
       if (mx.tracking_type === 'time') {
-        remaining = mx.due_time - (aircraft.total_engine_time || 0);
+        remaining = (mx.due_time ?? 0) - (aircraft.total_engine_time || 0);
         if (burnRate > 0) projectedDays = remaining / burnRate;
       } else {
-        const diffTime = new Date(mx.due_date + 'T00:00:00').getTime() - new Date(new Date().setHours(0,0,0,0)).getTime();
+        const diffTime = new Date((mx.due_date ?? '') + 'T00:00:00').getTime() - new Date(new Date().setHours(0, 0, 0, 0)).getTime();
         remaining = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
         projectedDays = remaining;
       }
 
-      let flagToUpdate: any = {};
-      let internalTriggerTemplate = null;
+      const flagToUpdate: Record<string, boolean> = {};
+      let internalTriggerTemplate: string | null = null;
 
       // ---------------------------------------------------------
-      // 2. AUTOMATED MECHANIC SCHEDULING (Predictive Logic)
+      // AUTOMATED MECHANIC SCHEDULING (Predictive Logic)
       // ---------------------------------------------------------
       const mxThresholdHitTime = mx.tracking_type === 'time' && remaining <= schedTime;
       const mxThresholdHitPredictive = mx.tracking_type === 'time' && projectedDays <= predictiveSchedDays;
       const mxThresholdHitDate = mx.tracking_type === 'date' && remaining <= schedDays;
-      
+
       if (mx.automate_scheduling && !mx.mx_schedule_sent) {
-        
-        // SCENARIO A: Auto-Send to Mechanic (Date MX, Hard Time MX, or High-Confidence Predictive)
+        // SCENARIO A: Auto-Send to Mechanic
         if (mxThresholdHitTime || mxThresholdHitDate || (mxThresholdHitPredictive && confidenceScore >= 80)) {
           if (aircraft.mx_contact_email) {
-            const mxCc = aircraft.main_contact_email ? [aircraft.main_contact_email] :[];
+            const mxCc = aircraft.main_contact_email ? [aircraft.main_contact_email] : [];
             let dueString = mx.tracking_type === 'time' ? `at ${mx.due_time} hours` : `on ${mx.due_date}`;
             if (mx.tracking_type === 'time' && burnRate > 0) {
               dueString += ` (Projected to hit in ~${Math.ceil(projectedDays)} days)`;
@@ -121,13 +107,13 @@ export async function GET(req: Request) {
             });
             flagToUpdate.mx_schedule_sent = true;
           }
-        } 
+        }
         // SCENARIO B: Heads-up to Primary Contact (Low-Confidence Predictive)
         else if (mxThresholdHitPredictive && confidenceScore < 80 && !mx.primary_heads_up_sent) {
           if (aircraft.main_contact_email) {
             await resend.emails.send({
               from: `Skyward System <${FROM_EMAIL}>`,
-              to:[aircraft.main_contact_email],
+              to: [aircraft.main_contact_email],
               subject: `Action Required: ${aircraft.tail_number} MX Prediction`,
               html: `<div style="font-family: Arial, sans-serif; font-size: 14px; color: #333333; line-height: 1.6;">
                       <p>Hello ${aircraft.main_contact || 'Operations'},</p>
@@ -142,10 +128,10 @@ export async function GET(req: Request) {
       }
 
       // ---------------------------------------------------------
-      // 3. INTERNAL PILOT/ADMIN ALERTS 
+      // INTERNAL PILOT/ADMIN ALERTS
       // ---------------------------------------------------------
       let hitReminder3 = false, hitReminder2 = false, hitReminder1 = false;
-      
+
       if (mx.tracking_type === 'time') {
         hitReminder3 = remaining <= reminderHours3 || projectedDays <= reminder3;
         hitReminder2 = remaining <= reminderHours2 || projectedDays <= reminder2;
@@ -168,15 +154,10 @@ export async function GET(req: Request) {
       }
 
       if (internalTriggerTemplate) {
-        const assignedPilotsIds = allAccess?.filter(a => a.aircraft_id === aircraft.id).map(a => a.user_id) ||[];
-        const assignedPilotsEmails = allRoles?.filter(r => assignedPilotsIds.includes(r.user_id)).map(r => r.email).filter(Boolean) ||[];
-        
-        const combinedEmails = admins.concat(assignedPilotsEmails);
-        const recipients: string[] =[];
-        for (let i = 0; i < combinedEmails.length; i++) {
-          const email = combinedEmails[i];
-          if (email && typeof email === 'string' && !recipients.includes(email)) recipients.push(email);
-        }
+        const assignedPilotsIds = allAccess?.filter(a => a.aircraft_id === aircraft.id).map(a => a.user_id) || [];
+        const assignedPilotsEmails = allRoles?.filter(r => assignedPilotsIds.includes(r.user_id)).map(r => r.email).filter(Boolean) || [];
+
+        const recipients = Array.from(new Set([...admins, ...assignedPilotsEmails])).filter(Boolean) as string[];
 
         if (recipients.length > 0) {
           await resend.emails.send({
@@ -197,7 +178,7 @@ export async function GET(req: Request) {
     }
 
     return NextResponse.json({ success: true });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 400 });
+  } catch (error) {
+    return handleApiError(error);
   }
 }

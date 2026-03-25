@@ -2,17 +2,19 @@
 
 import { useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { authFetch } from "@/lib/authFetch";
+import type { AircraftWithMetrics, SystemSettings, AppTab } from "@/lib/types";
 import { ShieldCheck, Settings, MailOpen, Database, Sliders, Globe, Users, PlaneTakeoff, X, ChevronRight } from "lucide-react";
 import { PrimaryButton } from "@/components/AppButtons";
 
 interface AdminModalsProps {
   showAdminMenu: boolean;
   setShowAdminMenu: (val: boolean) => void;
-  allAircraftList: any[];
+  allAircraftList: AircraftWithMetrics[];
   setActiveTail: (tail: string) => void;
-  setActiveTab: (tab: any) => void;
-  sysSettings: any;
-  setSysSettings: (val: any) => void;
+  setActiveTab: (tab: AppTab) => void;
+  sysSettings: SystemSettings;
+  setSysSettings: (val: SystemSettings) => void;
   refreshData: () => void;
 }
 
@@ -22,22 +24,22 @@ export default function AdminModals({
 }: AdminModalsProps) {
   
   const [showToolsMenu, setShowToolsMenu] = useState(false);
-  const[showGlobalFleetModal, setShowGlobalFleetModal] = useState(false);
-  const[showSettingsModal, setShowSettingsModal] = useState(false);
+  const [showGlobalFleetModal, setShowGlobalFleetModal] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showEmailPreview, setShowEmailPreview] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
-  const[showAccessModal, setShowAccessModal] = useState(false);
+  const [showAccessModal, setShowAccessModal] = useState(false);
 
   const [globalFleetSearch, setGlobalFleetSearch] = useState("");
-  const[emailPreviewType, setEmailPreviewType] = useState<'squawk_mx' | 'squawk_internal' | 'mx_schedule' | 'mx_reminder'>('squawk_mx');
+  const [emailPreviewType, setEmailPreviewType] = useState<'squawk_mx' | 'squawk_internal' | 'mx_schedule' | 'mx_reminder'>('squawk_mx');
   
   const [inviteEmail, setInviteEmail] = useState("");
-  const[inviteRole, setInviteRole] = useState<'admin'|'pilot'>('pilot');
-  const[inviteAircraftIds, setInviteAircraftIds] = useState<string[]>([]);
+  const [inviteRole, setInviteRole] = useState<'admin'|'pilot'>('pilot');
+  const [inviteAircraftIds, setInviteAircraftIds] = useState<string[]>([]);
 
   const [allUsers, setAllUsers] = useState<any[]>([]);
   const [selectedAccessUserId, setSelectedAccessUserId] = useState<string>("");
-  const[userAccessList, setUserAccessList] = useState<string[]>([]);
+  const [userAccessList, setUserAccessList] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   if (!showAdminMenu && !showGlobalFleetModal && !showToolsMenu && !showSettingsModal && !showEmailPreview && !showAccessModal && !showInviteModal) {
@@ -48,11 +50,13 @@ export default function AdminModals({
     if (!confirm("Run Health Check?\n\nThis will safely purge old read-receipts (older than 30 days) to keep the database fast and optimized.")) return;
     setIsSubmitting(true);
     try {
-      const thirtyDaysAgo = new Date();
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-      const { error } = await supabase.from('aft_note_reads').delete().lt('read_at', thirtyDaysAgo.toISOString());
-      if (error) throw error;
-      alert("Database health check & cleanup completed successfully!");
+      const res = await authFetch('/api/admin/db-health', { method: 'POST' });
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error || 'Cleanup failed');
+      }
+      const data = await res.json();
+      alert(`Database health check completed!\n\nOrphaned images cleaned:\n- Squawk images: ${data.cleaned?.squawk_images || 0}\n- Note images: ${data.cleaned?.note_images || 0}\n- Avatars: ${data.cleaned?.avatars || 0}`);
     } catch (e: any) { 
       alert("Cleanup failed: " + e.message); 
     }
@@ -118,10 +122,17 @@ export default function AdminModals({
     if (!confirm(`CRITICAL WARNING: Are you absolutely sure you want to permanently delete ${selectedUserEmail} and revoke all their access?`)) return;
     setIsSubmitting(true);
     try {
-      const res = await fetch('/api/users', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: selectedAccessUserId }) });
-      if (!res.ok) throw new Error(await res.text());
+      // SECURITY: Use authFetch instead of plain fetch
+      const res = await authFetch('/api/users', { 
+        method: 'DELETE', 
+        body: JSON.stringify({ userId: selectedAccessUserId }) 
+      });
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error || 'Failed to delete user');
+      }
       alert("User successfully deleted.");
-      const { data } = await supabase.from('aft_user_roles').select('*').eq('role', 'pilot');
+      const { data } = await supabase.from('aft_user_roles').select('*').order('role').order('email');
       if (data) setAllUsers(data);
       setSelectedAccessUserId("");
       setUserAccessList([]);
@@ -135,11 +146,15 @@ export default function AdminModals({
     e.preventDefault(); 
     setIsSubmitting(true);
     try {
-      const res = await fetch('/api/invite', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+      // SECURITY: Use authFetch instead of plain fetch
+      const res = await authFetch('/api/invite', {
+        method: 'POST',
         body: JSON.stringify({ email: inviteEmail, role: inviteRole, aircraftIds: inviteAircraftIds })
       });
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error || 'Failed to invite user');
+      }
       alert(`Invitation successfully sent to ${inviteEmail}!`);
       setShowInviteModal(false); setInviteEmail(""); setInviteAircraftIds([]);
     } catch (error: any) { 
@@ -149,7 +164,7 @@ export default function AdminModals({
   };
 
   const getEmailPreviewHtml = () => {
-    const baseStyle = `font-family: Arial, sans-serif; font-size: 14px; color: #333333; line-height: 1.6; max-w: 600px;`;
+    const baseStyle = `font-family: Arial, sans-serif; font-size: 14px; color: #333333; line-height: 1.6; max-width: 600px;`;
     const contactInfo = `<strong>John Doe</strong><br/>(555) 123-4567<br/><a href="#" style="color: #333333;">john@doe.com</a>`;
     
     if (emailPreviewType === 'squawk_mx') {
@@ -167,6 +182,7 @@ export default function AdminModals({
     return "";
   };
 
+  // JSX is identical to original — all UI preserved, only the data flow is secured
   return (
     <>
       {showAdminMenu && (
@@ -218,29 +234,14 @@ export default function AdminModals({
               <button onClick={() => { setShowGlobalFleetModal(false); setGlobalFleetSearch(""); }} className="text-gray-400 hover:text-red-500"><X size={24}/></button>
             </div>
             <div className="mb-4 shrink-0">
-              <input 
-                type="text" 
-                placeholder="Search Tail Number..." 
-                value={globalFleetSearch}
-                onChange={(e) => setGlobalFleetSearch(e.target.value.toUpperCase())}
-                className="w-full border border-gray-300 rounded p-3 text-sm focus:border-navy outline-none uppercase font-bold"
-              />
+              <input type="text" placeholder="Search Tail Number..." value={globalFleetSearch} onChange={(e) => setGlobalFleetSearch(e.target.value.toUpperCase())} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-navy outline-none uppercase font-bold" />
             </div>
             <div className="overflow-y-auto space-y-2 pr-2 flex-1">
               {allAircraftList.filter(ac => ac.tail_number.includes(globalFleetSearch)).length === 0 ? (
                 <p className="text-center text-sm text-gray-400 italic py-4">No aircraft found.</p>
               ) : (
                 allAircraftList.filter(ac => ac.tail_number.includes(globalFleetSearch)).map(ac => (
-                  <button 
-                    key={ac.id} 
-                    onClick={() => {
-                      setActiveTail(ac.tail_number);
-                      setActiveTab('summary');
-                      setShowGlobalFleetModal(false);
-                      setGlobalFleetSearch("");
-                    }}
-                    className="w-full bg-gray-50 border border-gray-200 p-3 rounded text-left flex justify-between items-center hover:border-navy hover:bg-blue-50 transition-colors active:scale-95"
-                  >
+                  <button key={ac.id} onClick={() => { setActiveTail(ac.tail_number); setActiveTab('summary'); setShowGlobalFleetModal(false); setGlobalFleetSearch(""); }} className="w-full bg-gray-50 border border-gray-200 p-3 rounded text-left flex justify-between items-center hover:border-navy hover:bg-blue-50 transition-colors active:scale-95">
                     <div>
                       <span className="font-oswald text-lg font-bold text-navy uppercase block leading-none">{ac.tail_number}</span>
                       <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1 block">{ac.aircraft_type}</span>
@@ -287,33 +288,28 @@ export default function AdminModals({
               <button onClick={() => setShowSettingsModal(false)} className="text-gray-400 hover:text-red-500"><X size={24}/></button>
             </div>
             <form onSubmit={handleSaveSettings} className="space-y-4">
-              
               <p className="text-[10px] text-gray-500 uppercase tracking-widest border-b pb-1">Internal Alerts - Date Based (Days)</p>
               <div className="grid grid-cols-3 gap-2">
                 <div><label className="text-[10px] font-bold uppercase text-navy">Alert 1</label><input type="number" value={sysSettings.reminder_1 || 30} onChange={e=>setSysSettings({...sysSettings, reminder_1: parseInt(e.target.value)})} className="w-full border rounded p-2 text-sm mt-1 focus:border-navy outline-none" /></div>
                 <div><label className="text-[10px] font-bold uppercase text-navy">Alert 2</label><input type="number" value={sysSettings.reminder_2 || 15} onChange={e=>setSysSettings({...sysSettings, reminder_2: parseInt(e.target.value)})} className="w-full border rounded p-2 text-sm mt-1 focus:border-navy outline-none" /></div>
                 <div><label className="text-[10px] font-bold uppercase text-navy">Alert 3</label><input type="number" value={sysSettings.reminder_3 || 5} onChange={e=>setSysSettings({...sysSettings, reminder_3: parseInt(e.target.value)})} className="w-full border rounded p-2 text-sm mt-1 focus:border-navy outline-none" /></div>
               </div>
-
               <p className="text-[10px] text-gray-500 uppercase tracking-widest border-b pb-1 mt-4">Internal Alerts - Time Based (Hours)</p>
               <div className="grid grid-cols-3 gap-2">
                 <div><label className="text-[10px] font-bold uppercase text-navy">Alert 1</label><input type="number" value={sysSettings.reminder_hours_1 || 30} onChange={e=>setSysSettings({...sysSettings, reminder_hours_1: parseInt(e.target.value)})} className="w-full border rounded p-2 text-sm mt-1 focus:border-navy outline-none" /></div>
                 <div><label className="text-[10px] font-bold uppercase text-navy">Alert 2</label><input type="number" value={sysSettings.reminder_hours_2 || 15} onChange={e=>setSysSettings({...sysSettings, reminder_hours_2: parseInt(e.target.value)})} className="w-full border rounded p-2 text-sm mt-1 focus:border-navy outline-none" /></div>
                 <div><label className="text-[10px] font-bold uppercase text-navy">Alert 3</label><input type="number" value={sysSettings.reminder_hours_3 || 5} onChange={e=>setSysSettings({...sysSettings, reminder_hours_3: parseInt(e.target.value)})} className="w-full border rounded p-2 text-sm mt-1 focus:border-navy outline-none" /></div>
               </div>
-
               <p className="text-[10px] text-gray-500 uppercase tracking-widest border-b pb-1 mt-4">Mechanic Scheduling Requests (To MX)</p>
               <div className="grid grid-cols-2 gap-2">
                 <div><label className="text-[10px] font-bold uppercase text-navy">Hard Hour Limit</label><input type="number" value={sysSettings.sched_time || 10} onChange={e=>setSysSettings({...sysSettings, sched_time: parseInt(e.target.value)})} className="w-full border rounded p-2 text-sm mt-1 focus:border-navy outline-none" /></div>
                 <div><label className="text-[10px] font-bold uppercase text-navy">Hard Date Limit</label><input type="number" value={sysSettings.sched_days || 30} onChange={e=>setSysSettings({...sysSettings, sched_days: parseInt(e.target.value)})} className="w-full border rounded p-2 text-sm mt-1 focus:border-navy outline-none" /></div>
               </div>
-
               <div>
                 <label className="text-[10px] font-bold uppercase text-navy">Predictive Time Scheduling (Days Out)</label>
                 <input type="number" value={sysSettings.predictive_sched_days || 45} onChange={e=>setSysSettings({...sysSettings, predictive_sched_days: parseInt(e.target.value)})} className="w-full border rounded p-2 text-sm mt-1 focus:border-navy outline-none" />
                 <p className="text-[10px] text-gray-400 mt-2 leading-tight">If an hour-based item is projected to hit its limit within this timeframe, the scheduling email will dispatch based on the flight history Confidence Score.</p>
               </div>
-
               <div className="pt-4"><PrimaryButton disabled={isSubmitting}>{isSubmitting ? "Saving..." : "Save Globally"}</PrimaryButton></div>
             </form>
           </div>
@@ -359,7 +355,6 @@ export default function AdminModals({
                   {allUsers.map(u => <option key={u.user_id} value={u.user_id}>{u.email || u.user_id} ({u.role})</option>)}
                 </select>
               </div>
-
               {selectedAccessUserId && (
                 <>
                   <div className="border border-gray-200 rounded p-4 bg-gray-50">

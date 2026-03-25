@@ -1,19 +1,27 @@
-import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 import { Resend } from 'resend';
+import { requireAuth, handleApiError } from '@/lib/auth';
+import { env } from '@/lib/env';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+const resend = new Resend(env.RESEND_API_KEY);
 const FROM_EMAIL = 'notifications@skywardsociety.com';
 
 export async function POST(req: Request) {
   try {
+    // SECURITY: Require authentication (any logged-in user can trigger this)
+    const { supabaseAdmin } = await requireAuth(req);
     const { aircraft, mxItem } = await req.json();
-    const supabaseAdmin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
-    
+
+    if (!aircraft || !mxItem) {
+      return NextResponse.json({ error: 'Aircraft and maintenance item data are required.' }, { status: 400 });
+    }
+
     if (aircraft.mx_contact_email) {
-      const mxCc = aircraft.main_contact_email ? [aircraft.main_contact_email] :[];
-      
-      let dueString = mxItem.tracking_type === 'time' ? `at ${mxItem.due_time} hours` : `on ${mxItem.due_date}`;
+      const mxCc = aircraft.main_contact_email ? [aircraft.main_contact_email] : [];
+
+      const dueString = mxItem.tracking_type === 'time'
+        ? `at ${mxItem.due_time} hours`
+        : `on ${mxItem.due_date}`;
 
       await resend.emails.send({
         from: `Skyward Maintenance <${FROM_EMAIL}>`,
@@ -21,7 +29,7 @@ export async function POST(req: Request) {
         cc: mxCc,
         subject: `Scheduling Request: ${aircraft.tail_number} Maintenance`,
         html: `
-          <div style="font-family: Arial, sans-serif; max-w: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; border-radius: 8px;">
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; border-radius: 8px;">
             <h2 style="color: #1B4869; text-transform: uppercase; letter-spacing: 2px; border-bottom: 2px solid #1B4869; padding-bottom: 10px;">Skyward Society</h2>
             <p style="color: #525659; font-size: 16px;">Hello ${aircraft.mx_contact || ''},</p>
             <p style="color: #525659; font-size: 16px;">The following maintenance item is coming due for <strong>${aircraft.tail_number}</strong>. Please let us know when you are able to add this aircraft to your schedule.</p>
@@ -39,12 +47,12 @@ export async function POST(req: Request) {
         `
       });
 
-      // Update the database to clear the manual trigger button!
+      // Update the database to clear the manual trigger button
       await supabaseAdmin.from('aft_maintenance_items').update({ mx_schedule_sent: true }).eq('id', mxItem.id);
     }
 
     return NextResponse.json({ success: true });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 400 });
+  } catch (error) {
+    return handleApiError(error);
   }
 }

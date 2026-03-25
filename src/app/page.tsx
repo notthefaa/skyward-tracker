@@ -2,7 +2,9 @@
 
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/lib/supabase";
+import { enrichAircraftWithMetrics } from "@/lib/math";
 import dynamic from "next/dynamic";
+import type { AircraftWithMetrics, SystemSettings, AppRole, AircraftStatus, AppTab } from "@/lib/types";
 import { 
   PlaneTakeoff, Wrench, AlertTriangle, FileText, Clock, LogOut, 
   Plus, Edit2, ChevronDown, Home, LayoutGrid, Send, ShieldCheck, X, Share, Copy, WifiOff, RefreshCw
@@ -23,31 +25,34 @@ const NotesTab = dynamic(() => import("@/components/tabs/NotesTab"));
 const FleetSummary = dynamic(() => import("@/components/tabs/FleetSummary"));
 
 export default function FleetTrackerApp() {
-  // --- BULLETPROOF STATE MANAGEMENT ---
+  // --- STATE MANAGEMENT ---
   const [session, setSession] = useState<any>(null);
   const [isAuthChecking, setIsAuthChecking] = useState(true);
-  const[isDataLoaded, setIsDataLoaded] = useState(false);
+  const [isDataLoaded, setIsDataLoaded] = useState(false);
   const [isNetworkTimeout, setIsNetworkTimeout] = useState(false);
   const [newDataAvailable, setNewDataAvailable] = useState(false); 
   const dataFetchTriggeredRef = useRef(false); 
   
-  const [role, setRole] = useState<'admin' | 'pilot'>('pilot');
+  const [role, setRole] = useState<AppRole>('pilot');
   const [userInitials, setUserInitials] = useState("");
   const companionUrl = process.env.NEXT_PUBLIC_COMPANION_URL || "https://your-logit-app.vercel.app";
 
-  const [allAircraftList, setAllAircraftList] = useState<any[]>([]);
-  const [aircraftList, setAircraftList] = useState<any[]>([]);
-  const[activeTail, setActiveTail] = useState<string>("");
-  const [activeTab, setActiveTab] = useState<'fleet' | 'summary' | 'times' | 'mx' | 'squawks' | 'notes'>('fleet');
-  const [aircraftStatus, setAircraftStatus] = useState<'airworthy' | 'issues' | 'grounded'>('airworthy');
+  const [allAircraftList, setAllAircraftList] = useState<AircraftWithMetrics[]>([]);
+  const [aircraftList, setAircraftList] = useState<AircraftWithMetrics[]>([]);
+  const [activeTail, setActiveTail] = useState<string>("");
+  const [activeTab, setActiveTab] = useState<AppTab>('fleet');
+  const [aircraftStatus, setAircraftStatus] = useState<AircraftStatus>('airworthy');
   const [unreadNotes, setUnreadNotes] = useState(0);
 
-  const [sysSettings, setSysSettings] = useState({
-    reminder_1: 30, reminder_2: 15, reminder_3: 5, sched_time: 10, sched_days: 30
+  const [sysSettings, setSysSettings] = useState<SystemSettings>({
+    id: 1,
+    reminder_1: 30, reminder_2: 15, reminder_3: 5,
+    reminder_hours_1: 30, reminder_hours_2: 15, reminder_hours_3: 5,
+    sched_time: 10, sched_days: 30, predictive_sched_days: 45
   });
 
   const [showAdminMenu, setShowAdminMenu] = useState(false);
-  const[showLogItModal, setShowLogItModal] = useState(false);
+  const [showLogItModal, setShowLogItModal] = useState(false);
   const [showAircraftModal, setShowAircraftModal] = useState(false);
   const [editingAircraftId, setEditingAircraftId] = useState<string | null>(null);
 
@@ -91,7 +96,7 @@ export default function FleetTrackerApp() {
     });
     
     return () => subscription.unsubscribe();
-  },[]);
+  }, []);
 
   // --- NETWORK GUARD ---
   useEffect(() => {
@@ -135,29 +140,29 @@ export default function FleetTrackerApp() {
 
   useEffect(() => { 
     if (activeTail) localStorage.setItem('aft_active_tail', activeTail);
-  },[activeTail]);
+  }, [activeTail]);
 
   useEffect(() => { 
     if (activeTail && allAircraftList.length > 0 && session) { 
       checkGroundedStatus(activeTail); 
       fetchUnreadNotes(activeTail, session.user.id); 
     } 
-  },[activeTail, allAircraftList, session]);
+  }, [activeTail, allAircraftList, session]);
 
   const fetchAircraftData = async (userId: string) => {
     const { data: settingsData } = await supabase.from('aft_system_settings').select('*').eq('id', 1).single();
-    if (settingsData) setSysSettings(settingsData);
+    if (settingsData) setSysSettings(settingsData as SystemSettings);
 
     const { data: roleData } = await supabase.from('aft_user_roles').select('role, initials').eq('user_id', userId).single();
     if (roleData) {
-      setRole(roleData.role);
+      setRole(roleData.role as AppRole);
       setUserInitials(roleData.initials || "");
     }
     
     const { data: allPlanesData } = await supabase.from('aft_aircraft').select('*').order('tail_number');
-    let allPlanes = allPlanesData ||[];
+    const rawPlanes = allPlanesData || [];
 
-    // --- CALCULATE BURN RATES & CONFIDENCE ---
+    // --- CALCULATE BURN RATES & CONFIDENCE using shared utility ---
     const oneEightyDaysAgo = new Date();
     oneEightyDaysAgo.setDate(oneEightyDaysAgo.getDate() - 180);
     const { data: recentLogs } = await supabase
@@ -165,44 +170,12 @@ export default function FleetTrackerApp() {
       .select('aircraft_id, ftt, tach, created_at')
       .gte('created_at', oneEightyDaysAgo.toISOString())
       .order('created_at', { ascending: true }); 
-      
-    allPlanes = allPlanes.map(plane => {
-      const planeLogs = recentLogs?.filter(l => l.aircraft_id === plane.id) ||[];
-      let burnRate = 0;
-      let confidenceScore = 0;
 
-      if (planeLogs.length > 0) {
-        const isTurbine = plane.engine_type === 'Turbine';
-        const currentTime = plane.total_engine_time || 0;
-        
-        // 1. 60-Day Burn Rate
-        const sixtyDaysAgo = new Date();
-        sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
-        const logs60 = planeLogs.filter(l => new Date(l.created_at) >= sixtyDaysAgo);
-        if (logs60.length > 0) {
-          const oldest60 = logs60[0];
-          const oldestTime = isTurbine ? oldest60.ftt : oldest60.tach;
-          const daysElapsed = Math.max(1, (new Date().getTime() - new Date(oldest60.created_at).getTime()) / (1000 * 60 * 60 * 24));
-          if (oldestTime !== null && oldestTime !== undefined && currentTime > oldestTime) {
-            burnRate = (currentTime - oldestTime) / daysElapsed;
-          }
-        }
-
-        // 2. 180-Day Confidence Score
-        const oldestLog = planeLogs[0];
-        const daysSpan = Math.max(1, (new Date().getTime() - new Date(oldestLog.created_at).getTime()) / (1000 * 60 * 60 * 24));
-        const historyScore = Math.min(50, (daysSpan / 180) * 50); 
-        const targetLogs = (daysSpan / 30) * 4; 
-        const densityScore = targetLogs > 0 ? Math.min(50, (planeLogs.length / targetLogs) * 50) : 0; 
-        confidenceScore = Math.round(historyScore + densityScore);
-      }
-      return { ...plane, burnRate, confidenceScore }; 
-    });
-
+    const allPlanes = enrichAircraftWithMetrics(rawPlanes as any[], recentLogs || []);
     setAllAircraftList(allPlanes);
 
     const { data: accessData } = await supabase.from('aft_user_aircraft_access').select('aircraft_id').eq('user_id', userId);
-    const assignedIds = accessData?.map(a => a.aircraft_id) ||[];
+    const assignedIds = accessData?.map(a => a.aircraft_id) || [];
     
     const assignedPlanes = allPlanes.filter(a => assignedIds.includes(a.id));
     setAircraftList(assignedPlanes);
@@ -279,7 +252,7 @@ export default function FleetTrackerApp() {
     await supabase.auth.signOut();
   };
 
-  const openAircraftForm = (aircraft: any = null) => {
+  const openAircraftForm = (aircraft: AircraftWithMetrics | null = null) => {
     if (aircraft) {
       setEditingAircraftId(aircraft.id);
     } else {
@@ -346,15 +319,13 @@ export default function FleetTrackerApp() {
     if (outOfScopePlane) dropdownOptions.push(outOfScopePlane);
   }
 
-  const selectedAircraftData = allAircraftList.find(a => a.tail_number === activeTail);
+  const selectedAircraftData = allAircraftList.find(a => a.tail_number === activeTail) || null;
 
   return (
     <div className="flex flex-col bg-neutral-100 h-[100dvh] w-full overflow-hidden relative">
 
-      {/* --- NEW TUTORIAL MODAL --- */}
       <TutorialModal session={session} role={role} />
 
-      {/* --- NEW DATA AVAILABLE PILL --- */}
       {newDataAvailable && (
         <div className="absolute top-20 left-1/2 -translate-x-1/2 z-[100] animate-fade-in">
           <button 
@@ -366,7 +337,6 @@ export default function FleetTrackerApp() {
         </div>
       )}
       
-      {/* FIX: Removed the {showAdminMenu && ...} conditional wrapper to prevent component death */}
       <AdminModals 
         showAdminMenu={showAdminMenu} 
         setShowAdminMenu={setShowAdminMenu} 
@@ -381,9 +351,9 @@ export default function FleetTrackerApp() {
       {showAircraftModal && (
         <AircraftModal 
           session={session} 
-          existingAircraft={editingAircraftId ? allAircraftList.find(a => a.id === editingAircraftId) : null} 
+          existingAircraft={editingAircraftId ? allAircraftList.find(a => a.id === editingAircraftId) || null : null} 
           onClose={() => setShowAircraftModal(false)} 
-          onSuccess={(newTail) => {
+          onSuccess={(newTail: string) => {
             setShowAircraftModal(false);
             fetchAircraftData(session.user.id);
             setActiveTail(newTail);
@@ -403,7 +373,7 @@ export default function FleetTrackerApp() {
             </p>
             <ol className="text-left text-sm text-gray-600 font-roboto mb-8 space-y-2 max-w-xs mx-auto list-decimal pl-4">
               <li>Tap below to copy the app link.</li>
-              <li>Open your phone's browser and paste the link.</li>
+              <li>Open your phone&apos;s browser and paste the link.</li>
               <li>Use the Share menu <Share size={14} className="inline text-blue-500 mb-1"/> to Add to Home Screen.</li>
             </ol>
             <button onClick={handleCopyQuickLink} className="w-full bg-[#3AB0FF] text-white font-oswald text-xl font-bold uppercase tracking-widest py-4 rounded-xl shadow-lg active:scale-95 transition-transform flex items-center justify-center gap-2">
@@ -475,8 +445,8 @@ export default function FleetTrackerApp() {
 
       <main className="flex-1 overflow-y-auto p-4 flex justify-center w-full" style={{ touchAction: 'auto' }}>
         <div className="w-full max-w-3xl flex flex-col gap-6">
-          {activeTab === 'fleet' && <FleetSummary aircraftList={aircraftList} onSelectAircraft={(tail) => { setActiveTail(tail); setActiveTab('summary'); }} />}
-          {activeTab === 'summary' && <SummaryTab aircraft={selectedAircraftData} setActiveTab={(tab: any) => setActiveTab(tab)} role={role} onDeleteAircraft={handleDeleteAircraft} sysSettings={sysSettings} />}
+          {activeTab === 'fleet' && <FleetSummary aircraftList={aircraftList} onSelectAircraft={(tail: string) => { setActiveTail(tail); setActiveTab('summary'); }} />}
+          {activeTab === 'summary' && <SummaryTab aircraft={selectedAircraftData} setActiveTab={(tab: AppTab) => setActiveTab(tab)} role={role} onDeleteAircraft={handleDeleteAircraft} sysSettings={sysSettings} />}
           {activeTab === 'times' && <TimesTab aircraft={selectedAircraftData} session={session} role={role} userInitials={userInitials} onUpdate={() => fetchAircraftData(session.user.id)} />}
           {activeTab === 'mx' && <MaintenanceTab aircraft={selectedAircraftData} role={role} onGroundedStatusChange={() => checkGroundedStatus(activeTail)} sysSettings={sysSettings} />}
           {activeTab === 'squawks' && <SquawksTab aircraft={selectedAircraftData} session={session} role={role} userInitials={userInitials} onGroundedStatusChange={() => checkGroundedStatus(activeTail)} />}
@@ -495,7 +465,7 @@ export default function FleetTrackerApp() {
           ].map((tab) => (
             <button 
               key={tab.id} 
-              onClick={() => setActiveTab(tab.id as any)} 
+              onClick={() => setActiveTab(tab.id as AppTab)} 
               className={`flex-1 py-3 md:py-4 flex flex-col items-center justify-center transition-all relative active:scale-95 ${getTabColor(tab.id)}`}
             >
               <div className="relative mb-1">

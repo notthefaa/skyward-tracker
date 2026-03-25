@@ -1,24 +1,28 @@
-import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
+import { requireAuth, handleApiError } from '@/lib/auth';
 
 export async function DELETE(req: Request) {
   try {
+    // SECURITY: Only admins can delete users
+    const { user, supabaseAdmin } = await requireAuth(req, 'admin');
     const { userId } = await req.json();
-    
-    if (!userId) throw new Error("User ID is required");
 
-    const supabaseAdmin = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    );
+    if (!userId) {
+      return NextResponse.json({ error: 'User ID is required.' }, { status: 400 });
+    }
 
-    // This securely deletes them from the Auth system. 
-    // Our SQL script ensures their flight logs are safely preserved.
+    // Prevent admins from accidentally deleting themselves
+    if (userId === user.id) {
+      return NextResponse.json({ error: 'You cannot delete your own account.' }, { status: 400 });
+    }
+
+    // This securely deletes them from the Auth system.
+    // Our SQL script ensures their flight logs are safely preserved (ON DELETE SET NULL).
     const { error } = await supabaseAdmin.auth.admin.deleteUser(userId);
     if (error) throw error;
 
     return NextResponse.json({ success: true });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 400 });
+  } catch (error) {
+    return handleApiError(error);
   }
 }

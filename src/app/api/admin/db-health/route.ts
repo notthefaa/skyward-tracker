@@ -1,12 +1,70 @@
-import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
+import { requireAuth, handleApiError } from '@/lib/auth';
+
+/**
+ * Lists ALL files in a storage bucket using pagination.
+ * Supabase limits `.list()` to 1000 items, so we page through.
+ */
+async function listAllFiles(
+  supabaseAdmin: any,
+  bucket: string
+) {
+  const allFiles: { name: string }[] = [];
+  const pageSize = 1000;
+  let offset = 0;
+  let hasMore = true;
+
+  while (hasMore) {
+    const { data } = await supabaseAdmin.storage.from(bucket).list('', {
+      limit: pageSize,
+      offset,
+    });
+    if (data && data.length > 0) {
+      allFiles.push(...data);
+      offset += data.length;
+      hasMore = data.length === pageSize; // If we got a full page, there might be more
+    } else {
+      hasMore = false;
+    }
+  }
+
+  return allFiles;
+}
+
+/**
+ * Sweeps a storage bucket for orphaned files not referenced in the active URLs set.
+ */
+async function sweepBucket(
+  supabaseAdmin: any,
+  bucket: string,
+  activeUrls: Set<string>
+) {
+  const files = await listAllFiles(supabaseAdmin, bucket);
+  const filesToDelete: string[] = [];
+
+  for (const f of files) {
+    if (f.name === '.emptyFolderPlaceholder') continue;
+    const { data } = supabaseAdmin.storage.from(bucket).getPublicUrl(f.name);
+    if (!activeUrls.has(data.publicUrl)) {
+      filesToDelete.push(f.name);
+    }
+  }
+
+  if (filesToDelete.length > 0) {
+    // Supabase storage.remove() accepts up to 1000 items, batch if needed
+    for (let i = 0; i < filesToDelete.length; i += 1000) {
+      const batch = filesToDelete.slice(i, i + 1000);
+      await supabaseAdmin.storage.from(bucket).remove(batch);
+    }
+  }
+
+  return filesToDelete.length;
+}
 
 export async function POST(req: Request) {
   try {
-    const supabaseAdmin = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    );
+    // SECURITY: Only admins can run database health checks
+    const { supabaseAdmin } = await requireAuth(req, 'admin');
 
     // ==========================================
     // 1. PURGE OLD READ RECEIPTS (30 Days)
@@ -23,102 +81,52 @@ export async function POST(req: Request) {
     await supabaseAdmin.from('aft_notes').delete().lt('created_at', sixMonthsAgo.toISOString());
 
     // ==========================================
-    // 3. ORPHANED IMAGE SWEEPER
+    // 3. ORPHANED IMAGE SWEEPER (with pagination)
     // ==========================================
 
-    // --- A. Squawk Images Sweep ---
+    // --- A. Squawk Images ---
     const { data: squawks } = await supabaseAdmin.from('aft_squawks').select('pictures');
-    const activeSquawkPics: string[] =[];
+    const activeSquawkPics = new Set<string>();
     if (squawks) {
-      for (let i = 0; i < squawks.length; i++) {
-        const pics = squawks[i].pictures;
-        if (pics && Array.isArray(pics)) {
-          for (let j = 0; j < pics.length; j++) {
-            activeSquawkPics.push(pics[j]);
-          }
+      for (const sq of squawks) {
+        if (sq.pictures && Array.isArray(sq.pictures)) {
+          for (const pic of sq.pictures) activeSquawkPics.add(pic);
         }
       }
     }
+    const squawkOrphans = await sweepBucket(supabaseAdmin, 'aft_squawk_images', activeSquawkPics);
 
-    const { data: squawkFiles } = await supabaseAdmin.storage.from('aft_squawk_images').list('', { limit: 1000 });
-    if (squawkFiles) {
-      const filesToDelete: string[] =[];
-      for (let i = 0; i < squawkFiles.length; i++) {
-        const f = squawkFiles[i];
-        if (f.name !== '.emptyFolderPlaceholder') {
-          const { data } = supabaseAdmin.storage.from('aft_squawk_images').getPublicUrl(f.name);
-          if (activeSquawkPics.indexOf(data.publicUrl) === -1) {
-            filesToDelete.push(f.name);
-          }
-        }
-      }
-      if (filesToDelete.length > 0) {
-        await supabaseAdmin.storage.from('aft_squawk_images').remove(filesToDelete);
-      }
-    }
-
-    // --- B. Note Images Sweep ---
+    // --- B. Note Images ---
     const { data: notes } = await supabaseAdmin.from('aft_notes').select('pictures');
-    const activeNotePics: string[] =[];
+    const activeNotePics = new Set<string>();
     if (notes) {
-      for (let i = 0; i < notes.length; i++) {
-        const pics = notes[i].pictures;
-        if (pics && Array.isArray(pics)) {
-          for (let j = 0; j < pics.length; j++) {
-            activeNotePics.push(pics[j]);
-          }
+      for (const note of notes) {
+        if (note.pictures && Array.isArray(note.pictures)) {
+          for (const pic of note.pictures) activeNotePics.add(pic);
         }
       }
     }
+    const noteOrphans = await sweepBucket(supabaseAdmin, 'aft_note_images', activeNotePics);
 
-    const { data: noteFiles } = await supabaseAdmin.storage.from('aft_note_images').list('', { limit: 1000 });
-    if (noteFiles) {
-      const filesToDelete: string[] =[];
-      for (let i = 0; i < noteFiles.length; i++) {
-        const f = noteFiles[i];
-        if (f.name !== '.emptyFolderPlaceholder') {
-          const { data } = supabaseAdmin.storage.from('aft_note_images').getPublicUrl(f.name);
-          if (activeNotePics.indexOf(data.publicUrl) === -1) {
-            filesToDelete.push(f.name);
-          }
-        }
-      }
-      if (filesToDelete.length > 0) {
-        await supabaseAdmin.storage.from('aft_note_images').remove(filesToDelete);
-      }
-    }
-
-    // --- C. Aircraft Avatars Sweep ---
+    // --- C. Aircraft Avatars ---
     const { data: aircraft } = await supabaseAdmin.from('aft_aircraft').select('avatar_url');
-    const activeAvatars: string[] =[];
+    const activeAvatars = new Set<string>();
     if (aircraft) {
-      for (let i = 0; i < aircraft.length; i++) {
-        const url = aircraft[i].avatar_url;
-        if (url && typeof url === 'string') {
-          activeAvatars.push(url);
-        }
+      for (const ac of aircraft) {
+        if (ac.avatar_url && typeof ac.avatar_url === 'string') activeAvatars.add(ac.avatar_url);
       }
     }
+    const avatarOrphans = await sweepBucket(supabaseAdmin, 'aft_aircraft_avatars', activeAvatars);
 
-    const { data: avatarFiles } = await supabaseAdmin.storage.from('aft_aircraft_avatars').list('', { limit: 1000 });
-    if (avatarFiles) {
-      const filesToDelete: string[] =[];
-      for (let i = 0; i < avatarFiles.length; i++) {
-        const f = avatarFiles[i];
-        if (f.name !== '.emptyFolderPlaceholder') {
-          const { data } = supabaseAdmin.storage.from('aft_aircraft_avatars').getPublicUrl(f.name);
-          if (activeAvatars.indexOf(data.publicUrl) === -1) {
-            filesToDelete.push(f.name);
-          }
-        }
+    return NextResponse.json({
+      success: true,
+      cleaned: {
+        squawk_images: squawkOrphans,
+        note_images: noteOrphans,
+        avatars: avatarOrphans,
       }
-      if (filesToDelete.length > 0) {
-        await supabaseAdmin.storage.from('aft_aircraft_avatars').remove(filesToDelete);
-      }
-    }
-
-    return NextResponse.json({ success: true });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 400 });
+    });
+  } catch (error) {
+    return handleApiError(error);
   }
 }

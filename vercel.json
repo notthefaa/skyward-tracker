@@ -1,5 +1,5 @@
 {
-  "crons":[
+  "crons": [
     {
       "path": "/api/cron/mx-reminders",
       "schedule": "0 12 * * *"

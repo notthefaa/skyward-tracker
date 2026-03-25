@@ -1,32 +1,34 @@
-import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
+import { createAdminClient, handleApiError } from '@/lib/auth';
 
 export async function POST(req: Request) {
   try {
     const { email } = await req.json();
 
     if (!email) {
-      throw new Error("Email is required.");
+      return NextResponse.json({ error: 'Email is required.' }, { status: 400 });
     }
 
-    const supabaseAdmin = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    );
+    // NOTE: This route intentionally does NOT require authentication.
+    // It is called from the "Link Expired" page by unauthenticated users
+    // who need a fresh invite link. Supabase's built-in rate limiting
+    // on inviteUserByEmail prevents abuse (it will reject rapid re-sends
+    // and only works for users who were already invited).
+    const supabaseAdmin = createAdminClient();
 
-    // Resend the official invite email. 
+    // Resend the official invite email.
     // This generates a fresh token without overwriting their assigned aircraft.
-    const { data, error } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
+    const { error } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
       redirectTo: `${new URL(req.url).origin}/update-password`
     });
 
     if (error) {
-      // If they are already fully registered, Supabase will throw an error here, preventing abuse.
+      // If they are already fully registered, Supabase throws an error here, preventing abuse.
       throw error;
     }
 
     return NextResponse.json({ success: true });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 400 });
+  } catch (error) {
+    return handleApiError(error);
   }
 }

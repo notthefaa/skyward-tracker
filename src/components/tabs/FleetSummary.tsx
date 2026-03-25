@@ -1,76 +1,47 @@
 import { supabase } from "@/lib/supabase";
+import { processMxItem } from "@/lib/math";
+import type { AircraftWithMetrics } from "@/lib/types";
 import useSWR from "swr";
 import { PlaneTakeoff, Wrench, AlertTriangle, Droplet, Clock } from "lucide-react";
 
 export default function FleetSummary({ 
-  aircraftList, 
-  onSelectAircraft 
+  aircraftList, onSelectAircraft 
 }: { 
-  aircraftList: any[], 
+  aircraftList: AircraftWithMetrics[], 
   onSelectAircraft: (tail: string) => void 
 }) {
-  
-  // --- SWR CACHING MAGIC ---
-  const { data: fleetData =[], isLoading } = useSWR(
+  const { data: fleetData = [], isLoading } = useSWR(
     aircraftList.length > 0 ? `fleet-${aircraftList.map(a => a.id).join('-')}` : null,
     async () => {
       const aircraftIds = aircraftList.map(a => a.id);
-      
       const [mxRes, sqRes] = await Promise.all([
         supabase.from('aft_maintenance_items').select('*').in('aircraft_id', aircraftIds),
         supabase.from('aft_squawks').select('*').in('aircraft_id', aircraftIds).eq('status', 'open')
       ]);
-
-      const mxData = mxRes.data ||[];
-      const sqData = sqRes.data ||[];
+      const mxData = mxRes.data || [];
+      const sqData = sqRes.data || [];
 
       return aircraftList.map(ac => {
         const acMx = mxData.filter(m => m.aircraft_id === ac.id);
         const acSq = sqData.filter(s => s.aircraft_id === ac.id);
-
         let isGrounded = false;
         let hasIssues = acSq.length > 0;
 
         acMx.forEach(item => {
           if (!item.is_required) return;
-          if (item.tracking_type === 'time' && item.due_time <= (ac.total_engine_time || 0)) isGrounded = true;
-          if (item.tracking_type === 'date' && new Date(item.due_date + 'T00:00:00') < new Date(new Date().setHours(0,0,0,0))) isGrounded = true;
+          if (item.tracking_type === 'time' && (item.due_time ?? 0) <= (ac.total_engine_time || 0)) isGrounded = true;
+          if (item.tracking_type === 'date' && new Date((item.due_date ?? '') + 'T00:00:00') < new Date(new Date().setHours(0,0,0,0))) isGrounded = true;
         });
+        if (acSq.some((sq: any) => sq.affects_airworthiness)) isGrounded = true;
 
-        if (acSq.some(sq => sq.affects_airworthiness)) isGrounded = true;
-
-        // --- PREDICTIVE MATH ENGINE ---
-        const processedMx = acMx.map(item => {
-          let remaining = 0;
-          let isExpired = false;
-          let dueText = "";
-          let projectedDays = Infinity;
-
-          if (item.tracking_type === 'time') {
-            remaining = item.due_time - (ac.total_engine_time || 0);
-            isExpired = remaining <= 0;
-            dueText = isExpired ? `Expired by ${Math.abs(remaining).toFixed(1)} hrs` : `Due in ${remaining.toFixed(1)} hrs (@ ${item.due_time})`;
-            
-            if (ac.burnRate && ac.burnRate > 0) {
-               projectedDays = remaining / ac.burnRate;
-               if (!isExpired) dueText += ` (~${Math.ceil(projectedDays)} days)`;
-            }
-          } else {
-            const diffTime = new Date(item.due_date + 'T00:00:00').getTime() - new Date(new Date().setHours(0,0,0,0)).getTime();
-            remaining = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-            isExpired = remaining < 0;
-            projectedDays = remaining;
-            dueText = isExpired ? `Expired ${Math.abs(remaining)} days ago` : `Due in ${remaining} days (${item.due_date})`;
-          }
-          return { ...item, remaining, projectedDays, isExpired, dueText };
-        });
-        
+        // Use shared math utility
+        const processedMx = acMx.map(item => processMxItem(item, ac.total_engine_time || 0, ac.burnRate));
         processedMx.sort((a, b) => a.remaining - b.remaining);
         const nextMx = processedMx[0];
 
         return {
           ...ac,
-          status: isGrounded ? 'grounded' : (hasIssues ? 'issues' : 'airworthy'),
+          status: isGrounded ? 'grounded' as const : (hasIssues ? 'issues' as const : 'airworthy' as const),
           squawkCount: acSq.length,
           nextMxName: nextMx ? nextMx.item_name : 'No MX Tracked'
         };
@@ -79,45 +50,25 @@ export default function FleetSummary({
   );
 
   if (isLoading && fleetData.length === 0) {
-    return (
-      <div className="p-8 text-center text-sm font-bold uppercase tracking-widest text-gray-400 animate-pulse">
-        Loading Fleet Dashboard...
-      </div>
-    );
+    return <div className="p-8 text-center text-sm font-bold uppercase tracking-widest text-gray-400 animate-pulse">Loading Fleet Dashboard...</div>;
   }
 
   return (
     <div className="flex flex-col gap-6 animate-fade-in">
       <div className="bg-navy p-6 rounded-sm shadow-lg text-white border-t-4 border-[#F5B05B]">
-        <h2 className="font-oswald text-3xl md:text-4xl font-bold uppercase tracking-widest leading-none mb-2">
-          Fleet Summary
-        </h2>
-        <p className="text-xs text-gray-300 font-bold tracking-widest uppercase">
-          Overview of {aircraftList.length} Aircraft
-        </p>
+        <h2 className="font-oswald text-3xl md:text-4xl font-bold uppercase tracking-widest leading-none mb-2">Fleet Summary</h2>
+        <p className="text-xs text-gray-300 font-bold tracking-widest uppercase">Overview of {aircraftList.length} Aircraft</p>
       </div>
-
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pb-4">
         {fleetData.map(ac => {
           const fuelGals = ac.current_fuel_gallons || 0;
           const statusColor = ac.status === 'grounded' ? 'bg-[#CE3732]' : ac.status === 'issues' ? 'bg-[#F08B46]' : 'bg-success';
           const borderColor = ac.status === 'grounded' ? 'border-[#CE3732]' : ac.status === 'issues' ? 'border-[#F08B46]' : 'border-success';
-
           return (
-            <div 
-              key={ac.id} 
-              onClick={() => onSelectAircraft(ac.tail_number)}
-              className={`bg-white shadow-md rounded-sm border-t-4 ${borderColor} overflow-hidden cursor-pointer hover:shadow-xl transition-all active:scale-[0.98] flex flex-col`}
-            >
+            <div key={ac.id} onClick={() => onSelectAircraft(ac.tail_number)} className={`bg-white shadow-md rounded-sm border-t-4 ${borderColor} overflow-hidden cursor-pointer hover:shadow-xl transition-all active:scale-[0.98] flex flex-col`}>
               <div className="flex justify-between items-center p-4 border-b border-gray-100 bg-gray-50">
                 <div className="flex items-center gap-4">
-                  {ac.avatar_url ? (
-                    <img src={ac.avatar_url} alt="Avatar" className="w-12 h-12 object-cover rounded-full border-2 border-white shadow-sm" />
-                  ) : (
-                    <div className="w-12 h-12 rounded-full bg-slateGray flex items-center justify-center text-white shadow-sm">
-                      <PlaneTakeoff size={20}/>
-                    </div>
-                  )}
+                  {ac.avatar_url ? <img src={ac.avatar_url} alt="Avatar" className="w-12 h-12 object-cover rounded-full border-2 border-white shadow-sm" /> : <div className="w-12 h-12 rounded-full bg-slateGray flex items-center justify-center text-white shadow-sm"><PlaneTakeoff size={20}/></div>}
                   <div>
                     <h3 className="font-oswald text-2xl font-bold text-navy leading-none uppercase">{ac.tail_number}</h3>
                     <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mt-1">{ac.aircraft_type}</p>
@@ -127,36 +78,19 @@ export default function FleetSummary({
                   {ac.status === 'grounded' ? 'Grounded' : ac.status === 'issues' ? 'Issues' : 'Airworthy'}
                 </div>
               </div>
-
               <div className="p-4 grid grid-cols-2 gap-4">
                 <div>
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 flex items-center gap-1 mb-1">
-                    <Clock size={12}/> Flight Time
-                  </span>
-                  <p className="text-xl font-roboto font-bold text-navy">
-                    {ac.total_airframe_time?.toFixed(1) || 0} <span className="text-xs text-gray-400">hrs</span>
-                  </p>
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 flex items-center gap-1 mb-1"><Clock size={12}/> Flight Time</span>
+                  <p className="text-xl font-roboto font-bold text-navy">{ac.total_airframe_time?.toFixed(1) || 0} <span className="text-xs text-gray-400">hrs</span></p>
                 </div>
                 <div>
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 flex items-center gap-1 mb-1">
-                    <Droplet size={12} className="text-blue-500"/> Fuel State
-                  </span>
-                  <p className="text-xl font-roboto font-bold text-navy">
-                    {fuelGals.toFixed(0)} <span className="text-xs text-gray-400">gal</span>
-                  </p>
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 flex items-center gap-1 mb-1"><Droplet size={12} className="text-blue-500"/> Fuel State</span>
+                  <p className="text-xl font-roboto font-bold text-navy">{fuelGals.toFixed(0)} <span className="text-xs text-gray-400">gal</span></p>
                 </div>
               </div>
-
               <div className="px-4 py-3 bg-gray-50 border-t border-gray-100 flex justify-between items-center text-xs">
-                <span className="font-bold text-navy truncate flex-1 flex items-center gap-2">
-                  <Wrench size={14} className="text-[#F08B46] shrink-0"/> 
-                  {ac.nextMxName}
-                </span>
-                {ac.squawkCount > 0 && (
-                  <span className="font-bold text-[#CE3732] shrink-0 flex items-center gap-1 ml-2">
-                    <AlertTriangle size={14}/> {ac.squawkCount} Sqk
-                  </span>
-                )}
+                <span className="font-bold text-navy truncate flex-1 flex items-center gap-2"><Wrench size={14} className="text-[#F08B46] shrink-0"/> {ac.nextMxName}</span>
+                {ac.squawkCount > 0 && <span className="font-bold text-[#CE3732] shrink-0 flex items-center gap-1 ml-2"><AlertTriangle size={14}/> {ac.squawkCount} Sqk</span>}
               </div>
             </div>
           );

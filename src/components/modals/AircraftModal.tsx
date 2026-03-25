@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/lib/supabase";
+import { authFetch } from "@/lib/authFetch";
+import type { AircraftWithMetrics } from "@/lib/types";
 import { X } from "lucide-react";
 import { PrimaryButton } from "@/components/AppButtons";
 import imageCompression from "browser-image-compression";
@@ -15,24 +17,24 @@ export default function AircraftModal({
   onSuccess 
 }: { 
   session: any, 
-  existingAircraft: any | null, 
+  existingAircraft: AircraftWithMetrics | null, 
   onClose: () => void, 
   onSuccess: (newTail: string) => void 
 }) {
   const [newTail, setNewTail] = useState("");
   const [newSerial, setNewSerial] = useState("");
   const [newModel, setNewModel] = useState("");
-  const[newType, setNewType] = useState<'Piston' | 'Turbine'>('Piston');
-  const[newAirframeTime, setNewAirframeTime] = useState("");
+  const [newType, setNewType] = useState<'Piston' | 'Turbine'>('Piston');
+  const [newAirframeTime, setNewAirframeTime] = useState("");
   const [newEngineTime, setNewEngineTime] = useState("");
-  const[newHomeAirport, setNewHomeAirport] = useState("");
-  const[newMainContact, setNewMainContact] = useState("");
-  const[newMainContactPhone, setNewMainContactPhone] = useState(""); 
-  const[newMainContactEmail, setNewMainContactEmail] = useState(""); 
-  const[newMxContact, setNewMxContact] = useState(""); 
+  const [newHomeAirport, setNewHomeAirport] = useState("");
+  const [newMainContact, setNewMainContact] = useState("");
+  const [newMainContactPhone, setNewMainContactPhone] = useState(""); 
+  const [newMainContactEmail, setNewMainContactEmail] = useState(""); 
+  const [newMxContact, setNewMxContact] = useState(""); 
   const [newMxContactPhone, setNewMxContactPhone] = useState(""); 
-  const[newMxContactEmail, setNewMxContactEmail] = useState(""); 
-  const[isSubmitting, setIsSubmitting] = useState(false);
+  const [newMxContactEmail, setNewMxContactEmail] = useState(""); 
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [avatarSrc, setAvatarSrc] = useState<string>("");
   const [crop, setCrop] = useState<Crop>({ unit: '%', width: 100, height: 56.25, x: 0, y: 0 });
@@ -47,11 +49,11 @@ export default function AircraftModal({
       setNewType(existingAircraft.engine_type); 
 
       if (existingAircraft.engine_type === 'Turbine') {
-        setNewAirframeTime(existingAircraft.setup_aftt !== null && existingAircraft.setup_aftt !== undefined ? existingAircraft.setup_aftt : (existingAircraft.total_airframe_time || ""));
-        setNewEngineTime(existingAircraft.setup_ftt !== null && existingAircraft.setup_ftt !== undefined ? existingAircraft.setup_ftt : (existingAircraft.total_engine_time || ""));
+        setNewAirframeTime(existingAircraft.setup_aftt !== null && existingAircraft.setup_aftt !== undefined ? String(existingAircraft.setup_aftt) : String(existingAircraft.total_airframe_time || ""));
+        setNewEngineTime(existingAircraft.setup_ftt !== null && existingAircraft.setup_ftt !== undefined ? String(existingAircraft.setup_ftt) : String(existingAircraft.total_engine_time || ""));
       } else {
-        setNewAirframeTime(existingAircraft.setup_hobbs !== null && existingAircraft.setup_hobbs !== undefined ? existingAircraft.setup_hobbs : (existingAircraft.total_airframe_time || ""));
-        setNewEngineTime(existingAircraft.setup_tach !== null && existingAircraft.setup_tach !== undefined ? existingAircraft.setup_tach : (existingAircraft.total_engine_time || ""));
+        setNewAirframeTime(existingAircraft.setup_hobbs !== null && existingAircraft.setup_hobbs !== undefined ? String(existingAircraft.setup_hobbs) : String(existingAircraft.total_airframe_time || ""));
+        setNewEngineTime(existingAircraft.setup_tach !== null && existingAircraft.setup_tach !== undefined ? String(existingAircraft.setup_tach) : String(existingAircraft.total_engine_time || ""));
       }
 
       setNewHomeAirport(existingAircraft.home_airport || ""); 
@@ -126,7 +128,7 @@ export default function AircraftModal({
       }
     }
 
-    const basePayload: any = { 
+    const basePayload: Record<string, any> = { 
       tail_number: newTail.toUpperCase(), 
       serial_number: newSerial, 
       aircraft_type: newModel, 
@@ -142,6 +144,7 @@ export default function AircraftModal({
     };
     
     if (existingAircraft) {
+      // EDIT — update via Supabase directly (RLS protects this)
       Object.assign(basePayload, {
         setup_aftt: newType === 'Turbine' ? (parseFloat(newAirframeTime) || 0) : 0,
         setup_ftt: newType === 'Turbine' ? (parseFloat(newEngineTime) || 0) : 0,
@@ -150,6 +153,7 @@ export default function AircraftModal({
       });
       await supabase.from('aft_aircraft').update(basePayload).eq('id', existingAircraft.id);
     } else {
+      // CREATE — use authenticated API route (server derives userId from session)
       Object.assign(basePayload, {
         total_airframe_time: parseFloat(newAirframeTime) || 0,
         total_engine_time: parseFloat(newEngineTime) || 0,
@@ -159,7 +163,21 @@ export default function AircraftModal({
         setup_tach: newType === 'Piston' ? (parseFloat(newEngineTime) || 0) : 0,
         created_by: session.user.id
       });
-      await supabase.from('aft_aircraft').insert(basePayload);
+
+      try {
+        const res = await authFetch('/api/aircraft/create', {
+          method: 'POST',
+          body: JSON.stringify({ payload: basePayload })
+        });
+        if (!res.ok) {
+          const errData = await res.json();
+          throw new Error(errData.error || 'Failed to create aircraft.');
+        }
+      } catch (err: any) {
+        alert(err.message);
+        setIsSubmitting(false);
+        return;
+      }
     }
     
     onSuccess(newTail.toUpperCase());
@@ -207,52 +225,23 @@ export default function AircraftModal({
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">
-                Tail Number
-              </label>
-              <input 
-                type="text" 
-                required 
-                value={newTail} 
-                onChange={e => setNewTail(e.target.value)} 
-                className="w-full border border-gray-300 rounded p-3 text-sm mt-1 uppercase focus:border-[#F08B46] outline-none bg-white" 
-              />
+              <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">Tail Number</label>
+              <input type="text" required value={newTail} onChange={e => setNewTail(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 uppercase focus:border-[#F08B46] outline-none bg-white" />
             </div>
             <div>
-              <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">
-                Serial Num
-              </label>
-              <input 
-                type="text" 
-                value={newSerial} 
-                onChange={e => setNewSerial(e.target.value)} 
-                className="w-full border border-gray-300 rounded p-3 text-sm mt-1 uppercase focus:border-[#F08B46] outline-none bg-white" 
-              />
+              <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">Serial Num</label>
+              <input type="text" value={newSerial} onChange={e => setNewSerial(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 uppercase focus:border-[#F08B46] outline-none bg-white" />
             </div>
           </div>
           
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">
-                Model Name
-              </label>
-              <input 
-                type="text" 
-                required 
-                value={newModel} 
-                onChange={e => setNewModel(e.target.value)} 
-                className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none bg-white" 
-              />
+              <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">Model Name</label>
+              <input type="text" required value={newModel} onChange={e => setNewModel(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none bg-white" />
             </div>
             <div>
-              <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">
-                Engine Type
-              </label>
-              <select 
-                value={newType} 
-                onChange={e => setNewType(e.target.value as 'Piston'|'Turbine')} 
-                className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none bg-white"
-              >
+              <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">Engine Type</label>
+              <select value={newType} onChange={e => setNewType(e.target.value as 'Piston'|'Turbine')} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none bg-white">
                 <option value="Piston">Piston</option>
                 <option value="Turbine">Turbine</option>
               </select>
@@ -260,87 +249,37 @@ export default function AircraftModal({
           </div>
 
           <div>
-            <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">
-              Home Airport
-            </label>
-            <input 
-              type="text" 
-              value={newHomeAirport} 
-              onChange={e => setNewHomeAirport(e.target.value)} 
-              className="w-full border border-gray-300 rounded p-3 text-sm mt-1 uppercase focus:border-[#F08B46] outline-none bg-white" 
-              placeholder="ICAO" 
-            />
+            <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">Home Airport</label>
+            <input type="text" value={newHomeAirport} onChange={e => setNewHomeAirport(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 uppercase focus:border-[#F08B46] outline-none bg-white" placeholder="ICAO" />
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
-              <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">
-                Main Contact
-              </label>
-              <input 
-                type="text" 
-                value={newMainContact} 
-                onChange={e => setNewMainContact(e.target.value)} 
-                className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none bg-white" 
-              />
+              <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">Main Contact</label>
+              <input type="text" value={newMainContact} onChange={e => setNewMainContact(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none bg-white" />
             </div>
             <div>
-              <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">
-                Phone
-              </label>
-              <input 
-                type="tel" 
-                value={newMainContactPhone} 
-                onChange={e => setNewMainContactPhone(e.target.value)} 
-                className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none bg-white" 
-              />
+              <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">Phone</label>
+              <input type="tel" value={newMainContactPhone} onChange={e => setNewMainContactPhone(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none bg-white" />
             </div>
             <div>
-              <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">
-                Email
-              </label>
-              <input 
-                type="email" 
-                value={newMainContactEmail} 
-                onChange={e => setNewMainContactEmail(e.target.value)} 
-                className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none bg-white" 
-              />
+              <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">Email</label>
+              <input type="email" value={newMainContactEmail} onChange={e => setNewMainContactEmail(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none bg-white" />
             </div>
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
-              <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">
-                MX Contact
-              </label>
-              <input 
-                type="text" 
-                value={newMxContact} 
-                onChange={e => setNewMxContact(e.target.value)} 
-                className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none bg-white" 
-              />
+              <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">MX Contact</label>
+              <input type="text" value={newMxContact} onChange={e => setNewMxContact(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none bg-white" />
             </div>
             <div>
-              <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">
-                MX Phone
-              </label>
-              <input 
-                type="tel" 
-                value={newMxContactPhone} 
-                onChange={e => setNewMxContactPhone(e.target.value)} 
-                className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none bg-white" 
-              />
+              <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">MX Phone</label>
+              <input type="tel" value={newMxContactPhone} onChange={e => setNewMxContactPhone(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none bg-white" />
             </div>
             <div>
-              <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">
-                MX Email
-              </label>
-              <input 
-                type="email" 
-                value={newMxContactEmail} 
-                onChange={e => setNewMxContactEmail(e.target.value)} 
-                className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none bg-white" 
-              />
+              <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">MX Email</label>
+              <input type="email" value={newMxContactEmail} onChange={e => setNewMxContactEmail(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none bg-white" />
             </div>
           </div>
 
@@ -349,27 +288,13 @@ export default function AircraftModal({
               <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">
                 Current {newType === 'Turbine' ? 'AFTT' : 'Hobbs'} *
               </label>
-              <input 
-                type="number" 
-                step="0.1" 
-                required 
-                value={newAirframeTime} 
-                onChange={e => setNewAirframeTime(e.target.value)} 
-                className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none bg-white" 
-              />
+              <input type="number" step="0.1" required value={newAirframeTime} onChange={e => setNewAirframeTime(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none bg-white" />
             </div>
             <div>
               <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">
                 Current {newType === 'Turbine' ? 'FTT' : 'Tach'} *
               </label>
-              <input 
-                type="number" 
-                step="0.1" 
-                required 
-                value={newEngineTime} 
-                onChange={e => setNewEngineTime(e.target.value)} 
-                className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none bg-white" 
-              />
+              <input type="number" step="0.1" required value={newEngineTime} onChange={e => setNewEngineTime(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none bg-white" />
             </div>
           </div>
 
