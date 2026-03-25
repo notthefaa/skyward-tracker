@@ -1,14 +1,12 @@
 import { useState, useEffect } from "react";
 import { 
-  PlaneTakeoff, LayoutGrid, Home, Clock, Wrench, 
-  AlertTriangle, FileText, Send, ShieldCheck, 
-  ChevronRight, ChevronLeft, CheckCircle, X 
+  PlaneTakeoff, LayoutGrid, Clock, Wrench, AlertTriangle, Send, ShieldCheck, 
+  ChevronRight, CheckCircle, X, Check, Activity, Bell, PenTool, Share, Download, Settings, Users, Database, RefreshCw, Camera
 } from "lucide-react";
-import { PrimaryButton } from "@/components/AppButtons";
 
 export default function TutorialModal({ session, role }: { session: any, role: string }) {
   const [isVisible, setIsVisible] = useState(false);
-  const[step, setStep] = useState(0);
+  const [step, setStep] = useState(0);
 
   useEffect(() => {
     if (session?.user?.id) {
@@ -42,60 +40,113 @@ export default function TutorialModal({ session, role }: { session: any, role: s
     {
       title: "Welcome to Skyward",
       icon: <PlaneTakeoff size={48} className="text-navy" />,
-      content: role === 'admin' 
-        ? "Welcome to the Skyward Aircraft Manager. As an Administrator, you have full control over fleet configuration, pilot access, maintenance schedules, and database health. Let's take a quick tour of your tools."
-        : "Welcome to the Skyward Fleet Tracker. This platform is designed to make logging flights, tracking maintenance, and reporting squawks seamless. Let's take a quick tour of your features."
+      content: (
+        <div className="space-y-4 text-left w-full">
+          <p className="text-sm text-gray-600 font-roboto leading-relaxed text-center">
+            {role === 'admin' 
+              ? "Welcome to the Skyward Aircraft Manager. As an Administrator, you have full control over fleet configuration, pilot access, maintenance schedules, and database health."
+              : "Welcome to the Skyward Fleet Tracker. This platform is designed to make logging flights, tracking maintenance, and reporting squawks seamless."}
+          </p>
+        </div>
+      )
     },
     {
       title: "Fleet Dashboard",
       icon: <LayoutGrid size={48} className="text-[#3AB0FF]" />,
-      content: "The Fleet tab gives you a bird's-eye view of all aircraft assigned to you. The system automatically color-codes aircraft: Green (Airworthy), Orange (Open Issues), or pulsing Red (Grounded due to an AOG squawk or expired maintenance)."
-    },
-    {
-      title: "Aircraft Summary",
-      icon: <Home size={48} className="text-navy" />,
-      content: "Selecting an aircraft takes you to its Summary Command Center. Here you can view vital statistics, current fuel states, and 1-tap contact buttons for the Primary and Maintenance contacts for that specific tail."
+      content: (
+        <div className="space-y-4 text-left w-full">
+          <p className="text-sm text-gray-600 font-roboto leading-relaxed text-center mb-4">
+            The Fleet tab gives you a bird's-eye view of all assigned aircraft. The system automatically color-codes statuses:
+          </p>
+          <ul className="text-sm text-gray-600 font-roboto space-y-3 pl-2">
+            <li className="flex items-center gap-3"><CheckCircle size={20} className="text-success shrink-0" /> <strong>Green:</strong> Airworthy & Ready</li>
+            <li className="flex items-center gap-3"><Activity size={20} className="text-[#F08B46] shrink-0" /> <strong>Orange:</strong> Open Monitor Issues</li>
+            <li className="flex items-center gap-3"><AlertTriangle size={20} className="text-[#CE3732] shrink-0" /> <strong>Red:</strong> Grounded (AOG or Expired MX)</li>
+          </ul>
+        </div>
+      )
     },
     {
       title: "Flight Times",
       icon: <Clock size={48} className="text-[#3AB0FF]" />,
-      content: role === 'admin'
-        ? "Flight logs dynamically adapt to Piston or Turbine engines. The system validates all math to prevent backwards logging. As an Admin, you also have the unique ability to delete the most recent log, which will automatically roll the aircraft's master times back to the previous entry."
-        : "Flight logs dynamically adapt to Piston or Turbine engines. The system validates your entries to ensure math is always perfectly accurate. You can also view historical flights and export them to a CSV file."
+      content: (
+        <div className="space-y-4 text-left w-full">
+          <ul className="text-sm text-gray-600 font-roboto space-y-4 pl-2">
+            <li className="flex items-start gap-3"><Check size={18} className="text-[#3AB0FF] shrink-0 mt-0.5" /> <span>Dynamically adapts to Piston (Tach) or Turbine (AFTT/Cycles).</span></li>
+            <li className="flex items-start gap-3"><Check size={18} className="text-[#3AB0FF] shrink-0 mt-0.5" /> <span>Strict math validation prevents backward logging.</span></li>
+            {role === 'admin' && (
+              <li className="flex items-start gap-3"><RefreshCw size={18} className="text-[#3AB0FF] shrink-0 mt-0.5" /> <span><strong>Rollbacks:</strong> Safely delete the newest log to automatically roll aircraft master times backward.</span></li>
+            )}
+            <li className="flex items-start gap-3"><Download size={18} className="text-[#3AB0FF] shrink-0 mt-0.5" /> <span>Export complete CSV logs instantly.</span></li>
+          </ul>
+        </div>
+      )
     },
     {
-      title: "Maintenance Tracking",
+      title: "Maintenance",
       icon: <Wrench size={48} className="text-[#F08B46]" />,
-      content: role === 'admin'
-        ? "You can track items by Hours or Calendar Dates. You can configure global alert triggers in the Admin Center. If you check 'Automate MX Communication' on an item, the system will automatically email the mechanic requesting scheduling when the item nears expiration."
-        : "View upcoming inspections and part replacements. Items will turn Orange when they are coming due soon, and Red if they have expired. Required items that expire will automatically ground the aircraft across the entire platform."
+      content: (
+        <div className="space-y-4 text-left w-full">
+          <ul className="text-sm text-gray-600 font-roboto space-y-4 pl-2">
+            <li className="flex items-start gap-3"><Clock size={18} className="text-[#F08B46] shrink-0 mt-0.5" /> <span>Track items by Hours or Calendar Dates.</span></li>
+            {role === 'admin' && (
+              <>
+                <li className="flex items-start gap-3"><Bell size={18} className="text-[#F08B46] shrink-0 mt-0.5" /> <span><strong>Automated Alerts:</strong> System emails Admins/Pilots at global thresholds (e.g., 30/15/5 limits).</span></li>
+                <li className="flex items-start gap-3"><Send size={18} className="text-[#F08B46] shrink-0 mt-0.5" /> <span><strong>Auto-Scheduling:</strong> Enable 'Automate MX' to have the system automatically email your mechanic requesting schedule time when nearing limits.</span></li>
+              </>
+            )}
+            {role !== 'admin' && (
+              <li className="flex items-start gap-3"><AlertTriangle size={18} className="text-[#CE3732] shrink-0 mt-0.5" /> <span>Required items that expire will automatically ground the aircraft.</span></li>
+            )}
+          </ul>
+        </div>
+      )
     },
     {
-      title: "Squawks & Discrepancies",
+      title: "Squawks",
       icon: <AlertTriangle size={48} className="text-[#CE3732]" />,
-      content: role === 'admin'
-        ? "When a pilot logs a squawk, you can resolve it, delete it, or legally defer it using the built-in digital signature pad. You can also export formal multi-page PDF reports with embedded photos, or email a secure web-link directly to your mechanic."
-        : "Report issues directly from the ramp and attach photos from your phone. You can flag an issue as a standard 'Monitor' item, or flag it as 'Affects Airworthiness' to instantly ground the aircraft and warn other pilots."
-    },
-    {
-      title: "Pilot Notes",
-      icon: <FileText size={48} className="text-[#525659]" />,
-      content: "Leave general chatter or passdown information for the next pilot. The system uses perpetual read-receipts, so any unread notes will trigger a red notification badge on your bottom navigation bar until you view them."
+      content: (
+        <div className="space-y-4 text-left w-full">
+          <ul className="text-sm text-gray-600 font-roboto space-y-4 pl-2">
+            <li className="flex items-start gap-3"><Camera size={18} className="text-[#CE3732] shrink-0 mt-0.5" /> <span>Report AOG or Monitor items with compressed photos.</span></li>
+            {role === 'admin' && (
+              <>
+                <li className="flex items-start gap-3"><PenTool size={18} className="text-[#CE3732] shrink-0 mt-0.5" /> <span><strong>Legal Deferrals:</strong> Process MEL/CDL deferrals using the built-in digital signature pad.</span></li>
+                <li className="flex items-start gap-3"><Share size={18} className="text-[#CE3732] shrink-0 mt-0.5" /> <span><strong>Mechanic Portal:</strong> Email a secure web-link directly to mechanics to view high-res photos without logging in.</span></li>
+                <li className="flex items-start gap-3"><Download size={18} className="text-[#CE3732] shrink-0 mt-0.5" /> <span><strong>Export Summaries:</strong> Generate formal multi-page PDF reports with embedded photos.</span></li>
+              </>
+            )}
+            {role !== 'admin' && (
+              <li className="flex items-start gap-3"><AlertTriangle size={18} className="text-[#CE3732] shrink-0 mt-0.5" /> <span>Flag an issue as 'Affects Airworthiness' to instantly ground the aircraft.</span></li>
+            )}
+          </ul>
+        </div>
+      )
     },
     ...(role === 'admin' ?[{
-      title: "The Admin Center",
+      title: "Admin Center",
       icon: <ShieldCheck size={48} className="text-navy" />,
-      content: "Click the Shield icon in the top right to access the Admin Center. From here you can search the Global Fleet, invite new pilots, explicitly grant/revoke aircraft access, reset passwords, and run database health cleanup tools."
+      content: (
+        <div className="space-y-4 text-left w-full">
+          <p className="text-sm text-gray-600 font-roboto text-center mb-4">Click the Shield icon (top right) to access global settings.</p>
+          <ul className="text-sm text-gray-600 font-roboto space-y-4 pl-2">
+            <li className="flex items-center gap-3"><Users size={18} className="text-navy shrink-0" /> Manage pilot invites & aircraft access</li>
+            <li className="flex items-center gap-3"><Settings size={18} className="text-navy shrink-0" /> Configure Global Maintenance Alert Triggers</li>
+            <li className="flex items-center gap-3"><Database size={18} className="text-navy shrink-0" /> Run Database Health & Photo Cleanup</li>
+          </ul>
+        </div>
+      )
     }] :[]),
     {
-      title: "The Companion App",
+      title: "Companion App",
       icon: <Send size={48} className="text-[#3AB0FF]" />,
-      content: "We also offer a hyper-fast, mobile-only app called 'Log It' designed exclusively for use on the ramp. Click the Paper Airplane icon in the top right menu to get instructions on how to install it directly to your phone's home screen."
-    },
-    {
-      title: "Ready for Takeoff",
-      icon: <CheckCircle size={48} className="text-success" />,
-      content: "You are all set! You can access all of these tools from the navigation bar at the bottom of your screen. Fly safe!"
+      content: (
+        <div className="space-y-4 text-left w-full">
+          <p className="text-sm text-gray-600 font-roboto leading-relaxed text-center">
+            We also offer a hyper-fast, mobile-only app called <strong>Log It</strong> designed exclusively for use on the ramp. Click the Paper Airplane icon in the top right menu to get instructions on how to install it directly to your phone's home screen.
+          </p>
+        </div>
+      )
     }
   ];
 
@@ -117,9 +168,10 @@ export default function TutorialModal({ session, role }: { session: any, role: s
           {currentStepData.title}
         </h2>
 
-        <p className="text-sm text-gray-600 font-roboto mb-8 leading-relaxed min-h-[100px] flex items-center">
+        {/* Min-height ensures the buttons don't jump around wildly between slides */}
+        <div className="w-full min-h-[240px] flex items-center justify-center mb-6">
           {currentStepData.content}
-        </p>
+        </div>
 
         {/* Dots Indicator */}
         <div className="flex gap-2 mb-8">
@@ -128,6 +180,7 @@ export default function TutorialModal({ session, role }: { session: any, role: s
           ))}
         </div>
 
+        {/* Perfectly Aligned Custom Buttons */}
         <div className="flex w-full gap-4">
           {step > 0 && (
             <button 
@@ -138,13 +191,12 @@ export default function TutorialModal({ session, role }: { session: any, role: s
             </button>
           )}
           
-          <div className="flex-[2]">
-            {step === tutorialSteps.length - 1 ? (
-              <PrimaryButton onClick={dismissTutorial}>Get Started</PrimaryButton>
-            ) : (
-              <PrimaryButton onClick={nextStep}>Next <ChevronRight size={18} /></PrimaryButton>
-            )}
-          </div>
+          <button 
+            onClick={step === tutorialSteps.length - 1 ? dismissTutorial : nextStep}
+            className="flex-[2] bg-navy border-2 border-navy text-white font-oswald text-lg font-bold uppercase tracking-widest py-3 rounded hover:bg-opacity-90 active:scale-95 transition-all flex justify-center items-center gap-2 shadow-md"
+          >
+            {step === tutorialSteps.length - 1 ? "Get Started" : <>Next <ChevronRight size={20} /></>}
+          </button>
         </div>
 
       </div>
