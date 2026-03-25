@@ -147,7 +147,7 @@ export default function MaintenanceTab({
           ) : (
             mxItems.map((item) => {
               // Use shared math utility
-              const processed = processMxItem(item, currentEngineTime, aircraft.burnRate);
+              const processed = processMxItem(item, currentEngineTime, aircraft.burnRate, aircraft.burnRateLow, aircraft.burnRateHigh);
               const dueTextColor = getMxTextColor(processed, sysSettings);
               const containerColorClass = processed.isExpired 
                 ? (item.is_required ? 'bg-red-50 border-red-200' : 'bg-orange-50 border-orange-200') 

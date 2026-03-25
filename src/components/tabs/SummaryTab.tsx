@@ -28,7 +28,7 @@ export default function SummaryTab({
         const currentEngineTime = aircraft!.total_engine_time || 0;
         // Use shared math utility
         const processedMx = (mxRes.data || []).map(item => 
-          processMxItem(item, currentEngineTime, aircraft!.burnRate)
+          processMxItem(item, currentEngineTime, aircraft!.burnRate, aircraft!.burnRateLow, aircraft!.burnRateHigh)
         );
         processedMx.sort((a, b) => a.remaining - b.remaining);
         nextMx = processedMx[0];

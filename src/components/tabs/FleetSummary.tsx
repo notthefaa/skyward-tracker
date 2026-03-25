@@ -35,7 +35,7 @@ export default function FleetSummary({
         if (acSq.some((sq: any) => sq.affects_airworthiness)) isGrounded = true;
 
         // Use shared math utility
-        const processedMx = acMx.map(item => processMxItem(item, ac.total_engine_time || 0, ac.burnRate));
+        const processedMx = acMx.map(item => processMxItem(item, ac.total_engine_time || 0, ac.burnRate, ac.burnRateLow, ac.burnRateHigh));
         processedMx.sort((a, b) => a.remaining - b.remaining);
         const nextMx = processedMx[0];
 
