@@ -325,7 +325,6 @@ export default function FleetTrackerApp() {
 
   return (
     <>
-      <style dangerouslySetInnerHTML={{__html: `html, body { background-color: #ffffff !important; }` }} />
       <div className="flex flex-col bg-neutral-100 w-full min-h-screen relative">
 
       <TutorialModal session={session} role={role} />
@@ -458,8 +457,8 @@ export default function FleetTrackerApp() {
         </div>
       </main>
 
-      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-[9999]">
-        <div className="max-w-3xl mx-auto flex justify-around">
+      <nav className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-gray-200 z-[9999] pb-[env(safe-area-inset-bottom)] shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+        <div className="flex justify-around items-center h-12 max-w-3xl mx-auto">
           {[
             { id: 'summary', icon: Home, label: 'Home', badge: 0 },
             { id: 'times', icon: Clock, label: 'Times', badge: 0 },
@@ -470,7 +469,7 @@ export default function FleetTrackerApp() {
             <button 
               key={tab.id} 
               onClick={() => setActiveTab(tab.id as AppTab)} 
-              className={`flex-1 py-2 flex flex-col items-center justify-center transition-all relative active:scale-95 ${getTabColor(tab.id)}`}
+              className={`flex-1 flex flex-col items-center justify-center transition-all relative active:scale-95 ${getTabColor(tab.id)}`}
             >
               <div className="relative mb-1">
                 <tab.icon size={20} />
