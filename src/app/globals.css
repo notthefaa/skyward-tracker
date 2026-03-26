@@ -21,8 +21,12 @@ html, body {
   color: var(--color-navy);
   height: 100%;
   width: 100%;
-  overflow: hidden;
   overscroll-behavior-y: none;
+}
+
+/* Smooth momentum scrolling for iOS */
+main {
+  -webkit-overflow-scrolling: touch;
 }
 
 /* Modal Animations */
