@@ -326,7 +326,7 @@ export default function FleetTrackerApp() {
   return (
     <>
       <style dangerouslySetInnerHTML={{__html: `html, body { background-color: #ffffff !important; }` }} />
-      <div className="flex flex-col bg-neutral-100 h-[100dvh] w-full overflow-hidden relative">
+      <div className="flex flex-col bg-neutral-100 fixed inset-0 overflow-hidden">
 
       <TutorialModal session={session} role={role} />
 
@@ -470,7 +470,7 @@ export default function FleetTrackerApp() {
             <button 
               key={tab.id} 
               onClick={() => setActiveTab(tab.id as AppTab)} 
-              className={`flex-1 py-3 flex flex-col items-center justify-center transition-all relative active:scale-95 ${getTabColor(tab.id)}`}
+              className={`flex-1 py-2 flex flex-col items-center justify-center transition-all relative active:scale-95 ${getTabColor(tab.id)}`}
             >
               <div className="relative mb-1">
                 <tab.icon size={20} />
