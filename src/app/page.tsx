@@ -486,6 +486,9 @@ export default function FleetTrackerApp() {
         </div>
       </nav>
 
+      {/* Fixed white fill at the very bottom of the screen — prevents body background from showing below the nav on notched devices */}
+      <div className="fixed bottom-0 left-0 right-0 h-12 bg-white -z-10" />
+
     </div>
   );
 }
