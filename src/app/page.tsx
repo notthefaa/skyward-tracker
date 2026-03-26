@@ -325,9 +325,8 @@ export default function FleetTrackerApp() {
 
   return (
     <>
-      <style dangerouslySetInnerHTML={{__html: `html, body { background-color: #ffffff !important; } #app-shell { height: 100dvh; }` }} />
-      <script dangerouslySetInnerHTML={{__html: `(function(){var s=document.getElementById('app-shell');if(!s)return;var isPWA=window.navigator.standalone===true;var offset=isPWA?34:0;function set(){s.style.height=(window.innerHeight-offset)+'px';}set();window.addEventListener('resize',set);})()`}} />
-      <div className="flex flex-col bg-neutral-100 w-full overflow-hidden relative" id="app-shell">
+      <style dangerouslySetInnerHTML={{__html: `html, body { background-color: #ffffff !important; }` }} />
+      <div className="flex flex-col bg-neutral-100 h-[100dvh] w-full overflow-hidden relative">
 
       <TutorialModal session={session} role={role} />
 
@@ -448,7 +447,7 @@ export default function FleetTrackerApp() {
         </div>
       )}
 
-      <main className="flex-1 overflow-y-auto p-4 flex justify-center w-full" style={{ touchAction: 'auto' }}>
+      <main className="flex-1 overflow-y-auto p-4 pb-16 flex justify-center w-full" style={{ touchAction: 'auto' }}>
         <div className="w-full max-w-3xl flex flex-col gap-6">
           {activeTab === 'fleet' && <FleetSummary aircraftList={aircraftList} onSelectAircraft={(tail: string) => { setActiveTail(tail); setActiveTab('summary'); }} />}
           {activeTab === 'summary' && <SummaryTab aircraft={selectedAircraftData} setActiveTab={(tab: AppTab) => setActiveTab(tab)} role={role} onDeleteAircraft={handleDeleteAircraft} sysSettings={sysSettings} />}
@@ -459,7 +458,7 @@ export default function FleetTrackerApp() {
         </div>
       </main>
 
-      <nav className="bg-white border-t border-gray-200 w-full z-20 shrink-0 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+      <nav className="fixed left-0 right-0 bg-white border-t border-gray-200 z-20 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]" style={{ bottom: 'env(safe-area-inset-bottom, 0px)' }}>
         <div className="max-w-3xl mx-auto flex justify-around">
           {[
             { id: 'summary', icon: Home, label: 'Home', badge: 0 },
