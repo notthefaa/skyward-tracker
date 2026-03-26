@@ -85,6 +85,7 @@ export default function FleetTrackerApp() {
       setIsAuthChecking(false);
       
       if (event === 'SIGNED_IN' && session) {
+        setActiveTab('fleet');
         if (!dataFetchTriggeredRef.current) {
           dataFetchTriggeredRef.current = true;
           fetchAircraftData(session.user.id);
@@ -92,6 +93,7 @@ export default function FleetTrackerApp() {
       } else if (event === 'SIGNED_OUT') {
         dataFetchTriggeredRef.current = false;
         setIsDataLoaded(false);
+        setActiveTab('fleet');
       }
     });
     
