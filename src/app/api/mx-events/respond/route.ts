@@ -59,7 +59,7 @@ export async function POST(req: Request) {
           subject: `Schedule Update: ${event.mx_contact_name || 'Your mechanic'} proposed ${proposedDate}`,
           html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-              <h2 style="color: #1B4869;">Schedule Proposal</h2>
+              <h2 style="color: #091F3C;">Schedule Proposal</h2>
               <p>${event.mx_contact_name || 'Your maintenance provider'} has proposed <strong>${proposedDate}</strong> for service on your aircraft.</p>
               ${message ? `<p style="margin-top: 15px; padding: 15px; background: #f9f9f9; border-left: 4px solid #F08B46; border-radius: 4px;"><em>${message}</em></p>` : ''}
               <p style="margin-top: 20px;">Log in to the fleet portal to confirm or propose a different date.</p>
@@ -115,7 +115,7 @@ export async function POST(req: Request) {
           subject: `Service Update from ${event.mx_contact_name || 'your mechanic'}`,
           html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-              <h2 style="color: #1B4869;">Service Update</h2>
+              <h2 style="color: #091F3C;">Service Update</h2>
               <p style="padding: 15px; background: #f9f9f9; border-left: 4px solid #3AB0FF; border-radius: 4px;">${message}</p>
             </div>
           `
@@ -154,7 +154,7 @@ export async function POST(req: Request) {
           subject: `Estimated Completion: ${proposedDate}`,
           html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-              <h2 style="color: #1B4869;">Completion Estimate</h2>
+              <h2 style="color: #091F3C;">Completion Estimate</h2>
               <p>${event.mx_contact_name || 'Your maintenance provider'} estimates your aircraft will be ready by <strong>${proposedDate}</strong>.</p>
               ${message ? `<p style="margin-top: 15px; padding: 15px; background: #f9f9f9; border-left: 4px solid #F08B46; border-radius: 4px;"><em>${message}</em></p>` : ''}
             </div>

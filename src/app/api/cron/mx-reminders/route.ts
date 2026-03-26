@@ -168,13 +168,13 @@ export async function GET(req: Request) {
                 subject: `Action Required: Review & Send Work Package for ${aircraft.tail_number}`,
                 html: `
                   <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; border-radius: 8px;">
-                    <h2 style="color: #1B4869; text-transform: uppercase; letter-spacing: 2px; border-bottom: 2px solid #1B4869; padding-bottom: 10px;">Maintenance Coming Due</h2>
+                    <h2 style="color: #091F3C; text-transform: uppercase; letter-spacing: 2px; border-bottom: 2px solid #091F3C; padding-bottom: 10px;">Maintenance Coming Due</h2>
                     
                     <p style="color: #525659; font-size: 16px;">Hello ${aircraft.main_contact || 'Operations'},</p>
                     <p style="color: #525659; font-size: 16px;">The following maintenance item is approaching for <strong>${aircraft.tail_number}</strong>:</p>
                     
                     <div style="background-color: #FFF7ED; padding: 20px; border-left: 4px solid #F08B46; margin: 25px 0; border-radius: 4px;">
-                      <p style="margin: 0 0 8px 0; color: #1B4869; font-size: 18px;"><strong>${mx.item_name}</strong></p>
+                      <p style="margin: 0 0 8px 0; color: #091F3C; font-size: 18px;"><strong>${mx.item_name}</strong></p>
                       <p style="margin: 0; color: #525659; font-size: 14px;">Due ${dueString}</p>
                     </div>
 
@@ -203,7 +203,7 @@ export async function GET(req: Request) {
               subject: `Heads Up: ${aircraft.tail_number} MX Approaching (Low Confidence)`,
               html: `
                 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-                  <h2 style="color: #1B4869;">Predictive Maintenance Alert</h2>
+                  <h2 style="color: #091F3C;">Predictive Maintenance Alert</h2>
                   <p>Hello ${aircraft.main_contact || 'Operations'},</p>
                   <p>Based on recent flight activity, we estimate that <strong>${mx.item_name}</strong> for ${aircraft.tail_number} may come due in roughly <strong>${Math.ceil(projectedDays)} days</strong>.</p>
                   <p>However, flight logs have been irregular (System Confidence: <strong>${confidenceScore}%</strong>), so this estimate may shift significantly.</p>

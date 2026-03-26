@@ -30,13 +30,13 @@ export async function POST(req: Request) {
         subject: `Scheduling Request: ${aircraft.tail_number} Maintenance`,
         html: `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; border-radius: 8px;">
-            <h2 style="color: #1B4869; text-transform: uppercase; letter-spacing: 2px; border-bottom: 2px solid #1B4869; padding-bottom: 10px;">Skyward Society</h2>
+            <h2 style="color: #091F3C; text-transform: uppercase; letter-spacing: 2px; border-bottom: 2px solid #091F3C; padding-bottom: 10px;">Skyward Society</h2>
             <p style="color: #525659; font-size: 16px;">Hello ${aircraft.mx_contact || ''},</p>
             <p style="color: #525659; font-size: 16px;">The following maintenance item is coming due for <strong>${aircraft.tail_number}</strong>. Please let us know when you are able to add this aircraft to your schedule.</p>
             
             <div style="background-color: #FDFCF4; padding: 20px; border-left: 4px solid #F08B46; margin: 25px 0; border-radius: 4px;">
-              <p style="margin: 0 0 10px 0; color: #1B4869; font-size: 18px;"><strong>Item:</strong> ${mxItem.item_name}</p>
-              <p style="margin: 0; color: #1B4869; font-size: 16px;"><strong>Due:</strong> ${dueString}</p>
+              <p style="margin: 0 0 10px 0; color: #091F3C; font-size: 18px;"><strong>Item:</strong> ${mxItem.item_name}</p>
+              <p style="margin: 0; color: #091F3C; font-size: 16px;"><strong>Due:</strong> ${dueString}</p>
             </div>
 
             <p style="color: #525659; font-size: 16px; margin-top: 20px;">

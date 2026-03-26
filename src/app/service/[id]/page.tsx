@@ -154,8 +154,8 @@ export default function ServicePortal() {
         <div className="w-full max-w-2xl space-y-6 animate-slide-up">
 
           {/* EVENT HEADER */}
-          <div className="bg-white shadow-2xl rounded-sm overflow-hidden border-t-4 border-[#1B4869]">
-            <div className="bg-[#1B4869] p-6 text-white flex justify-between items-center">
+          <div className="bg-white shadow-2xl rounded-sm overflow-hidden border-t-4 border-[#091F3C]">
+            <div className="bg-[#091F3C] p-6 text-white flex justify-between items-center">
               <div>
                 <h2 className="font-oswald text-3xl font-bold uppercase leading-none">{aircraft.tail_number}</h2>
                 <p className="text-xs font-bold uppercase tracking-widest mt-1 opacity-90">{aircraft.aircraft_type} • SN: {aircraft.serial_number || 'N/A'}</p>
@@ -218,7 +218,7 @@ export default function ServicePortal() {
                 <div className="space-y-3">
                   <p className="text-sm text-gray-600">{event.proposed_by === 'mechanic' ? 'Waiting for owner to confirm your proposed date.' : 'Please propose a service date.'}</p>
                   {!event.proposed_date && (
-                    <button onClick={() => setShowDateForm(true)} className="w-full bg-[#1B4869] text-white font-oswald font-bold uppercase tracking-widest py-3 rounded active:scale-95 transition-transform">
+                    <button onClick={() => setShowDateForm(true)} className="w-full bg-[#091F3C] text-white font-oswald font-bold uppercase tracking-widest py-3 rounded active:scale-95 transition-transform">
                       Propose a Date
                     </button>
                   )}
@@ -415,18 +415,18 @@ export default function ServicePortal() {
 
           {/* ESTIMATED COMPLETION & NOTES */}
           {event.status !== 'complete' && (event.status === 'confirmed' || event.status === 'in_progress') && (
-            <div className="bg-white shadow-lg rounded-sm p-6 border-t-4 border-[#1B4869]">
-              <h3 className="font-oswald text-lg font-bold uppercase tracking-widest text-navy mb-4 flex items-center gap-2"><Clock size={18} className="text-[#1B4869]"/> Estimated Completion</h3>
+            <div className="bg-white shadow-lg rounded-sm p-6 border-t-4 border-[#091F3C]">
+              <h3 className="font-oswald text-lg font-bold uppercase tracking-widest text-navy mb-4 flex items-center gap-2"><Clock size={18} className="text-[#091F3C]"/> Estimated Completion</h3>
               <div className="space-y-3">
                 <div>
                   <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Expected Ready Date</label>
-                  <input type="date" value={estimatedCompletion} onChange={e => setEstimatedCompletion(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#1B4869] outline-none" />
+                  <input type="date" value={estimatedCompletion} onChange={e => setEstimatedCompletion(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#091F3C] outline-none" />
                 </div>
                 <div>
                   <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Notes for Owner</label>
-                  <textarea value={mechanicNotes} onChange={e => setMechanicNotes(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#1B4869] outline-none min-h-[80px]" placeholder="Parts on order, waiting for weather, etc." />
+                  <textarea value={mechanicNotes} onChange={e => setMechanicNotes(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#091F3C] outline-none min-h-[80px]" placeholder="Parts on order, waiting for weather, etc." />
                 </div>
-                <button onClick={() => handleAction('update_estimate', { proposedDate: estimatedCompletion, message: mechanicNotes })} disabled={isSubmitting} className="w-full bg-[#1B4869] text-white font-oswald font-bold uppercase tracking-widest py-3 rounded active:scale-95 transition-transform disabled:opacity-50">
+                <button onClick={() => handleAction('update_estimate', { proposedDate: estimatedCompletion, message: mechanicNotes })} disabled={isSubmitting} className="w-full bg-[#091F3C] text-white font-oswald font-bold uppercase tracking-widest py-3 rounded active:scale-95 transition-transform disabled:opacity-50">
                   {isSubmitting ? "Updating..." : "Save & Notify Owner"}
                 </button>
               </div>

@@ -4,40 +4,47 @@ import "./globals.css";
 
 const oswald = Oswald({ 
   subsets: ["latin"], 
-  variable: "--font-oswald",
+  variable: "--font-oswald", 
   weight: ["400", "700"] 
 });
 
 const roboto = Roboto({ 
   subsets: ["latin"], 
-  variable: "--font-roboto",
+  variable: "--font-roboto", 
   weight: ["400", "500", "700"] 
 });
 
-// THIS TELLS ALL BROWSERS AND APPLE DEVICES TO USE YOUR ONE ICON
 export const metadata: Metadata = {
   title: "Aviation Fleet Tracker",
-  description: "Pilot log and maintenance tracker for the fleet",
-  icons: {
-    icon: '/icon.png',
-    apple: '/icon.png',
+  description: "Aircraft fleet management, maintenance tracking, and flight logging.",
+  appleWebApp: {
+    capable: true,
+    title: "Fleet Tracker",
+    statusBarStyle: "black-translucent",
   },
 };
 
-// THIS STRICTLY PREVENTS THE MOBILE AUTO-ZOOM BUG
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
+  viewportFit: "cover",
+  themeColor: "#091F3C",
 };
 
 export default function RootLayout({
   children,
-}: Readonly<{ children: React.ReactNode; }>) {
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
   return (
     <html lang="en">
-      <body className={`${oswald.variable} ${roboto.variable} font-roboto bg-neutral-100 text-navy`}>
+      <head>
+        <meta name="theme-color" content="#091F3C" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+      </head>
+      <body className={`${oswald.variable} ${roboto.variable} font-roboto antialiased`}>
         {children}
       </body>
     </html>

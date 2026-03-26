@@ -150,7 +150,7 @@ export async function POST(req: Request) {
         subject: `${subjectPrefix}Service Request: ${aircraft.tail_number} — Work Package`,
         html: `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; border-radius: 8px;">
-            <h2 style="color: #1B4869; text-transform: uppercase; letter-spacing: 2px; border-bottom: 2px solid #1B4869; padding-bottom: 10px;">Service Request</h2>
+            <h2 style="color: #091F3C; text-transform: uppercase; letter-spacing: 2px; border-bottom: 2px solid #091F3C; padding-bottom: 10px;">Service Request</h2>
             
             <p style="color: #525659; font-size: 16px;">Hello ${aircraft.mx_contact || ''},</p>
             <p style="color: #525659; font-size: 16px;">We'd like to schedule service for <strong>${aircraft.tail_number}</strong> (${aircraft.aircraft_type}). Below is the full work package.</p>
@@ -179,8 +179,8 @@ export async function POST(req: Request) {
             ` : ''}
 
             <div style="margin-top: 30px; padding: 20px; background-color: #F0F9FF; border-radius: 8px; text-align: center;">
-              <p style="margin: 0 0 12px 0; color: #1B4869; font-weight: bold;">View Full Details & Respond</p>
-              <a href="${portalUrl}" style="display: inline-block; background-color: #1B4869; color: white; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: bold; letter-spacing: 1px;">OPEN SERVICE PORTAL</a>
+              <p style="margin: 0 0 12px 0; color: #091F3C; font-weight: bold;">View Full Details & Respond</p>
+              <a href="${portalUrl}" style="display: inline-block; background-color: #091F3C; color: white; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: bold; letter-spacing: 1px;">OPEN SERVICE PORTAL</a>
             </div>
 
             <p style="color: #525659; font-size: 16px; margin-top: 25px;">

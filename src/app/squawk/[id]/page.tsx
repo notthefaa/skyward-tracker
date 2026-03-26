@@ -77,7 +77,7 @@ export default function SquawkViewer() {
 
           {/* HEADER */}
           <div className="bg-white shadow-2xl rounded-sm overflow-hidden border-t-4 border-[#CE3732]">
-            <div className={`${isGrounded ? 'bg-[#CE3732]' : 'bg-[#1B4869]'} p-6 text-white flex justify-between items-center`}>
+            <div className={`${isGrounded ? 'bg-[#CE3732]' : 'bg-[#091F3C]'} p-6 text-white flex justify-between items-center`}>
               <div>
                 <h2 className="font-oswald text-3xl font-bold uppercase leading-none">{aircraft?.tail_number || 'N/A'}</h2>
                 <p className="text-xs font-bold uppercase tracking-widest mt-1 opacity-90">{aircraft?.aircraft_type || ''}</p>
