@@ -470,7 +470,7 @@ export default function FleetTrackerApp() {
             <button 
               key={tab.id} 
               onClick={() => setActiveTab(tab.id as AppTab)} 
-              className={`flex-1 py-4 flex flex-col items-center justify-center transition-all relative active:scale-95 ${getTabColor(tab.id)}`}
+              className={`flex-1 py-3 flex flex-col items-center justify-center transition-all relative active:scale-95 ${getTabColor(tab.id)}`}
             >
               <div className="relative mb-1">
                 <tab.icon size={20} />
