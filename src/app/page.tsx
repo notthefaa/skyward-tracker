@@ -486,8 +486,8 @@ export default function FleetTrackerApp() {
         </div>
       </nav>
 
-      {/* White fill below nav — just enough to cover the home indicator area */}
-      <div className="fixed bottom-0 left-0 right-0 h-4 bg-white -z-10" />
+      {/* White fill below nav */}
+      <div className="fixed bottom-0 left-0 right-0 h-8 bg-white z-10 pointer-events-none" />
 
     </div>
   );
