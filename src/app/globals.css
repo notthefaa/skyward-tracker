@@ -15,15 +15,13 @@
   --font-roboto: var(--font-roboto), sans-serif;
 }
 
-/* NATIVE APP SHELL LOCK */
+/* NATIVE APP SHELL */
 html, body {
-  background-color: #f5f5f5;
+  background-color: #ffffff;
   color: var(--color-navy);
   height: 100%;
   width: 100%;
-  overflow: hidden;
   overscroll-behavior-y: none;
-  touch-action: none;
 }
 
 /* Modal Animations */
