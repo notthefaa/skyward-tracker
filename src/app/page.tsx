@@ -326,7 +326,7 @@ export default function FleetTrackerApp() {
   return (
     <>
       <style dangerouslySetInnerHTML={{__html: `html, body { background-color: #ffffff !important; }` }} />
-      <div className="flex flex-col bg-neutral-100 h-[100dvh] w-full overflow-hidden relative">
+      <div className="flex flex-col bg-neutral-100 w-full min-h-screen relative">
 
       <TutorialModal session={session} role={role} />
 
@@ -387,7 +387,7 @@ export default function FleetTrackerApp() {
         </div>
       )}
 
-      <header className="bg-navy text-white shadow-md z-20 shrink-0 w-full" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
+      <header className="fixed top-0 left-0 right-0 bg-navy text-white shadow-md z-[9999]" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
         <div className="max-w-3xl mx-auto px-4 py-2 flex justify-between items-center w-full min-h-[52px]">
           
           <div className="flex flex-col">
@@ -447,7 +447,7 @@ export default function FleetTrackerApp() {
         </div>
       )}
 
-      <main className="flex-1 overflow-y-auto p-4 pb-16 flex justify-center w-full" style={{ touchAction: 'auto' }}>
+      <main className="flex-1 overflow-y-auto p-4 flex justify-center w-full" style={{ touchAction: 'auto', paddingTop: 'calc(4rem + env(safe-area-inset-top, 0px))', paddingBottom: 'calc(4.5rem + env(safe-area-inset-bottom, 0px))' }}>
         <div className="w-full max-w-3xl flex flex-col gap-6">
           {activeTab === 'fleet' && <FleetSummary aircraftList={aircraftList} onSelectAircraft={(tail: string) => { setActiveTail(tail); setActiveTab('summary'); }} />}
           {activeTab === 'summary' && <SummaryTab aircraft={selectedAircraftData} setActiveTab={(tab: AppTab) => setActiveTab(tab)} role={role} onDeleteAircraft={handleDeleteAircraft} sysSettings={sysSettings} />}
@@ -458,7 +458,7 @@ export default function FleetTrackerApp() {
         </div>
       </main>
 
-      <nav className="fixed left-0 right-0 bottom-0 bg-white border-t border-gray-200 z-20 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-[9999]" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)', height: 'calc(3.5rem + env(safe-area-inset-bottom, 0px))' }}>
         <div className="max-w-3xl mx-auto flex justify-around">
           {[
             { id: 'summary', icon: Home, label: 'Home', badge: 0 },
