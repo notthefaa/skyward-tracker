@@ -326,9 +326,6 @@ export default function FleetTrackerApp() {
   return (
     <div className="flex flex-col bg-navy h-[100dvh] w-full overflow-hidden relative">
 
-      {/* Safe area spacer — fills the iOS status bar area with navy */}
-      <div className="bg-navy shrink-0 w-full" style={{ height: 'env(safe-area-inset-top, 0px)' }} />
-
       <TutorialModal session={session} role={role} />
 
       {newDataAvailable && (
@@ -388,8 +385,8 @@ export default function FleetTrackerApp() {
         </div>
       )}
 
-      <header className="bg-navy text-white shadow-md z-20 shrink-0 w-full">
-        <div className="max-w-3xl mx-auto px-4 py-2 flex justify-between items-center w-full">
+      <header className="bg-navy text-white shadow-md z-20 shrink-0 w-full" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
+        <div className="max-w-3xl mx-auto px-4 py-1.5 flex justify-between items-center w-full">
           
           <div className="flex flex-col">
             <span className="text-[9px] font-bold uppercase tracking-widest text-[#F5B05B] mb-[2px]">
@@ -459,7 +456,7 @@ export default function FleetTrackerApp() {
         </div>
       </main>
 
-      <nav className="bg-white border-t border-gray-200 w-full z-20 shrink-0" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+      <nav className="bg-white border-t border-gray-200 w-full z-20 shrink-0">
         <div className="max-w-3xl mx-auto flex justify-around">
           {[
             { id: 'summary', icon: Home, label: 'Home', badge: 0 },
@@ -488,6 +485,8 @@ export default function FleetTrackerApp() {
           ))}
         </div>
       </nav>
+      {/* White safe area fill below nav — covers the home indicator area */}
+      <div className="bg-white shrink-0 w-full" style={{ height: 'env(safe-area-inset-bottom, 0px)' }} />
 
     </div>
   );
