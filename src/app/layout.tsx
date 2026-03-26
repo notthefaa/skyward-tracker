@@ -17,6 +17,11 @@ const roboto = Roboto({
 export const metadata: Metadata = {
   title: "Aviation Fleet Tracker",
   description: "Aircraft fleet management, maintenance tracking, and flight logging.",
+  appleWebApp: {
+    capable: true,
+    title: "Fleet Tracker",
+    statusBarStyle: "black-translucent",
+  },
 };
 
 export const viewport: Viewport = {
@@ -24,6 +29,8 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
+  viewportFit: "cover",
+  themeColor: "#091F3C",
 };
 
 export default function RootLayout({
