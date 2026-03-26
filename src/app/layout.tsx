@@ -40,7 +40,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${oswald.variable} ${roboto.variable} font-roboto bg-navy antialiased`}>
+      <body className={`${oswald.variable} ${roboto.variable} font-roboto bg-white antialiased`}>
         {children}
       </body>
     </html>

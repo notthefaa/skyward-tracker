@@ -456,7 +456,7 @@ export default function FleetTrackerApp() {
         </div>
       </main>
 
-      <nav className="bg-white border-t border-gray-200 w-full z-20 shrink-0" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+      <nav className="bg-white border-t border-gray-200 w-full z-20 shrink-0">
         <div className="max-w-3xl mx-auto flex justify-around">
           {[
             { id: 'summary', icon: Home, label: 'Home', badge: 0 },
