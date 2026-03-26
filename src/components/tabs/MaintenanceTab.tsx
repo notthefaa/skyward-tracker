@@ -4,7 +4,7 @@ import { authFetch } from "@/lib/authFetch";
 import { processMxItem, getMxTextColor, isMxExpired } from "@/lib/math";
 import type { AircraftWithMetrics, SystemSettings } from "@/lib/types";
 import useSWR from "swr";
-import { Wrench, Trash2, Plus, X, Edit2, Calendar } from "lucide-react";
+import { Wrench, Trash2, Plus, X, Edit2, Calendar, Send, ExternalLink, ChevronRight } from "lucide-react";
 import { PrimaryButton } from "@/components/AppButtons";
 import ServiceEventModal from "@/components/modals/ServiceEventModal";
 
@@ -34,11 +34,26 @@ export default function MaintenanceTab({
     }
   );
 
+  // Fetch active maintenance events for this aircraft
+  const { data: activeEvents = [], mutate: mutateEvents } = useSWR(
+    aircraft ? `mx-events-${aircraft.id}` : null,
+    async () => {
+      const { data } = await supabase
+        .from('aft_maintenance_events')
+        .select('*')
+        .eq('aircraft_id', aircraft!.id)
+        .in('status', ['draft', 'scheduling', 'confirmed', 'in_progress'])
+        .order('created_at', { ascending: false });
+      return (data || []) as any[];
+    }
+  );
+
   const isGroundedLocally = mxItems.some((item: any) => isMxExpired(item, currentEngineTime));
 
   const [showMxModal, setShowMxModal] = useState(false);
   const [showServiceModal, setShowServiceModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [resendingEventId, setResendingEventId] = useState<string | null>(null);
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [mxName, setMxName] = useState("");
@@ -66,6 +81,22 @@ export default function MaintenanceTab({
       alert("Failed to send email");
     }
     setIsSubmitting(false);
+  };
+
+  const handleResendWorkpackage = async (eventId: string) => {
+    setResendingEventId(eventId);
+    try {
+      const res = await authFetch('/api/mx-events/send-workpackage', {
+        method: 'POST',
+        body: JSON.stringify({ eventId, additionalMxItemIds: [], additionalSquawkIds: [], addonServices: [], resend: true })
+      });
+      if (!res.ok) throw new Error('Failed');
+      alert("Work package resent successfully.");
+      await mutateEvents();
+    } catch (err) {
+      alert("Failed to resend work package.");
+    }
+    setResendingEventId(null);
   };
 
   const openMxForm = (item: any = null) => {
@@ -130,6 +161,22 @@ export default function MaintenanceTab({
 
   if (!aircraft) return null;
 
+  const statusLabel = (s: string) => {
+    if (s === 'draft') return 'Draft — Review & Send';
+    if (s === 'scheduling') return 'Scheduling';
+    if (s === 'confirmed') return 'Confirmed';
+    if (s === 'in_progress') return 'In Progress';
+    return s;
+  };
+
+  const statusColor = (s: string) => {
+    if (s === 'draft') return 'bg-[#F08B46]';
+    if (s === 'scheduling') return 'bg-gray-500';
+    if (s === 'confirmed') return 'bg-[#3AB0FF]';
+    if (s === 'in_progress') return 'bg-[#56B94A]';
+    return 'bg-gray-400';
+  };
+
   return (
     <>
       {role === 'admin' && (
@@ -153,9 +200,63 @@ export default function MaintenanceTab({
       <ServiceEventModal 
         aircraft={aircraft} 
         show={showServiceModal} 
-        onClose={() => setShowServiceModal(false)} 
-        onRefresh={() => mutate()}
+        onClose={() => { setShowServiceModal(false); mutateEvents(); }} 
+        onRefresh={() => { mutate(); mutateEvents(); }}
       />
+
+      {/* ACTIVE EVENTS BANNER — visible directly on the MX tab */}
+      {activeEvents.length > 0 && (
+        <div className="mb-4 space-y-2">
+          {activeEvents.map(ev => (
+            <div key={ev.id} className={`bg-white shadow-lg rounded-sm p-4 border-t-4 ${ev.status === 'draft' ? 'border-[#F08B46]' : ev.status === 'confirmed' ? 'border-[#3AB0FF]' : ev.status === 'in_progress' ? 'border-[#56B94A]' : 'border-gray-400'}`}>
+              <div className="flex justify-between items-start">
+                <div>
+                  <span className={`text-[8px] font-bold uppercase tracking-widest px-2 py-0.5 rounded text-white ${statusColor(ev.status)}`}>
+                    {statusLabel(ev.status)}
+                  </span>
+                  <p className="font-oswald font-bold text-navy text-sm mt-2">
+                    {ev.status === 'draft' ? 'Work Package Ready for Review'
+                      : ev.confirmed_date ? `Service: ${ev.confirmed_date}`
+                      : ev.proposed_date ? `Proposed: ${ev.proposed_date} (by ${ev.proposed_by})`
+                      : 'Awaiting Date'}
+                  </p>
+                  {ev.estimated_completion && (
+                    <p className="text-[10px] text-gray-500 mt-1">Est. completion: {ev.estimated_completion}</p>
+                  )}
+                  <p className="text-[10px] text-gray-400 mt-1">MX Contact: {ev.mx_contact_name || 'N/A'}</p>
+                </div>
+                <div className="flex flex-col gap-2 items-end shrink-0 ml-3">
+                  <button
+                    onClick={() => setShowServiceModal(true)}
+                    className="text-[10px] font-bold uppercase tracking-widest text-[#3AB0FF] hover:underline flex items-center gap-1"
+                  >
+                    View <ChevronRight size={12} />
+                  </button>
+                  {ev.status !== 'draft' && (
+                    <button
+                      onClick={() => handleResendWorkpackage(ev.id)}
+                      disabled={resendingEventId === ev.id}
+                      className="text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:text-[#F08B46] flex items-center gap-1 disabled:opacity-50"
+                    >
+                      <Send size={10} /> {resendingEventId === ev.id ? 'Sending...' : 'Resend'}
+                    </button>
+                  )}
+                  {ev.access_token && ev.status !== 'draft' && (
+                    <a
+                      href={`/service/${ev.access_token}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:text-[#3AB0FF] flex items-center gap-1"
+                    >
+                      <ExternalLink size={10} /> Portal
+                    </a>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
       
       <div className={`bg-cream shadow-lg rounded-sm p-4 md:p-6 border-t-4 mb-6 ${isGroundedLocally ? 'border-[#CE3732]' : 'border-[#F08B46]'}`}>
         <h2 className="font-oswald text-2xl md:text-3xl font-bold uppercase text-navy m-0 mb-6 leading-none">Maintenance</h2>
@@ -165,7 +266,6 @@ export default function MaintenanceTab({
             <p className="text-center text-sm text-gray-400 italic py-4">No maintenance items tracked.</p>
           ) : (
             mxItems.map((item) => {
-              // Use shared math utility
               const processed = processMxItem(item, currentEngineTime, aircraft.burnRate, aircraft.burnRateLow, aircraft.burnRateHigh);
               const dueTextColor = getMxTextColor(processed, sysSettings);
               const containerColorClass = processed.isExpired 

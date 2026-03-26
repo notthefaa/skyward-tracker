@@ -13,7 +13,7 @@ import {
 const ADDON_OPTIONS = [
   "Aircraft Wash & Detail",
   "Engine Oil Change & Top-Off",
-  "Hydraulic Fluid Check & Top-Off",
+  "Fluid Check & Top-Off",
   "Nav Database Update",
   "Tire Inspection & Pressure Check",
   "Interior Cleaning",
@@ -51,6 +51,9 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh }
 
   // Completion form
   const [completionItems, setCompletionItems] = useState<any[]>([]);
+
+  // Email preview
+  const [showPreview, setShowPreview] = useState(false);
 
   useEffect(() => {
     if (show && aircraft) {
@@ -281,6 +284,70 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh }
   const activeEvents = events.filter(e => e.status !== 'complete');
   const completedEvents = events.filter(e => e.status === 'complete');
 
+  // Build preview content from currently selected items
+  const renderEmailPreview = (existingLines?: any[]) => {
+    const mxPreviewItems = mxItems.filter(mx => selectedMxIds.includes(mx.id));
+    const sqPreviewItems = squawks.filter(sq => selectedSquawkIds.includes(sq.id));
+    const existingMx = (existingLines || []).filter(li => li.item_type === 'maintenance');
+    const existingSq = (existingLines || []).filter(li => li.item_type === 'squawk');
+    const existingAddon = (existingLines || []).filter(li => li.item_type === 'addon');
+
+    const allMx = [...existingMx.map(li => ({ name: li.item_name, desc: li.item_description })), ...mxPreviewItems.map(mx => ({ name: mx.item_name, desc: mx.tracking_type === 'time' ? `Due at ${mx.due_time} hrs` : `Due on ${mx.due_date}` }))];
+    const allSq = [...existingSq.map(li => ({ name: li.item_name, desc: li.item_description })), ...sqPreviewItems.map(sq => ({ name: `Squawk: ${sq.location}`, desc: sq.description }))];
+    const allAddons = [...existingAddon.map(li => li.item_name), ...selectedAddons];
+
+    return (
+      <div className="bg-gray-50 border border-gray-200 rounded p-4 space-y-4 text-sm animate-fade-in">
+        <div className="flex justify-between items-center border-b border-gray-200 pb-2">
+          <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Email Preview</span>
+          <button onClick={() => setShowPreview(false)} className="text-gray-400 hover:text-red-500"><X size={16}/></button>
+        </div>
+
+        <div className="space-y-1 text-[10px] text-gray-500">
+          <p><strong>To:</strong> {aircraft.mx_contact_email || 'No MX contact set'}</p>
+          <p><strong>CC:</strong> {aircraft.main_contact_email || 'None'}</p>
+          <p><strong>Reply-To:</strong> {aircraft.main_contact_email || 'System default'}</p>
+          <p><strong>Subject:</strong> Service Request: {aircraft.tail_number} — Work Package</p>
+        </div>
+
+        <div className="border-t border-gray-200 pt-3 space-y-3">
+          <p className="text-navy">Hello {aircraft.mx_contact || ''},</p>
+          <p className="text-gray-600">We'd like to schedule service for <strong>{aircraft.tail_number}</strong> ({aircraft.aircraft_type}). Below is the full work package.</p>
+          
+          {proposedDate && <p className="text-navy font-bold">Requested Service Date: {proposedDate}</p>}
+          {!proposedDate && <p className="text-gray-500 italic">No preferred date — mechanic will be asked to propose one.</p>}
+
+          {allMx.length > 0 && (
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-[#F08B46] mb-1">Maintenance Items Due</p>
+              {allMx.map((m, i) => <p key={i} className="text-navy ml-3">• <strong>{m.name}</strong>{m.desc ? ` — ${m.desc}` : ''}</p>)}
+            </div>
+          )}
+
+          {allSq.length > 0 && (
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-[#CE3732] mb-1">Squawks / Discrepancies</p>
+              {allSq.map((s, i) => <p key={i} className="text-navy ml-3">• <strong>{s.name}</strong>{s.desc ? ` — ${s.desc}` : ''}</p>)}
+            </div>
+          )}
+
+          {allAddons.length > 0 && (
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-[#3AB0FF] mb-1">Additional Services</p>
+              {allAddons.map((a, i) => <p key={i} className="text-navy ml-3">• {a}</p>)}
+            </div>
+          )}
+
+          <div className="bg-blue-50 p-3 rounded text-center">
+            <p className="text-[10px] font-bold text-navy">[ OPEN SERVICE PORTAL button will appear here ]</p>
+          </div>
+
+          <p className="text-gray-600">Thank you,<br/><strong>{aircraft.main_contact || 'Skyward Operations'}</strong>{aircraft.main_contact_phone ? <><br/>{aircraft.main_contact_phone}</> : null}</p>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 animate-fade-in" onClick={onClose}>
       <div className="bg-white rounded shadow-2xl w-full max-w-lg p-6 border-t-4 border-[#F08B46] max-h-[90vh] overflow-y-auto animate-slide-up" onClick={e => e.stopPropagation()}>
@@ -416,6 +483,14 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh }
               <input type="date" value={proposedDate} onChange={e => setProposedDate(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" />
             </div>
 
+            {!showPreview ? (
+              <button onClick={() => setShowPreview(true)} className="w-full text-[10px] font-bold uppercase tracking-widest text-[#3AB0FF] hover:underline py-2">
+                Preview Email Before Sending
+              </button>
+            ) : (
+              renderEmailPreview()
+            )}
+
             <PrimaryButton onClick={handleCreateEvent} disabled={isSubmitting}>
               {isSubmitting ? "Creating..." : "Send Work Package to Mechanic"}
             </PrimaryButton>
@@ -501,6 +576,14 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh }
               <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Preferred Service Date (Optional)</label>
               <input type="date" value={proposedDate} onChange={e => setProposedDate(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" />
             </div>
+
+            {!showPreview ? (
+              <button onClick={() => setShowPreview(true)} className="w-full text-[10px] font-bold uppercase tracking-widest text-[#3AB0FF] hover:underline py-2">
+                Preview Email Before Sending
+              </button>
+            ) : (
+              renderEmailPreview(eventLineItems)
+            )}
 
             <PrimaryButton onClick={handleSendDraft} disabled={isSubmitting}>
               {isSubmitting ? "Sending..." : "Send Work Package to Mechanic"}
