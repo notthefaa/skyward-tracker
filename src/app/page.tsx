@@ -326,7 +326,7 @@ export default function FleetTrackerApp() {
   return (
     <>
       <style dangerouslySetInnerHTML={{__html: `html, body { background-color: #ffffff !important; }` }} />
-      <div className="flex flex-col bg-neutral-100 w-full overflow-x-hidden relative" style={{ height: 'calc(100vh + env(safe-area-inset-top, 0px))' }}>
+      <div className="flex flex-col bg-neutral-100 w-full overflow-hidden relative" style={{ height: 'calc(100dvh - env(safe-area-inset-bottom, 0px))' }}>
 
       <TutorialModal session={session} role={role} />
 
