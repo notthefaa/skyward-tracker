@@ -481,7 +481,7 @@ export default function FleetTrackerApp() {
                 )}
               </div>
               <span className="text-[10px] font-bold uppercase tracking-widest">{tab.label}</span>
-              {activeTab === tab.id && <div className={`absolute top-0 w-12 h-1 rounded-b-full ${getIndicatorColor(tab.id)}`}></div>}
+              {activeTab === tab.id && <div className={`absolute bottom-0 w-12 h-1 rounded-t-full ${getIndicatorColor(tab.id)}`}></div>}
             </button>
           ))}
         </div>
