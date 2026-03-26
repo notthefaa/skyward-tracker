@@ -21,6 +21,7 @@ html, body {
   color: var(--color-navy);
   height: 100%;
   width: 100%;
+  overflow: hidden;
   overscroll-behavior-y: none;
 }
 
