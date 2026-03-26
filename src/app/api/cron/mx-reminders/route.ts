@@ -4,7 +4,6 @@ import { createAdminClient, handleApiError } from '@/lib/auth';
 import { env } from '@/lib/env';
 import { computeMetrics } from '@/lib/math';
 
-
 const resend = new Resend(env.RESEND_API_KEY);
 const FROM_EMAIL = 'notifications@skywardsociety.com';
 
@@ -42,7 +41,7 @@ export async function GET(req: Request) {
     const { data: allRoles } = await supabaseAdmin.from('aft_user_roles').select('*');
     const { data: allAccess } = await supabaseAdmin.from('aft_user_aircraft_access').select('*');
 
-    // Fetch Flight Logs from last 180 days for Confidence & Burn Rate
+    // Fetch Flight Logs from last 180 days
     const oneEightyDaysAgo = new Date();
     oneEightyDaysAgo.setDate(oneEightyDaysAgo.getDate() - 180);
     const { data: recentLogs } = await supabaseAdmin
@@ -53,11 +52,45 @@ export async function GET(req: Request) {
 
     const admins = allRoles?.filter(r => r.role === 'admin').map(a => a.email).filter(Boolean) || [];
 
+    // =====================================================
+    // BUILD SET OF MX ITEMS ALREADY IN ACTIVE EVENTS
+    // =====================================================
+    const { data: activeEventLines } = await supabaseAdmin
+      .from('aft_event_line_items')
+      .select('maintenance_item_id, event_id')
+      .not('maintenance_item_id', 'is', null);
+
+    const mxIdsInActiveEvents = new Set<string>();
+    if (activeEventLines && activeEventLines.length > 0) {
+      const eventIds = Array.from(new Set(activeEventLines.map((l: any) => l.event_id)));
+      if (eventIds.length > 0) {
+        const { data: activeEvents } = await supabaseAdmin
+          .from('aft_maintenance_events')
+          .select('id')
+          .in('id', eventIds)
+          .in('status', ['draft', 'scheduling', 'confirmed', 'in_progress']);
+
+        if (activeEvents) {
+          const activeEvIds = new Set(activeEvents.map((e: any) => e.id));
+          for (const line of activeEventLines) {
+            if (line.maintenance_item_id && activeEvIds.has(line.event_id)) {
+              mxIdsInActiveEvents.add(line.maintenance_item_id);
+            }
+          }
+        }
+      }
+    }
+
+    // =====================================================
+    // MAIN LOOP
+    // =====================================================
     for (const mx of mxItems as any[]) {
       const aircraft = (aircraftList as any[]).find(a => a.id === mx.aircraft_id);
       if (!aircraft) continue;
 
-      // Use shared math utility instead of duplicated logic
+      // SKIP items already in an active maintenance event
+      if (mxIdsInActiveEvents.has(mx.id)) continue;
+
       const planeLogs = recentLogs?.filter(l => l.aircraft_id === aircraft.id) || [];
       const { burnRate, confidenceScore } = computeMetrics(aircraft, planeLogs);
 
@@ -74,53 +107,109 @@ export async function GET(req: Request) {
       }
 
       const flagToUpdate: Record<string, boolean> = {};
-      let internalTriggerTemplate: string | null = null;
 
       // ---------------------------------------------------------
-      // AUTOMATED MECHANIC SCHEDULING (Predictive Logic)
+      // 1. SCHEDULING: Create DRAFT event & notify OWNER
+      //    The mechanic is NEVER emailed directly by the CRON.
+      //    The owner reviews the draft, adds items, then sends.
       // ---------------------------------------------------------
       const mxThresholdHitTime = mx.tracking_type === 'time' && remaining <= schedTime;
       const mxThresholdHitPredictive = mx.tracking_type === 'time' && projectedDays <= predictiveSchedDays;
       const mxThresholdHitDate = mx.tracking_type === 'date' && remaining <= schedDays;
 
       if (mx.automate_scheduling && !mx.mx_schedule_sent) {
-        // SCENARIO A: Auto-Send to Mechanic
-        if (mxThresholdHitTime || mxThresholdHitDate || (mxThresholdHitPredictive && confidenceScore >= 80)) {
-          if (aircraft.mx_contact_email) {
-            const mxCc = aircraft.main_contact_email ? [aircraft.main_contact_email] : [];
-            let dueString = mx.tracking_type === 'time' ? `at ${mx.due_time} hours` : `on ${mx.due_date}`;
-            if (mx.tracking_type === 'time' && burnRate > 0) {
-              dueString += ` (Projected to hit in ~${Math.ceil(projectedDays)} days)`;
-            }
 
-            await resend.emails.send({
-              from: `Skyward Operations <${FROM_EMAIL}>`,
-              to: [aircraft.mx_contact_email],
-              cc: mxCc,
-              subject: `Scheduling Request: ${aircraft.tail_number} Maintenance`,
-              html: `<div style="font-family: Arial, sans-serif; font-size: 14px; color: #333333; line-height: 1.6;">
-                      <p>Hello ${aircraft.mx_contact || ''},</p>
-                      <p>The following maintenance item is coming due for ${aircraft.tail_number}. Please let us know when you are able to add this aircraft to your schedule.</p>
-                      <p style="margin-top: 20px;"><strong>Item:</strong> ${mx.item_name}<br/><strong>Due:</strong> ${dueString}</p>
-                      <p style="margin-top: 20px;">Thank you,<br/><strong>${aircraft.main_contact || 'Skyward Operations'}</strong></p>
-                    </div>`
-            });
-            flagToUpdate.mx_schedule_sent = true;
+        // SCENARIO A: Threshold hit (high confidence or hard limit) → Create draft
+        if (mxThresholdHitTime || mxThresholdHitDate || (mxThresholdHitPredictive && confidenceScore >= 80)) {
+
+          let dueString = mx.tracking_type === 'time' ? `at ${mx.due_time} hours` : `on ${mx.due_date}`;
+          if (mx.tracking_type === 'time' && burnRate > 0) {
+            dueString += ` (projected ~${Math.ceil(projectedDays)} days)`;
           }
+
+          // Create a DRAFT maintenance event
+          const { data: draftEvent } = await supabaseAdmin
+            .from('aft_maintenance_events')
+            .insert({
+              aircraft_id: aircraft.id,
+              status: 'draft',
+              addon_services: [],
+              mx_contact_name: aircraft.mx_contact || null,
+              mx_contact_email: aircraft.mx_contact_email || null,
+              primary_contact_name: aircraft.main_contact || null,
+              primary_contact_email: aircraft.main_contact_email || null,
+            } as any)
+            .select()
+            .single();
+
+          if (draftEvent) {
+            // Add the triggered MX item as a line item
+            await supabaseAdmin.from('aft_event_line_items').insert({
+              event_id: draftEvent.id,
+              item_type: 'maintenance',
+              maintenance_item_id: mx.id,
+              item_name: mx.item_name,
+              item_description: `Due ${dueString}`,
+            } as any);
+
+            await supabaseAdmin.from('aft_event_messages').insert({
+              event_id: draftEvent.id,
+              sender: 'system',
+              message_type: 'status_update',
+              message: `Draft created automatically. ${mx.item_name} is approaching: ${dueString}.`,
+            } as any);
+
+            // Email the PRIMARY CONTACT to review and send
+            if (aircraft.main_contact_email) {
+              await resend.emails.send({
+                from: `Skyward System <${FROM_EMAIL}>`,
+                replyTo: aircraft.main_contact_email,
+                to: [aircraft.main_contact_email],
+                subject: `Action Required: Review & Send Work Package for ${aircraft.tail_number}`,
+                html: `
+                  <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; border-radius: 8px;">
+                    <h2 style="color: #1B4869; text-transform: uppercase; letter-spacing: 2px; border-bottom: 2px solid #1B4869; padding-bottom: 10px;">Maintenance Coming Due</h2>
+                    
+                    <p style="color: #525659; font-size: 16px;">Hello ${aircraft.main_contact || 'Operations'},</p>
+                    <p style="color: #525659; font-size: 16px;">The following maintenance item is approaching for <strong>${aircraft.tail_number}</strong>:</p>
+                    
+                    <div style="background-color: #FFF7ED; padding: 20px; border-left: 4px solid #F08B46; margin: 25px 0; border-radius: 4px;">
+                      <p style="margin: 0 0 8px 0; color: #1B4869; font-size: 18px;"><strong>${mx.item_name}</strong></p>
+                      <p style="margin: 0; color: #525659; font-size: 14px;">Due ${dueString}</p>
+                    </div>
+
+                    <p style="color: #525659; font-size: 16px;">We've prepared a <strong>draft work package</strong> for you. Log into the fleet portal to:</p>
+                    <ul style="color: #525659; font-size: 14px; line-height: 2;">
+                      <li>Add any open squawks you'd like addressed</li>
+                      <li>Request additional services (wash, fluid top-off, nav update, etc.)</li>
+                      <li>Propose a preferred service date</li>
+                      <li>Send the complete package to ${aircraft.mx_contact || 'your mechanic'}</li>
+                    </ul>
+                  </div>
+                `
+              });
+            }
+          }
+
+          flagToUpdate.mx_schedule_sent = true;
         }
-        // SCENARIO B: Heads-up to Primary Contact (Low-Confidence Predictive)
+        // SCENARIO B: Low-confidence predictive → heads-up to owner only
         else if (mxThresholdHitPredictive && confidenceScore < 80 && !mx.primary_heads_up_sent) {
           if (aircraft.main_contact_email) {
             await resend.emails.send({
               from: `Skyward System <${FROM_EMAIL}>`,
+              replyTo: aircraft.main_contact_email,
               to: [aircraft.main_contact_email],
-              subject: `Action Required: ${aircraft.tail_number} MX Prediction`,
-              html: `<div style="font-family: Arial, sans-serif; font-size: 14px; color: #333333; line-height: 1.6;">
-                      <p>Hello ${aircraft.main_contact || 'Operations'},</p>
-                      <p>We estimate that maintenance for <strong>${mx.item_name}</strong> is coming due in roughly ${Math.ceil(projectedDays)} days for ${aircraft.tail_number}.</p>
-                      <p>However, because recent flight logs have been irregular (System Confidence: ${confidenceScore}%), we have paused the automated request to your mechanic.</p>
-                      <p style="margin-top: 20px; font-weight: bold; color: #CE3732;">Please log into the Skyward Fleet Portal and navigate to the Maintenance tab to manually approve and dispatch the scheduling request.</p>
-                    </div>`
+              subject: `Heads Up: ${aircraft.tail_number} MX Approaching (Low Confidence)`,
+              html: `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+                  <h2 style="color: #1B4869;">Predictive Maintenance Alert</h2>
+                  <p>Hello ${aircraft.main_contact || 'Operations'},</p>
+                  <p>Based on recent flight activity, we estimate that <strong>${mx.item_name}</strong> for ${aircraft.tail_number} may come due in roughly <strong>${Math.ceil(projectedDays)} days</strong>.</p>
+                  <p>However, flight logs have been irregular (System Confidence: <strong>${confidenceScore}%</strong>), so this estimate may shift significantly.</p>
+                  <p style="margin-top: 20px;">No action is needed yet. We'll create a draft work package automatically when the item gets closer to its threshold. You can also schedule service proactively from the Maintenance tab at any time.</p>
+                </div>
+              `
             });
             flagToUpdate.primary_heads_up_sent = true;
           }
@@ -128,9 +217,10 @@ export async function GET(req: Request) {
       }
 
       // ---------------------------------------------------------
-      // INTERNAL PILOT/ADMIN ALERTS
+      // 2. INTERNAL PILOT/ADMIN ALERTS (unchanged)
       // ---------------------------------------------------------
       let hitReminder3 = false, hitReminder2 = false, hitReminder1 = false;
+      let internalTriggerTemplate: string | null = null;
 
       if (mx.tracking_type === 'time') {
         hitReminder3 = remaining <= reminderHours3 || projectedDays <= reminder3;
@@ -156,7 +246,6 @@ export async function GET(req: Request) {
       if (internalTriggerTemplate) {
         const assignedPilotsIds = allAccess?.filter(a => a.aircraft_id === aircraft.id).map(a => a.user_id) || [];
         const assignedPilotsEmails = allRoles?.filter(r => assignedPilotsIds.includes(r.user_id)).map(r => r.email).filter(Boolean) || [];
-
         const recipients = Array.from(new Set([...admins, ...assignedPilotsEmails])).filter(Boolean) as string[];
 
         if (recipients.length > 0) {

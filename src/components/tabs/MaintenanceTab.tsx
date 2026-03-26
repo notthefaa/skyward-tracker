@@ -4,8 +4,9 @@ import { authFetch } from "@/lib/authFetch";
 import { processMxItem, getMxTextColor, isMxExpired } from "@/lib/math";
 import type { AircraftWithMetrics, SystemSettings } from "@/lib/types";
 import useSWR from "swr";
-import { Wrench, Trash2, Plus, X, Edit2 } from "lucide-react";
+import { Wrench, Trash2, Plus, X, Edit2, Calendar } from "lucide-react";
 import { PrimaryButton } from "@/components/AppButtons";
+import ServiceEventModal from "@/components/modals/ServiceEventModal";
 
 export default function MaintenanceTab({ 
   aircraft, 
@@ -36,6 +37,7 @@ export default function MaintenanceTab({
   const isGroundedLocally = mxItems.some((item: any) => isMxExpired(item, currentEngineTime));
 
   const [showMxModal, setShowMxModal] = useState(false);
+  const [showServiceModal, setShowServiceModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -131,12 +133,29 @@ export default function MaintenanceTab({
   return (
     <>
       {role === 'admin' && (
-        <div className="mb-2">
-          <PrimaryButton onClick={() => openMxForm()}>
-            <Plus size={18} /> Track New MX Item
-          </PrimaryButton>
+        <div className="mb-2 flex gap-2">
+          <div className="flex-1">
+            <PrimaryButton onClick={() => openMxForm()}>
+              <Plus size={18} /> Track New MX Item
+            </PrimaryButton>
+          </div>
+          <div className="flex-1">
+            <button 
+              onClick={() => setShowServiceModal(true)}
+              className="w-full bg-[#F08B46] text-white font-oswald tracking-widest uppercase py-3 px-4 rounded hover:bg-opacity-90 active:scale-95 transition-all duration-150 ease-out flex justify-center items-center gap-2 text-sm"
+            >
+              <Calendar size={18} /> Schedule Service
+            </button>
+          </div>
         </div>
       )}
+
+      <ServiceEventModal 
+        aircraft={aircraft} 
+        show={showServiceModal} 
+        onClose={() => setShowServiceModal(false)} 
+        onRefresh={() => mutate()}
+      />
       
       <div className={`bg-cream shadow-lg rounded-sm p-4 md:p-6 border-t-4 mb-6 ${isGroundedLocally ? 'border-[#CE3732]' : 'border-[#F08B46]'}`}>
         <h2 className="font-oswald text-2xl md:text-3xl font-bold uppercase text-navy m-0 mb-6 leading-none">Maintenance</h2>
