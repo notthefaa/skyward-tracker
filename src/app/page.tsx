@@ -325,8 +325,9 @@ export default function FleetTrackerApp() {
 
   return (
     <>
-      <style dangerouslySetInnerHTML={{__html: `html, body { background-color: #ffffff !important; }` }} />
-      <div className="flex flex-col bg-neutral-100 w-full overflow-hidden relative" style={{ height: 'calc(100dvh - env(safe-area-inset-bottom, 0px))' }}>
+      <style dangerouslySetInnerHTML={{__html: `html, body { background-color: #ffffff !important; } #app-shell { height: 100dvh; }` }} />
+      <script dangerouslySetInnerHTML={{__html: `(function(){var s=document.getElementById('app-shell');if(s)s.style.height=window.innerHeight+'px';window.addEventListener('resize',function(){if(s)s.style.height=window.innerHeight+'px'});})()`}} />
+      <div className="flex flex-col bg-neutral-100 w-full overflow-hidden relative" id="app-shell">
 
       <TutorialModal session={session} role={role} />
 
