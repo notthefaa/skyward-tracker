@@ -40,11 +40,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <head>
-        <meta name="theme-color" content="#091F3C" />
-        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-      </head>
-      <body className={`${oswald.variable} ${roboto.variable} font-roboto antialiased`}>
+      <body className={`${oswald.variable} ${roboto.variable} font-roboto bg-navy antialiased`}>
         {children}
       </body>
     </html>

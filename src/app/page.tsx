@@ -324,7 +324,7 @@ export default function FleetTrackerApp() {
   const selectedAircraftData = allAircraftList.find(a => a.tail_number === activeTail) || null;
 
   return (
-    <div className="flex flex-col bg-navy h-[100dvh] w-full overflow-hidden relative">
+    <div className="flex flex-col bg-neutral-100 h-[100dvh] w-full overflow-hidden relative">
 
       <TutorialModal session={session} role={role} />
 
@@ -385,8 +385,8 @@ export default function FleetTrackerApp() {
         </div>
       )}
 
-      <header className="bg-navy text-white shadow-md z-20 shrink-0 w-full" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
-        <div className="max-w-3xl mx-auto px-4 py-1.5 flex justify-between items-center w-full">
+      <header className="bg-navy text-white shadow-md z-20 shrink-0 w-full">
+        <div className="max-w-3xl mx-auto px-4 py-3 flex justify-between items-center w-full min-h-[60px]">
           
           <div className="flex flex-col">
             <span className="text-[9px] font-bold uppercase tracking-widest text-[#F5B05B] mb-[2px]">
@@ -445,7 +445,7 @@ export default function FleetTrackerApp() {
         </div>
       )}
 
-      <main className="flex-1 overflow-y-auto p-4 flex justify-center w-full bg-neutral-100" style={{ touchAction: 'auto' }}>
+      <main className="flex-1 overflow-y-auto p-4 flex justify-center w-full" style={{ touchAction: 'auto' }}>
         <div className="w-full max-w-3xl flex flex-col gap-6">
           {activeTab === 'fleet' && <FleetSummary aircraftList={aircraftList} onSelectAircraft={(tail: string) => { setActiveTail(tail); setActiveTab('summary'); }} />}
           {activeTab === 'summary' && <SummaryTab aircraft={selectedAircraftData} setActiveTab={(tab: AppTab) => setActiveTab(tab)} role={role} onDeleteAircraft={handleDeleteAircraft} sysSettings={sysSettings} />}
@@ -456,7 +456,7 @@ export default function FleetTrackerApp() {
         </div>
       </main>
 
-      <nav className="bg-white border-t border-gray-200 w-full z-20 shrink-0">
+      <nav className="bg-white border-t border-gray-200 w-full z-20 shrink-0 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
         <div className="max-w-3xl mx-auto flex justify-around">
           {[
             { id: 'summary', icon: Home, label: 'Home', badge: 0 },
@@ -468,7 +468,7 @@ export default function FleetTrackerApp() {
             <button 
               key={tab.id} 
               onClick={() => setActiveTab(tab.id as AppTab)} 
-              className={`flex-1 py-2 flex flex-col items-center justify-center transition-all relative active:scale-95 ${getTabColor(tab.id)}`}
+              className={`flex-1 py-3 md:py-4 flex flex-col items-center justify-center transition-all relative active:scale-95 ${getTabColor(tab.id)}`}
             >
               <div className="relative mb-1">
                 <tab.icon size={20} />
@@ -485,8 +485,6 @@ export default function FleetTrackerApp() {
           ))}
         </div>
       </nav>
-      {/* White safe area fill below nav — covers the home indicator area */}
-      <div className="bg-white shrink-0 w-full" style={{ height: 'env(safe-area-inset-bottom, 0px)' }} />
 
     </div>
   );
