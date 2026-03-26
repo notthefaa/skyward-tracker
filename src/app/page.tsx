@@ -324,7 +324,9 @@ export default function FleetTrackerApp() {
   const selectedAircraftData = allAircraftList.find(a => a.tail_number === activeTail) || null;
 
   return (
-    <div className="flex flex-col bg-neutral-100 h-[100dvh] w-full overflow-hidden relative">
+    <>
+      <style dangerouslySetInnerHTML={{__html: `html, body { background-color: #ffffff !important; }` }} />
+      <div className="flex flex-col bg-neutral-100 h-[100dvh] w-full overflow-hidden relative">
 
       <TutorialModal session={session} role={role} />
 
@@ -487,5 +489,6 @@ export default function FleetTrackerApp() {
       </nav>
 
     </div>
+    </>
   );
 }
