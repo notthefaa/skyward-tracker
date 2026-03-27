@@ -433,7 +433,7 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh }
         {/* ===================== CREATE VIEW ===================== */}
         {view === 'create' && (
           <div className="space-y-6">
-            <button onClick={() => setView('list')} className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-[#F08B46] border border-[#F08B46] rounded-full px-3 py-1.5 hover:bg-orange-50 active:scale-95 transition-all mb-2"><ChevronDown size={12} className="rotate-90" /> Back to Events</button>
+            <button onClick={() => setView('list')} className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-[#F08B46] bg-orange-50 border border-orange-200 rounded px-3 py-1.5 hover:bg-orange-100 active:scale-95 transition-all mb-2"><ChevronDown size={12} className="rotate-90" /> Back to Events</button>
 
             {/* MX Items */}
             {mxItems.length > 0 && (
@@ -508,7 +508,7 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh }
         {/* ===================== REVIEW DRAFT VIEW ===================== */}
         {view === 'review_draft' && selectedEvent && (
           <div className="space-y-6">
-            <button onClick={() => { setSelectedEvent(null); setView('list'); }} className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-[#F08B46] border border-[#F08B46] rounded-full px-3 py-1.5 hover:bg-orange-50 active:scale-95 transition-all"><ChevronDown size={12} className="rotate-90" /> Back to Events</button>
+            <button onClick={() => { setSelectedEvent(null); setView('list'); }} className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-[#F08B46] bg-orange-50 border border-orange-200 rounded px-3 py-1.5 hover:bg-orange-100 active:scale-95 transition-all"><ChevronDown size={12} className="rotate-90" /> Back to Events</button>
 
             <div className="bg-orange-50 border border-orange-200 rounded p-4">
               <p className="text-sm text-navy font-bold mb-1">System-Generated Draft</p>
@@ -602,14 +602,14 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh }
         {/* ===================== DETAIL VIEW ===================== */}
         {view === 'detail' && selectedEvent && (
           <div className="space-y-5">
-            <button onClick={() => { setSelectedEvent(null); setView('list'); }} className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-[#F08B46] border border-[#F08B46] rounded-full px-3 py-1.5 hover:bg-orange-50 active:scale-95 transition-all"><ChevronDown size={12} className="rotate-90" /> Back to Events</button>
+            <button onClick={() => { setSelectedEvent(null); setView('list'); }} className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-[#F08B46] bg-orange-50 border border-orange-200 rounded px-3 py-1.5 hover:bg-orange-100 active:scale-95 transition-all"><ChevronDown size={12} className="rotate-90" /> Back to Events</button>
 
             {/* Status & Dates */}
             <div className="bg-gray-50 rounded p-4 border border-gray-200">
               <div className="flex justify-between items-center mb-3">
                 <span className={`text-[8px] font-bold uppercase tracking-widest px-2 py-1 rounded text-white ${selectedEvent.status === 'confirmed' ? 'bg-[#3AB0FF]' : selectedEvent.status === 'complete' ? 'bg-[#56B94A]' : 'bg-[#F08B46]'}`}>{selectedEvent.status}</span>
                 {selectedEvent.access_token && selectedEvent.status !== 'complete' && (
-                  <a href={`/service/${selectedEvent.access_token}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-[#3AB0FF] border border-[#3AB0FF] rounded-full px-3 py-1.5 hover:bg-blue-50 active:scale-95 transition-all">
+                  <a href={`/service/${selectedEvent.access_token}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-[#3AB0FF] bg-blue-50 border border-blue-200 rounded px-3 py-1.5 hover:bg-blue-100 active:scale-95 transition-all">
                     <ExternalLink size={12} /> Portal
                   </a>
                 )}
@@ -692,7 +692,7 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh }
         {/* ===================== COMPLETION VIEW — #6 fix: white inputs, no overlap ===================== */}
         {view === 'complete' && selectedEvent && (
           <div className="space-y-5">
-            <button onClick={() => setView('detail')} className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-[#F08B46] border border-[#F08B46] rounded-full px-3 py-1.5 hover:bg-orange-50 active:scale-95 transition-all"><ChevronDown size={12} className="rotate-90" /> Back to Event</button>
+            <button onClick={() => setView('detail')} className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-[#F08B46] bg-orange-50 border border-orange-200 rounded px-3 py-1.5 hover:bg-orange-100 active:scale-95 transition-all"><ChevronDown size={12} className="rotate-90" /> Back to Event</button>
             
             <p className="text-sm text-gray-600">Enter the logbook data from your mechanic's sign-off. These times and dates will reset the tracking for each item.</p>
 
@@ -704,23 +704,22 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh }
                 </div>
 
                 <div className="space-y-3">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-[10px] font-bold uppercase tracking-widest text-navy block">Completion Date</label>
-                      <input type="date" value={item.completionDate} onChange={e => updateCompletionItem(idx, 'completionDate', e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-[#56B94A] outline-none bg-white" />
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-bold uppercase tracking-widest text-navy block">Comp. {isTurbine ? 'FTT' : 'Tach'}</label>
-                      <input type="number" step="0.1" value={item.completionTime} onChange={e => updateCompletionItem(idx, 'completionTime', e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-[#56B94A] outline-none bg-white" placeholder="Engine time" />
-                    </div>
+                  <div>
+                    <label className="text-[10px] font-bold uppercase tracking-widest text-navy block">Completion Date</label>
+                    <input type="date" value={item.completionDate} onChange={e => updateCompletionItem(idx, 'completionDate', e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-[#56B94A] outline-none bg-white" />
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-bold uppercase tracking-widest text-navy block">Completion {isTurbine ? 'FTT' : 'Tach'}</label>
+                    <input type="number" step="0.1" value={item.completionTime} onChange={e => updateCompletionItem(idx, 'completionTime', e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-[#56B94A] outline-none bg-white" placeholder="Engine time at completion" />
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
-                    <div>
+                    <div className="min-w-0">
                       <label className="text-[10px] font-bold uppercase tracking-widest text-navy block">Signed By</label>
                       <input type="text" value={item.completedByName} onChange={e => updateCompletionItem(idx, 'completedByName', e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-[#56B94A] outline-none bg-white" placeholder="IA / A&P" />
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <label className="text-[10px] font-bold uppercase tracking-widest text-navy block">Certificate #</label>
                       <input type="text" value={item.completedByCert} onChange={e => updateCompletionItem(idx, 'completedByCert', e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-[#56B94A] outline-none bg-white" />
                     </div>

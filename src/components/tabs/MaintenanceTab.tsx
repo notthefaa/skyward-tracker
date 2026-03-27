@@ -230,7 +230,7 @@ export default function MaintenanceTab({
                 <div className="flex flex-col gap-2 items-end shrink-0 ml-3">
                   <button
                     onClick={() => setShowServiceModal(true)}
-                    className="text-[10px] font-bold uppercase tracking-widest text-[#3AB0FF] hover:underline flex items-center gap-1"
+                    className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-[#3AB0FF] bg-blue-50 border border-blue-200 px-2.5 py-1.5 rounded transition-colors active:scale-95"
                   >
                     View <ChevronRight size={12} />
                   </button>
@@ -238,9 +238,9 @@ export default function MaintenanceTab({
                     <button
                       onClick={() => setConfirmResendId(ev.id)}
                       disabled={resendingEventId === ev.id}
-                      className="text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:text-[#F08B46] flex items-center gap-1 disabled:opacity-50"
+                      className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-[#F08B46] bg-orange-50 border border-orange-200 px-2.5 py-1.5 rounded transition-colors active:scale-95 disabled:opacity-50"
                     >
-                      <Send size={10} /> {resendingEventId === ev.id ? 'Sending...' : 'Resend'}
+                      <Send size={10} /> {resendingEventId === ev.id ? '...' : 'Resend'}
                     </button>
                   )}
                   {ev.access_token && ev.status !== 'draft' && (
@@ -248,7 +248,7 @@ export default function MaintenanceTab({
                       href={`/service/${ev.access_token}`}
                       target="_blank"
                       rel="noreferrer"
-                      className="text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:text-[#3AB0FF] flex items-center gap-1"
+                      className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-navy bg-gray-50 border border-gray-200 px-2.5 py-1.5 rounded transition-colors active:scale-95"
                     >
                       <ExternalLink size={10} /> Portal
                     </a>
