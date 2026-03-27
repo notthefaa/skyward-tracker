@@ -299,7 +299,7 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh }
     const existingAddon = (existingLines || []).filter(li => li.item_type === 'addon');
 
     const allMx = [...existingMx.map(li => ({ name: li.item_name, desc: li.item_description })), ...mxPreviewItems.map(mx => ({ name: mx.item_name, desc: mx.tracking_type === 'time' ? `Due at ${mx.due_time} hrs` : `Due on ${mx.due_date}` }))];
-    const allSq = [...existingSq.map(li => ({ name: li.item_name, desc: li.item_description })), ...sqPreviewItems.map(sq => ({ name: sq.description ? `${sq.location} — ${sq.description.substring(0, 60)}` : sq.location, desc: sq.description }))];
+    const allSq = [...existingSq.map(li => ({ name: li.item_name, desc: li.item_description })), ...sqPreviewItems.map(sq => ({ name: sq.description || 'No description', desc: sq.affects_airworthiness && sq.location ? `Grounded at ${sq.location}` : null }))];
     const allAddons = [...existingAddon.map(li => li.item_name), ...selectedAddons];
 
     return (
@@ -356,8 +356,8 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh }
 
   return (
     // #3 fix — overscroll-behavior: contain prevents background scrolling
-    <div className="fixed inset-0 bg-black/60 z-[10000] flex items-center justify-center p-4 animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={onClose}>
-      <div className="bg-white rounded shadow-2xl w-full max-w-lg p-6 border-t-4 border-[#F08B46] max-h-[90vh] overflow-y-auto animate-slide-up" style={{ overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch' }} onClick={e => e.stopPropagation()}>
+    <div className="fixed inset-0 bg-black/60 z-[10000] flex items-center justify-center animate-fade-in" style={{ overscrollBehavior: 'contain', paddingTop: 'calc(3.5rem + env(safe-area-inset-top, 0px) + 8px)', paddingBottom: 'calc(3.5rem + env(safe-area-inset-bottom, 0px) + 8px)', paddingLeft: '1rem', paddingRight: '1rem' }} onClick={onClose}>
+      <div className="bg-white rounded shadow-2xl w-full max-w-lg p-6 border-t-4 border-[#F08B46] max-h-full overflow-y-auto animate-slide-up" style={{ overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch' }} onClick={e => e.stopPropagation()}>
 
         <div className="flex justify-between items-center mb-6">
           <h2 className="font-oswald text-2xl font-bold uppercase text-navy flex items-center gap-2">
@@ -453,7 +453,7 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh }
               </div>
             )}
 
-            {/* Squawks — #5 fix: show description, not just location */}
+            {/* Squawks — description primary, grounded flag if AOG */}
             {squawks.length > 0 && (
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-widest text-navy mb-2 flex items-center gap-2"><AlertTriangle size={14} className="text-[#CE3732]" /> Open Squawks</p>
@@ -463,7 +463,8 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh }
                       <input type="checkbox" checked={selectedSquawkIds.includes(sq.id)} onChange={() => setSelectedSquawkIds(prev => prev.includes(sq.id) ? prev.filter(id => id !== sq.id) : [...prev, sq.id])} className="mt-1 w-4 h-4 text-[#CE3732] border-gray-300 rounded" />
                       <div>
                         <span className="font-bold text-sm text-navy">{sq.description || 'No description'}</span>
-                        <span className="block text-[10px] text-gray-500">{sq.location} • Reported {new Date(sq.created_at).toLocaleDateString()}</span>
+                        {sq.affects_airworthiness && sq.location && <span className="block text-[10px] font-bold text-[#CE3732]">⚠ Grounded at {sq.location}</span>}
+                        <span className="block text-[10px] text-gray-500">Reported {new Date(sq.created_at).toLocaleDateString()}</span>
                       </div>
                     </label>
                   ))}
@@ -547,7 +548,7 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh }
               </div>
             )}
 
-            {/* Additional squawks — #5 fix */}
+            {/* Additional squawks — description primary, grounded flag if AOG */}
             {squawks.filter(sq => !eventLineItems.some(li => li.squawk_id === sq.id)).length > 0 && (
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-widest text-navy mb-2 flex items-center gap-2"><AlertTriangle size={14} className="text-[#CE3732]" /> Add Squawks</p>
@@ -557,7 +558,8 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh }
                       <input type="checkbox" checked={selectedSquawkIds.includes(sq.id)} onChange={() => setSelectedSquawkIds(prev => prev.includes(sq.id) ? prev.filter(id => id !== sq.id) : [...prev, sq.id])} className="mt-1 w-4 h-4 text-[#CE3732] border-gray-300 rounded" />
                       <div>
                         <span className="font-bold text-sm text-navy">{sq.description || 'No description'}</span>
-                        <span className="block text-[10px] text-gray-500">{sq.location} • Reported {new Date(sq.created_at).toLocaleDateString()}</span>
+                        {sq.affects_airworthiness && sq.location && <span className="block text-[10px] font-bold text-[#CE3732]">⚠ Grounded at {sq.location}</span>}
+                        <span className="block text-[10px] text-gray-500">Reported {new Date(sq.created_at).toLocaleDateString()}</span>
                       </div>
                     </label>
                   ))}
