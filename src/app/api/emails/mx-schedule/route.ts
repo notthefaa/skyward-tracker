@@ -27,6 +27,7 @@ export async function POST(req: Request) {
         from: `Skyward Maintenance <${FROM_EMAIL}>`,
         to: [aircraft.mx_contact_email],
         cc: mxCc,
+        replyTo: aircraft.main_contact_email || undefined,
         subject: `Scheduling Request: ${aircraft.tail_number} Maintenance`,
         html: `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; border-radius: 8px;">
@@ -39,9 +40,13 @@ export async function POST(req: Request) {
               <p style="margin: 0; color: #091F3C; font-size: 16px;"><strong>Due:</strong> ${dueString}</p>
             </div>
 
+            <p style="color: #525659; font-size: 16px;">Please reply to this email to coordinate scheduling.</p>
+
             <p style="color: #525659; font-size: 16px; margin-top: 20px;">
               Thank you,<br/>
               <strong>${aircraft.main_contact || 'Skyward Operations'}</strong>
+              ${aircraft.main_contact_phone ? `<br/>${aircraft.main_contact_phone}` : ''}
+              ${aircraft.main_contact_email ? `<br/><a href="mailto:${aircraft.main_contact_email}" style="color: #091F3C;">${aircraft.main_contact_email}</a>` : ''}
             </p>
           </div>
         `

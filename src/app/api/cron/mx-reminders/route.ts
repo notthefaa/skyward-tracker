@@ -161,6 +161,7 @@ export async function GET(req: Request) {
 
             // Email the PRIMARY CONTACT to review and send
             if (aircraft.main_contact_email) {
+              const appUrl = new URL(req.url).origin;
               await resend.emails.send({
                 from: `Skyward System <${FROM_EMAIL}>`,
                 replyTo: aircraft.main_contact_email,
@@ -178,13 +179,17 @@ export async function GET(req: Request) {
                       <p style="margin: 0; color: #525659; font-size: 14px;">Due ${dueString}</p>
                     </div>
 
-                    <p style="color: #525659; font-size: 16px;">We've prepared a <strong>draft work package</strong> for you. Log into the fleet portal to:</p>
+                    <p style="color: #525659; font-size: 16px;">We've prepared a <strong>draft work package</strong> for you. Open the app to:</p>
                     <ul style="color: #525659; font-size: 14px; line-height: 2;">
                       <li>Add any open squawks you'd like addressed</li>
                       <li>Request additional services (wash, fluid top-off, nav update, etc.)</li>
                       <li>Propose a preferred service date</li>
                       <li>Send the complete package to ${aircraft.mx_contact || 'your mechanic'}</li>
                     </ul>
+
+                    <div style="margin-top: 25px; text-align: center;">
+                      <a href="${appUrl}" style="display: inline-block; background-color: #091F3C; color: white; text-decoration: none; padding: 12px 28px; border-radius: 6px; font-weight: bold; font-size: 14px; letter-spacing: 1px;">OPEN SKYWARD TRACKER</a>
+                    </div>
                   </div>
                 `
               });
@@ -208,6 +213,9 @@ export async function GET(req: Request) {
                   <p>Based on recent flight activity, we estimate that <strong>${mx.item_name}</strong> for ${aircraft.tail_number} may come due in roughly <strong>${Math.ceil(projectedDays)} days</strong>.</p>
                   <p>However, flight logs have been irregular (System Confidence: <strong>${confidenceScore}%</strong>), so this estimate may shift significantly.</p>
                   <p style="margin-top: 20px;">No action is needed yet. We'll create a draft work package automatically when the item gets closer to its threshold. You can also schedule service proactively from the Maintenance tab at any time.</p>
+                  <div style="margin-top: 25px; text-align: center;">
+                    <a href="${new URL(req.url).origin}" style="display: inline-block; background-color: #091F3C; color: white; text-decoration: none; padding: 12px 28px; border-radius: 6px; font-weight: bold; font-size: 14px; letter-spacing: 1px;">OPEN SKYWARD TRACKER</a>
+                  </div>
                 </div>
               `
             });
@@ -256,6 +264,9 @@ export async function GET(req: Request) {
             html: `<div style="font-family: Arial, sans-serif; font-size: 14px; color: #333333; line-height: 1.6;">
                     <p>This is an automated reminder that required maintenance is coming due for ${aircraft.tail_number}.</p>
                     <p style="margin-top: 20px;"><strong>Item:</strong> ${mx.item_name}<br/><strong>Status:</strong> ${internalTriggerTemplate}</p>
+                    <div style="margin-top: 25px; text-align: center;">
+                      <a href="${new URL(req.url).origin}" style="display: inline-block; background-color: #091F3C; color: white; text-decoration: none; padding: 12px 28px; border-radius: 6px; font-weight: bold; font-size: 14px; letter-spacing: 1px;">OPEN SKYWARD TRACKER</a>
+                    </div>
                   </div>`
           });
         }

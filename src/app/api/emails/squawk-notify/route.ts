@@ -91,7 +91,9 @@ export async function POST(req: Request) {
             Grounded: ${squawk.affects_airworthiness ? 'YES' : 'NO'}<br/>
             Description: ${squawk.description}</p>
             
-            <p style="margin-top: 20px;">Please log in to the fleet portal to view full details and any attached photos.</p>
+            <div style="margin-top: 25px; text-align: center;">
+              <a href="${new URL(req.url).origin}" style="display: inline-block; background-color: #091F3C; color: white; text-decoration: none; padding: 12px 28px; border-radius: 6px; font-weight: bold; font-size: 14px; letter-spacing: 1px;">OPEN SKYWARD TRACKER</a>
+            </div>
           </div>
         `
       });
