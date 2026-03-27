@@ -4,10 +4,10 @@ import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import { enrichAircraftWithMetrics } from "@/lib/math";
 import dynamic from "next/dynamic";
-import type { AircraftWithMetrics, SystemSettings, AppRole, AircraftStatus, AppTab } from "@/lib/types";
+import type { AircraftWithMetrics, UserRole, SystemSettings, AppRole, AircraftStatus, AppTab } from "@/lib/types";
 import { 
   PlaneTakeoff, Wrench, AlertTriangle, FileText, Clock, LogOut, 
-  Plus, Edit2, ChevronDown, Home, LayoutGrid, Send, ShieldCheck, X, Share, Copy, WifiOff, RefreshCw
+  Plus, Edit2, ChevronDown, Home, LayoutGrid, Send, ShieldCheck, X, Share, Copy, WifiOff, RefreshCw, Loader2
 } from "lucide-react";
 
 // --- DYNAMIC IMPORTS FOR CODE SPLITTING ---
@@ -151,34 +151,33 @@ export default function FleetTrackerApp() {
     } 
   }, [activeTail, allAircraftList, session]);
 
+  // --- OPTIMIZED: All Supabase calls run in parallel ---
   const fetchAircraftData = async (userId: string) => {
-    const { data: settingsData } = await supabase.from('aft_system_settings').select('*').eq('id', 1).single();
-    if (settingsData) setSysSettings(settingsData as SystemSettings);
-
-    const { data: roleData } = await supabase.from('aft_user_roles').select('role, initials').eq('user_id', userId).single();
-    if (roleData) {
-      setRole(roleData.role as AppRole);
-      setUserInitials(roleData.initials || "");
-    }
-    
-    const { data: allPlanesData } = await supabase.from('aft_aircraft').select('*').order('tail_number');
-    const rawPlanes = allPlanesData || [];
-
-    // --- CALCULATE BURN RATES & CONFIDENCE using shared utility ---
     const oneEightyDaysAgo = new Date();
     oneEightyDaysAgo.setDate(oneEightyDaysAgo.getDate() - 180);
-    const { data: recentLogs } = await supabase
-      .from('aft_flight_logs')
-      .select('aircraft_id, ftt, tach, created_at')
-      .gte('created_at', oneEightyDaysAgo.toISOString())
-      .order('created_at', { ascending: true }); 
 
-    const allPlanes = enrichAircraftWithMetrics(rawPlanes as any[], recentLogs || []);
+    // Fire all 5 queries simultaneously instead of sequentially
+    const [settingsRes, roleRes, planesRes, logsRes, accessRes] = await Promise.all([
+      supabase.from('aft_system_settings').select('*').eq('id', 1).single(),
+      supabase.from('aft_user_roles').select('role, initials').eq('user_id', userId).single(),
+      supabase.from('aft_aircraft').select('*').order('tail_number'),
+      supabase.from('aft_flight_logs').select('aircraft_id, ftt, tach, created_at').gte('created_at', oneEightyDaysAgo.toISOString()).order('created_at', { ascending: true }),
+      supabase.from('aft_user_aircraft_access').select('aircraft_id').eq('user_id', userId),
+    ]);
+
+    // Process results
+    if (settingsRes.data) setSysSettings(settingsRes.data as SystemSettings);
+
+    if (roleRes.data) {
+      setRole(roleRes.data.role as AppRole);
+      setUserInitials(roleRes.data.initials || "");
+    }
+    
+    const rawPlanes = planesRes.data || [];
+    const allPlanes = enrichAircraftWithMetrics(rawPlanes as any[], logsRes.data || []);
     setAllAircraftList(allPlanes);
 
-    const { data: accessData } = await supabase.from('aft_user_aircraft_access').select('aircraft_id').eq('user_id', userId);
-    const assignedIds = accessData?.map(a => a.aircraft_id) || [];
-    
+    const assignedIds = accessRes.data?.map((a: any) => a.aircraft_id) || [];
     const assignedPlanes = allPlanes.filter(a => assignedIds.includes(a.id));
     setAircraftList(assignedPlanes);
 
@@ -286,7 +285,8 @@ export default function FleetTrackerApp() {
     }
   };
 
-  if (isAuthChecking || (session && !isDataLoaded)) {
+  // --- AUTH CHECKING: show minimal loading ---
+  if (isAuthChecking) {
     if (isNetworkTimeout) {
       return (
         <div className="flex flex-col items-center justify-center p-4 bg-slateGray h-[100dvh] w-full text-white text-center selection:bg-none">
@@ -311,7 +311,7 @@ export default function FleetTrackerApp() {
     return <AuthScreen />;
   }
 
-  if (role === 'pilot' && aircraftList.length === 0) {
+  if (role === 'pilot' && aircraftList.length === 0 && isDataLoaded) {
     return <PilotOnboarding session={session} handleLogout={handleLogout} onSuccess={() => fetchAircraftData(session.user.id)} />;
   }
 
@@ -323,6 +323,7 @@ export default function FleetTrackerApp() {
 
   const selectedAircraftData = allAircraftList.find(a => a.tail_number === activeTail) || null;
 
+  // --- RENDER: App shell shows immediately after auth, content loads progressively ---
   return (
     <>
       <div className="flex flex-col bg-neutral-100 w-full min-h-screen relative">
@@ -398,7 +399,7 @@ export default function FleetTrackerApp() {
               
               <div className="relative flex items-center">
                 <select className="appearance-none bg-transparent text-xl font-oswald font-bold uppercase tracking-wide focus:outline-none cursor-pointer w-[120px] shrink-0 text-white pr-6 truncate" value={activeTail} onChange={(e) => setActiveTail(e.target.value)}>
-                  {dropdownOptions.map(a => <option key={a.id} value={a.tail_number} className="text-white">{a.tail_number}</option>)}
+                  {dropdownOptions.length > 0 ? dropdownOptions.map(a => <option key={a.id} value={a.tail_number} className="text-white">{a.tail_number}</option>) : <option value="">—</option>}
                 </select>
                 <ChevronDown size={18} className="absolute right-1 text-white pointer-events-none opacity-80" />
               </div>
@@ -448,12 +449,22 @@ export default function FleetTrackerApp() {
 
       <main className="fixed left-0 right-0 overflow-y-auto bg-neutral-100 p-4 flex justify-center w-full" style={{ touchAction: 'auto', top: 'calc(3.5rem + env(safe-area-inset-top, 0px))', bottom: 'calc(3.5rem + env(safe-area-inset-bottom, 0px))' }}>
         <div className="w-full max-w-3xl flex flex-col gap-6">
-          {activeTab === 'fleet' && <FleetSummary aircraftList={aircraftList} onSelectAircraft={(tail: string) => { setActiveTail(tail); setActiveTab('summary'); }} />}
-          {activeTab === 'summary' && <SummaryTab aircraft={selectedAircraftData} setActiveTab={(tab: AppTab) => setActiveTab(tab)} role={role} onDeleteAircraft={handleDeleteAircraft} sysSettings={sysSettings} />}
-          {activeTab === 'times' && <TimesTab aircraft={selectedAircraftData} session={session} role={role} userInitials={userInitials} onUpdate={() => fetchAircraftData(session.user.id)} />}
-          {activeTab === 'mx' && <MaintenanceTab aircraft={selectedAircraftData} role={role} onGroundedStatusChange={() => checkGroundedStatus(activeTail)} sysSettings={sysSettings} />}
-          {activeTab === 'squawks' && <SquawksTab aircraft={selectedAircraftData} session={session} role={role} userInitials={userInitials} onGroundedStatusChange={() => checkGroundedStatus(activeTail)} />}
-          {activeTab === 'notes' && <NotesTab aircraft={selectedAircraftData} session={session} role={role} userInitials={userInitials} onNotesRead={() => setUnreadNotes(0)} />}
+          {/* Show loading skeleton while data fetches, app shell is already visible */}
+          {!isDataLoaded ? (
+            <div className="flex flex-col items-center justify-center py-20 animate-pulse">
+              <Loader2 size={32} className="text-[#F08B46] animate-spin mb-4" />
+              <p className="font-oswald text-sm font-bold uppercase tracking-widest text-gray-400">Loading Fleet Data...</p>
+            </div>
+          ) : (
+            <>
+              {activeTab === 'fleet' && <FleetSummary aircraftList={aircraftList} onSelectAircraft={(tail: string) => { setActiveTail(tail); setActiveTab('summary'); }} />}
+              {activeTab === 'summary' && <SummaryTab aircraft={selectedAircraftData} setActiveTab={(tab: AppTab) => setActiveTab(tab)} role={role} onDeleteAircraft={handleDeleteAircraft} sysSettings={sysSettings} />}
+              {activeTab === 'times' && <TimesTab aircraft={selectedAircraftData} session={session} role={role} userInitials={userInitials} onUpdate={() => fetchAircraftData(session.user.id)} />}
+              {activeTab === 'mx' && <MaintenanceTab aircraft={selectedAircraftData} role={role} onGroundedStatusChange={() => checkGroundedStatus(activeTail)} sysSettings={sysSettings} />}
+              {activeTab === 'squawks' && <SquawksTab aircraft={selectedAircraftData} session={session} role={role} userInitials={userInitials} onGroundedStatusChange={() => checkGroundedStatus(activeTail)} />}
+              {activeTab === 'notes' && <NotesTab aircraft={selectedAircraftData} session={session} role={role} userInitials={userInitials} onNotesRead={() => setUnreadNotes(0)} />}
+            </>
+          )}
         </div>
       </main>
 
