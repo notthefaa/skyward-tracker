@@ -55,6 +55,14 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh }
   // Email preview
   const [showPreview, setShowPreview] = useState(false);
 
+  // Lock body scroll when modal is open (#3 fix)
+  useEffect(() => {
+    if (show) {
+      document.body.style.overflow = 'hidden';
+      return () => { document.body.style.overflow = ''; };
+    }
+  }, [show]);
+
   useEffect(() => {
     if (show && aircraft) {
       fetchEvents();
@@ -84,7 +92,6 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh }
   };
 
   const openCreateFlow = async () => {
-    // Fetch all MX items and open squawks for this aircraft
     const { data: mx } = await supabase.from('aft_maintenance_items').select('*').eq('aircraft_id', aircraft.id).order('due_time').order('due_date');
     const { data: sq } = await supabase.from('aft_squawks').select('*').eq('aircraft_id', aircraft.id).eq('status', 'open').order('created_at', { ascending: false });
     setMxItems(mx || []);
@@ -121,63 +128,66 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh }
     setIsSubmitting(false);
   };
 
+  // #4 — Owner actions now go through authFetch to send email notifications to mechanic
   const handleOwnerConfirm = async () => {
     if (!selectedEvent) return;
     setIsSubmitting(true);
-    // Owner confirms the mechanic's proposed date
-    await supabase.from('aft_maintenance_events').update({
-      status: 'confirmed',
-      confirmed_date: selectedEvent.proposed_date,
-      confirmed_at: new Date().toISOString(),
-    }).eq('id', selectedEvent.id);
-
-    await supabase.from('aft_event_messages').insert({
-      event_id: selectedEvent.id,
-      sender: 'owner',
-      message_type: 'confirm',
-      proposed_date: selectedEvent.proposed_date,
-      message: ownerMessage || `Confirmed for ${selectedEvent.proposed_date}.`,
-    });
-
-    setOwnerMessage("");
-    await fetchEventDetail(selectedEvent.id);
+    try {
+      await authFetch('/api/mx-events/owner-action', {
+        method: 'POST',
+        body: JSON.stringify({
+          eventId: selectedEvent.id,
+          action: 'confirm',
+          message: ownerMessage || `Confirmed for ${selectedEvent.proposed_date}.`,
+        })
+      });
+      setOwnerMessage("");
+      await fetchEventDetail(selectedEvent.id);
+    } catch (err) {
+      alert("Failed to confirm date.");
+    }
     setIsSubmitting(false);
   };
 
   const handleOwnerCounter = async () => {
     if (!selectedEvent || !proposedDate) return alert("Please select a date.");
     setIsSubmitting(true);
-
-    await supabase.from('aft_maintenance_events').update({
-      proposed_date: proposedDate,
-      proposed_by: 'owner',
-    }).eq('id', selectedEvent.id);
-
-    await supabase.from('aft_event_messages').insert({
-      event_id: selectedEvent.id,
-      sender: 'owner',
-      message_type: 'counter',
-      proposed_date: proposedDate,
-      message: ownerMessage || `How about ${proposedDate} instead?`,
-    });
-
-    setOwnerMessage("");
-    setProposedDate("");
-    await fetchEventDetail(selectedEvent.id);
+    try {
+      await authFetch('/api/mx-events/owner-action', {
+        method: 'POST',
+        body: JSON.stringify({
+          eventId: selectedEvent.id,
+          action: 'counter',
+          proposedDate,
+          message: ownerMessage || `How about ${proposedDate} instead?`,
+        })
+      });
+      setOwnerMessage("");
+      setProposedDate("");
+      await fetchEventDetail(selectedEvent.id);
+    } catch (err) {
+      alert("Failed to send counter proposal.");
+    }
     setIsSubmitting(false);
   };
 
   const handleOwnerComment = async () => {
     if (!selectedEvent || !ownerMessage.trim()) return;
     setIsSubmitting(true);
-    await supabase.from('aft_event_messages').insert({
-      event_id: selectedEvent.id,
-      sender: 'owner',
-      message_type: 'comment',
-      message: ownerMessage,
-    });
-    setOwnerMessage("");
-    await fetchEventDetail(selectedEvent.id);
+    try {
+      await authFetch('/api/mx-events/owner-action', {
+        method: 'POST',
+        body: JSON.stringify({
+          eventId: selectedEvent.id,
+          action: 'comment',
+          message: ownerMessage,
+        })
+      });
+      setOwnerMessage("");
+      await fetchEventDetail(selectedEvent.id);
+    } catch (err) {
+      alert("Failed to send message.");
+    }
     setIsSubmitting(false);
   };
 
@@ -207,7 +217,6 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh }
   const openDraftReview = async (ev: any) => {
     setSelectedEvent(ev);
     await fetchEventDetail(ev.id);
-    // Load MX items and squawks for the add-more flow
     const { data: mx } = await supabase.from('aft_maintenance_items').select('*').eq('aircraft_id', aircraft.id).order('due_time').order('due_date');
     const { data: sq } = await supabase.from('aft_squawks').select('*').eq('aircraft_id', aircraft.id).eq('status', 'open').order('created_at', { ascending: false });
     setMxItems(mx || []);
@@ -220,7 +229,6 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh }
   };
 
   const openCompleteFlow = () => {
-    // Pre-populate completion form with line items that need logbook data
     const items = eventLineItems
       .filter(li => li.item_type === 'maintenance' || li.item_type === 'squawk')
       .map(li => ({
@@ -236,7 +244,6 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh }
   };
 
   const handleCompleteEvent = async () => {
-    // Validate that at least maintenance items have completion data
     const mxCompletions = completionItems.filter(c => c.item_type === 'maintenance');
     for (const c of mxCompletions) {
       if (!c.completionDate && !c.completionTime) {
@@ -262,7 +269,7 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh }
 
       if (!res.ok) throw new Error('Failed to complete event');
       await fetchEvents();
-      onRefresh(); // Refresh parent MX tab to show reset tracking
+      onRefresh();
       setView('list');
     } catch (err: any) {
       alert("Failed to complete event: " + err.message);
@@ -284,7 +291,6 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh }
   const activeEvents = events.filter(e => e.status !== 'complete');
   const completedEvents = events.filter(e => e.status === 'complete');
 
-  // Build preview content from currently selected items
   const renderEmailPreview = (existingLines?: any[]) => {
     const mxPreviewItems = mxItems.filter(mx => selectedMxIds.includes(mx.id));
     const sqPreviewItems = squawks.filter(sq => selectedSquawkIds.includes(sq.id));
@@ -293,7 +299,7 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh }
     const existingAddon = (existingLines || []).filter(li => li.item_type === 'addon');
 
     const allMx = [...existingMx.map(li => ({ name: li.item_name, desc: li.item_description })), ...mxPreviewItems.map(mx => ({ name: mx.item_name, desc: mx.tracking_type === 'time' ? `Due at ${mx.due_time} hrs` : `Due on ${mx.due_date}` }))];
-    const allSq = [...existingSq.map(li => ({ name: li.item_name, desc: li.item_description })), ...sqPreviewItems.map(sq => ({ name: `Squawk: ${sq.location}`, desc: sq.description }))];
+    const allSq = [...existingSq.map(li => ({ name: li.item_name, desc: li.item_description })), ...sqPreviewItems.map(sq => ({ name: sq.description ? `${sq.location} — ${sq.description.substring(0, 60)}` : sq.location, desc: sq.description }))];
     const allAddons = [...existingAddon.map(li => li.item_name), ...selectedAddons];
 
     return (
@@ -338,19 +344,20 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh }
             </div>
           )}
 
-          <div className="bg-blue-50 p-3 rounded text-center">
-            <p className="text-[10px] font-bold text-navy">[ OPEN SERVICE PORTAL button will appear here ]</p>
+          <div className="border-t border-gray-200 pt-3 text-gray-600">
+            <p>Thank you,</p>
+            <p className="font-bold text-navy">{aircraft.main_contact || 'Owner'}</p>
+            {aircraft.main_contact_email && <p className="text-[10px]">{aircraft.main_contact_email}</p>}
           </div>
-
-          <p className="text-gray-600">Thank you,<br/><strong>{aircraft.main_contact || 'Skyward Operations'}</strong>{aircraft.main_contact_phone ? <><br/>{aircraft.main_contact_phone}</> : null}</p>
         </div>
       </div>
     );
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 animate-fade-in" onClick={onClose}>
-      <div className="bg-white rounded shadow-2xl w-full max-w-lg p-6 border-t-4 border-[#F08B46] max-h-[90vh] overflow-y-auto animate-slide-up" onClick={e => e.stopPropagation()}>
+    // #3 fix — overscroll-behavior: contain prevents background scrolling
+    <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={onClose}>
+      <div className="bg-white rounded shadow-2xl w-full max-w-lg p-6 border-t-4 border-[#F08B46] max-h-[90vh] overflow-y-auto animate-slide-up" style={{ overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch' }} onClick={e => e.stopPropagation()}>
 
         <div className="flex justify-between items-center mb-6">
           <h2 className="font-oswald text-2xl font-bold uppercase text-navy flex items-center gap-2">
@@ -367,7 +374,7 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh }
               <Calendar size={18} /> Schedule New Service
             </PrimaryButton>
 
-            {/* DRAFT EVENTS — prominently displayed with action required */}
+            {/* DRAFT EVENTS */}
             {activeEvents.filter(e => e.status === 'draft').length > 0 && (
               <div className="bg-orange-50 border-2 border-orange-200 rounded p-4">
                 <p className="text-[10px] font-bold uppercase tracking-widest text-[#F08B46] mb-3 flex items-center gap-1">
@@ -385,7 +392,7 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh }
               </div>
             )}
 
-            {/* ACTIVE EVENTS (non-draft) */}
+            {/* ACTIVE EVENTS */}
             {activeEvents.filter(e => e.status !== 'draft').length > 0 && (
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-2">Active</p>
@@ -418,7 +425,7 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh }
             )}
 
             {events.length === 0 && (
-              <p className="text-center text-sm text-gray-400 italic py-4">No maintenance events yet. Schedule your first service above.</p>
+              <p className="text-center text-sm text-gray-400 italic py-4">No maintenance events yet.</p>
             )}
           </div>
         )}
@@ -446,7 +453,7 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh }
               </div>
             )}
 
-            {/* Squawks */}
+            {/* Squawks — #5 fix: show description, not just location */}
             {squawks.length > 0 && (
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-widest text-navy mb-2 flex items-center gap-2"><AlertTriangle size={14} className="text-[#CE3732]" /> Open Squawks</p>
@@ -455,8 +462,8 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh }
                     <label key={sq.id} className="flex items-start gap-3 p-3 border border-gray-200 rounded cursor-pointer hover:bg-gray-50">
                       <input type="checkbox" checked={selectedSquawkIds.includes(sq.id)} onChange={() => setSelectedSquawkIds(prev => prev.includes(sq.id) ? prev.filter(id => id !== sq.id) : [...prev, sq.id])} className="mt-1 w-4 h-4 text-[#CE3732] border-gray-300 rounded" />
                       <div>
-                        <span className="font-bold text-sm text-navy">{sq.location}</span>
-                        <span className="block text-[10px] text-gray-500 line-clamp-1">{sq.description}</span>
+                        <span className="font-bold text-sm text-navy">{sq.description || 'No description'}</span>
+                        <span className="block text-[10px] text-gray-500">{sq.location} • Reported {new Date(sq.created_at).toLocaleDateString()}</span>
                       </div>
                     </label>
                   ))}
@@ -480,7 +487,7 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh }
             {/* Proposed Date */}
             <div>
               <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Preferred Service Date (Optional)</label>
-              <input type="date" value={proposedDate} onChange={e => setProposedDate(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" />
+              <input type="date" value={proposedDate} onChange={e => setProposedDate(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none bg-white" />
             </div>
 
             {!showPreview ? (
@@ -507,7 +514,7 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh }
               <p className="text-xs text-gray-600">This work package was created automatically because maintenance is approaching. Review the items below, add anything else you need, and send it to your mechanic.</p>
             </div>
 
-            {/* Existing line items already in the draft */}
+            {/* Existing line items */}
             {eventLineItems.length > 0 && (
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-widest text-navy mb-2">Already Included</p>
@@ -522,7 +529,7 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh }
               </div>
             )}
 
-            {/* Additional MX items the owner can add */}
+            {/* Additional MX items */}
             {mxItems.filter(mx => !eventLineItems.some(li => li.maintenance_item_id === mx.id)).length > 0 && (
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-widest text-navy mb-2 flex items-center gap-2"><Wrench size={14} className="text-[#F08B46]" /> Add More Maintenance Items</p>
@@ -540,17 +547,17 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh }
               </div>
             )}
 
-            {/* Squawks */}
-            {squawks.length > 0 && (
+            {/* Additional squawks — #5 fix */}
+            {squawks.filter(sq => !eventLineItems.some(li => li.squawk_id === sq.id)).length > 0 && (
               <div>
-                <p className="text-[10px] font-bold uppercase tracking-widest text-navy mb-2 flex items-center gap-2"><AlertTriangle size={14} className="text-[#CE3732]" /> Add Open Squawks</p>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-navy mb-2 flex items-center gap-2"><AlertTriangle size={14} className="text-[#CE3732]" /> Add Squawks</p>
                 <div className="space-y-2 max-h-[160px] overflow-y-auto">
-                  {squawks.map(sq => (
+                  {squawks.filter(sq => !eventLineItems.some(li => li.squawk_id === sq.id)).map(sq => (
                     <label key={sq.id} className="flex items-start gap-3 p-3 border border-gray-200 rounded cursor-pointer hover:bg-gray-50">
                       <input type="checkbox" checked={selectedSquawkIds.includes(sq.id)} onChange={() => setSelectedSquawkIds(prev => prev.includes(sq.id) ? prev.filter(id => id !== sq.id) : [...prev, sq.id])} className="mt-1 w-4 h-4 text-[#CE3732] border-gray-300 rounded" />
                       <div>
-                        <span className="font-bold text-sm text-navy">{sq.location}</span>
-                        <span className="block text-[10px] text-gray-500 line-clamp-1">{sq.description}</span>
+                        <span className="font-bold text-sm text-navy">{sq.description || 'No description'}</span>
+                        <span className="block text-[10px] text-gray-500">{sq.location} • Reported {new Date(sq.created_at).toLocaleDateString()}</span>
                       </div>
                     </label>
                   ))}
@@ -558,7 +565,7 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh }
               </div>
             )}
 
-            {/* Add-on services */}
+            {/* Add-On Services */}
             <div>
               <p className="text-[10px] font-bold uppercase tracking-widest text-navy mb-2 flex items-center gap-2"><Sparkles size={14} className="text-[#3AB0FF]" /> Additional Services</p>
               <div className="grid grid-cols-2 gap-2">
@@ -571,10 +578,9 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh }
               </div>
             </div>
 
-            {/* Preferred date */}
             <div>
               <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Preferred Service Date (Optional)</label>
-              <input type="date" value={proposedDate} onChange={e => setProposedDate(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" />
+              <input type="date" value={proposedDate} onChange={e => setProposedDate(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none bg-white" />
             </div>
 
             {!showPreview ? (
@@ -612,7 +618,7 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh }
               {selectedEvent.mechanic_notes && <p className="text-xs text-gray-500 mt-2 italic">{selectedEvent.mechanic_notes}</p>}
             </div>
 
-            {/* Scheduling Actions (owner side of the ping-pong) */}
+            {/* Scheduling Actions */}
             {selectedEvent.status === 'scheduling' && selectedEvent.proposed_by === 'mechanic' && (
               <div className="bg-orange-50 border border-orange-200 rounded p-4 space-y-3">
                 <p className="text-sm font-bold text-navy">{selectedEvent.mx_contact_name || 'Mechanic'} proposed <strong>{selectedEvent.proposed_date}</strong></p>
@@ -620,25 +626,27 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh }
                   <button onClick={handleOwnerConfirm} disabled={isSubmitting} className="flex-1 bg-[#56B94A] text-white font-oswald font-bold uppercase tracking-widest py-2 rounded text-xs active:scale-95 disabled:opacity-50">Confirm</button>
                   <button onClick={() => setView('counter')} className="flex-1 bg-[#F08B46] text-white font-oswald font-bold uppercase tracking-widest py-2 rounded text-xs active:scale-95">Counter</button>
                 </div>
-                {/* Inline counter */}
                 <div className="space-y-2 pt-2">
-                  <input type="date" value={proposedDate} onChange={e => setProposedDate(e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm focus:border-[#F08B46] outline-none" />
-                  <textarea value={ownerMessage} onChange={e => setOwnerMessage(e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm focus:border-[#F08B46] outline-none min-h-[50px]" placeholder="Message (optional)" />
+                  <input type="date" value={proposedDate} onChange={e => setProposedDate(e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm focus:border-[#F08B46] outline-none bg-white" />
+                  <textarea value={ownerMessage} onChange={e => setOwnerMessage(e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm focus:border-[#F08B46] outline-none bg-white min-h-[50px]" placeholder="Message (optional)" />
                   <button onClick={handleOwnerCounter} disabled={isSubmitting || !proposedDate} className="w-full bg-[#F08B46] text-white font-oswald font-bold uppercase tracking-widest py-2 rounded text-xs active:scale-95 disabled:opacity-50">Send Counter Proposal</button>
                 </div>
               </div>
             )}
 
-            {/* Line Items Summary */}
+            {/* Line Items — #5 fix: show description for squawks */}
             {eventLineItems.length > 0 && (
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-2">Work Package</p>
                 <div className="space-y-2">
                   {eventLineItems.map(li => (
                     <div key={li.id} className={`p-3 border rounded text-sm ${li.line_status === 'complete' ? 'bg-green-50 border-green-200' : li.line_status === 'in_progress' ? 'bg-blue-50 border-blue-200' : 'bg-white border-gray-200'}`}>
-                      <div className="flex justify-between items-center">
-                        <span className="font-bold text-navy">{li.item_name}</span>
-                        <span className={`text-[8px] font-bold uppercase tracking-widest px-2 py-0.5 rounded ${li.line_status === 'complete' ? 'bg-green-100 text-green-700' : li.line_status === 'in_progress' ? 'bg-blue-100 text-blue-700' : li.line_status === 'deferred' ? 'bg-gray-100 text-gray-600' : 'bg-orange-100 text-orange-700'}`}>{li.line_status}</span>
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <span className="font-bold text-navy">{li.item_name}</span>
+                          {li.item_description && <p className="text-[10px] text-gray-500 mt-0.5">{li.item_description}</p>}
+                        </div>
+                        <span className={`text-[8px] font-bold uppercase tracking-widest px-2 py-0.5 rounded shrink-0 ml-2 ${li.line_status === 'complete' ? 'bg-green-100 text-green-700' : li.line_status === 'in_progress' ? 'bg-blue-100 text-blue-700' : li.line_status === 'deferred' ? 'bg-gray-100 text-gray-600' : 'bg-orange-100 text-orange-700'}`}>{li.line_status}</span>
                       </div>
                       {li.mechanic_comment && <p className="text-[10px] text-[#3AB0FF] mt-1 italic">{li.mechanic_comment}</p>}
                     </div>
@@ -665,12 +673,12 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh }
             {/* Owner comment box */}
             {selectedEvent.status !== 'complete' && (
               <div className="flex gap-2">
-                <textarea value={ownerMessage} onChange={e => setOwnerMessage(e.target.value)} className="flex-1 border border-gray-300 rounded p-2 text-sm focus:border-[#3AB0FF] outline-none min-h-[50px]" placeholder="Send a message..." />
+                <textarea value={ownerMessage} onChange={e => setOwnerMessage(e.target.value)} className="flex-1 border border-gray-300 rounded p-2 text-sm focus:border-[#3AB0FF] outline-none bg-white min-h-[50px]" placeholder="Send a message..." />
                 <button onClick={handleOwnerComment} disabled={isSubmitting || !ownerMessage.trim()} className="bg-[#3AB0FF] text-white px-3 rounded active:scale-95 disabled:opacity-50"><Send size={16}/></button>
               </div>
             )}
 
-            {/* Complete Event Button — available from any active status */}
+            {/* Complete Event Button */}
             {selectedEvent.status !== 'complete' && selectedEvent.status !== 'cancelled' && (
               <button onClick={openCompleteFlow} className="w-full bg-[#56B94A] text-white font-oswald font-bold uppercase tracking-widest py-3 rounded active:scale-95 transition-transform flex items-center justify-center gap-2">
                 <CheckCircle size={18} /> Enter Logbook Data & Complete
@@ -679,7 +687,7 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh }
           </div>
         )}
 
-        {/* ===================== COMPLETION VIEW ===================== */}
+        {/* ===================== COMPLETION VIEW — #6 fix: white inputs, no overlap ===================== */}
         {view === 'complete' && selectedEvent && (
           <div className="space-y-5">
             <button onClick={() => setView('detail')} className="text-[10px] font-bold uppercase tracking-widest text-[#F08B46] hover:text-orange-600">← Back to Event</button>
@@ -693,31 +701,33 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh }
                   <h4 className="font-oswald font-bold uppercase text-sm text-navy">{item.item_name}</h4>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Completion Date</label>
-                    <input type="date" value={item.completionDate} onChange={e => updateCompletionItem(idx, 'completionDate', e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-[#56B94A] outline-none" />
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[10px] font-bold uppercase tracking-widest text-navy block">Completion Date</label>
+                      <input type="date" value={item.completionDate} onChange={e => updateCompletionItem(idx, 'completionDate', e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-[#56B94A] outline-none bg-white" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold uppercase tracking-widest text-navy block">Comp. {isTurbine ? 'FTT' : 'Tach'}</label>
+                      <input type="number" step="0.1" value={item.completionTime} onChange={e => updateCompletionItem(idx, 'completionTime', e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-[#56B94A] outline-none bg-white" placeholder="Engine time" />
+                    </div>
                   </div>
-                  <div>
-                    <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Completion {isTurbine ? 'FTT' : 'Tach'}</label>
-                    <input type="number" step="0.1" value={item.completionTime} onChange={e => updateCompletionItem(idx, 'completionTime', e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-[#56B94A] outline-none" placeholder="Engine time" />
-                  </div>
-                </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Signed By (Name)</label>
-                    <input type="text" value={item.completedByName} onChange={e => updateCompletionItem(idx, 'completedByName', e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-[#56B94A] outline-none" placeholder="IA / A&P" />
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[10px] font-bold uppercase tracking-widest text-navy block">Signed By</label>
+                      <input type="text" value={item.completedByName} onChange={e => updateCompletionItem(idx, 'completedByName', e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-[#56B94A] outline-none bg-white" placeholder="IA / A&P" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold uppercase tracking-widest text-navy block">Certificate #</label>
+                      <input type="text" value={item.completedByCert} onChange={e => updateCompletionItem(idx, 'completedByCert', e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-[#56B94A] outline-none bg-white" />
+                    </div>
                   </div>
-                  <div>
-                    <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Certificate #</label>
-                    <input type="text" value={item.completedByCert} onChange={e => updateCompletionItem(idx, 'completedByCert', e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-[#56B94A] outline-none" />
-                  </div>
-                </div>
 
-                <div>
-                  <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Work Performed</label>
-                  <textarea value={item.workDescription} onChange={e => updateCompletionItem(idx, 'workDescription', e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-[#56B94A] outline-none min-h-[60px]" placeholder="Description of work from logbook entry..." />
+                  <div>
+                    <label className="text-[10px] font-bold uppercase tracking-widest text-navy block">Work Performed</label>
+                    <textarea value={item.workDescription} onChange={e => updateCompletionItem(idx, 'workDescription', e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-[#56B94A] outline-none bg-white min-h-[60px]" placeholder="Description of work from logbook entry..." />
+                  </div>
                 </div>
               </div>
             ))}

@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { 
   Wrench, AlertTriangle, CheckCircle, Clock, Send, 
-  MessageSquare, Calendar, Sparkles, X, Plus, Image
+  MessageSquare, Calendar, Sparkles, X, Plus, Image, ArrowLeft
 } from "lucide-react";
 
 export default function ServicePortal() {
@@ -19,6 +19,7 @@ export default function ServicePortal() {
   const [squawkPhotos, setSquawkPhotos] = useState<Record<string, string[]>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isAppUser, setIsAppUser] = useState(false);
 
   // Forms
   const [showDateForm, setShowDateForm] = useState(false);
@@ -37,6 +38,13 @@ export default function ServicePortal() {
 
   // Photo viewer
   const [viewingPhoto, setViewingPhoto] = useState<string | null>(null);
+
+  // #1 — Detect if user has an active session (app user vs mechanic from email)
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setIsAppUser(!!session);
+    });
+  }, []);
 
   useEffect(() => {
     if (accessToken) fetchEventData();
@@ -147,6 +155,11 @@ export default function ServicePortal() {
 
         {/* BRANDING */}
         <div className="mb-6 mt-4">
+          {isAppUser && (
+            <a href="/" className="inline-flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-[#3AB0FF] hover:underline mb-4 active:scale-95 transition-transform">
+              <ArrowLeft size={14} /> Back to App
+            </a>
+          )}
           <img src="/logo.png" alt="Skyward" className="mx-auto h-24 object-contain mb-2 opacity-80" />
           <h1 className="font-oswald text-xl font-bold uppercase tracking-widest text-navy text-center">Service Portal</h1>
         </div>
