@@ -67,7 +67,7 @@ export async function POST(req: Request) {
           event_id: event.id,
           item_type: 'squawk',
           squawk_id: sq.id,
-          item_name: sq.description ? `Squawk: ${sq.description.substring(0, 80)}` : `Squawk: ${sq.location || 'No description'}`,
+          item_name: sq.description ? `Squawk: ${sq.description}` : `Squawk: ${sq.location || 'No description'}`,
           item_description: sq.affects_airworthiness && sq.location ? `Grounded at ${sq.location}` : (sq.description || null),
         }));
         await supabaseAdmin.from('aft_event_line_items').insert(lineItems);

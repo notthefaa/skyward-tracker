@@ -364,7 +364,7 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh }
             <Wrench size={20} className="text-[#F08B46]" />
             {view === 'create' ? 'Schedule Service' : view === 'detail' ? 'Service Event' : view === 'complete' ? 'Enter Logbook Data' : view === 'review_draft' ? 'Review Draft' : 'Maintenance Events'}
           </h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-red-500"><X size={24}/></button>
+          <button onClick={onClose} className="text-gray-400 hover:text-red-500 p-2 -mr-2"><X size={24}/></button>
         </div>
 
         {/* ===================== LIST VIEW ===================== */}
@@ -433,7 +433,7 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh }
         {/* ===================== CREATE VIEW ===================== */}
         {view === 'create' && (
           <div className="space-y-6">
-            <button onClick={() => setView('list')} className="text-[10px] font-bold uppercase tracking-widest text-[#F08B46] hover:text-orange-600 mb-2">← Back to Events</button>
+            <button onClick={() => setView('list')} className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-[#F08B46] border border-[#F08B46] rounded-full px-3 py-1.5 hover:bg-orange-50 active:scale-95 transition-all mb-2"><ChevronDown size={12} className="rotate-90" /> Back to Events</button>
 
             {/* MX Items */}
             {mxItems.length > 0 && (
@@ -508,7 +508,7 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh }
         {/* ===================== REVIEW DRAFT VIEW ===================== */}
         {view === 'review_draft' && selectedEvent && (
           <div className="space-y-6">
-            <button onClick={() => { setSelectedEvent(null); setView('list'); }} className="text-[10px] font-bold uppercase tracking-widest text-[#F08B46] hover:text-orange-600">← Back to Events</button>
+            <button onClick={() => { setSelectedEvent(null); setView('list'); }} className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-[#F08B46] border border-[#F08B46] rounded-full px-3 py-1.5 hover:bg-orange-50 active:scale-95 transition-all"><ChevronDown size={12} className="rotate-90" /> Back to Events</button>
 
             <div className="bg-orange-50 border border-orange-200 rounded p-4">
               <p className="text-sm text-navy font-bold mb-1">System-Generated Draft</p>
@@ -602,15 +602,15 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh }
         {/* ===================== DETAIL VIEW ===================== */}
         {view === 'detail' && selectedEvent && (
           <div className="space-y-5">
-            <button onClick={() => { setSelectedEvent(null); setView('list'); }} className="text-[10px] font-bold uppercase tracking-widest text-[#F08B46] hover:text-orange-600">← Back to Events</button>
+            <button onClick={() => { setSelectedEvent(null); setView('list'); }} className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-[#F08B46] border border-[#F08B46] rounded-full px-3 py-1.5 hover:bg-orange-50 active:scale-95 transition-all"><ChevronDown size={12} className="rotate-90" /> Back to Events</button>
 
             {/* Status & Dates */}
             <div className="bg-gray-50 rounded p-4 border border-gray-200">
               <div className="flex justify-between items-center mb-3">
                 <span className={`text-[8px] font-bold uppercase tracking-widest px-2 py-1 rounded text-white ${selectedEvent.status === 'confirmed' ? 'bg-[#3AB0FF]' : selectedEvent.status === 'complete' ? 'bg-[#56B94A]' : 'bg-[#F08B46]'}`}>{selectedEvent.status}</span>
                 {selectedEvent.access_token && selectedEvent.status !== 'complete' && (
-                  <a href={`/service/${selectedEvent.access_token}`} target="_blank" rel="noreferrer" className="text-[10px] font-bold uppercase tracking-widest text-[#3AB0FF] flex items-center gap-1 hover:underline">
-                    <ExternalLink size={12} /> Mechanic Portal
+                  <a href={`/service/${selectedEvent.access_token}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-[#3AB0FF] border border-[#3AB0FF] rounded-full px-3 py-1.5 hover:bg-blue-50 active:scale-95 transition-all">
+                    <ExternalLink size={12} /> Portal
                   </a>
                 )}
               </div>
@@ -676,7 +676,7 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh }
             {selectedEvent.status !== 'complete' && (
               <div className="flex gap-2">
                 <textarea value={ownerMessage} onChange={e => setOwnerMessage(e.target.value)} className="flex-1 border border-gray-300 rounded p-2 text-sm focus:border-[#3AB0FF] outline-none bg-white min-h-[50px]" placeholder="Send a message..." />
-                <button onClick={handleOwnerComment} disabled={isSubmitting || !ownerMessage.trim()} className="bg-[#3AB0FF] text-white px-3 rounded active:scale-95 disabled:opacity-50"><Send size={16}/></button>
+                <button onClick={handleOwnerComment} disabled={isSubmitting || !ownerMessage.trim()} className="bg-[#3AB0FF] text-white px-4 py-3 rounded active:scale-95 disabled:opacity-50"><Send size={18}/></button>
               </div>
             )}
 
@@ -692,7 +692,7 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh }
         {/* ===================== COMPLETION VIEW — #6 fix: white inputs, no overlap ===================== */}
         {view === 'complete' && selectedEvent && (
           <div className="space-y-5">
-            <button onClick={() => setView('detail')} className="text-[10px] font-bold uppercase tracking-widest text-[#F08B46] hover:text-orange-600">← Back to Event</button>
+            <button onClick={() => setView('detail')} className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-[#F08B46] border border-[#F08B46] rounded-full px-3 py-1.5 hover:bg-orange-50 active:scale-95 transition-all"><ChevronDown size={12} className="rotate-90" /> Back to Event</button>
             
             <p className="text-sm text-gray-600">Enter the logbook data from your mechanic's sign-off. These times and dates will reset the tracking for each item.</p>
 
