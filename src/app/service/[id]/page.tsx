@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { 
   Wrench, AlertTriangle, CheckCircle, Clock, Send, 
-  MessageSquare, Calendar, Sparkles, X, Plus, Image, ArrowLeft
+  MessageSquare, Calendar, Sparkles, X, Plus, Image, ArrowLeft, XCircle, Plane
 } from "lucide-react";
 
 export default function ServicePortal() {
@@ -39,6 +39,14 @@ export default function ServicePortal() {
 
   // Photo viewer
   const [viewingPhoto, setViewingPhoto] = useState<string | null>(null);
+
+  // Decline confirmation
+  const [showDeclineConfirm, setShowDeclineConfirm] = useState(false);
+  const [declineReason, setDeclineReason] = useState("");
+
+  // Ready confirmation
+  const [showReadyConfirm, setShowReadyConfirm] = useState(false);
+  const [readyMessage, setReadyMessage] = useState("");
 
   // #1 — Detect if user has an active session (app user vs mechanic from email)
   useEffect(() => {
@@ -135,7 +143,8 @@ export default function ServicePortal() {
     );
   }
 
-  const statusColor = event.status === 'complete' ? 'bg-[#56B94A]' : event.status === 'confirmed' ? 'bg-[#3AB0FF]' : 'bg-[#F08B46]';
+  const statusColor = event.status === 'complete' ? 'bg-[#56B94A]' : event.status === 'ready_for_pickup' ? 'bg-[#56B94A]' : event.status === 'confirmed' ? 'bg-[#3AB0FF]' : event.status === 'cancelled' ? 'bg-[#CE3732]' : 'bg-[#F08B46]';
+  const statusLabel = event.status === 'ready_for_pickup' ? 'Ready for Pickup' : event.status;
   const mxLines = lineItems.filter(li => li.item_type === 'maintenance');
   const squawkLines = lineItems.filter(li => li.item_type === 'squawk');
   const addonLines = lineItems.filter(li => li.item_type === 'addon');
@@ -181,7 +190,7 @@ export default function ServicePortal() {
               <div className="text-right">
                 <span className="text-[10px] font-bold uppercase tracking-widest block mb-1">Status</span>
                 <span className={`${statusColor} px-3 py-1 rounded text-xs font-bold uppercase tracking-widest`}>
-                  {event.status}
+                  {statusLabel}
                 </span>
               </div>
             </div>
@@ -432,7 +441,7 @@ export default function ServicePortal() {
           )}
 
           {/* ESTIMATED COMPLETION & NOTES */}
-          {event.status !== 'complete' && (event.status === 'confirmed' || event.status === 'in_progress') && (
+          {event.status !== 'complete' && event.status !== 'cancelled' && (event.status === 'confirmed' || event.status === 'in_progress' || event.status === 'ready_for_pickup') && (
             <div className="bg-white shadow-lg rounded-sm p-6 border-t-4 border-[#091F3C]">
               <h3 className="font-oswald text-lg font-bold uppercase tracking-widest text-navy mb-4 flex items-center gap-2"><Clock size={18} className="text-[#091F3C]"/> Estimated Completion</h3>
               <div className="space-y-3">
@@ -448,6 +457,79 @@ export default function ServicePortal() {
                   {isSubmitting ? "Updating..." : "Save & Notify Owner"}
                 </button>
               </div>
+            </div>
+          )}
+
+          {/* MARK AIRCRAFT READY — only shows when all line items are complete */}
+          {event.status !== 'complete' && event.status !== 'cancelled' && event.status !== 'ready_for_pickup' && lineItems.length > 0 && lineItems.every(li => li.line_status === 'complete') && (
+            <div className="bg-green-50 shadow-lg rounded-sm p-6 border-t-4 border-[#56B94A]">
+              <h3 className="font-oswald text-lg font-bold uppercase tracking-widest text-navy mb-4 flex items-center gap-2"><Plane size={18} className="text-[#56B94A]"/> All Work Complete</h3>
+              <p className="text-sm text-gray-600 mb-4">All line items are marked complete. Notify the owner that the aircraft is ready for pickup.</p>
+              
+              {!showReadyConfirm ? (
+                <button onClick={() => setShowReadyConfirm(true)} className="w-full bg-[#56B94A] text-white font-oswald font-bold uppercase tracking-widest py-3 rounded active:scale-95 transition-transform flex items-center justify-center gap-2">
+                  <CheckCircle size={18} /> Mark Aircraft Ready for Pickup
+                </button>
+              ) : (
+                <div className="space-y-3 animate-fade-in">
+                  <textarea value={readyMessage} onChange={e => setReadyMessage(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-[#56B94A] outline-none bg-white min-h-[60px]" placeholder="Any pickup notes for the owner (optional)..." />
+                  <div className="flex gap-2">
+                    <button onClick={() => { setShowReadyConfirm(false); setReadyMessage(""); }} className="flex-1 border border-gray-300 text-gray-600 font-bold py-2 rounded text-xs uppercase tracking-widest hover:bg-gray-50 active:scale-95">Cancel</button>
+                    <button 
+                      onClick={() => handleAction('mark_ready', { message: readyMessage })} 
+                      disabled={isSubmitting} 
+                      className="flex-[2] bg-[#56B94A] text-white font-bold py-2 rounded text-xs uppercase tracking-widest active:scale-95 transition-transform disabled:opacity-50"
+                    >
+                      {isSubmitting ? "Notifying..." : "Confirm & Notify Owner"}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* READY FOR PICKUP BANNER (shown after marking ready) */}
+          {event.status === 'ready_for_pickup' && (
+            <div className="bg-green-50 border-2 border-green-200 rounded-sm p-6 text-center">
+              <Plane size={48} className="mx-auto text-[#56B94A] mb-4" />
+              <h3 className="font-oswald text-2xl font-bold uppercase tracking-widest text-navy mb-2">Aircraft Ready</h3>
+              <p className="text-sm text-gray-600">The owner has been notified that the aircraft is ready for pickup.</p>
+            </div>
+          )}
+
+          {/* DECLINE SERVICE */}
+          {event.status !== 'complete' && event.status !== 'cancelled' && event.status !== 'ready_for_pickup' && (
+            <div className="bg-white shadow-lg rounded-sm p-6 border-t-4 border-red-200">
+              {!showDeclineConfirm ? (
+                <button onClick={() => setShowDeclineConfirm(true)} className="w-full text-[10px] font-bold uppercase tracking-widest text-[#CE3732] border border-red-200 bg-red-50 rounded py-2.5 hover:bg-red-100 active:scale-95 transition-all flex items-center justify-center gap-1.5">
+                  <XCircle size={12} /> Unable to Accommodate — Decline Service
+                </button>
+              ) : (
+                <div className="space-y-3 animate-fade-in">
+                  <p className="text-sm font-bold text-navy">Are you sure you want to decline this service request?</p>
+                  <p className="text-xs text-gray-500">The owner will be notified via email.</p>
+                  <textarea value={declineReason} onChange={e => setDeclineReason(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-[#CE3732] outline-none bg-white min-h-[60px]" placeholder="Reason (optional) — e.g. shop fully booked through Q2, recommend contacting..." />
+                  <div className="flex gap-2">
+                    <button onClick={() => { setShowDeclineConfirm(false); setDeclineReason(""); }} className="flex-1 border border-gray-300 text-gray-600 font-bold py-2 rounded text-xs uppercase tracking-widest hover:bg-gray-50 active:scale-95">Keep Event</button>
+                    <button 
+                      onClick={() => handleAction('decline', { message: declineReason })} 
+                      disabled={isSubmitting} 
+                      className="flex-[2] bg-[#CE3732] text-white font-bold py-2 rounded text-xs uppercase tracking-widest active:scale-95 transition-transform disabled:opacity-50"
+                    >
+                      {isSubmitting ? "Declining..." : "Decline & Notify Owner"}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* CANCELLED STATE */}
+          {event.status === 'cancelled' && (
+            <div className="bg-red-50 border-2 border-red-200 rounded-sm p-6 text-center">
+              <XCircle size={48} className="mx-auto text-[#CE3732] mb-4" />
+              <h3 className="font-oswald text-2xl font-bold uppercase tracking-widest text-navy mb-2">Service Cancelled</h3>
+              <p className="text-sm text-gray-600">This service event has been cancelled.</p>
             </div>
           )}
 

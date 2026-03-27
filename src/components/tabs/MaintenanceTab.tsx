@@ -168,6 +168,8 @@ export default function MaintenanceTab({
     if (s === 'scheduling') return 'Scheduling';
     if (s === 'confirmed') return 'Confirmed';
     if (s === 'in_progress') return 'In Progress';
+    if (s === 'ready_for_pickup') return 'Ready for Pickup';
+    if (s === 'cancelled') return 'Cancelled';
     return s;
   };
 
@@ -176,6 +178,8 @@ export default function MaintenanceTab({
     if (s === 'scheduling') return 'bg-gray-500';
     if (s === 'confirmed') return 'bg-[#3AB0FF]';
     if (s === 'in_progress') return 'bg-[#56B94A]';
+    if (s === 'ready_for_pickup') return 'bg-[#56B94A]';
+    if (s === 'cancelled') return 'bg-[#CE3732]';
     return 'bg-gray-400';
   };
 
@@ -210,7 +214,7 @@ export default function MaintenanceTab({
       {activeEvents.length > 0 && (
         <div className="mb-4 space-y-2">
           {activeEvents.map(ev => (
-            <div key={ev.id} className={`bg-white shadow-lg rounded-sm p-4 border-t-4 ${ev.status === 'draft' ? 'border-[#F08B46]' : ev.status === 'confirmed' ? 'border-[#3AB0FF]' : ev.status === 'in_progress' ? 'border-[#56B94A]' : 'border-gray-400'}`}>
+            <div key={ev.id} className={`bg-white shadow-lg rounded-sm p-4 border-t-4 ${ev.status === 'draft' ? 'border-[#F08B46]' : ev.status === 'confirmed' ? 'border-[#3AB0FF]' : ev.status === 'in_progress' ? 'border-[#56B94A]' : ev.status === 'ready_for_pickup' ? 'border-[#56B94A]' : ev.status === 'cancelled' ? 'border-[#CE3732]' : 'border-gray-400'}`}>
               <div className="flex justify-between items-start">
                 <div>
                   <span className={`text-[8px] font-bold uppercase tracking-widest px-2 py-0.5 rounded text-white ${statusColor(ev.status)}`}>

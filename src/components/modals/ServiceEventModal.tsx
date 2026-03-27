@@ -6,7 +6,7 @@ import { authFetch } from "@/lib/authFetch";
 import { PrimaryButton } from "@/components/AppButtons";
 import { 
   X, Calendar, Wrench, AlertTriangle, Sparkles, CheckCircle, 
-  Send, MessageSquare, Clock, ChevronRight, ChevronDown, ExternalLink
+  Send, MessageSquare, Clock, ChevronRight, ChevronDown, ExternalLink, XCircle, Plane
 } from "lucide-react";
 
 // Common add-on services that owners can request
@@ -191,6 +191,32 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh }
     setIsSubmitting(false);
   };
 
+  // Cancel event confirmation
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
+
+  const handleCancelEvent = async () => {
+    if (!selectedEvent) return;
+    setIsSubmitting(true);
+    try {
+      await authFetch('/api/mx-events/owner-action', {
+        method: 'POST',
+        body: JSON.stringify({
+          eventId: selectedEvent.id,
+          action: 'cancel',
+          message: cancelReason || 'Service event cancelled.',
+        })
+      });
+      setShowCancelConfirm(false);
+      setCancelReason("");
+      await fetchEvents();
+      setView('list');
+    } catch (err) {
+      alert("Failed to cancel event.");
+    }
+    setIsSubmitting(false);
+  };
+
   const handleSendDraft = async () => {
     if (!selectedEvent) return;
     setIsSubmitting(true);
@@ -288,8 +314,9 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh }
   if (!show) return null;
 
   const isTurbine = aircraft?.engine_type === 'Turbine';
-  const activeEvents = events.filter(e => e.status !== 'complete');
+  const activeEvents = events.filter(e => e.status !== 'complete' && e.status !== 'cancelled');
   const completedEvents = events.filter(e => e.status === 'complete');
+  const cancelledEvents = events.filter(e => e.status === 'cancelled');
 
   const renderEmailPreview = (existingLines?: any[]) => {
     const mxPreviewItems = mxItems.filter(mx => selectedMxIds.includes(mx.id));
@@ -399,7 +426,7 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh }
                 {activeEvents.filter(e => e.status !== 'draft').map(ev => (
                   <button key={ev.id} onClick={() => { setSelectedEvent(ev); fetchEventDetail(ev.id); setView('detail'); }} className="w-full bg-gray-50 border border-gray-200 p-4 rounded mb-2 text-left flex justify-between items-center hover:border-[#F08B46] transition-colors active:scale-[0.98]">
                     <div>
-                      <span className={`text-[8px] font-bold uppercase tracking-widest px-2 py-0.5 rounded text-white ${ev.status === 'confirmed' ? 'bg-[#3AB0FF]' : ev.status === 'in_progress' ? 'bg-[#56B94A]' : 'bg-gray-500'}`}>{ev.status}</span>
+                      <span className={`text-[8px] font-bold uppercase tracking-widest px-2 py-0.5 rounded text-white ${ev.status === 'confirmed' ? 'bg-[#3AB0FF]' : ev.status === 'in_progress' ? 'bg-[#56B94A]' : ev.status === 'ready_for_pickup' ? 'bg-[#56B94A]' : 'bg-gray-500'}`}>{ev.status === 'ready_for_pickup' ? 'Ready' : ev.status}</span>
                       <p className="font-bold text-navy text-sm mt-1">{ev.confirmed_date || ev.proposed_date || 'Pending'}</p>
                       <p className="text-[10px] text-gray-500">Created {new Date(ev.created_at).toLocaleDateString()}</p>
                     </div>
@@ -417,6 +444,21 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh }
                     <div>
                       <span className="text-[8px] font-bold uppercase tracking-widest px-2 py-0.5 rounded text-white bg-[#56B94A]">complete</span>
                       <p className="text-[10px] text-gray-500 mt-1">Completed {ev.completed_at ? new Date(ev.completed_at).toLocaleDateString() : ''}</p>
+                    </div>
+                    <ChevronRight size={18} className="text-gray-400" />
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {cancelledEvents.length > 0 && (
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-2">Cancelled</p>
+                {cancelledEvents.slice(0, 3).map(ev => (
+                  <button key={ev.id} onClick={() => { setSelectedEvent(ev); fetchEventDetail(ev.id); setView('detail'); }} className="w-full bg-red-50 border border-red-200 p-3 rounded mb-2 text-left flex justify-between items-center opacity-50 hover:opacity-80 transition-opacity active:scale-[0.98]">
+                    <div>
+                      <span className="text-[8px] font-bold uppercase tracking-widest px-2 py-0.5 rounded text-white bg-[#CE3732]">cancelled</span>
+                      <p className="text-[10px] text-gray-500 mt-1">Created {new Date(ev.created_at).toLocaleDateString()}</p>
                     </div>
                     <ChevronRight size={18} className="text-gray-400" />
                   </button>
@@ -607,7 +649,7 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh }
             {/* Status & Dates */}
             <div className="bg-gray-50 rounded p-4 border border-gray-200">
               <div className="flex justify-between items-center mb-3">
-                <span className={`text-[8px] font-bold uppercase tracking-widest px-2 py-1 rounded text-white ${selectedEvent.status === 'confirmed' ? 'bg-[#3AB0FF]' : selectedEvent.status === 'complete' ? 'bg-[#56B94A]' : 'bg-[#F08B46]'}`}>{selectedEvent.status}</span>
+                <span className={`text-[8px] font-bold uppercase tracking-widest px-2 py-1 rounded text-white ${selectedEvent.status === 'confirmed' ? 'bg-[#3AB0FF]' : selectedEvent.status === 'complete' ? 'bg-[#56B94A]' : selectedEvent.status === 'ready_for_pickup' ? 'bg-[#56B94A]' : selectedEvent.status === 'cancelled' ? 'bg-[#CE3732]' : 'bg-[#F08B46]'}`}>{selectedEvent.status === 'ready_for_pickup' ? 'Ready for Pickup' : selectedEvent.status}</span>
                 {selectedEvent.access_token && selectedEvent.status !== 'complete' && (
                   <a href={`/service/${selectedEvent.access_token}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-[#3AB0FF] bg-blue-50 border border-blue-200 rounded px-3 py-1.5 hover:bg-blue-100 active:scale-95 transition-all">
                     <ExternalLink size={12} /> Portal
@@ -685,6 +727,46 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh }
               <button onClick={openCompleteFlow} className="w-full bg-[#56B94A] text-white font-oswald font-bold uppercase tracking-widest py-3 rounded active:scale-95 transition-transform flex items-center justify-center gap-2">
                 <CheckCircle size={18} /> Enter Logbook Data & Complete
               </button>
+            )}
+
+            {/* Ready for Pickup Banner */}
+            {selectedEvent.status === 'ready_for_pickup' && (
+              <div className="bg-green-50 border-2 border-green-200 rounded p-4 text-center">
+                <Plane size={32} className="mx-auto text-[#56B94A] mb-2" />
+                <p className="font-oswald text-lg font-bold uppercase tracking-widest text-navy">Aircraft Ready</p>
+                <p className="text-sm text-gray-600 mt-1">Your mechanic has marked all work as complete. Enter logbook data above to finalize.</p>
+              </div>
+            )}
+
+            {/* Cancelled Banner */}
+            {selectedEvent.status === 'cancelled' && (
+              <div className="bg-red-50 border-2 border-red-200 rounded p-4 text-center">
+                <XCircle size={32} className="mx-auto text-[#CE3732] mb-2" />
+                <p className="font-oswald text-lg font-bold uppercase tracking-widest text-navy">Event Cancelled</p>
+                <p className="text-sm text-gray-600 mt-1">This service event has been cancelled.</p>
+              </div>
+            )}
+
+            {/* Cancel Event Button */}
+            {selectedEvent.status !== 'complete' && selectedEvent.status !== 'cancelled' && !showCancelConfirm && (
+              <button onClick={() => setShowCancelConfirm(true)} className="w-full text-[10px] font-bold uppercase tracking-widest text-[#CE3732] border border-red-200 bg-red-50 rounded py-2 hover:bg-red-100 active:scale-95 transition-all flex items-center justify-center gap-1.5 mt-2">
+                <XCircle size={12} /> Cancel Service Event
+              </button>
+            )}
+
+            {/* Cancel Confirmation */}
+            {showCancelConfirm && (
+              <div className="bg-red-50 border-2 border-red-200 rounded p-4 space-y-3 animate-fade-in">
+                <p className="text-sm font-bold text-navy">Are you sure you want to cancel this service event?</p>
+                <p className="text-xs text-gray-500">This will notify {selectedEvent.mx_contact_name || 'the mechanic'} via email.</p>
+                <textarea value={cancelReason} onChange={e => setCancelReason(e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm focus:border-[#CE3732] outline-none bg-white min-h-[50px]" placeholder="Reason for cancellation (optional)..." />
+                <div className="flex gap-2">
+                  <button onClick={() => { setShowCancelConfirm(false); setCancelReason(""); }} className="flex-1 border border-gray-300 text-gray-600 font-oswald font-bold uppercase tracking-widest py-2 rounded text-xs active:scale-95">Keep Event</button>
+                  <button onClick={handleCancelEvent} disabled={isSubmitting} className="flex-1 bg-[#CE3732] text-white font-oswald font-bold uppercase tracking-widest py-2 rounded text-xs active:scale-95 disabled:opacity-50">
+                    {isSubmitting ? "Cancelling..." : "Cancel Event"}
+                  </button>
+                </div>
+              </div>
             )}
           </div>
         )}

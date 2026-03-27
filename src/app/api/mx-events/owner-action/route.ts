@@ -132,6 +132,39 @@ export async function POST(req: Request) {
         });
       }
 
+    } else if (action === 'cancel') {
+      // Owner cancels the service event
+      await supabaseAdmin.from('aft_maintenance_events').update({
+        status: 'cancelled',
+      }).eq('id', eventId);
+
+      await supabaseAdmin.from('aft_event_messages').insert({
+        event_id: eventId,
+        sender: 'owner',
+        message_type: 'status_update',
+        message: message || 'Service event cancelled by owner.',
+      } as any);
+
+      // Email mechanic
+      if (mxEmail) {
+        await resend.emails.send({
+          from: `Skyward Operations <${FROM_EMAIL}>`,
+          to: [mxEmail],
+          cc: primaryEmail ? [primaryEmail] : [],
+          replyTo: primaryEmail || undefined,
+          subject: `Service Cancelled — ${event.primary_contact_name || 'Owner'}`,
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+              <h2 style="color: #CE3732;">Service Event Cancelled</h2>
+              <p>Hello ${mxName},</p>
+              <p>${primaryName} has cancelled the pending service event.</p>
+              ${message ? `<p style="margin-top: 15px; padding: 15px; background: #f9f9f9; border-left: 4px solid #CE3732; border-radius: 4px;"><em>${message}</em></p>` : ''}
+              <p style="margin-top: 15px; color: #666;">No further action is needed on your end. We apologize for any inconvenience.</p>
+            </div>
+          `
+        });
+      }
+
     } else {
       return NextResponse.json({ error: 'Unknown action.' }, { status: 400 });
     }

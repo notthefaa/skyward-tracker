@@ -135,6 +135,48 @@ export async function POST(req: Request) {
               .eq('event_id', event.id);
           }
         }
+
+        // After updating, check status and notify owner
+        const { data: allItems } = await supabaseAdmin
+          .from('aft_event_line_items').select('item_name, line_status').eq('event_id', event.id);
+        
+        if (allItems && event.primary_contact_email) {
+          const totalItems = allItems.length;
+          const completedItems = allItems.filter((li: any) => li.line_status === 'complete').length;
+          const inProgressItems = allItems.filter((li: any) => li.line_status === 'in_progress').length;
+
+          // Build a summary of what changed
+          const changedNames = lineItemUpdates
+            .filter((u: any) => u.line_status)
+            .map((u: any) => {
+              const item = allItems.find((li: any) => li.item_name);
+              return u.line_status;
+            });
+
+          const summaryLine = `${completedItems}/${totalItems} items complete` + (inProgressItems > 0 ? `, ${inProgressItems} in progress` : '');
+
+          await resend.emails.send({
+            from: `Skyward Operations <${FROM_EMAIL}>`,
+            to: [event.primary_contact_email],
+            subject: `Work Package Update — ${summaryLine}`,
+            html: `
+              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+                <h2 style="color: #091F3C;">Work Package Progress</h2>
+                <p>${event.mx_contact_name || 'Your maintenance provider'} updated the status of work items on your aircraft.</p>
+                <div style="margin-top: 15px; padding: 15px; background: #f9f9f9; border-radius: 4px;">
+                  <p style="margin: 0; font-size: 16px;"><strong>${summaryLine}</strong></p>
+                </div>
+                <div style="margin-top: 15px;">
+                  ${allItems.map((li: any) => {
+                    const color = li.line_status === 'complete' ? '#56B94A' : li.line_status === 'in_progress' ? '#3AB0FF' : li.line_status === 'deferred' ? '#999' : '#F08B46';
+                    return `<p style="margin: 4px 0; font-size: 14px;">• ${li.item_name} — <span style="color: ${color}; font-weight: bold; text-transform: uppercase;">${li.line_status}</span></p>`;
+                  }).join('')}
+                </div>
+                ${ctaButton(appUrl, 'OPEN SKYWARD TRACKER')}
+              </div>
+            `
+          });
+        }
       }
 
     } else if (action === 'update_estimate') {
@@ -194,6 +236,67 @@ export async function POST(req: Request) {
                 <strong>${suggestedName}</strong>
                 ${itemDescription ? `<p style="margin-top: 8px; color: #666;">${itemDescription}</p>` : ''}
               </div>
+              ${ctaButton(appUrl, 'OPEN SKYWARD TRACKER')}
+            </div>
+          `
+        });
+      }
+
+    } else if (action === 'decline') {
+      // Mechanic declines the service event
+      await supabaseAdmin.from('aft_maintenance_events').update({
+        status: 'cancelled',
+        mechanic_notes: message || 'Declined by maintenance provider.',
+      }).eq('id', event.id);
+
+      await supabaseAdmin.from('aft_event_messages').insert({
+        event_id: event.id,
+        sender: 'mechanic',
+        message_type: 'status_update',
+        message: message || 'Service declined by maintenance provider.',
+      } as any);
+
+      if (event.primary_contact_email) {
+        await resend.emails.send({
+          from: `Skyward Operations <${FROM_EMAIL}>`,
+          to: [event.primary_contact_email],
+          subject: `Service Declined by ${event.mx_contact_name || 'Maintenance Provider'}`,
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+              <h2 style="color: #CE3732;">Service Declined</h2>
+              <p>${event.mx_contact_name || 'Your maintenance provider'} has indicated they are unable to accommodate this service request.</p>
+              ${message ? `<p style="margin-top: 15px; padding: 15px; background: #f9f9f9; border-left: 4px solid #CE3732; border-radius: 4px;"><em>${message}</em></p>` : ''}
+              <p style="margin-top: 15px; color: #666;">You may wish to contact an alternative maintenance provider or reschedule.</p>
+              ${ctaButton(appUrl, 'OPEN SKYWARD TRACKER')}
+            </div>
+          `
+        });
+      }
+
+    } else if (action === 'mark_ready') {
+      // Mechanic marks the aircraft as ready for pickup
+      await supabaseAdmin.from('aft_maintenance_events').update({
+        status: 'ready_for_pickup',
+      }).eq('id', event.id);
+
+      await supabaseAdmin.from('aft_event_messages').insert({
+        event_id: event.id,
+        sender: 'mechanic',
+        message_type: 'status_update',
+        message: message || 'All work complete. Aircraft is ready for pickup.',
+      } as any);
+
+      if (event.primary_contact_email) {
+        await resend.emails.send({
+          from: `Skyward Operations <${FROM_EMAIL}>`,
+          to: [event.primary_contact_email],
+          subject: `✈ Aircraft Ready for Pickup`,
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+              <h2 style="color: #56B94A;">Aircraft Ready for Pickup!</h2>
+              <p>${event.mx_contact_name || 'Your maintenance provider'} has completed all work and your aircraft is ready.</p>
+              ${message ? `<p style="margin-top: 15px; padding: 15px; background: #f0fdf4; border-left: 4px solid #56B94A; border-radius: 4px;"><em>${message}</em></p>` : ''}
+              <p style="margin-top: 15px; color: #666;">Please log in to enter the logbook data from your mechanic's sign-off to complete this service event and reset maintenance tracking.</p>
               ${ctaButton(appUrl, 'OPEN SKYWARD TRACKER')}
             </div>
           `
