@@ -17,6 +17,11 @@ const roboto = Roboto({
 export const metadata: Metadata = {
   title: "Aviation Fleet Tracker",
   description: "Aircraft fleet management, maintenance tracking, and flight logging.",
+  icons: {
+    icon: "/icon.png",
+    shortcut: "/icon.png",
+    apple: "/icon.png",
+  },
   appleWebApp: {
     capable: true,
     title: "Fleet Tracker",
