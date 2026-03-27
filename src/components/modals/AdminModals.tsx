@@ -227,7 +227,7 @@ export default function AdminModals({
       )}
 
       {showGlobalFleetModal && (
-        <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 animate-fade-in" onClick={() => { setShowGlobalFleetModal(false); setGlobalFleetSearch(""); }}>
+        <div className="fixed inset-0 bg-black/60 z-[10000] flex items-center justify-center p-4 animate-fade-in" onClick={() => { setShowGlobalFleetModal(false); setGlobalFleetSearch(""); }}>
           <div className="bg-white rounded shadow-2xl w-full max-w-md p-6 border-t-4 border-navy animate-slide-up flex flex-col max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-6 shrink-0">
               <h2 className="font-oswald text-2xl font-bold uppercase text-navy flex items-center gap-2"><Globe size={20} className="text-navy"/> Global Fleet</h2>
@@ -256,7 +256,7 @@ export default function AdminModals({
       )}
 
       {showToolsMenu && (
-        <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 animate-fade-in" onClick={() => setShowToolsMenu(false)}>
+        <div className="fixed inset-0 bg-black/60 z-[10000] flex items-center justify-center p-4 animate-fade-in" onClick={() => setShowToolsMenu(false)}>
           <div className="bg-white rounded shadow-2xl w-full max-w-sm p-6 border-t-4 border-[#F08B46] animate-slide-up" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-6">
               <h2 className="font-oswald text-xl font-bold uppercase text-navy flex items-center gap-2"><Settings size={20}/> System Tools</h2>
@@ -281,7 +281,7 @@ export default function AdminModals({
       )}
 
       {showSettingsModal && (
-        <div className="fixed inset-0 bg-black/60 z-[70] flex items-center justify-center p-4 animate-fade-in" onClick={() => setShowSettingsModal(false)}>
+        <div className="fixed inset-0 bg-black/60 z-[10001] flex items-center justify-center p-4 animate-fade-in" onClick={() => setShowSettingsModal(false)}>
           <div className="bg-white rounded shadow-2xl w-full max-w-sm p-6 border-t-4 border-navy animate-slide-up max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-6">
               <h2 className="font-oswald text-xl font-bold uppercase text-navy flex items-center gap-2"><Sliders size={20}/> Maintenance Triggers</h2>
@@ -317,7 +317,7 @@ export default function AdminModals({
       )}
 
       {showEmailPreview && (
-        <div className="fixed inset-0 bg-black/60 z-[70] flex items-center justify-center p-4 animate-fade-in" onClick={() => setShowEmailPreview(false)}>
+        <div className="fixed inset-0 bg-black/60 z-[10001] flex items-center justify-center p-4 animate-fade-in" onClick={() => setShowEmailPreview(false)}>
           <div className="bg-white rounded shadow-2xl w-full max-w-lg p-6 border-t-4 border-navy animate-slide-up max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-4">
               <h2 className="font-oswald text-xl font-bold uppercase text-navy flex items-center gap-2"><MailOpen size={20}/> Email Previewer</h2>
@@ -341,7 +341,7 @@ export default function AdminModals({
       )}
 
       {showAccessModal && (
-        <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 animate-fade-in" onClick={() => setShowAccessModal(false)}>
+        <div className="fixed inset-0 bg-black/60 z-[10000] flex items-center justify-center p-4 animate-fade-in" onClick={() => setShowAccessModal(false)}>
           <div className="bg-white rounded shadow-2xl w-full max-w-md p-6 border-t-4 border-navy animate-slide-up max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-6">
               <h2 className="font-oswald text-2xl font-bold uppercase text-navy flex items-center gap-2"><ShieldCheck size={20}/> Assign Aircraft</h2>
@@ -385,7 +385,7 @@ export default function AdminModals({
       )}
 
       {showInviteModal && (
-        <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 animate-fade-in" onClick={() => setShowInviteModal(false)}>
+        <div className="fixed inset-0 bg-black/60 z-[10000] flex items-center justify-center p-4 animate-fade-in" onClick={() => setShowInviteModal(false)}>
           <div className="bg-white rounded shadow-2xl w-full max-w-sm p-6 border-t-4 border-navy animate-slide-up" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-6">
               <h2 className="font-oswald text-2xl font-bold uppercase text-navy flex items-center gap-2"><Users size={20}/> Invite User</h2>

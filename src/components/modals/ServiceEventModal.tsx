@@ -356,7 +356,7 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh }
 
   return (
     // #3 fix — overscroll-behavior: contain prevents background scrolling
-    <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={onClose}>
+    <div className="fixed inset-0 bg-black/60 z-[10000] flex items-center justify-center p-4 animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={onClose}>
       <div className="bg-white rounded shadow-2xl w-full max-w-lg p-6 border-t-4 border-[#F08B46] max-h-[90vh] overflow-y-auto animate-slide-up" style={{ overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch' }} onClick={e => e.stopPropagation()}>
 
         <div className="flex justify-between items-center mb-6">

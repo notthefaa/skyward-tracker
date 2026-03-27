@@ -365,7 +365,7 @@ export default function FleetTrackerApp() {
       )}
 
       {showLogItModal && (
-        <div className="fixed inset-0 bg-black/80 z-[80] flex items-center justify-center p-4 animate-fade-in" onClick={() => setShowLogItModal(false)}>
+        <div className="fixed inset-0 bg-black/80 z-[10000] flex items-center justify-center p-4 animate-fade-in" onClick={() => setShowLogItModal(false)}>
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 border-t-8 border-[#3AB0FF] animate-slide-up relative" onClick={(e) => e.stopPropagation()}>
             <button onClick={() => setShowLogItModal(false)} className="absolute top-4 right-4 text-gray-400 hover:text-red-500">
               <X size={24}/>

@@ -54,6 +54,7 @@ export default function MaintenanceTab({
   const [showServiceModal, setShowServiceModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [resendingEventId, setResendingEventId] = useState<string | null>(null);
+  const [confirmResendId, setConfirmResendId] = useState<string | null>(null);
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [mxName, setMxName] = useState("");
@@ -97,6 +98,7 @@ export default function MaintenanceTab({
       alert("Failed to resend work package.");
     }
     setResendingEventId(null);
+    setConfirmResendId(null);
   };
 
   const openMxForm = (item: any = null) => {
@@ -234,7 +236,7 @@ export default function MaintenanceTab({
                   </button>
                   {ev.status !== 'draft' && (
                     <button
-                      onClick={() => handleResendWorkpackage(ev.id)}
+                      onClick={() => setConfirmResendId(ev.id)}
                       disabled={resendingEventId === ev.id}
                       className="text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:text-[#F08B46] flex items-center gap-1 disabled:opacity-50"
                     >
@@ -367,6 +369,24 @@ export default function MaintenanceTab({
               )}
               <div className="pt-4"><PrimaryButton disabled={isSubmitting}>{isSubmitting ? "Saving..." : "Save Maintenance Item"}</PrimaryButton></div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Resend Confirmation Modal */}
+      {confirmResendId && (
+        <div className="fixed inset-0 bg-black/60 z-[10001] flex items-center justify-center p-4 animate-fade-in" onClick={() => setConfirmResendId(null)}>
+          <div className="bg-white rounded shadow-2xl w-full max-w-sm p-6 border-t-4 border-[#F08B46] animate-slide-up" onClick={e => e.stopPropagation()}>
+            <h3 className="font-oswald text-xl font-bold uppercase text-navy mb-3">Resend Work Package?</h3>
+            <p className="text-sm text-gray-600 mb-6">
+              Are you sure you want to resend the work order to <strong>{activeEvents.find(e => e.id === confirmResendId)?.mx_contact_name || 'the primary maintenance contact'}</strong>?
+            </p>
+            <div className="flex gap-3">
+              <button onClick={() => setConfirmResendId(null)} className="flex-1 border border-gray-300 text-gray-600 font-oswald font-bold uppercase tracking-widest py-3 rounded text-xs active:scale-95">Cancel</button>
+              <button onClick={() => handleResendWorkpackage(confirmResendId)} disabled={resendingEventId === confirmResendId} className="flex-1 bg-[#F08B46] text-white font-oswald font-bold uppercase tracking-widest py-3 rounded text-xs active:scale-95 disabled:opacity-50">
+                {resendingEventId === confirmResendId ? 'Sending...' : 'Resend'}
+              </button>
+            </div>
           </div>
         </div>
       )}

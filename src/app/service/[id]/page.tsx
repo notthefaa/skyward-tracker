@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { 
   Wrench, AlertTriangle, CheckCircle, Clock, Send, 
@@ -10,6 +10,7 @@ import {
 
 export default function ServicePortal() {
   const params = useParams();
+  const router = useRouter();
   const accessToken = params.id as string;
 
   const [event, setEvent] = useState<any>(null);
@@ -151,15 +152,19 @@ export default function ServicePortal() {
         </div>
       )}
 
-      <div className="min-h-screen bg-neutral-100 flex flex-col items-center p-4 md:p-8">
+      {/* Back to App — fixed header for logged-in users */}
+      {isAppUser && (
+        <div className="fixed top-0 left-0 right-0 z-50 bg-navy" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
+          <button onClick={() => router.push('/')} className="flex items-center gap-2 px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-white hover:text-[#3AB0FF] active:scale-95 transition-all">
+            <ArrowLeft size={14} /> Back to App
+          </button>
+        </div>
+      )}
+
+      <div className="min-h-screen bg-neutral-100 flex flex-col items-center p-4 md:p-8" style={{ paddingTop: isAppUser ? 'calc(3rem + env(safe-area-inset-top, 0px))' : 'env(safe-area-inset-top, 16px)' }}>
 
         {/* BRANDING */}
         <div className="mb-6 mt-4">
-          {isAppUser && (
-            <a href="/" className="inline-flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-[#3AB0FF] hover:underline mb-4 active:scale-95 transition-transform">
-              <ArrowLeft size={14} /> Back to App
-            </a>
-          )}
           <img src="/logo.png" alt="Skyward" className="mx-auto h-24 object-contain mb-2 opacity-80" />
           <h1 className="font-oswald text-xl font-bold uppercase tracking-widest text-navy text-center">Service Portal</h1>
         </div>
