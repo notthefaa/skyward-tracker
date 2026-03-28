@@ -1,7 +1,9 @@
 import { useState, useEffect } from "react";
 import { 
   PlaneTakeoff, LayoutGrid, Clock, Wrench, AlertTriangle, Send, ShieldCheck, 
-  ChevronRight, CheckCircle, X, Check, Activity, Bell, PenTool, Share, Download, Settings, Users, Database, RefreshCw, Camera
+  ChevronRight, CheckCircle, X, Check, Activity, Bell, PenTool, Share, Download, 
+  Settings, Users, Database, RefreshCw, Camera, Calendar, MessageSquare, 
+  ExternalLink, Sparkles, Plane, XCircle, TrendingUp
 } from "lucide-react";
 
 export default function TutorialModal({ session, role }: { session: any, role: string }) {
@@ -10,7 +12,7 @@ export default function TutorialModal({ session, role }: { session: any, role: s
 
   useEffect(() => {
     if (session?.user?.id) {
-      const hasSeen = localStorage.getItem(`aft_tutorial_${session.user.id}`);
+      const hasSeen = localStorage.getItem(`aft_tutorial_v2_${session.user.id}`);
       if (!hasSeen) {
         setIsVisible(true);
       }
@@ -19,7 +21,7 @@ export default function TutorialModal({ session, role }: { session: any, role: s
 
   const dismissTutorial = () => {
     if (session?.user?.id) {
-      localStorage.setItem(`aft_tutorial_${session.user.id}`, 'true');
+      localStorage.setItem(`aft_tutorial_v2_${session.user.id}`, 'true');
     }
     setIsVisible(false);
   };
@@ -35,8 +37,7 @@ export default function TutorialModal({ session, role }: { session: any, role: s
 
   if (!isVisible) return null;
 
-  // Dynamic Content Generation based on Role
-  const tutorialSteps =[
+  const tutorialSteps = [
     {
       title: "Welcome to Skyward",
       icon: <PlaneTakeoff size={48} className="text-navy" />,
@@ -44,8 +45,8 @@ export default function TutorialModal({ session, role }: { session: any, role: s
         <div className="space-y-4 text-left w-full">
           <p className="text-sm text-gray-600 font-roboto leading-relaxed text-center">
             {role === 'admin' 
-              ? "Welcome to the Skyward Aircraft Manager. As an Administrator, you have full control over fleet configuration, pilot access, maintenance schedules, and database health. You will also have the ability to log flights, track maintenance, and report squawks."
-              : "Welcome to the Skyward Fleet Manager. This platform is designed to make logging flights, tracking maintenance, and reporting squawks seamless."}
+              ? "Welcome to the Skyward Aircraft Manager. As an Administrator, you have full control over fleet configuration, pilot access, maintenance scheduling, mechanic coordination, and database health."
+              : "Welcome to the Skyward Fleet Manager. This platform is designed to make logging flights, tracking maintenance, coordinating with your mechanic, and reporting squawks seamless."}
           </p>
         </div>
       )
@@ -56,7 +57,7 @@ export default function TutorialModal({ session, role }: { session: any, role: s
       content: (
         <div className="space-y-4 text-left w-full">
           <p className="text-sm text-gray-600 font-roboto leading-relaxed text-center mb-4">
-            The Fleet tab gives you a bird's-eye view of all of your aircraft. Clicking an aircraft on this page takes you directly to that aircraft's summary. The system automatically color-codes statuses:
+            The Fleet tab gives you a bird's-eye view of all aircraft. Tap any aircraft to jump to its summary. Status is color-coded automatically:
           </p>
           <ul className="text-sm text-gray-600 font-roboto space-y-3 pl-2">
             <li className="flex items-center gap-3"><CheckCircle size={20} className="text-success shrink-0" /> <strong>Green:</strong> Airworthy & Ready</li>
@@ -72,32 +73,69 @@ export default function TutorialModal({ session, role }: { session: any, role: s
       content: (
         <div className="space-y-4 text-left w-full">
           <ul className="text-sm text-gray-600 font-roboto space-y-4 pl-2">
-            <li className="flex items-start gap-3"><Check size={18} className="text-[#3AB0FF] shrink-0 mt-0.5" /> <span>The flight time tracking dynamically adapts to Piston (Tach) or Turbine (AFTT/Cycles) depending on aircraft setup.</span></li>
-            <li className="flex items-start gap-3"><Check size={18} className="text-[#3AB0FF] shrink-0 mt-0.5" /> <span>Strict math validation prevents backward logging.</span></li>
+            <li className="flex items-start gap-3"><Check size={18} className="text-[#3AB0FF] shrink-0 mt-0.5" /> <span>Tracks adapt to your engine type — Hobbs/Tach for Piston or AFTT/FTT for Turbine.</span></li>
+            <li className="flex items-start gap-3"><Check size={18} className="text-[#3AB0FF] shrink-0 mt-0.5" /> <span>Log departure/arrival airports, fuel state, passengers, and trip reason codes.</span></li>
+            <li className="flex items-start gap-3"><Check size={18} className="text-[#3AB0FF] shrink-0 mt-0.5" /> <span>Strict math validation prevents backward logging errors.</span></li>
             {role === 'admin' && (
-              <li className="flex items-start gap-3"><RefreshCw size={18} className="text-[#3AB0FF] shrink-0 mt-0.5" /> <span><strong>Rollbacks:</strong> Safely delete the newest log to automatically roll aircraft master times backward.</span></li>
+              <li className="flex items-start gap-3"><RefreshCw size={18} className="text-[#3AB0FF] shrink-0 mt-0.5" /> <span><strong>Rollbacks:</strong> Delete the newest log to automatically roll aircraft master times back to the previous entry.</span></li>
             )}
-            <li className="flex items-start gap-3"><Download size={18} className="text-[#3AB0FF] shrink-0 mt-0.5" /> <span>Export complete CSV logs instantly.</span></li>
+            <li className="flex items-start gap-3"><Download size={18} className="text-[#3AB0FF] shrink-0 mt-0.5" /> <span>Export the complete flight log as CSV.</span></li>
           </ul>
         </div>
       )
     },
     {
-      title: "Maintenance",
+      title: "Maintenance Tracking",
       icon: <Wrench size={48} className="text-[#F08B46]" />,
       content: (
         <div className="space-y-4 text-left w-full">
           <ul className="text-sm text-gray-600 font-roboto space-y-4 pl-2">
-            <li className="flex items-start gap-3"><Clock size={18} className="text-[#F08B46] shrink-0 mt-0.5" /> <span>Track items by Hours or Calendar Dates.</span></li>
+            <li className="flex items-start gap-3"><Clock size={18} className="text-[#F08B46] shrink-0 mt-0.5" /> <span>Track items by Engine Hours or Calendar Dates with automatic interval recalculation.</span></li>
+            <li className="flex items-start gap-3"><TrendingUp size={18} className="text-[#F08B46] shrink-0 mt-0.5" /> <span><strong>Predictive Engine:</strong> Uses 180 days of flight data to project when MX will come due, with a confidence score based on flying consistency.</span></li>
             {role === 'admin' && (
               <>
-                <li className="flex items-start gap-3"><Bell size={18} className="text-[#F08B46] shrink-0 mt-0.5" /> <span><strong>Automated Alerts:</strong> System emails Admins/Pilots at global thresholds (e.g., 30/15/5 limits) when items are coming due.</span></li>
-                <li className="flex items-start gap-3"><Send size={18} className="text-[#F08B46] shrink-0 mt-0.5" /> <span><strong>Auto-Scheduling:</strong> Click 'Automate MX' to have the system automatically email your mechanic (with you in cc) requesting schedule time when a maintenace item is approaching.</span></li>
+                <li className="flex items-start gap-3"><Bell size={18} className="text-[#F08B46] shrink-0 mt-0.5" /> <span><strong>Automated Alerts:</strong> System emails pilots and admins at configurable thresholds (e.g., 30/15/5 days or hours remaining).</span></li>
+                <li className="flex items-start gap-3"><Send size={18} className="text-[#F08B46] shrink-0 mt-0.5" /> <span><strong>Auto-Scheduling:</strong> Enable "Automate MX" to have the system create draft work packages when items approach their due thresholds.</span></li>
               </>
             )}
-            {role !== 'admin' && (
-              <li className="flex items-start gap-3"><AlertTriangle size={18} className="text-[#CE3732] shrink-0 mt-0.5" /> <span>Required items that expire will automatically ground the aircraft.</span></li>
-            )}
+            <li className="flex items-start gap-3"><AlertTriangle size={18} className="text-[#CE3732] shrink-0 mt-0.5" /> <span>Required items that expire will automatically ground the aircraft until completed.</span></li>
+          </ul>
+        </div>
+      )
+    },
+    {
+      title: "Service Events",
+      icon: <Calendar size={48} className="text-[#F08B46]" />,
+      content: (
+        <div className="space-y-4 text-left w-full">
+          <p className="text-sm text-gray-600 font-roboto leading-relaxed text-center mb-4">
+            Coordinate maintenance with your mechanic through a complete work package workflow:
+          </p>
+          <ul className="text-sm text-gray-600 font-roboto space-y-3 pl-2">
+            <li className="flex items-start gap-3"><Sparkles size={18} className="text-[#F08B46] shrink-0 mt-0.5" /> <span><strong>Build a Work Package:</strong> Bundle MX items, open squawks, and add-on services (wash, oil change, nav update, etc.) into one package.</span></li>
+            <li className="flex items-start gap-3"><Send size={18} className="text-[#F08B46] shrink-0 mt-0.5" /> <span><strong>Send to Mechanic:</strong> Preview the email, propose a date, then send. Your mechanic gets a professional email with a secure portal link.</span></li>
+            <li className="flex items-start gap-3"><MessageSquare size={18} className="text-[#3AB0FF] shrink-0 mt-0.5" /> <span><strong>Negotiate Dates:</strong> Propose, confirm, or counter dates back and forth until both sides agree. All messages are logged.</span></li>
+            <li className="flex items-start gap-3"><Plane size={18} className="text-success shrink-0 mt-0.5" /> <span><strong>Track to Completion:</strong> Monitor line item progress, receive "Aircraft Ready" notifications, then enter logbook data to reset tracking.</span></li>
+            <li className="flex items-start gap-3"><XCircle size={18} className="text-[#CE3732] shrink-0 mt-0.5" /> <span><strong>Cancel or Decline:</strong> Either side can cancel or decline with a reason. The other party is notified by email.</span></li>
+          </ul>
+        </div>
+      )
+    },
+    {
+      title: "Mechanic Portal",
+      icon: <ExternalLink size={48} className="text-[#091F3C]" />,
+      content: (
+        <div className="space-y-4 text-left w-full">
+          <p className="text-sm text-gray-600 font-roboto leading-relaxed text-center mb-4">
+            Your mechanic accesses a secure portal via a link in their email — no login required.
+          </p>
+          <ul className="text-sm text-gray-600 font-roboto space-y-3 pl-2">
+            <li className="flex items-start gap-3"><Check size={18} className="text-navy shrink-0 mt-0.5" /> <span>View the full work package with aircraft details and current times.</span></li>
+            <li className="flex items-start gap-3"><Check size={18} className="text-navy shrink-0 mt-0.5" /> <span>View squawk photos in full resolution directly in the portal.</span></li>
+            <li className="flex items-start gap-3"><Check size={18} className="text-navy shrink-0 mt-0.5" /> <span>Propose or confirm service dates with shop availability notes.</span></li>
+            <li className="flex items-start gap-3"><Check size={18} className="text-navy shrink-0 mt-0.5" /> <span>Update line item statuses (pending → in progress → complete → deferred).</span></li>
+            <li className="flex items-start gap-3"><Check size={18} className="text-navy shrink-0 mt-0.5" /> <span>Suggest additional work discovered during service.</span></li>
+            <li className="flex items-start gap-3"><Check size={18} className="text-navy shrink-0 mt-0.5" /> <span>Mark the aircraft ready for pickup when all work is done.</span></li>
           </ul>
         </div>
       )
@@ -108,42 +146,42 @@ export default function TutorialModal({ session, role }: { session: any, role: s
       content: (
         <div className="space-y-4 text-left w-full">
           <ul className="text-sm text-gray-600 font-roboto space-y-4 pl-2">
-            <li className="flex items-start gap-3"><Camera size={18} className="text-[#CE3732] shrink-0 mt-0.5" /> <span>Track squawks in detail with photos.</span></li>
+            <li className="flex items-start gap-3"><Camera size={18} className="text-[#CE3732] shrink-0 mt-0.5" /> <span>Report discrepancies with photos, location, and a detailed description.</span></li>
+            <li className="flex items-start gap-3"><AlertTriangle size={18} className="text-[#CE3732] shrink-0 mt-0.5" /> <span>Flag as "Affects Airworthiness" to instantly ground the aircraft fleet-wide.</span></li>
+            <li className="flex items-start gap-3"><Calendar size={18} className="text-[#F08B46] shrink-0 mt-0.5" /> <span>Include squawks in service event work packages — they auto-resolve when the mechanic marks them complete.</span></li>
             {role === 'admin' && (
               <>
-                <li className="flex items-start gap-3"><PenTool size={18} className="text-[#CE3732] shrink-0 mt-0.5" /> <span><strong>Document Deferrals:</strong> Process MEL/CDL deferrals when appropriate and keep everyone in the loop.</span></li>
-                <li className="flex items-start gap-3"><Share size={18} className="text-[#CE3732] shrink-0 mt-0.5" /> <span><strong>Mechanic Portal:</strong> Email a secure link directly to your mechanic to view squawks with high-res photos.</span></li>
-                <li className="flex items-start gap-3"><Download size={18} className="text-[#CE3732] shrink-0 mt-0.5" /> <span><strong>Export Summaries:</strong> Generate PDF reports outlining active squawks with photos to aid maintenance visits.</span></li>
+                <li className="flex items-start gap-3"><PenTool size={18} className="text-[#CE3732] shrink-0 mt-0.5" /> <span><strong>Deferrals:</strong> Document MEL/CDL/NEF/MDL deferrals with digital signature capture (turbine aircraft).</span></li>
+                <li className="flex items-start gap-3"><Share size={18} className="text-[#CE3732] shrink-0 mt-0.5" /> <span><strong>Secure Viewer:</strong> Email your mechanic a direct link to view squawk details and high-res photos.</span></li>
+                <li className="flex items-start gap-3"><Download size={18} className="text-[#CE3732] shrink-0 mt-0.5" /> <span><strong>PDF Export:</strong> Generate formal squawk reports with photos for maintenance visits.</span></li>
               </>
-            )}
-            {role !== 'admin' && (
-              <li className="flex items-start gap-3"><AlertTriangle size={18} className="text-[#CE3732] shrink-0 mt-0.5" /> <span>Flag an issue as 'Affects Airworthiness' to instantly ground the aircraft.</span></li>
             )}
           </ul>
         </div>
       )
     },
-    ...(role === 'admin' ?[{
+    ...(role === 'admin' ? [{
       title: "Admin Center",
       icon: <ShieldCheck size={48} className="text-navy" />,
       content: (
         <div className="space-y-4 text-left w-full">
-          <p className="text-sm text-gray-600 font-roboto text-center mb-4">Click the Shield icon (top right) to access global settings.</p>
+          <p className="text-sm text-gray-600 font-roboto text-center mb-4">Tap the Shield icon in the top bar to access global settings.</p>
           <ul className="text-sm text-gray-600 font-roboto space-y-4 pl-2">
-            <li className="flex items-center gap-3"><Users size={18} className="text-navy shrink-0" /> Manage pilot invites & aircraft access</li>
-            <li className="flex items-center gap-3"><Settings size={18} className="text-navy shrink-0" /> Configure Global Maintenance Alert Triggers</li>
-            <li className="flex items-center gap-3"><Database size={18} className="text-navy shrink-0" /> Run Database Health & Photo Cleanup</li>
+            <li className="flex items-center gap-3"><Users size={18} className="text-navy shrink-0" /> Invite pilots, reset passwords, and delete users.</li>
+            <li className="flex items-center gap-3"><PlaneTakeoff size={18} className="text-navy shrink-0" /> Assign aircraft access per user.</li>
+            <li className="flex items-center gap-3"><Settings size={18} className="text-navy shrink-0" /> Configure global maintenance alert and scheduling thresholds.</li>
+            <li className="flex items-center gap-3"><Database size={18} className="text-navy shrink-0" /> Run database health checks — cleans orphaned images, old records, and reports table sizes.</li>
           </ul>
         </div>
       )
-    }] :[]),
+    }] : []),
     {
       title: "Companion App",
       icon: <Send size={48} className="text-[#3AB0FF]" />,
       content: (
         <div className="space-y-4 text-left w-full">
           <p className="text-sm text-gray-600 font-roboto leading-relaxed text-center">
-            We also offer a hyper-fast, mobile app called <strong>Log It</strong> designed exclusively for use on the ramp. Click the Paper Airplane icon in the top right menu to get instructions on how to install it directly to your phone's home screen.
+            We also offer <strong>Log It</strong>, a hyper-fast mobile app designed exclusively for use on the ramp. Tap the Paper Airplane icon in the top menu to get installation instructions for your phone's home screen.
           </p>
         </div>
       )
@@ -168,7 +206,6 @@ export default function TutorialModal({ session, role }: { session: any, role: s
           {currentStepData.title}
         </h2>
 
-        {/* Min-height ensures the buttons don't jump around wildly between slides */}
         <div className="w-full min-h-[240px] flex items-center justify-center mb-6">
           {currentStepData.content}
         </div>
@@ -180,7 +217,6 @@ export default function TutorialModal({ session, role }: { session: any, role: s
           ))}
         </div>
 
-        {/* Perfectly Aligned Custom Buttons */}
         <div className="flex w-full gap-4">
           {step > 0 && (
             <button 

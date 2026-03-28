@@ -4,9 +4,10 @@ import { authFetch } from "@/lib/authFetch";
 import { processMxItem, getMxTextColor, isMxExpired } from "@/lib/math";
 import type { AircraftWithMetrics, SystemSettings } from "@/lib/types";
 import useSWR from "swr";
-import { Wrench, Trash2, Plus, X, Edit2, Calendar, Send, ExternalLink, ChevronRight } from "lucide-react";
+import { Wrench, Trash2, Plus, X, Edit2, Calendar, Send, ExternalLink, ChevronRight, HelpCircle } from "lucide-react";
 import { PrimaryButton } from "@/components/AppButtons";
 import ServiceEventModal from "@/components/modals/ServiceEventModal";
+import MxGuideModal from "@/components/modals/MxGuideModal";
 
 export default function MaintenanceTab({ 
   aircraft, 
@@ -52,6 +53,7 @@ export default function MaintenanceTab({
 
   const [showMxModal, setShowMxModal] = useState(false);
   const [showServiceModal, setShowServiceModal] = useState(false);
+  const [showGuideModal, setShowGuideModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [resendingEventId, setResendingEventId] = useState<string | null>(null);
   const [confirmResendId, setConfirmResendId] = useState<string | null>(null);
@@ -210,6 +212,8 @@ export default function MaintenanceTab({
         onRefresh={() => { mutate(); mutateEvents(); }}
       />
 
+      <MxGuideModal show={showGuideModal} onClose={() => setShowGuideModal(false)} />
+
       {/* ACTIVE EVENTS BANNER — visible directly on the MX tab */}
       {activeEvents.length > 0 && (
         <div className="mb-4 space-y-2">
@@ -265,7 +269,15 @@ export default function MaintenanceTab({
       )}
       
       <div className={`bg-cream shadow-lg rounded-sm p-4 md:p-6 border-t-4 mb-6 ${isGroundedLocally ? 'border-[#CE3732]' : 'border-[#F08B46]'}`}>
-        <h2 className="font-oswald text-2xl md:text-3xl font-bold uppercase text-navy m-0 mb-6 leading-none">Maintenance</h2>
+        <div className="flex justify-between items-end mb-6">
+          <h2 className="font-oswald text-2xl md:text-3xl font-bold uppercase text-navy m-0 leading-none">Maintenance</h2>
+          <button 
+            onClick={() => setShowGuideModal(true)} 
+            className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-[#F08B46] hover:opacity-80 transition-colors active:scale-95"
+          >
+            <HelpCircle size={14} /> Guide
+          </button>
+        </div>
         
         <div className="space-y-3">
           {mxItems.length === 0 ? (
