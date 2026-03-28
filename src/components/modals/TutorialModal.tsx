@@ -1,9 +1,7 @@
 import { useState, useEffect } from "react";
 import { 
   PlaneTakeoff, LayoutGrid, Clock, Wrench, AlertTriangle, Send, ShieldCheck, 
-  ChevronRight, CheckCircle, X, Check, Activity, Bell, PenTool, Share, Download, 
-  Settings, Users, Database, RefreshCw, Camera, Calendar, MessageSquare, 
-  ExternalLink, Sparkles, Plane, XCircle, TrendingUp
+  ChevronRight, X, Calendar, Check
 } from "lucide-react";
 
 export default function TutorialModal({ session, role }: { session: any, role: string }) {
@@ -12,7 +10,7 @@ export default function TutorialModal({ session, role }: { session: any, role: s
 
   useEffect(() => {
     if (session?.user?.id) {
-      const hasSeen = localStorage.getItem(`aft_tutorial_v2_${session.user.id}`);
+      const hasSeen = localStorage.getItem(`aft_tutorial_v4_${session.user.id}`);
       if (!hasSeen) {
         setIsVisible(true);
       }
@@ -21,7 +19,7 @@ export default function TutorialModal({ session, role }: { session: any, role: s
 
   const dismissTutorial = () => {
     if (session?.user?.id) {
-      localStorage.setItem(`aft_tutorial_v2_${session.user.id}`, 'true');
+      localStorage.setItem(`aft_tutorial_v4_${session.user.id}`, 'true');
     }
     setIsVisible(false);
   };
@@ -37,151 +35,139 @@ export default function TutorialModal({ session, role }: { session: any, role: s
 
   if (!isVisible) return null;
 
+  const Bullet = ({ children }: { children: React.ReactNode }) => (
+    <li className="flex items-start gap-2.5">
+      <Check size={16} className="text-[#F5B05B] shrink-0 mt-0.5" />
+      <span>{children}</span>
+    </li>
+  );
+
   const tutorialSteps = [
     {
       title: "Welcome to Skyward",
       icon: <PlaneTakeoff size={48} className="text-navy" />,
       content: (
-        <div className="space-y-4 text-left w-full">
+        <div className="space-y-4 w-full">
           <p className="text-sm text-gray-600 font-roboto leading-relaxed text-center">
             {role === 'admin' 
-              ? "Welcome to the Skyward Aircraft Manager. As an Administrator, you have full control over fleet configuration, pilot access, maintenance scheduling, mechanic coordination, and database health."
-              : "Welcome to the Skyward Fleet Manager. This platform is designed to make logging flights, tracking maintenance, coordinating with your mechanic, and reporting squawks seamless."}
+              ? "Your entire fleet, in one place. Skyward keeps your aircraft organized — from flight logs and maintenance tracking to mechanic coordination and squawk reporting."
+              : "Your aircraft, simplified. Skyward makes it easy to log flights, stay on top of maintenance, and keep your team in sync."}
+          </p>
+          <p className="text-sm text-gray-600 font-roboto leading-relaxed text-center">
+            Let's take a quick look around.
           </p>
         </div>
       )
     },
     {
-      title: "Fleet Dashboard",
+      title: "Your Fleet at a Glance",
       icon: <LayoutGrid size={48} className="text-[#3AB0FF]" />,
       content: (
-        <div className="space-y-4 text-left w-full">
-          <p className="text-sm text-gray-600 font-roboto leading-relaxed text-center mb-4">
-            The Fleet tab gives you a bird's-eye view of all aircraft. Tap any aircraft to jump to its summary. Status is color-coded automatically:
+        <div className="space-y-4 w-full">
+          <p className="text-sm text-gray-600 font-roboto leading-relaxed text-center">
+            The Fleet dashboard shows every aircraft and its current status at a glance. Tap any aircraft to dive into its details.
           </p>
-          <ul className="text-sm text-gray-600 font-roboto space-y-3 pl-2">
-            <li className="flex items-center gap-3"><CheckCircle size={20} className="text-success shrink-0" /> <strong>Green:</strong> Airworthy & Ready</li>
-            <li className="flex items-center gap-3"><Activity size={20} className="text-[#F08B46] shrink-0" /> <strong>Orange:</strong> Open Monitor Issues</li>
-            <li className="flex items-center gap-3"><AlertTriangle size={20} className="text-[#CE3732] shrink-0" /> <strong>Red:</strong> Grounded (AOG or Expired MX)</li>
+          <ul className="text-sm text-gray-600 font-roboto space-y-2.5 pl-1">
+            <Bullet><strong className="text-success">Green</strong> means airworthy and ready to fly.</Bullet>
+            <Bullet><strong className="text-[#F08B46]">Orange</strong> means open squawks worth monitoring.</Bullet>
+            <Bullet><strong className="text-[#CE3732]">Red</strong> means grounded — expired MX or an AOG squawk.</Bullet>
           </ul>
         </div>
       )
     },
     {
-      title: "Flight Times",
+      title: "Flight Logging",
       icon: <Clock size={48} className="text-[#3AB0FF]" />,
       content: (
-        <div className="space-y-4 text-left w-full">
-          <ul className="text-sm text-gray-600 font-roboto space-y-4 pl-2">
-            <li className="flex items-start gap-3"><Check size={18} className="text-[#3AB0FF] shrink-0 mt-0.5" /> <span>Tracks adapt to your engine type — Hobbs/Tach for Piston or AFTT/FTT for Turbine.</span></li>
-            <li className="flex items-start gap-3"><Check size={18} className="text-[#3AB0FF] shrink-0 mt-0.5" /> <span>Log departure/arrival airports, fuel state, passengers, and trip reason codes.</span></li>
-            <li className="flex items-start gap-3"><Check size={18} className="text-[#3AB0FF] shrink-0 mt-0.5" /> <span>Strict math validation prevents backward logging errors.</span></li>
-            {role === 'admin' && (
-              <li className="flex items-start gap-3"><RefreshCw size={18} className="text-[#3AB0FF] shrink-0 mt-0.5" /> <span><strong>Rollbacks:</strong> Delete the newest log to automatically roll aircraft master times back to the previous entry.</span></li>
-            )}
-            <li className="flex items-start gap-3"><Download size={18} className="text-[#3AB0FF] shrink-0 mt-0.5" /> <span>Export the complete flight log as CSV.</span></li>
+        <div className="space-y-4 w-full">
+          <p className="text-sm text-gray-600 font-roboto leading-relaxed text-center">
+            Log flights in seconds. The system automatically adapts to your engine type so you always see the right fields.
+          </p>
+          <ul className="text-sm text-gray-600 font-roboto space-y-2.5 pl-1">
+            <Bullet>Hobbs & Tach for piston, AFTT & FTT for turbine — plus fuel state, routing, and passengers.</Bullet>
+            <Bullet>Built-in validation prevents backward entries so your logbook stays clean.</Bullet>
+            <Bullet>Export your full flight history as a CSV anytime.</Bullet>
           </ul>
         </div>
       )
     },
     {
-      title: "Maintenance Tracking",
+      title: "Maintenance That Thinks Ahead",
       icon: <Wrench size={48} className="text-[#F08B46]" />,
       content: (
-        <div className="space-y-4 text-left w-full">
-          <ul className="text-sm text-gray-600 font-roboto space-y-4 pl-2">
-            <li className="flex items-start gap-3"><Clock size={18} className="text-[#F08B46] shrink-0 mt-0.5" /> <span>Track items by Engine Hours or Calendar Dates with automatic interval recalculation.</span></li>
-            <li className="flex items-start gap-3"><TrendingUp size={18} className="text-[#F08B46] shrink-0 mt-0.5" /> <span><strong>Predictive Engine:</strong> Uses 180 days of flight data to project when MX will come due, with a confidence score based on flying consistency.</span></li>
-            {role === 'admin' && (
-              <>
-                <li className="flex items-start gap-3"><Bell size={18} className="text-[#F08B46] shrink-0 mt-0.5" /> <span><strong>Automated Alerts:</strong> System emails pilots and admins at configurable thresholds (e.g., 30/15/5 days or hours remaining).</span></li>
-                <li className="flex items-start gap-3"><Send size={18} className="text-[#F08B46] shrink-0 mt-0.5" /> <span><strong>Auto-Scheduling:</strong> Enable "Automate MX" to have the system create draft work packages when items approach their due thresholds.</span></li>
-              </>
-            )}
-            <li className="flex items-start gap-3"><AlertTriangle size={18} className="text-[#CE3732] shrink-0 mt-0.5" /> <span>Required items that expire will automatically ground the aircraft until completed.</span></li>
+        <div className="space-y-4 w-full">
+          <p className="text-sm text-gray-600 font-roboto leading-relaxed text-center">
+            Track maintenance by hours or calendar dates. Skyward learns from your flying patterns and projects when items will come due — so you're never caught off guard.
+          </p>
+          <ul className="text-sm text-gray-600 font-roboto space-y-2.5 pl-1">
+            <Bullet>Predictive engine uses your flight history to estimate days until service is needed.</Bullet>
+            {role === 'admin' 
+              ? <Bullet>Enable automated scheduling and the system drafts work packages as items approach their thresholds.</Bullet>
+              : <Bullet>Required items that expire will automatically ground the aircraft until completed.</Bullet>
+            }
+            <Bullet>Tap the <strong>Guide</strong> button on the Maintenance tab for a full walkthrough anytime.</Bullet>
           </ul>
         </div>
       )
     },
     {
-      title: "Service Events",
+      title: "Mechanic Coordination",
       icon: <Calendar size={48} className="text-[#F08B46]" />,
       content: (
-        <div className="space-y-4 text-left w-full">
-          <p className="text-sm text-gray-600 font-roboto leading-relaxed text-center mb-4">
-            Coordinate maintenance with your mechanic through a complete work package workflow:
+        <div className="space-y-4 w-full">
+          <p className="text-sm text-gray-600 font-roboto leading-relaxed text-center">
+            No more phone tag. Bundle everything your mechanic needs into one work package and send it in a single professional email.
           </p>
-          <ul className="text-sm text-gray-600 font-roboto space-y-3 pl-2">
-            <li className="flex items-start gap-3"><Sparkles size={18} className="text-[#F08B46] shrink-0 mt-0.5" /> <span><strong>Build a Work Package:</strong> Bundle MX items, open squawks, and add-on services (wash, oil change, nav update, etc.) into one package.</span></li>
-            <li className="flex items-start gap-3"><Send size={18} className="text-[#F08B46] shrink-0 mt-0.5" /> <span><strong>Send to Mechanic:</strong> Preview the email, propose a date, then send. Your mechanic gets a professional email with a secure portal link.</span></li>
-            <li className="flex items-start gap-3"><MessageSquare size={18} className="text-[#3AB0FF] shrink-0 mt-0.5" /> <span><strong>Negotiate Dates:</strong> Propose, confirm, or counter dates back and forth until both sides agree. All messages are logged.</span></li>
-            <li className="flex items-start gap-3"><Plane size={18} className="text-success shrink-0 mt-0.5" /> <span><strong>Track to Completion:</strong> Monitor line item progress, receive "Aircraft Ready" notifications, then enter logbook data to reset tracking.</span></li>
-            <li className="flex items-start gap-3"><XCircle size={18} className="text-[#CE3732] shrink-0 mt-0.5" /> <span><strong>Cancel or Decline:</strong> Either side can cancel or decline with a reason. The other party is notified by email.</span></li>
+          <ul className="text-sm text-gray-600 font-roboto space-y-2.5 pl-1">
+            <Bullet>Combine MX items, squawks, and add-on services (wash, oil change, nav update, etc.).</Bullet>
+            <Bullet>Your mechanic gets a secure portal to propose dates, track progress, and message you directly.</Bullet>
+            <Bullet>When service is done, enter the logbook data and all tracking resets automatically.</Bullet>
           </ul>
         </div>
       )
     },
     {
-      title: "Mechanic Portal",
-      icon: <ExternalLink size={48} className="text-[#091F3C]" />,
-      content: (
-        <div className="space-y-4 text-left w-full">
-          <p className="text-sm text-gray-600 font-roboto leading-relaxed text-center mb-4">
-            Your mechanic accesses a secure portal via a link in their email — no login required.
-          </p>
-          <ul className="text-sm text-gray-600 font-roboto space-y-3 pl-2">
-            <li className="flex items-start gap-3"><Check size={18} className="text-navy shrink-0 mt-0.5" /> <span>View the full work package with aircraft details and current times.</span></li>
-            <li className="flex items-start gap-3"><Check size={18} className="text-navy shrink-0 mt-0.5" /> <span>View squawk photos in full resolution directly in the portal.</span></li>
-            <li className="flex items-start gap-3"><Check size={18} className="text-navy shrink-0 mt-0.5" /> <span>Propose or confirm service dates with shop availability notes.</span></li>
-            <li className="flex items-start gap-3"><Check size={18} className="text-navy shrink-0 mt-0.5" /> <span>Update line item statuses (pending → in progress → complete → deferred).</span></li>
-            <li className="flex items-start gap-3"><Check size={18} className="text-navy shrink-0 mt-0.5" /> <span>Suggest additional work discovered during service.</span></li>
-            <li className="flex items-start gap-3"><Check size={18} className="text-navy shrink-0 mt-0.5" /> <span>Mark the aircraft ready for pickup when all work is done.</span></li>
-          </ul>
-        </div>
-      )
-    },
-    {
-      title: "Squawks",
+      title: "Squawk Reporting",
       icon: <AlertTriangle size={48} className="text-[#CE3732]" />,
       content: (
-        <div className="space-y-4 text-left w-full">
-          <ul className="text-sm text-gray-600 font-roboto space-y-4 pl-2">
-            <li className="flex items-start gap-3"><Camera size={18} className="text-[#CE3732] shrink-0 mt-0.5" /> <span>Report discrepancies with photos, location, and a detailed description.</span></li>
-            <li className="flex items-start gap-3"><AlertTriangle size={18} className="text-[#CE3732] shrink-0 mt-0.5" /> <span>Flag as "Affects Airworthiness" to instantly ground the aircraft fleet-wide.</span></li>
-            <li className="flex items-start gap-3"><Calendar size={18} className="text-[#F08B46] shrink-0 mt-0.5" /> <span>Include squawks in service event work packages — they auto-resolve when the mechanic marks them complete.</span></li>
-            {role === 'admin' && (
-              <>
-                <li className="flex items-start gap-3"><PenTool size={18} className="text-[#CE3732] shrink-0 mt-0.5" /> <span><strong>Deferrals:</strong> Document MEL/CDL/NEF/MDL deferrals with digital signature capture (turbine aircraft).</span></li>
-                <li className="flex items-start gap-3"><Share size={18} className="text-[#CE3732] shrink-0 mt-0.5" /> <span><strong>Secure Viewer:</strong> Email your mechanic a direct link to view squawk details and high-res photos.</span></li>
-                <li className="flex items-start gap-3"><Download size={18} className="text-[#CE3732] shrink-0 mt-0.5" /> <span><strong>PDF Export:</strong> Generate formal squawk reports with photos for maintenance visits.</span></li>
-              </>
-            )}
+        <div className="space-y-4 w-full">
+          <p className="text-sm text-gray-600 font-roboto leading-relaxed text-center">
+            Report discrepancies with photos right from the ramp. Your team and mechanic stay informed automatically.
+          </p>
+          <ul className="text-sm text-gray-600 font-roboto space-y-2.5 pl-1">
+            <Bullet>Flag anything that affects airworthiness to ground the aircraft instantly across the fleet.</Bullet>
+            <Bullet>Include squawks in service events — they auto-resolve when your mechanic completes the work.</Bullet>
+            {role === 'admin' && <Bullet>Defer items with full MEL/CDL documentation, digital signatures, and exportable PDF reports.</Bullet>}
           </ul>
         </div>
       )
     },
     ...(role === 'admin' ? [{
-      title: "Admin Center",
+      title: "Admin Tools",
       icon: <ShieldCheck size={48} className="text-navy" />,
       content: (
-        <div className="space-y-4 text-left w-full">
-          <p className="text-sm text-gray-600 font-roboto text-center mb-4">Tap the Shield icon in the top bar to access global settings.</p>
-          <ul className="text-sm text-gray-600 font-roboto space-y-4 pl-2">
-            <li className="flex items-center gap-3"><Users size={18} className="text-navy shrink-0" /> Invite pilots, reset passwords, and delete users.</li>
-            <li className="flex items-center gap-3"><PlaneTakeoff size={18} className="text-navy shrink-0" /> Assign aircraft access per user.</li>
-            <li className="flex items-center gap-3"><Settings size={18} className="text-navy shrink-0" /> Configure global maintenance alert and scheduling thresholds.</li>
-            <li className="flex items-center gap-3"><Database size={18} className="text-navy shrink-0" /> Run database health checks — cleans orphaned images, old records, and reports table sizes.</li>
+        <div className="space-y-4 w-full">
+          <p className="text-sm text-gray-600 font-roboto leading-relaxed text-center">
+            Tap the Shield icon in the top bar to access everything you need to manage the operation.
+          </p>
+          <ul className="text-sm text-gray-600 font-roboto space-y-2.5 pl-1">
+            <Bullet>Invite pilots, reset passwords, and assign aircraft access per user.</Bullet>
+            <Bullet>Configure global maintenance alert and scheduling thresholds.</Bullet>
+            <Bullet>Run database health checks to clean orphaned files and monitor growth.</Bullet>
           </ul>
         </div>
       )
     }] : []),
     {
-      title: "Companion App",
+      title: "Take It With You",
       icon: <Send size={48} className="text-[#3AB0FF]" />,
       content: (
-        <div className="space-y-4 text-left w-full">
+        <div className="space-y-4 w-full">
           <p className="text-sm text-gray-600 font-roboto leading-relaxed text-center">
-            We also offer <strong>Log It</strong>, a hyper-fast mobile app designed exclusively for use on the ramp. Tap the Paper Airplane icon in the top menu to get installation instructions for your phone's home screen.
+            Need to log a flight or report a squawk from the ramp? Tap the Paper Airplane icon in the top menu to install <strong>Log It</strong> — a lightweight companion app built for speed on your phone.
+          </p>
+          <p className="text-sm text-gray-600 font-roboto leading-relaxed text-center">
+            That's it — you're all set. Happy flying!
           </p>
         </div>
       )
@@ -206,7 +192,7 @@ export default function TutorialModal({ session, role }: { session: any, role: s
           {currentStepData.title}
         </h2>
 
-        <div className="w-full min-h-[240px] flex items-center justify-center mb-6">
+        <div className="w-full min-h-[180px] flex items-center justify-center mb-6">
           {currentStepData.content}
         </div>
 
