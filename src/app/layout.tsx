@@ -15,8 +15,8 @@ const roboto = Roboto({
 });
 
 export const metadata: Metadata = {
-  title: "Aviation Fleet Tracker",
-  description: "Aircraft fleet management, maintenance tracking, and flight logging.",
+  title: "Skyward Aircraft Manager",
+  description: "Aircraft fleet management, maintenance tracking, mechanic coordination, and flight logging by Skyward Society.",
   icons: {
     icon: "/icon.png",
     shortcut: "/icon.png",
@@ -24,7 +24,7 @@ export const metadata: Metadata = {
   },
   appleWebApp: {
     capable: true,
-    title: "Fleet Tracker",
+    title: "Aircraft Manager",
     statusBarStyle: "black-translucent",
   },
 };

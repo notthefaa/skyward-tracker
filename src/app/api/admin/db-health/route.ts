@@ -89,34 +89,25 @@ export async function POST(req: Request) {
     results.notes_purged = notesPurged || 0;
 
     // ==========================================
-    // 3. PURGE OLD RESOLVED SQUAWKS (12 Months)
-    // ==========================================
     // 3. SQUAWKS — kept forever (no purge)
-    //    All squawks (open + resolved) are retained
-    //    as permanent maintenance history.
     // ==========================================
     results.resolved_squawks_purged = 0;
 
     // ==========================================
     // 4. PURGE OLD COMPLETED MX EVENTS (12 Months)
-    //    Completed events older than 1 year are cleaned up.
-    //    The completion data (dates, tach, signed-by) lives
-    //    on the maintenance_items themselves, so no data is lost.
-    //    Cancelled events are cleaned after 3 months.
+    //    + CANCELLED EVENTS (3 Months)
     // ==========================================
     const oneYearAgo = new Date();
     oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
     const threeMonthsAgo = new Date();
     threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
 
-    // Find completed events older than 1 year
     const { data: oldCompletedEvents } = await supabaseAdmin
       .from('aft_maintenance_events')
       .select('id')
       .eq('status', 'complete')
       .lt('completed_at', oneYearAgo.toISOString());
 
-    // Find cancelled events older than 3 months
     const { data: oldCancelledEvents } = await supabaseAdmin
       .from('aft_maintenance_events')
       .select('id')
@@ -133,7 +124,6 @@ export async function POST(req: Request) {
     let eventsPurged = 0;
 
     if (eventIdsToClean.length > 0) {
-      // Delete children first, then parents
       const { count: liCount } = await supabaseAdmin
         .from('aft_event_line_items')
         .delete({ count: 'exact' })
@@ -158,16 +148,13 @@ export async function POST(req: Request) {
     results.mx_messages_purged = messagesPurged;
 
     // ==========================================
-    // 5. PURGE ORPHANED CHILD RECORDS (Safety net)
-    //    Messages and line items referencing events
-    //    that no longer exist.
+    // 5. PURGE ORPHANED CHILD RECORDS
     // ==========================================
     const { data: allEventIds } = await supabaseAdmin
       .from('aft_maintenance_events')
       .select('id');
     const validEventIds = new Set((allEventIds || []).map((e: any) => e.id));
 
-    // Orphaned messages
     const { data: allMessages } = await supabaseAdmin
       .from('aft_event_messages')
       .select('id, event_id');
@@ -183,7 +170,6 @@ export async function POST(req: Request) {
     }
     results.orphaned_messages_purged = orphanedMessageIds.length;
 
-    // Orphaned line items
     const { data: allLineItems } = await supabaseAdmin
       .from('aft_event_line_items')
       .select('id, event_id');
@@ -201,8 +187,6 @@ export async function POST(req: Request) {
 
     // ==========================================
     // 6. PURGE ORPHANED ACCESS RECORDS
-    //    User-aircraft access for aircraft that
-    //    no longer exist.
     // ==========================================
     const { data: allAircraft } = await supabaseAdmin
       .from('aft_aircraft')
@@ -226,10 +210,6 @@ export async function POST(req: Request) {
 
     // ==========================================
     // 7. PURGE OLD FLIGHT LOGS (5 Years)
-    //    Flight logs older than 5 years. The aircraft's
-    //    total_engine_time is the running counter — individual
-    //    log entries are only needed for recent burn rate calc
-    //    (180 days) and historical reference.
     // ==========================================
     const fiveYearsAgo = new Date();
     fiveYearsAgo.setFullYear(fiveYearsAgo.getFullYear() - 5);
@@ -277,10 +257,26 @@ export async function POST(req: Request) {
     }
     results.avatar_orphans = await sweepBucket(supabaseAdmin, 'aft_aircraft_avatars', activeAvatars);
 
+    // --- D. Event Attachments ---
+    // Collect all attachment URLs from messages that still exist
+    const { data: messagesWithAttachments } = await supabaseAdmin
+      .from('aft_event_messages')
+      .select('attachments')
+      .not('attachments', 'is', null);
+    const activeAttachmentUrls = new Set<string>();
+    if (messagesWithAttachments) {
+      for (const msg of messagesWithAttachments) {
+        if (msg.attachments && Array.isArray(msg.attachments)) {
+          for (const att of msg.attachments) {
+            if (att.url) activeAttachmentUrls.add(att.url);
+          }
+        }
+      }
+    }
+    results.event_attachment_orphans = await sweepBucket(supabaseAdmin, 'aft_event_attachments', activeAttachmentUrls);
+
     // ==========================================
     // 9. TABLE ROW COUNTS (for monitoring)
-    //    Returns current row count for every table
-    //    so admins can spot growth trends.
     // ==========================================
     const counts: Record<string, number> = {};
     const tables = [

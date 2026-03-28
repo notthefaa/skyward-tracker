@@ -50,8 +50,6 @@ export async function GET(req: Request) {
       .gte('created_at', oneEightyDaysAgo.toISOString())
       .order('created_at', { ascending: true });
 
-    const admins = allRoles?.filter(r => r.role === 'admin').map(a => a.email).filter(Boolean) || [];
-
     // =====================================================
     // BUILD SET OF MX ITEMS ALREADY IN ACTIVE EVENTS
     // =====================================================
@@ -110,8 +108,6 @@ export async function GET(req: Request) {
 
       // ---------------------------------------------------------
       // 1. SCHEDULING: Create DRAFT event & notify OWNER
-      //    The mechanic is NEVER emailed directly by the CRON.
-      //    The owner reviews the draft, adds items, then sends.
       // ---------------------------------------------------------
       const mxThresholdHitTime = mx.tracking_type === 'time' && remaining <= schedTime;
       const mxThresholdHitPredictive = mx.tracking_type === 'time' && projectedDays <= predictiveSchedDays;
@@ -143,7 +139,6 @@ export async function GET(req: Request) {
             .single();
 
           if (draftEvent) {
-            // Add the triggered MX item as a line item
             await supabaseAdmin.from('aft_event_line_items').insert({
               event_id: draftEvent.id,
               item_type: 'maintenance',
@@ -163,7 +158,7 @@ export async function GET(req: Request) {
             if (aircraft.main_contact_email) {
               const appUrl = new URL(req.url).origin;
               await resend.emails.send({
-                from: `Skyward System <${FROM_EMAIL}>`,
+                from: `Skyward Aircraft Manager <${FROM_EMAIL}>`,
                 replyTo: aircraft.main_contact_email,
                 to: [aircraft.main_contact_email],
                 subject: `Action Required: Review & Send Work Package for ${aircraft.tail_number}`,
@@ -188,7 +183,7 @@ export async function GET(req: Request) {
                     </ul>
 
                     <div style="margin-top: 25px; text-align: center;">
-                      <a href="${appUrl}" style="display: inline-block; background-color: #091F3C; color: white; text-decoration: none; padding: 12px 28px; border-radius: 6px; font-weight: bold; font-size: 14px; letter-spacing: 1px;">OPEN SKYWARD TRACKER</a>
+                      <a href="${appUrl}" style="display: inline-block; background-color: #091F3C; color: white; text-decoration: none; padding: 12px 28px; border-radius: 6px; font-weight: bold; font-size: 14px; letter-spacing: 1px;">OPEN AIRCRAFT MANAGER</a>
                     </div>
                   </div>
                 `
@@ -202,7 +197,7 @@ export async function GET(req: Request) {
         else if (mxThresholdHitPredictive && confidenceScore < 80 && !mx.primary_heads_up_sent) {
           if (aircraft.main_contact_email) {
             await resend.emails.send({
-              from: `Skyward System <${FROM_EMAIL}>`,
+              from: `Skyward Aircraft Manager <${FROM_EMAIL}>`,
               replyTo: aircraft.main_contact_email,
               to: [aircraft.main_contact_email],
               subject: `Heads Up: ${aircraft.tail_number} MX Approaching (Low Confidence)`,
@@ -214,7 +209,7 @@ export async function GET(req: Request) {
                   <p>However, flight logs have been irregular (System Confidence: <strong>${confidenceScore}%</strong>), so this estimate may shift significantly.</p>
                   <p style="margin-top: 20px;">No action is needed yet. We'll create a draft work package automatically when the item gets closer to its threshold. You can also schedule service proactively from the Maintenance tab at any time.</p>
                   <div style="margin-top: 25px; text-align: center;">
-                    <a href="${new URL(req.url).origin}" style="display: inline-block; background-color: #091F3C; color: white; text-decoration: none; padding: 12px 28px; border-radius: 6px; font-weight: bold; font-size: 14px; letter-spacing: 1px;">OPEN SKYWARD TRACKER</a>
+                    <a href="${new URL(req.url).origin}" style="display: inline-block; background-color: #091F3C; color: white; text-decoration: none; padding: 12px 28px; border-radius: 6px; font-weight: bold; font-size: 14px; letter-spacing: 1px;">OPEN AIRCRAFT MANAGER</a>
                   </div>
                 </div>
               `
@@ -225,7 +220,7 @@ export async function GET(req: Request) {
       }
 
       // ---------------------------------------------------------
-      // 2. INTERNAL PILOT/ADMIN ALERTS (unchanged)
+      // 2. INTERNAL PILOT/ADMIN ALERTS
       // ---------------------------------------------------------
       let hitReminder3 = false, hitReminder2 = false, hitReminder1 = false;
       let internalTriggerTemplate: string | null = null;
@@ -252,20 +247,20 @@ export async function GET(req: Request) {
       }
 
       if (internalTriggerTemplate) {
-        const assignedPilotsIds = allAccess?.filter(a => a.aircraft_id === aircraft.id).map(a => a.user_id) || [];
-        const assignedPilotsEmails = allRoles?.filter(r => assignedPilotsIds.includes(r.user_id)).map(r => r.email).filter(Boolean) || [];
-        const recipients = Array.from(new Set([...admins, ...assignedPilotsEmails])).filter(Boolean) as string[];
+        const assignedUserIds = allAccess?.filter(a => a.aircraft_id === aircraft.id).map(a => a.user_id) || [];
+        const recipients = allRoles?.filter(r => assignedUserIds.includes(r.user_id)).map(r => r.email).filter(Boolean) || [];
+        const dedupedRecipients = Array.from(new Set(recipients)) as string[];
 
-        if (recipients.length > 0) {
+        if (dedupedRecipients.length > 0) {
           await resend.emails.send({
             from: `Skyward Alerts <${FROM_EMAIL}>`,
-            to: recipients,
+            to: dedupedRecipients,
             subject: `Maintenance Alert: ${aircraft.tail_number} Due Soon`,
             html: `<div style="font-family: Arial, sans-serif; font-size: 14px; color: #333333; line-height: 1.6;">
                     <p>This is an automated reminder that required maintenance is coming due for ${aircraft.tail_number}.</p>
                     <p style="margin-top: 20px;"><strong>Item:</strong> ${mx.item_name}<br/><strong>Status:</strong> ${internalTriggerTemplate}</p>
                     <div style="margin-top: 25px; text-align: center;">
-                      <a href="${new URL(req.url).origin}" style="display: inline-block; background-color: #091F3C; color: white; text-decoration: none; padding: 12px 28px; border-radius: 6px; font-weight: bold; font-size: 14px; letter-spacing: 1px;">OPEN SKYWARD TRACKER</a>
+                      <a href="${new URL(req.url).origin}" style="display: inline-block; background-color: #091F3C; color: white; text-decoration: none; padding: 12px 28px; border-radius: 6px; font-weight: bold; font-size: 14px; letter-spacing: 1px;">OPEN AIRCRAFT MANAGER</a>
                     </div>
                   </div>`
           });

@@ -5,7 +5,8 @@ import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { 
   Wrench, AlertTriangle, CheckCircle, Clock, Send, 
-  MessageSquare, Calendar, Sparkles, X, Plus, Image, ArrowLeft, XCircle, Plane
+  MessageSquare, Calendar, Sparkles, X, Plus, Image, ArrowLeft, XCircle, Plane,
+  Upload, FileText, Paperclip, Loader2
 } from "lucide-react";
 
 export default function ServicePortal() {
@@ -37,7 +38,7 @@ export default function ServicePortal() {
   const [suggestName, setSuggestName] = useState("");
   const [suggestDescription, setSuggestDescription] = useState("");
 
-  // Photo viewer
+  // Photo/file viewer
   const [viewingPhoto, setViewingPhoto] = useState<string | null>(null);
 
   // Decline confirmation
@@ -47,6 +48,12 @@ export default function ServicePortal() {
   // Ready confirmation
   const [showReadyConfirm, setShowReadyConfirm] = useState(false);
   const [readyMessage, setReadyMessage] = useState("");
+
+  // File upload state
+  const [showUploadForm, setShowUploadForm] = useState(false);
+  const [uploadFiles, setUploadFiles] = useState<File[]>([]);
+  const [uploadDescription, setUploadDescription] = useState("");
+  const [isUploading, setIsUploading] = useState(false);
 
   // #1 — Detect if user has an active session (app user vs mechanic from email)
   useEffect(() => {
@@ -76,7 +83,6 @@ export default function ServicePortal() {
         .from('aft_event_line_items').select('*').eq('event_id', evData.id).order('created_at');
       if (liData) {
         setLineItems(liData);
-        // Fetch photos for squawk line items
         const squawkIds = liData.filter(li => li.squawk_id).map(li => li.squawk_id);
         if (squawkIds.length > 0) {
           const { data: squawksData } = await supabase
@@ -125,6 +131,50 @@ export default function ServicePortal() {
     });
   };
 
+  const handleFileUpload = async () => {
+    if (uploadFiles.length === 0) return;
+    setIsUploading(true);
+
+    try {
+      const formData = new FormData();
+      formData.append('accessToken', accessToken);
+      formData.append('description', uploadDescription);
+      for (const file of uploadFiles) {
+        formData.append('files', file);
+      }
+
+      const res = await fetch('/api/mx-events/upload-attachment', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error || 'Upload failed');
+      }
+
+      await fetchEventData();
+      setUploadFiles([]);
+      setUploadDescription("");
+      setShowUploadForm(false);
+    } catch (err: any) {
+      alert(err.message || "Upload failed. Please try again.");
+    }
+    setIsUploading(false);
+  };
+
+  const removeUploadFile = (index: number) => {
+    setUploadFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const isImageType = (type: string) => type.startsWith('image/');
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(0) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  };
+
   if (isLoading) {
     return (
       <>
@@ -153,11 +203,11 @@ export default function ServicePortal() {
     <>
       <style dangerouslySetInnerHTML={{__html: `html, body { overflow: auto !important; touch-action: auto !important; height: auto !important; }` }} />
 
-      {/* PHOTO LIGHTBOX */}
+      {/* PHOTO/FILE LIGHTBOX */}
       {viewingPhoto && (
         <div className="fixed inset-0 z-[80] bg-black/90 flex items-center justify-center p-4 animate-fade-in" onClick={() => setViewingPhoto(null)}>
           <button onClick={() => setViewingPhoto(null)} className="absolute top-4 right-4 text-white hover:text-gray-300"><X size={32}/></button>
-          <img src={viewingPhoto} alt="Squawk photo" className="max-w-full max-h-[90vh] rounded-lg shadow-2xl" />
+          <img src={viewingPhoto} alt="Attachment" className="max-w-full max-h-[90vh] rounded-lg shadow-2xl" />
         </div>
       )}
 
@@ -258,24 +308,15 @@ export default function ServicePortal() {
                     <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Proposed Date</label>
                     <input type="date" value={proposedDate} onChange={e => setProposedDate(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" />
                   </div>
-
-                  {/* AVAILABILITY INDICATOR */}
                   <div>
                     <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Shop Availability (Optional)</label>
-                    <textarea 
-                      value={availabilityNote} 
-                      onChange={e => setAvailabilityNote(e.target.value)} 
-                      className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none min-h-[60px]" 
-                      placeholder="e.g. We're booked through March 15. Earliest opening is March 17-21. Also available the week of April 1." 
-                    />
+                    <textarea value={availabilityNote} onChange={e => setAvailabilityNote(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none min-h-[60px]" placeholder="e.g. We're booked through March 15. Earliest opening is March 17-21." />
                     <p className="text-[10px] text-gray-400 mt-1">Let the owner know about your upcoming availability so they can plan accordingly.</p>
                   </div>
-
                   <div>
                     <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Additional Message (Optional)</label>
                     <textarea value={commentText} onChange={e => setCommentText(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none min-h-[60px]" placeholder="Any other notes..." />
                   </div>
-
                   <button 
                     onClick={() => {
                       const fullMessage = [availabilityNote ? `Shop Availability: ${availabilityNote}` : '', commentText].filter(Boolean).join('\n\n');
@@ -337,18 +378,12 @@ export default function ServicePortal() {
                           <h4 className="font-oswald font-bold uppercase text-sm text-navy">{li.item_name}</h4>
                           {li.item_description && <p className="text-xs text-gray-600 mt-1 whitespace-pre-wrap">{li.item_description}</p>}
                           {li.mechanic_comment && <p className="text-xs text-[#3AB0FF] mt-2 italic">Note: {li.mechanic_comment}</p>}
-                          
-                          {/* SQUAWK PHOTOS */}
                           {photos.length > 0 && (
                             <div className="mt-3">
                               <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2 flex items-center gap-1"><Image size={12} /> {photos.length} Photo{photos.length > 1 ? 's' : ''} Attached</p>
                               <div className="flex gap-2 flex-wrap">
                                 {photos.map((url: string, idx: number) => (
-                                  <button 
-                                    key={idx} 
-                                    onClick={() => setViewingPhoto(url)} 
-                                    className="w-20 h-20 rounded border-2 border-gray-200 overflow-hidden hover:border-[#CE3732] transition-colors active:scale-95"
-                                  >
+                                  <button key={idx} onClick={() => setViewingPhoto(url)} className="w-20 h-20 rounded border-2 border-gray-200 overflow-hidden hover:border-[#CE3732] transition-colors active:scale-95">
                                     <img src={url} alt={`Squawk photo ${idx + 1}`} className="w-full h-full object-cover" />
                                   </button>
                                 ))}
@@ -440,6 +475,90 @@ export default function ServicePortal() {
             </div>
           )}
 
+          {/* ════════════════════════════════════════════════════════ */}
+          {/* UPLOAD FILES / DOCUMENTS */}
+          {/* ════════════════════════════════════════════════════════ */}
+          {event.status !== 'complete' && event.status !== 'cancelled' && (
+            <div className="bg-white shadow-lg rounded-sm p-6 border-t-4 border-[#3AB0FF]">
+              <h3 className="font-oswald text-lg font-bold uppercase tracking-widest text-navy mb-4 flex items-center gap-2"><Upload size={18} className="text-[#3AB0FF]"/> Upload Photos & Documents</h3>
+              
+              {!showUploadForm ? (
+                <button onClick={() => setShowUploadForm(true)} className="w-full border-2 border-dashed border-gray-300 text-gray-500 font-bold py-3 rounded hover:bg-gray-50 hover:border-[#3AB0FF] active:scale-95 transition-all text-sm uppercase tracking-widest">
+                  + Attach Files
+                </button>
+              ) : (
+                <div className="space-y-3 animate-fade-in">
+                  <div>
+                    <label className="text-[10px] font-bold uppercase tracking-widest text-navy flex items-center gap-2 mb-2">
+                      <Paperclip size={14}/> Select Files (Max 5, 10MB each)
+                    </label>
+                    <input 
+                      type="file" 
+                      multiple 
+                      accept="image/*,.pdf,.doc,.docx" 
+                      onChange={(e) => {
+                        if (e.target.files) {
+                          const newFiles = Array.from(e.target.files);
+                          const combined = [...uploadFiles, ...newFiles].slice(0, 5);
+                          setUploadFiles(combined);
+                        }
+                      }} 
+                      className="text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:bg-gray-100 file:text-navy cursor-pointer w-full" 
+                    />
+                    <p className="text-[10px] text-gray-400 mt-1">Accepted: Photos (JPG, PNG, WebP, HEIC), PDFs, and Word documents.</p>
+                  </div>
+
+                  {/* Selected files preview */}
+                  {uploadFiles.length > 0 && (
+                    <div className="space-y-2">
+                      {uploadFiles.map((file, idx) => (
+                        <div key={idx} className="flex items-center gap-3 p-2 bg-gray-50 rounded border border-gray-200">
+                          {isImageType(file.type) ? (
+                            <div className="w-10 h-10 rounded overflow-hidden shrink-0 border border-gray-200">
+                              <img src={URL.createObjectURL(file)} alt="" className="w-full h-full object-cover" />
+                            </div>
+                          ) : (
+                            <div className="w-10 h-10 rounded bg-gray-200 flex items-center justify-center shrink-0">
+                              <FileText size={18} className="text-gray-500" />
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-bold text-navy truncate">{file.name}</p>
+                            <p className="text-[10px] text-gray-400">{formatFileSize(file.size)}</p>
+                          </div>
+                          <button onClick={() => removeUploadFile(idx)} className="text-gray-400 hover:text-red-500 shrink-0 active:scale-95">
+                            <X size={16} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Description (Optional)</label>
+                    <textarea 
+                      value={uploadDescription} 
+                      onChange={e => setUploadDescription(e.target.value)} 
+                      className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#3AB0FF] outline-none min-h-[60px]" 
+                      placeholder="e.g. Photos of corroded exhaust gasket, work order estimate attached..." 
+                    />
+                  </div>
+
+                  <div className="flex gap-2">
+                    <button onClick={() => { setShowUploadForm(false); setUploadFiles([]); setUploadDescription(""); }} className="flex-1 border border-gray-300 text-gray-600 font-bold py-2 rounded text-xs uppercase tracking-widest hover:bg-gray-50 active:scale-95">Cancel</button>
+                    <button 
+                      onClick={handleFileUpload}
+                      disabled={isUploading || uploadFiles.length === 0} 
+                      className="flex-[2] bg-[#3AB0FF] text-white font-bold py-2 rounded text-xs uppercase tracking-widest active:scale-95 transition-transform disabled:opacity-50 flex items-center justify-center gap-2"
+                    >
+                      {isUploading ? <><Loader2 size={14} className="animate-spin" /> Uploading...</> : `Upload & Notify Owner`}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* ESTIMATED COMPLETION & NOTES */}
           {event.status !== 'complete' && event.status !== 'cancelled' && (event.status === 'confirmed' || event.status === 'in_progress' || event.status === 'ready_for_pickup') && (
             <div className="bg-white shadow-lg rounded-sm p-6 border-t-4 border-[#091F3C]">
@@ -460,7 +579,7 @@ export default function ServicePortal() {
             </div>
           )}
 
-          {/* MARK AIRCRAFT READY — only shows when all line items are complete */}
+          {/* MARK AIRCRAFT READY */}
           {event.status !== 'complete' && event.status !== 'cancelled' && event.status !== 'ready_for_pickup' && lineItems.length > 0 && lineItems.every(li => li.line_status === 'complete') && (
             <div className="bg-green-50 shadow-lg rounded-sm p-6 border-t-4 border-[#56B94A]">
               <h3 className="font-oswald text-lg font-bold uppercase tracking-widest text-navy mb-4 flex items-center gap-2"><Plane size={18} className="text-[#56B94A]"/> All Work Complete</h3>
@@ -488,7 +607,7 @@ export default function ServicePortal() {
             </div>
           )}
 
-          {/* READY FOR PICKUP BANNER (shown after marking ready) */}
+          {/* READY FOR PICKUP BANNER */}
           {event.status === 'ready_for_pickup' && (
             <div className="bg-green-50 border-2 border-green-200 rounded-sm p-6 text-center">
               <Plane size={48} className="mx-auto text-[#56B94A] mb-4" />
@@ -533,7 +652,9 @@ export default function ServicePortal() {
             </div>
           )}
 
-          {/* COMMUNICATION THREAD */}
+          {/* ════════════════════════════════════════════════════════ */}
+          {/* COMMUNICATION THREAD — with attachment rendering */}
+          {/* ════════════════════════════════════════════════════════ */}
           <div className="bg-white shadow-lg rounded-sm p-6 border-t-4 border-gray-400">
             <h3 className="font-oswald text-lg font-bold uppercase tracking-widest text-navy mb-4 flex items-center gap-2"><MessageSquare size={18} className="text-gray-500"/> Communication</h3>
             
@@ -550,6 +671,46 @@ export default function ServicePortal() {
                       <span className="text-[10px] text-gray-400">{new Date(msg.created_at).toLocaleString()}</span>
                     </div>
                     <p className="text-navy whitespace-pre-wrap">{msg.message}</p>
+
+                    {/* RENDER ATTACHMENTS */}
+                    {msg.attachments && Array.isArray(msg.attachments) && msg.attachments.length > 0 && (
+                      <div className="mt-3 pt-3 border-t border-gray-200">
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2 flex items-center gap-1">
+                          <Paperclip size={10} /> {msg.attachments.length} Attachment{msg.attachments.length > 1 ? 's' : ''}
+                        </p>
+                        <div className="flex gap-2 flex-wrap">
+                          {msg.attachments.map((att: any, idx: number) => {
+                            const isImg = att.type && att.type.startsWith('image/');
+                            if (isImg) {
+                              return (
+                                <button 
+                                  key={idx} 
+                                  onClick={() => setViewingPhoto(att.url)} 
+                                  className="w-20 h-20 rounded border-2 border-gray-200 overflow-hidden hover:border-[#3AB0FF] transition-colors active:scale-95"
+                                >
+                                  <img src={att.url} alt={att.filename} className="w-full h-full object-cover" />
+                                </button>
+                              );
+                            }
+                            return (
+                              <a 
+                                key={idx} 
+                                href={att.url} 
+                                target="_blank" 
+                                rel="noreferrer" 
+                                className="flex items-center gap-2 p-2 bg-white border border-gray-200 rounded hover:border-[#3AB0FF] transition-colors"
+                              >
+                                <FileText size={16} className="text-gray-500 shrink-0" />
+                                <div className="min-w-0">
+                                  <p className="text-xs font-bold text-navy truncate max-w-[120px]">{att.filename}</p>
+                                  {att.size && <p className="text-[10px] text-gray-400">{att.size < 1024 * 1024 ? (att.size / 1024).toFixed(0) + ' KB' : (att.size / (1024 * 1024)).toFixed(1) + ' MB'}</p>}
+                                </div>
+                              </a>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ))
               )}
@@ -577,7 +738,7 @@ export default function ServicePortal() {
         </div>
 
         <div className="mt-8 mb-4 text-center">
-          <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Powered by Skyward Fleet Management</p>
+          <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Powered by Skyward Aircraft Manager</p>
         </div>
       </div>
     </>

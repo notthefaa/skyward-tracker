@@ -33,7 +33,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Service event not found.' }, { status: 404 });
     }
 
-    // Owner sees the app; mechanic sees the portal
     const appUrl = baseUrl;
 
     if (action === 'propose_date') {
@@ -61,7 +60,7 @@ export async function POST(req: Request) {
               <p>${event.mx_contact_name || 'Your maintenance provider'} has proposed <strong>${proposedDate}</strong> for service on your aircraft.</p>
               ${message ? `<p style="margin-top: 15px; padding: 15px; background: #f9f9f9; border-left: 4px solid #F08B46; border-radius: 4px;"><em>${message}</em></p>` : ''}
               <p style="margin-top: 15px; color: #666;">Open the app to confirm or propose a different date.</p>
-              ${ctaButton(appUrl, 'OPEN SKYWARD TRACKER')}
+              ${ctaButton(appUrl, 'OPEN AIRCRAFT MANAGER')}
             </div>
           `
         });
@@ -92,7 +91,7 @@ export async function POST(req: Request) {
               <h2 style="color: #56B94A;">Appointment Confirmed</h2>
               <p>${event.mx_contact_name || 'Your maintenance provider'} has confirmed service for <strong>${event.proposed_date}</strong>.</p>
               ${message ? `<p style="margin-top: 15px; padding: 15px; background: #f9f9f9; border-left: 4px solid #56B94A; border-radius: 4px;"><em>${message}</em></p>` : ''}
-              ${ctaButton(appUrl, 'OPEN SKYWARD TRACKER')}
+              ${ctaButton(appUrl, 'OPEN AIRCRAFT MANAGER')}
             </div>
           `
         });
@@ -116,7 +115,7 @@ export async function POST(req: Request) {
               <h2 style="color: #091F3C;">Service Update</h2>
               <p>${event.mx_contact_name || 'Your maintenance provider'} sent a message:</p>
               <p style="padding: 15px; background: #f9f9f9; border-left: 4px solid #3AB0FF; border-radius: 4px;">${message}</p>
-              ${ctaButton(appUrl, 'OPEN SKYWARD TRACKER')}
+              ${ctaButton(appUrl, 'OPEN AIRCRAFT MANAGER')}
             </div>
           `
         });
@@ -136,7 +135,6 @@ export async function POST(req: Request) {
           }
         }
 
-        // After updating, check status and notify owner
         const { data: allItems } = await supabaseAdmin
           .from('aft_event_line_items').select('item_name, line_status').eq('event_id', event.id);
         
@@ -144,14 +142,6 @@ export async function POST(req: Request) {
           const totalItems = allItems.length;
           const completedItems = allItems.filter((li: any) => li.line_status === 'complete').length;
           const inProgressItems = allItems.filter((li: any) => li.line_status === 'in_progress').length;
-
-          // Build a summary of what changed
-          const changedNames = lineItemUpdates
-            .filter((u: any) => u.line_status)
-            .map((u: any) => {
-              const item = allItems.find((li: any) => li.item_name);
-              return u.line_status;
-            });
 
           const summaryLine = `${completedItems}/${totalItems} items complete` + (inProgressItems > 0 ? `, ${inProgressItems} in progress` : '');
 
@@ -172,7 +162,7 @@ export async function POST(req: Request) {
                     return `<p style="margin: 4px 0; font-size: 14px;">• ${li.item_name} — <span style="color: ${color}; font-weight: bold; text-transform: uppercase;">${li.line_status}</span></p>`;
                   }).join('')}
                 </div>
-                ${ctaButton(appUrl, 'OPEN SKYWARD TRACKER')}
+                ${ctaButton(appUrl, 'OPEN AIRCRAFT MANAGER')}
               </div>
             `
           });
@@ -197,7 +187,7 @@ export async function POST(req: Request) {
               <h2 style="color: #091F3C;">Completion Estimate</h2>
               <p>${event.mx_contact_name || 'Your maintenance provider'} estimates your aircraft will be ready by <strong>${proposedDate}</strong>.</p>
               ${message ? `<p style="margin-top: 15px; padding: 15px; background: #f9f9f9; border-left: 4px solid #F08B46; border-radius: 4px;"><em>${message}</em></p>` : ''}
-              ${ctaButton(appUrl, 'OPEN SKYWARD TRACKER')}
+              ${ctaButton(appUrl, 'OPEN AIRCRAFT MANAGER')}
             </div>
           `
         });
@@ -236,14 +226,13 @@ export async function POST(req: Request) {
                 <strong>${suggestedName}</strong>
                 ${itemDescription ? `<p style="margin-top: 8px; color: #666;">${itemDescription}</p>` : ''}
               </div>
-              ${ctaButton(appUrl, 'OPEN SKYWARD TRACKER')}
+              ${ctaButton(appUrl, 'OPEN AIRCRAFT MANAGER')}
             </div>
           `
         });
       }
 
     } else if (action === 'decline') {
-      // Mechanic declines the service event
       await supabaseAdmin.from('aft_maintenance_events').update({
         status: 'cancelled',
         mechanic_notes: message || 'Declined by maintenance provider.',
@@ -267,14 +256,13 @@ export async function POST(req: Request) {
               <p>${event.mx_contact_name || 'Your maintenance provider'} has indicated they are unable to accommodate this service request.</p>
               ${message ? `<p style="margin-top: 15px; padding: 15px; background: #f9f9f9; border-left: 4px solid #CE3732; border-radius: 4px;"><em>${message}</em></p>` : ''}
               <p style="margin-top: 15px; color: #666;">You may wish to contact an alternative maintenance provider or reschedule.</p>
-              ${ctaButton(appUrl, 'OPEN SKYWARD TRACKER')}
+              ${ctaButton(appUrl, 'OPEN AIRCRAFT MANAGER')}
             </div>
           `
         });
       }
 
     } else if (action === 'mark_ready') {
-      // Mechanic marks the aircraft as ready for pickup
       await supabaseAdmin.from('aft_maintenance_events').update({
         status: 'ready_for_pickup',
       }).eq('id', event.id);
@@ -290,14 +278,14 @@ export async function POST(req: Request) {
         await resend.emails.send({
           from: `Skyward Operations <${FROM_EMAIL}>`,
           to: [event.primary_contact_email],
-          subject: `✈ Aircraft Ready for Pickup`,
+          subject: `Aircraft Ready for Pickup`,
           html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
               <h2 style="color: #56B94A;">Aircraft Ready for Pickup!</h2>
               <p>${event.mx_contact_name || 'Your maintenance provider'} has completed all work and your aircraft is ready.</p>
               ${message ? `<p style="margin-top: 15px; padding: 15px; background: #f0fdf4; border-left: 4px solid #56B94A; border-radius: 4px;"><em>${message}</em></p>` : ''}
               <p style="margin-top: 15px; color: #666;">Please log in to enter the logbook data from your mechanic's sign-off to complete this service event and reset maintenance tracking.</p>
-              ${ctaButton(appUrl, 'OPEN SKYWARD TRACKER')}
+              ${ctaButton(appUrl, 'OPEN AIRCRAFT MANAGER')}
             </div>
           `
         });

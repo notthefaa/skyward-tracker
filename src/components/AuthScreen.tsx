@@ -38,9 +38,9 @@ export default function AuthScreen() {
     <div className="flex flex-col items-center justify-center p-4 bg-slateGray h-[100dvh] w-full overflow-hidden">
       <div className="bg-cream shadow-2xl rounded-sm p-8 w-full max-w-md animate-slide-up">
         <div className="text-center mb-8">
-          <img src="/logo.png" alt="Alis Grave Nil" className="mx-auto h-32 object-contain mb-4" />
+          <img src="/logo.png" alt="Skyward Society" className="mx-auto h-32 object-contain mb-4" />
           <h2 className="font-oswald text-xl font-bold uppercase tracking-widest text-navy">
-            Aircraft Manager
+            Skyward Aircraft Manager
           </h2>
         </div>
         

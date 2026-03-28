@@ -16,23 +16,19 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Squawk and aircraft data are required.' }, { status: 400 });
     }
 
-    const { data: admins } = await supabaseAdmin.from('aft_user_roles').select('email').eq('role', 'admin');
     const { data: access } = await supabaseAdmin.from('aft_user_aircraft_access').select('user_id').eq('aircraft_id', aircraft.id);
 
-    let pilotEmails: string[] = [];
+    let internalEmails: string[] = [];
     if (access && access.length > 0) {
       const userIds = access.map(a => a.user_id);
-      const { data: pilots } = await supabaseAdmin.from('aft_user_roles').select('email').in('user_id', userIds);
-      if (pilots) {
-        for (const p of pilots) {
-          if (p.email) pilotEmails.push(p.email);
+      const { data: assignedUsers } = await supabaseAdmin.from('aft_user_roles').select('email').in('user_id', userIds);
+      if (assignedUsers) {
+        for (const u of assignedUsers) {
+          if (u.email) internalEmails.push(u.email);
         }
       }
     }
-
-    const adminEmails = admins ? admins.map(a => a.email).filter(Boolean) as string[] : [];
-    const combinedEmails = [...adminEmails, ...pilotEmails];
-    const internalEmails = Array.from(new Set(combinedEmails)); // Deduplicate
+    internalEmails = Array.from(new Set(internalEmails));
 
     // 1. EMAIL TO MECHANIC (Unbranded & Professional)
     if (notifyMx && aircraft.mx_contact_email) {
@@ -92,7 +88,7 @@ export async function POST(req: Request) {
             Description: ${squawk.description}</p>
             
             <div style="margin-top: 25px; text-align: center;">
-              <a href="${new URL(req.url).origin}" style="display: inline-block; background-color: #091F3C; color: white; text-decoration: none; padding: 12px 28px; border-radius: 6px; font-weight: bold; font-size: 14px; letter-spacing: 1px;">OPEN SKYWARD TRACKER</a>
+              <a href="${new URL(req.url).origin}" style="display: inline-block; background-color: #091F3C; color: white; text-decoration: none; padding: 12px 28px; border-radius: 6px; font-weight: bold; font-size: 14px; letter-spacing: 1px;">OPEN AIRCRAFT MANAGER</a>
             </div>
           </div>
         `

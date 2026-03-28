@@ -50,8 +50,8 @@ export default function TutorialModal({ session, role }: { session: any, role: s
         <div className="space-y-4 w-full">
           <p className="text-sm text-gray-600 font-roboto leading-relaxed text-center">
             {role === 'admin' 
-              ? "Your entire fleet, in one place. Skyward keeps your aircraft organized — from flight logs and maintenance tracking to mechanic coordination and squawk reporting."
-              : "Your aircraft, simplified. Skyward makes it easy to log flights, stay on top of maintenance, and keep your team in sync."}
+              ? "Your entire fleet, in one place. The Skyward Aircraft Manager keeps your aircraft organized — from flight logs and maintenance tracking to mechanic coordination and squawk reporting."
+              : "Your aircraft, simplified. The Skyward Aircraft Manager makes it easy to log flights, stay on top of maintenance, and keep your team in sync."}
           </p>
           <p className="text-sm text-gray-600 font-roboto leading-relaxed text-center">
             Let's take a quick look around.
@@ -97,7 +97,7 @@ export default function TutorialModal({ session, role }: { session: any, role: s
       content: (
         <div className="space-y-4 w-full">
           <p className="text-sm text-gray-600 font-roboto leading-relaxed text-center">
-            Track maintenance by hours or calendar dates. Skyward learns from your flying patterns and projects when items will come due — so you're never caught off guard.
+            Track maintenance by hours or calendar dates. The system learns from your flying patterns and projects when items will come due — so you're never caught off guard.
           </p>
           <ul className="text-sm text-gray-600 font-roboto space-y-2.5 pl-1">
             <Bullet>Predictive engine uses your flight history to estimate days until service is needed.</Bullet>

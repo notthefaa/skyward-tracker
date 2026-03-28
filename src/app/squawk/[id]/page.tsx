@@ -69,7 +69,7 @@ export default function SquawkViewer() {
 
         {/* BRANDING */}
         <div className="mb-6 mt-4">
-          <img src="/logo.png" alt="Skyward" className="mx-auto h-24 object-contain mb-2 opacity-80" />
+          <img src="/logo.png" alt="Skyward Society" className="mx-auto h-24 object-contain mb-2 opacity-80" />
           <h1 className="font-oswald text-xl font-bold uppercase tracking-widest text-navy text-center">Squawk Report</h1>
         </div>
 
@@ -139,7 +139,7 @@ export default function SquawkViewer() {
             </div>
           )}
 
-          {/* DEFERRAL INFO (if applicable) */}
+          {/* DEFERRAL INFO */}
           {squawk.is_deferred && (
             <div className="bg-white shadow-lg rounded-sm p-6 border-t-4 border-[#F08B46]">
               <h3 className="font-oswald text-lg font-bold uppercase tracking-widest text-navy mb-4">Deferral Information</h3>
@@ -168,7 +168,7 @@ export default function SquawkViewer() {
         </div>
 
         <div className="mt-8 mb-4 text-center">
-          <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Powered by Skyward Fleet Management</p>
+          <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Powered by Skyward Aircraft Manager</p>
         </div>
       </div>
     </>
