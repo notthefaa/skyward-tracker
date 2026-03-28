@@ -115,7 +115,7 @@ export default function PilotOnboarding({
   };
 
   return (
-    <div className="flex flex-col bg-neutral-100 min-h-[100dvh] w-full overflow-y-auto">
+    <div className="flex flex-col bg-neutral-100 min-h-[100dvh] w-full overflow-y-auto" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
       <header className="bg-navy text-white shadow-md z-20 shrink-0 w-full">
         <div className="max-w-3xl mx-auto px-4 py-3 flex justify-between items-center w-full min-h-[60px]">
           <h1 className="font-oswald text-xl font-bold uppercase tracking-widest text-white m-0 leading-none">Skyward Aircraft Manager</h1>
