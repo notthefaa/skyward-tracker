@@ -5,6 +5,7 @@ import useSWR from "swr";
 import { FileText, Plus, X, Upload, Edit2, ChevronLeft, ChevronRight, Trash2 } from "lucide-react";
 import { PrimaryButton } from "@/components/AppButtons";
 import imageCompression from "browser-image-compression";
+import Toast from "@/components/Toast";
 
 export default function NotesTab({ aircraft, session, role, userInitials, onNotesRead }: { aircraft: any, session: any, role: string, userInitials: string, onNotesRead: () => void }) {
   
@@ -39,6 +40,11 @@ export default function NotesTab({ aircraft, session, role, userInitials, onNote
 
   const [showModal, setShowModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Toast
+  const [toastMessage, setToastMessage] = useState("");
+  const [showToast, setShowToast] = useState(false);
+  const showSuccess = (msg: string) => { setToastMessage(msg); setShowToast(true); };
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [content, setContent] = useState("");
@@ -122,6 +128,7 @@ export default function NotesTab({ aircraft, session, role, userInitials, onNote
     await mutate();
     setShowModal(false);
     setIsSubmitting(false);
+    showSuccess(editingId ? "Note updated" : "Note posted");
   };
 
   const deleteNote = async (id: string) => {
@@ -134,6 +141,8 @@ export default function NotesTab({ aircraft, session, role, userInitials, onNote
 
   return (
     <>
+      <Toast message={toastMessage} show={showToast} onDismiss={() => setShowToast(false)} />
+
       <div className="mb-2">
         <PrimaryButton onClick={() => openForm()}>
           <Plus size={18} /> Add New Note

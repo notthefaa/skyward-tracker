@@ -42,6 +42,7 @@ export default function FleetTrackerApp() {
   const [activeTail, setActiveTail] = useState<string>("");
   const [activeTab, setActiveTab] = useState<AppTab>('fleet');
   const [aircraftStatus, setAircraftStatus] = useState<AircraftStatus>('airworthy');
+  const [groundedReason, setGroundedReason] = useState<string>("");
   const [unreadNotes, setUnreadNotes] = useState(0);
 
   const [sysSettings, setSysSettings] = useState<SystemSettings>({
@@ -272,26 +273,42 @@ export default function FleetTrackerApp() {
     if (!aircraft) return;
     let isGrounded = false; 
     let hasOpenSquawks = false;
+    let reason = "";
 
     const { data: mxData } = await supabase.from('aft_maintenance_items').select('*').eq('aircraft_id', aircraft.id);
     if (mxData) {
       const currentEngineTime = aircraft.total_engine_time || 0;
-      isGrounded = mxData.some(item => {
-        if (!item.is_required) return false;
-        if (item.tracking_type === 'time') return item.due_time <= currentEngineTime;
-        if (item.tracking_type === 'date') return new Date(item.due_date + 'T00:00:00') < new Date(new Date().setHours(0,0,0,0));
-        return false;
-      });
+      for (const item of mxData) {
+        if (!item.is_required) continue;
+        if (item.tracking_type === 'time' && item.due_time <= currentEngineTime) {
+          isGrounded = true;
+          const overBy = (currentEngineTime - item.due_time).toFixed(1);
+          reason = `${item.item_name} expired by ${overBy} hrs`;
+          break;
+        }
+        if (item.tracking_type === 'date' && new Date(item.due_date + 'T00:00:00') < new Date(new Date().setHours(0,0,0,0))) {
+          isGrounded = true;
+          const daysAgo = Math.ceil((Date.now() - new Date(item.due_date + 'T00:00:00').getTime()) / (1000 * 60 * 60 * 24));
+          reason = `${item.item_name} expired ${daysAgo} day${daysAgo > 1 ? 's' : ''} ago`;
+          break;
+        }
+      }
     }
 
     if (!isGrounded) {
       const { data: sqData } = await supabase.from('aft_squawks').select('*').eq('aircraft_id', aircraft.id).eq('status', 'open');
       if (sqData && sqData.length > 0) {
-        if (sqData.some(sq => sq.affects_airworthiness)) isGrounded = true;
-        else hasOpenSquawks = true;
+        const groundingSquawk = sqData.find(sq => sq.affects_airworthiness);
+        if (groundingSquawk) {
+          isGrounded = true;
+          reason = `AOG squawk${groundingSquawk.location ? ' at ' + groundingSquawk.location : ''}`;
+        } else {
+          hasOpenSquawks = true;
+        }
       }
     }
     
+    setGroundedReason(reason);
     if (isGrounded) setAircraftStatus('grounded');
     else if (hasOpenSquawks) setAircraftStatus('issues');
     else setAircraftStatus('airworthy');
@@ -495,10 +512,15 @@ export default function FleetTrackerApp() {
       </header>
 
       {aircraftStatus === 'grounded' && (
-        <div className="bg-[#CE3732] text-white text-center py-2 px-4 shadow-md z-10 flex justify-center items-center gap-2 animate-pulse shrink-0 w-full">
-          <AlertTriangle size={18} />
-          <span className="font-oswald tracking-widest font-bold uppercase text-sm md:text-base">This aircraft is not flight ready</span>
-          <AlertTriangle size={18} />
+        <div className="bg-[#CE3732] text-white text-center py-2 px-4 shadow-md z-10 flex flex-col justify-center items-center shrink-0 w-full">
+          <div className="flex items-center gap-2">
+            <AlertTriangle size={16} />
+            <span className="font-oswald tracking-widest font-bold uppercase text-sm">Not Flight Ready</span>
+            <AlertTriangle size={16} />
+          </div>
+          {groundedReason && (
+            <span className="text-[10px] font-bold uppercase tracking-widest text-white/80 mt-0.5">{groundedReason}</span>
+          )}
         </div>
       )}
 

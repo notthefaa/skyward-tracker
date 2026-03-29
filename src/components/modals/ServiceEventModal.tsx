@@ -9,6 +9,7 @@ import {
   Send, MessageSquare, Clock, ChevronRight, ChevronDown, ExternalLink, XCircle, Plane,
   Paperclip, FileText, Image as ImageIcon
 } from "lucide-react";
+import Toast from "@/components/Toast";
 
 // Common add-on services that owners can request
 const ADDON_OPTIONS = [
@@ -58,6 +59,11 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh }
 
   // Attachment lightbox
   const [viewingAttachment, setViewingAttachment] = useState<string | null>(null);
+
+  // Success toast
+  const [toastMessage, setToastMessage] = useState("");
+  const [showToast, setShowToast] = useState(false);
+  const showSuccess = (msg: string) => { setToastMessage(msg); setShowToast(true); };
 
   // Lock body scroll when modal is open
   useEffect(() => {
@@ -125,6 +131,7 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh }
       });
       if (!res.ok) throw new Error('Failed to create event');
       await fetchEvents();
+      showSuccess("Work package sent to mechanic");
       setView('list');
     } catch (err: any) {
       alert("Failed to create service event: " + err.message);
@@ -146,6 +153,7 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh }
       });
       setOwnerMessage("");
       await fetchEventDetail(selectedEvent.id);
+      showSuccess("Date confirmed");
     } catch (err) {
       alert("Failed to confirm date.");
     }
@@ -168,6 +176,7 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh }
       setOwnerMessage("");
       setProposedDate("");
       await fetchEventDetail(selectedEvent.id);
+      showSuccess("Counter proposal sent");
     } catch (err) {
       alert("Failed to send counter proposal.");
     }
@@ -188,6 +197,7 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh }
       });
       setOwnerMessage("");
       await fetchEventDetail(selectedEvent.id);
+      showSuccess("Message sent");
     } catch (err) {
       alert("Failed to send message.");
     }
@@ -213,6 +223,7 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh }
       setShowCancelConfirm(false);
       setCancelReason("");
       await fetchEvents();
+      showSuccess("Service event cancelled");
       setView('list');
     } catch (err) {
       alert("Failed to cancel event.");
@@ -236,6 +247,7 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh }
       });
       if (!res.ok) throw new Error('Failed to send');
       await fetchEvents();
+      showSuccess("Work package sent to mechanic");
       setView('list');
     } catch (err: any) {
       alert("Failed to send work package: " + err.message);
@@ -258,12 +270,15 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh }
   };
 
   const openCompleteFlow = () => {
+    const today = new Date().toISOString().split('T')[0];
+    const currentTime = aircraft?.total_engine_time?.toFixed(1) || "";
+
     const items = eventLineItems
       .filter(li => li.item_type === 'maintenance' || li.item_type === 'squawk')
       .map(li => ({
         ...li,
-        completionDate: "",
-        completionTime: "",
+        completionDate: today,
+        completionTime: currentTime,
         completedByName: "",
         completedByCert: "",
         workDescription: "",
@@ -299,6 +314,7 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh }
       if (!res.ok) throw new Error('Failed to complete event');
       await fetchEvents();
       onRefresh();
+      showSuccess("Service complete — tracking reset");
       setView('list');
     } catch (err: any) {
       alert("Failed to complete event: " + err.message);
@@ -398,6 +414,8 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh }
           <img src={viewingAttachment} alt="Attachment" className="max-w-full max-h-[90vh] rounded-lg shadow-2xl" />
         </div>
       )}
+
+      <Toast message={toastMessage} show={showToast} onDismiss={() => setShowToast(false)} />
 
       <div className="fixed inset-0 bg-black/60 z-[10000] flex items-center justify-center animate-fade-in" style={{ overscrollBehavior: 'contain', paddingTop: 'calc(3.5rem + env(safe-area-inset-top, 0px) + 8px)', paddingBottom: 'calc(3.5rem + env(safe-area-inset-bottom, 0px) + 8px)', paddingLeft: '1rem', paddingRight: '1rem' }} onClick={onClose}>
         <div className="bg-white rounded shadow-2xl w-full max-w-lg p-6 border-t-4 border-[#F08B46] max-h-full overflow-y-auto animate-slide-up" style={{ overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch' }} onClick={e => e.stopPropagation()}>

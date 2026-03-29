@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import type { AircraftWithMetrics } from "@/lib/types";
 import useSWR from "swr";
 import { Download, ChevronLeft, ChevronRight, Plus, X, Edit2, Trash2, Info, MapPin } from "lucide-react";
 import { PrimaryButton } from "@/components/AppButtons";
+import Toast from "@/components/Toast";
 
 export default function TimesTab({ 
   aircraft, session, role, userInitials, onUpdate 
@@ -45,6 +46,11 @@ export default function TimesTab({
   const [viewPax, setViewPax] = useState<string | null>(null);
   const [viewRouting, setViewRouting] = useState<{pod: string | null, poa: string | null} | null>(null);
   const [showLegend, setShowLegend] = useState(false);
+
+  // Toast
+  const [toastMessage, setToastMessage] = useState("");
+  const [showToast, setShowToast] = useState(false);
+  const showSuccess = useCallback((msg: string) => { setToastMessage(msg); setShowToast(true); }, []);
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [logPod, setLogPod] = useState("");
@@ -120,6 +126,7 @@ export default function TimesTab({
     setLogPage(1);
     await mutate(); 
     onUpdate();
+    showSuccess("Flight log deleted — times rolled back");
     setIsSubmitting(false);
   };
 
@@ -220,6 +227,7 @@ export default function TimesTab({
 
     await supabase.from('aft_aircraft').update(aircraftUpdate).eq('id', aircraft!.id);
     await mutate(); onUpdate(); setShowLogModal(false); setIsSubmitting(false);
+    showSuccess(editingId ? "Flight log updated" : "Flight logged");
   };
 
   if (!aircraft) return null;
@@ -243,6 +251,8 @@ export default function TimesTab({
 
   return (
     <>
+      <Toast message={toastMessage} show={showToast} onDismiss={() => setShowToast(false)} />
+
       <div className="mb-2">
         <PrimaryButton onClick={() => openLogForm()}><Plus size={18} /> Log New Flight</PrimaryButton>
       </div>

@@ -8,6 +8,7 @@ import { AlertTriangle, Plus, X, Upload, Mail, Edit2, ChevronLeft, ChevronRight,
 import { PrimaryButton } from "@/components/AppButtons";
 import SignatureCanvas from "react-signature-canvas";
 import imageCompression from "browser-image-compression";
+import Toast from "@/components/Toast";
 
 export default function SquawksTab({ 
   aircraft, session, role, userInitials, onGroundedStatusChange 
@@ -33,6 +34,11 @@ export default function SquawksTab({
   const [selectedForExport, setSelectedForExport] = useState<string[]>([]);
   const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [visibleArchivedCount, setVisibleArchivedCount] = useState(10);
+
+  // Toast
+  const [toastMessage, setToastMessage] = useState("");
+  const [showToast, setShowToast] = useState(false);
+  const showSuccess = (msg: string) => { setToastMessage(msg); setShowToast(true); };
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [location, setLocation] = useState("");
@@ -131,6 +137,7 @@ export default function SquawksTab({
     }
 
     await mutate(); onGroundedStatusChange(); setShowModal(false); setIsSubmitting(false);
+    showSuccess(editingId ? "Squawk updated" : "Squawk reported");
   };
 
   const deleteSquawk = async (id: string) => {
@@ -143,6 +150,7 @@ export default function SquawksTab({
     if (!confirm("Mark this squawk as resolved?")) return;
     await supabase.from('aft_squawks').update({ status: 'resolved', affects_airworthiness: false }).eq('id', sq.id);
     await mutate(); onGroundedStatusChange();
+    showSuccess("Squawk resolved");
   };
 
   const handleShareMx = (sq: any) => { 
@@ -208,6 +216,8 @@ export default function SquawksTab({
 
   return (
     <>
+      <Toast message={toastMessage} show={showToast} onDismiss={() => setShowToast(false)} />
+
       <div className="mb-2">
         <PrimaryButton onClick={() => openForm()}><Plus size={18} /> Report New Squawk</PrimaryButton>
       </div>
