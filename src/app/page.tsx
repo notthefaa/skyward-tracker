@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { enrichAircraftWithMetrics } from "@/lib/math";
+import { useSWRConfig } from "swr";
 import dynamic from "next/dynamic";
 import type { AircraftWithMetrics, UserRole, SystemSettings, AppRole, AircraftStatus, AppTab } from "@/lib/types";
 import { 
@@ -30,7 +31,6 @@ export default function FleetTrackerApp() {
   const [isAuthChecking, setIsAuthChecking] = useState(true);
   const [isDataLoaded, setIsDataLoaded] = useState(false);
   const [isNetworkTimeout, setIsNetworkTimeout] = useState(false);
-  const [newDataAvailable, setNewDataAvailable] = useState(false); 
   const dataFetchTriggeredRef = useRef(false); 
   
   const [role, setRole] = useState<AppRole>('pilot');
@@ -55,6 +55,9 @@ export default function FleetTrackerApp() {
   const [showLogItModal, setShowLogItModal] = useState(false);
   const [showAircraftModal, setShowAircraftModal] = useState(false);
   const [editingAircraftId, setEditingAircraftId] = useState<string | null>(null);
+
+  // SWR global mutate — used to invalidate all tab caches on realtime updates
+  const { mutate: globalMutate } = useSWRConfig();
 
   useEffect(() => { 
     // --- AUTO VERSION TRACKER ---
@@ -112,18 +115,80 @@ export default function FleetTrackerApp() {
     };
   }, [isAuthChecking, session, isDataLoaded]);
 
+  // --- TARGETED REFRESH: Only refetch data for the affected aircraft ---
+  const refreshForAircraft = useCallback(async (aircraftId: string) => {
+    if (!session?.user?.id) return;
+
+    // Refetch the single aircraft's master record and recalculate its metrics
+    const oneEightyDaysAgo = new Date();
+    oneEightyDaysAgo.setDate(oneEightyDaysAgo.getDate() - 180);
+
+    const [planeRes, logsRes] = await Promise.all([
+      supabase.from('aft_aircraft').select('*').eq('id', aircraftId).single(),
+      supabase.from('aft_flight_logs').select('aircraft_id, ftt, tach, created_at')
+        .eq('aircraft_id', aircraftId)
+        .gte('created_at', oneEightyDaysAgo.toISOString())
+        .order('created_at', { ascending: true }),
+    ]);
+
+    if (planeRes.data) {
+      const updatedPlanes = enrichAircraftWithMetrics([planeRes.data], logsRes.data || []);
+      const updatedPlane = updatedPlanes[0];
+
+      // Patch the aircraft lists in place
+      setAllAircraftList(prev => prev.map(a => a.id === aircraftId ? updatedPlane : a));
+      setAircraftList(prev => prev.map(a => a.id === aircraftId ? updatedPlane : a));
+    }
+
+    // Invalidate only SWR caches related to this aircraft
+    globalMutate(
+      (key: any) => typeof key === 'string' && key.includes(aircraftId),
+      undefined,
+      { revalidate: true }
+    );
+  }, [session, globalMutate]);
+
+  // --- FULL REFRESH: For events that aren't tied to a single aircraft (e.g. fleet view) ---
+  const fullRefresh = useCallback(async () => {
+    if (!session?.user?.id) return;
+    await fetchAircraftData(session.user.id);
+    globalMutate(() => true, undefined, { revalidate: true });
+  }, [session, globalMutate]);
+
   // --- SUPABASE REALTIME LISTENER ---
   useEffect(() => {
     if (!session) return;
 
+    // Debounce per aircraft: batch rapid events for the same plane
+    const debounceTimers: Record<string, NodeJS.Timeout> = {};
+
     const handleRealtimeEvent = (payload: any) => {
       const newRow = payload.new;
       if (newRow) {
+        // Skip events caused by the current user
         if (newRow.user_id === session.user.id) return;
         if (newRow.reported_by === session.user.id) return;
         if (newRow.author_id === session.user.id) return;
       }
-      setNewDataAvailable(true);
+
+      // Extract the aircraft_id from the payload
+      const aircraftId = newRow?.aircraft_id || null;
+
+      if (aircraftId) {
+        // Targeted refresh for the specific aircraft
+        if (debounceTimers[aircraftId]) clearTimeout(debounceTimers[aircraftId]);
+        debounceTimers[aircraftId] = setTimeout(() => {
+          refreshForAircraft(aircraftId);
+          delete debounceTimers[aircraftId];
+        }, 1500);
+      } else {
+        // No aircraft_id (e.g. event messages) — do a scoped SWR invalidation only
+        if (debounceTimers['__global']) clearTimeout(debounceTimers['__global']);
+        debounceTimers['__global'] = setTimeout(() => {
+          globalMutate(() => true, undefined, { revalidate: true });
+          delete debounceTimers['__global'];
+        }, 1500);
+      }
     };
 
     const channel = supabase
@@ -133,12 +198,15 @@ export default function FleetTrackerApp() {
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'aft_squawks' }, handleRealtimeEvent)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'aft_maintenance_items' }, handleRealtimeEvent)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'aft_notes' }, handleRealtimeEvent)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'aft_maintenance_events' }, handleRealtimeEvent)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'aft_event_messages' }, handleRealtimeEvent)
       .subscribe();
 
     return () => {
+      Object.values(debounceTimers).forEach(t => clearTimeout(t));
       supabase.removeChannel(channel);
     };
-  }, [session]);
+  }, [session, refreshForAircraft, globalMutate]);
 
   useEffect(() => { 
     if (activeTail) localStorage.setItem('aft_active_tail', activeTail);
@@ -156,7 +224,6 @@ export default function FleetTrackerApp() {
     const oneEightyDaysAgo = new Date();
     oneEightyDaysAgo.setDate(oneEightyDaysAgo.getDate() - 180);
 
-    // Fire all 5 queries simultaneously instead of sequentially
     const [settingsRes, roleRes, planesRes, logsRes, accessRes] = await Promise.all([
       supabase.from('aft_system_settings').select('*').eq('id', 1).single(),
       supabase.from('aft_user_roles').select('role, initials').eq('user_id', userId).single(),
@@ -165,7 +232,6 @@ export default function FleetTrackerApp() {
       supabase.from('aft_user_aircraft_access').select('aircraft_id').eq('user_id', userId),
     ]);
 
-    // Process results
     if (settingsRes.data) setSysSettings(settingsRes.data as SystemSettings);
 
     if (roleRes.data) {
@@ -323,23 +389,12 @@ export default function FleetTrackerApp() {
 
   const selectedAircraftData = allAircraftList.find(a => a.tail_number === activeTail) || null;
 
-  // --- RENDER: App shell shows immediately after auth, content loads progressively ---
+  // --- RENDER ---
   return (
     <>
       <div className="flex flex-col bg-neutral-100 w-full min-h-screen relative">
 
       <TutorialModal session={session} role={role} />
-
-      {newDataAvailable && (
-        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-[100] animate-fade-in">
-          <button 
-            onClick={() => window.location.reload()} 
-            className="bg-[#F08B46] text-white font-oswald text-sm font-bold tracking-widest uppercase px-6 py-3 rounded-full shadow-[0_10px_20px_rgba(0,0,0,0.4)] flex items-center gap-2 active:scale-95 transition-transform border-2 border-white"
-          >
-            <RefreshCw size={16} /> New Data Available
-          </button>
-        </div>
-      )}
       
       <AdminModals 
         showAdminMenu={showAdminMenu} 
@@ -449,7 +504,6 @@ export default function FleetTrackerApp() {
 
       <main className="fixed left-0 right-0 overflow-y-auto bg-neutral-100 p-4 flex justify-center w-full" style={{ touchAction: 'auto', top: 'calc(3.5rem + env(safe-area-inset-top, 0px))', bottom: 'calc(3.5rem + env(safe-area-inset-bottom, 0px))' }}>
         <div className="w-full max-w-3xl flex flex-col gap-6">
-          {/* Show loading skeleton while data fetches, app shell is already visible */}
           {!isDataLoaded ? (
             <div className="flex flex-col items-center justify-center py-20 animate-pulse">
               <Loader2 size={32} className="text-[#F08B46] animate-spin mb-4" />

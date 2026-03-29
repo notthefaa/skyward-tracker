@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import { authFetch } from "@/lib/authFetch";
+import { validateFileSize, MAX_UPLOAD_SIZE_LABEL } from "@/lib/constants";
 import type { AircraftWithMetrics } from "@/lib/types";
 import { X } from "lucide-react";
 import { PrimaryButton } from "@/components/AppButtons";
@@ -40,7 +41,6 @@ export default function AircraftModal({
   const [crop, setCrop] = useState<Crop>({ unit: '%', width: 100, height: 56.25, x: 0, y: 0 });
   const imageRef = useRef<HTMLImageElement>(null);
 
-  // Pre-fill form if editing
   useEffect(() => {
     if (existingAircraft) {
       setNewTail(existingAircraft.tail_number); 
@@ -68,9 +68,16 @@ export default function AircraftModal({
 
   const onSelectFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
+      const file = e.target.files[0];
+      const sizeError = validateFileSize(file);
+      if (sizeError) {
+        alert(sizeError);
+        e.target.value = '';
+        return;
+      }
       const reader = new FileReader();
       reader.addEventListener('load', () => setAvatarSrc(reader.result?.toString() || ''));
-      reader.readAsDataURL(e.target.files[0]);
+      reader.readAsDataURL(file);
     }
   };
 
@@ -144,7 +151,6 @@ export default function AircraftModal({
     };
     
     if (existingAircraft) {
-      // EDIT — update via Supabase directly (RLS protects this)
       Object.assign(basePayload, {
         setup_aftt: newType === 'Turbine' ? (parseFloat(newAirframeTime) || 0) : 0,
         setup_ftt: newType === 'Turbine' ? (parseFloat(newEngineTime) || 0) : 0,
@@ -153,7 +159,6 @@ export default function AircraftModal({
       });
       await supabase.from('aft_aircraft').update(basePayload).eq('id', existingAircraft.id);
     } else {
-      // CREATE — use authenticated API route (server derives userId from session)
       Object.assign(basePayload, {
         total_airframe_time: parseFloat(newAirframeTime) || 0,
         total_engine_time: parseFloat(newEngineTime) || 0,
@@ -200,7 +205,7 @@ export default function AircraftModal({
         <form onSubmit={handleSaveAircraft} className="space-y-4">
           <div className="border border-dashed border-gray-300 bg-gray-50 rounded p-4 text-center">
             <label className="text-[10px] font-bold uppercase tracking-widest text-navy block mb-2 cursor-pointer">
-              {avatarSrc ? 'Adjust Photo Alignment' : 'Upload Aircraft Photo (Avatar)'}
+              {avatarSrc ? 'Adjust Photo Alignment' : `Upload Aircraft Photo (Max ${MAX_UPLOAD_SIZE_LABEL})`}
             </label>
             {!avatarSrc ? (
               <input 

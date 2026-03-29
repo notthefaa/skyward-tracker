@@ -48,6 +48,14 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Service event not found.' }, { status: 404 });
     }
 
+    // Token expiry: reject uploads on events completed more than 7 days ago
+    if (event.status === 'complete' && event.completed_at) {
+      const expiryDate = new Date(new Date(event.completed_at).getTime() + 7 * 24 * 60 * 60 * 1000);
+      if (new Date() > expiryDate) {
+        return NextResponse.json({ error: 'This service portal link has expired.' }, { status: 403 });
+      }
+    }
+
     if (event.status === 'complete' || event.status === 'cancelled') {
       return NextResponse.json({ error: 'Cannot upload to a completed or cancelled event.' }, { status: 400 });
     }

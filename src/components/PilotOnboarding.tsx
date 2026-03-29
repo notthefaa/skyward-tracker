@@ -2,6 +2,7 @@
 
 import { useState, useRef } from "react";
 import { authFetch } from "@/lib/authFetch";
+import { validateFileSize, MAX_UPLOAD_SIZE_LABEL } from "@/lib/constants";
 import { PlaneTakeoff, LogOut } from "lucide-react";
 import { PrimaryButton } from "@/components/AppButtons";
 import imageCompression from "browser-image-compression";
@@ -38,9 +39,16 @@ export default function PilotOnboarding({
 
   const onSelectFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
+      const file = e.target.files[0];
+      const sizeError = validateFileSize(file);
+      if (sizeError) {
+        alert(sizeError);
+        e.target.value = '';
+        return;
+      }
       const reader = new FileReader();
       reader.addEventListener('load', () => setAvatarSrc(reader.result?.toString() || ''));
-      reader.readAsDataURL(e.target.files[0]);
+      reader.readAsDataURL(file);
     }
   };
 
@@ -98,7 +106,6 @@ export default function PilotOnboarding({
     };
 
     try {
-      // SECURITY: Use authFetch — server derives userId from session token
       const res = await authFetch('/api/aircraft/create', {
         method: 'POST',
         body: JSON.stringify({ payload })
@@ -132,7 +139,7 @@ export default function PilotOnboarding({
           </div>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="border border-dashed border-gray-300 bg-gray-50 rounded p-4 text-center">
-              <label className="text-[10px] font-bold uppercase tracking-widest text-navy block mb-2 cursor-pointer">{avatarSrc ? 'Adjust Photo Alignment' : 'Upload Aircraft Photo (Avatar)'}</label>
+              <label className="text-[10px] font-bold uppercase tracking-widest text-navy block mb-2 cursor-pointer">{avatarSrc ? 'Adjust Photo Alignment' : `Upload Aircraft Photo (Max ${MAX_UPLOAD_SIZE_LABEL})`}</label>
               {!avatarSrc ? (
                 <input type="file" accept="image/*" onChange={onSelectFile} className="text-xs text-gray-500 w-full cursor-pointer bg-white" />
               ) : (

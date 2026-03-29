@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { validateFileSizes, MAX_UPLOAD_SIZE_LABEL } from "@/lib/constants";
 import useSWR from "swr";
 import { FileText, Plus, X, Upload, Edit2, ChevronLeft, ChevronRight, Trash2 } from "lucide-react";
 import { PrimaryButton } from "@/components/AppButtons";
@@ -7,8 +8,7 @@ import imageCompression from "browser-image-compression";
 
 export default function NotesTab({ aircraft, session, role, userInitials, onNotesRead }: { aircraft: any, session: any, role: string, userInitials: string, onNotesRead: () => void }) {
   
-  // --- SWR CACHING MAGIC ---
-  const { data: notes =[], mutate } = useSWR(
+  const { data: notes = [], mutate } = useSWR(
     aircraft ? `notes-${aircraft.id}` : null,
     async () => {
       const { data: notesData } = await supabase
@@ -24,38 +24,35 @@ export default function NotesTab({ aircraft, session, role, userInitials, onNote
           .eq('user_id', session.user.id)
           .in('note_id', notesData.map(n => n.id));
           
-        const readIds = readsData ? readsData.map(r => r.note_id) :[];
+        const readIds = readsData ? readsData.map(r => r.note_id) : [];
         const unreadIds = notesData.filter(n => !readIds.includes(n.id)).map(n => n.id);
         
-        // Safely insert read receipts only if unread notes exist
         if (unreadIds.length > 0) {
           const inserts = unreadIds.map(id => ({ note_id: id, user_id: session.user.id }));
           await supabase.from('aft_note_reads').upsert(inserts, { onConflict: 'note_id,user_id' });
-          onNotesRead(); // Clear the red badge in the main shell
+          onNotesRead();
         }
       }
-      return notesData ||[];
+      return notesData || [];
     }
   );
 
-  const[showModal, setShowModal] = useState(false);
-  const[isSubmitting, setIsSubmitting] = useState(false);
+  const [showModal, setShowModal] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Form State
   const [editingId, setEditingId] = useState<string | null>(null);
   const [content, setContent] = useState("");
-  const[selectedImages, setSelectedImages] = useState<File[]>([]);
-  const[existingImages, setExistingImages] = useState<string[]>([]);
+  const [selectedImages, setSelectedImages] = useState<File[]>([]);
+  const [existingImages, setExistingImages] = useState<string[]>([]);
 
-  // Lightbox State
-  const[previewImages, setPreviewImages] = useState<string[] | null>(null);
+  const [previewImages, setPreviewImages] = useState<string[] | null>(null);
   const [previewIndex, setPreviewIndex] = useState<number>(0);
 
   const openForm = (note: any = null) => {
     if (note) {
       setEditingId(note.id);
       setContent(note.content || "");
-      setExistingImages(note.pictures ||[]);
+      setExistingImages(note.pictures || []);
     } else {
       setEditingId(null);
       setContent("");
@@ -65,8 +62,20 @@ export default function NotesTab({ aircraft, session, role, userInitials, onNote
     setShowModal(true);
   };
 
+  const handleImageSelection = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files) return;
+    const files = Array.from(e.target.files);
+    const sizeError = validateFileSizes(files);
+    if (sizeError) {
+      alert(sizeError);
+      e.target.value = '';
+      return;
+    }
+    setSelectedImages(files);
+  };
+
   const uploadImages = async (): Promise<string[]> => {
-    let uploadedPaths: string[] =[];
+    let uploadedPaths: string[] = [];
     const options = { maxSizeMB: 1, maxWidthOrHeight: 1920, useWebWorker: true };
     
     for (const file of selectedImages) {
@@ -92,7 +101,7 @@ export default function NotesTab({ aircraft, session, role, userInitials, onNote
     setIsSubmitting(true);
 
     const uploadedUrls = await uploadImages();
-    const allPictures =[...existingImages, ...uploadedUrls];
+    const allPictures = [...existingImages, ...uploadedUrls];
 
     const noteData: any = {
       aircraft_id: aircraft.id,
@@ -110,7 +119,7 @@ export default function NotesTab({ aircraft, session, role, userInitials, onNote
       await supabase.from('aft_notes').insert(noteData);
     }
 
-    await mutate(); // Refresh SWR Cache
+    await mutate();
     setShowModal(false);
     setIsSubmitting(false);
   };
@@ -236,13 +245,13 @@ export default function NotesTab({ aircraft, session, role, userInitials, onNote
               
               <div>
                 <label className="text-[10px] font-bold uppercase tracking-widest text-navy flex items-center gap-2 mb-2">
-                  <Upload size={14}/> Attach Photos (Optional)
+                  <Upload size={14}/> Attach Photos (Max {MAX_UPLOAD_SIZE_LABEL} each)
                 </label>
                 <input 
                   type="file" 
                   multiple 
                   accept="image/*" 
-                  onChange={(e)=>{if (e.target.files) setSelectedImages(Array.from(e.target.files));}} 
+                  onChange={handleImageSelection} 
                   className="text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:bg-gray-100 file:text-navy cursor-pointer" 
                 />
               </div>

@@ -1,6 +1,7 @@
 import { useState, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import { authFetch } from "@/lib/authFetch";
+import { validateFileSizes, MAX_UPLOAD_SIZE_LABEL } from "@/lib/constants";
 import type { AircraftWithMetrics } from "@/lib/types";
 import useSWR from "swr";
 import { AlertTriangle, Plus, X, Upload, Mail, Edit2, ChevronLeft, ChevronRight, Download, CheckSquare, Trash2, CheckCircle } from "lucide-react";
@@ -67,6 +68,18 @@ export default function SquawksTab({
     setShowModal(true);
   };
 
+  const handleImageSelection = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files) return;
+    const files = Array.from(e.target.files);
+    const sizeError = validateFileSizes(files);
+    if (sizeError) {
+      alert(sizeError);
+      e.target.value = '';
+      return;
+    }
+    setSelectedImages(files);
+  };
+
   const uploadImages = async (): Promise<string[]> => {
     let uploadedPaths: string[] = [];
     const options = { maxSizeMB: 1, maxWidthOrHeight: 1920, useWebWorker: true };
@@ -109,7 +122,6 @@ export default function SquawksTab({
       const { data: newSquawk } = await supabase.from('aft_squawks').insert(squawkData).select().single();
       if (newSquawk) {
         try {
-          // SECURITY: Use authFetch for email dispatch
           await authFetch('/api/emails/squawk-notify', {
             method: 'POST',
             body: JSON.stringify({ squawk: newSquawk, aircraft, notifyMx })
@@ -347,8 +359,8 @@ export default function SquawksTab({
               <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Location (Airport) *</label><input type="text" required value={location} onChange={e=>setLocation(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#CE3732] outline-none" placeholder="e.g. KDFW" /></div>
               <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Description *</label><textarea required value={description} onChange={e=>setDescription(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 min-h-[100px] focus:border-[#CE3732] outline-none" /></div>
               <div>
-                <label className="text-[10px] font-bold uppercase tracking-widest text-navy flex items-center gap-2 mb-2"><Upload size={14}/> Attach Photos</label>
-                <input type="file" multiple accept="image/*" onChange={(e) => { if (e.target.files) setSelectedImages(Array.from(e.target.files)); }} className="text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:bg-gray-100 file:text-navy cursor-pointer" />
+                <label className="text-[10px] font-bold uppercase tracking-widest text-navy flex items-center gap-2 mb-2"><Upload size={14}/> Attach Photos (Max {MAX_UPLOAD_SIZE_LABEL} each)</label>
+                <input type="file" multiple accept="image/*" onChange={handleImageSelection} className="text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:bg-gray-100 file:text-navy cursor-pointer" />
               </div>
 
               {isTurbine && status === 'open' && (

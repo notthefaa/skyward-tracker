@@ -33,6 +33,14 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Service event not found.' }, { status: 404 });
     }
 
+    // Token expiry: reject actions on events completed more than 7 days ago
+    if (event.status === 'complete' && event.completed_at) {
+      const expiryDate = new Date(new Date(event.completed_at).getTime() + 7 * 24 * 60 * 60 * 1000);
+      if (new Date() > expiryDate) {
+        return NextResponse.json({ error: 'This service portal link has expired.' }, { status: 403 });
+      }
+    }
+
     const appUrl = baseUrl;
 
     if (action === 'propose_date') {

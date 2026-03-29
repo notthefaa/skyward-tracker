@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { validateFileSizes, MAX_UPLOAD_SIZE_LABEL } from "@/lib/constants";
 import { 
   Wrench, AlertTriangle, CheckCircle, Clock, Send, 
   MessageSquare, Calendar, Sparkles, X, Plus, Image, ArrowLeft, XCircle, Plane,
@@ -22,6 +23,7 @@ export default function ServicePortal() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isAppUser, setIsAppUser] = useState(false);
+  const [isExpired, setIsExpired] = useState(false);
 
   // Forms
   const [showDateForm, setShowDateForm] = useState(false);
@@ -71,6 +73,17 @@ export default function ServicePortal() {
       .from('aft_maintenance_events').select('*').eq('access_token', accessToken).single();
 
     if (evData) {
+      // Check if the portal link has expired (7 days after completion)
+      if (evData.status === 'complete' && evData.completed_at) {
+        const completedDate = new Date(evData.completed_at);
+        const expiryDate = new Date(completedDate.getTime() + 7 * 24 * 60 * 60 * 1000);
+        if (new Date() > expiryDate) {
+          setIsExpired(true);
+          setIsLoading(false);
+          return;
+        }
+      }
+
       setEvent(evData);
       setEstimatedCompletion(evData.estimated_completion || "");
       setMechanicNotes(evData.mechanic_notes || "");
@@ -188,7 +201,7 @@ export default function ServicePortal() {
     return (
       <>
         <style dangerouslySetInnerHTML={{__html: `html, body { overflow: auto !important; touch-action: auto !important; height: auto !important; }` }} />
-        <div className="min-h-screen bg-neutral-100 flex items-center justify-center text-navy font-oswald tracking-widest uppercase text-xl">Service Event Not Found</div>
+        <div className="min-h-screen bg-neutral-100 flex items-center justify-center text-navy font-oswald tracking-widest uppercase text-xl">{isExpired ? 'This Service Portal Link Has Expired' : 'Service Event Not Found'}</div>
       </>
     );
   }
@@ -490,7 +503,7 @@ export default function ServicePortal() {
                 <div className="space-y-3 animate-fade-in">
                   <div>
                     <label className="text-[10px] font-bold uppercase tracking-widest text-navy flex items-center gap-2 mb-2">
-                      <Paperclip size={14}/> Select Files (Max 5, 10MB each)
+                      <Paperclip size={14}/> Select Files (Max 5, {MAX_UPLOAD_SIZE_LABEL} each)
                     </label>
                     <input 
                       type="file" 
@@ -499,6 +512,12 @@ export default function ServicePortal() {
                       onChange={(e) => {
                         if (e.target.files) {
                           const newFiles = Array.from(e.target.files);
+                          const sizeError = validateFileSizes(newFiles);
+                          if (sizeError) {
+                            alert(sizeError);
+                            e.target.value = '';
+                            return;
+                          }
                           const combined = [...uploadFiles, ...newFiles].slice(0, 5);
                           setUploadFiles(combined);
                         }
