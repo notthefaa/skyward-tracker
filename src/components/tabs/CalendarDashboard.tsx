@@ -2,6 +2,7 @@ import { useState, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
 import type { AircraftWithMetrics, Reservation } from "@/lib/types";
 import useSWR from "swr";
+import { ChevronDown } from "lucide-react";
 
 const WINDOW = 30;
 
@@ -11,10 +12,11 @@ interface CalendarDashboardProps {
 }
 
 function RingGauge({ 
-  value, max, label, sublabel, color, size = 90, strokeWidth = 8, suffix = ''
+  value, max, label, sublabel, color, size = 90, strokeWidth = 8, suffix = '', children
 }: { 
   value: number; max: number; label: string; sublabel: string; 
   color: string; size?: number; strokeWidth?: number; suffix?: string;
+  children?: React.ReactNode;
 }) {
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
@@ -23,20 +25,31 @@ function RingGauge({
 
   return (
     <div className="flex flex-col items-center flex-1 min-w-0">
-      <div className="relative" style={{ width: size, height: size }}>
-        <svg width={size} height={size} className="-rotate-90">
-          <circle cx={size/2} cy={size/2} r={radius} fill="none" stroke="#e5e7eb" strokeWidth={strokeWidth} />
-          <circle cx={size/2} cy={size/2} r={radius} fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeDasharray={circumference} strokeDashoffset={dashOffset} style={{ transition: 'stroke-dashoffset 0.6s ease-out' }} />
-        </svg>
-        <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="font-oswald text-xl font-bold leading-none" style={{ color }}>
-            {typeof value === 'number' && !Number.isInteger(value) ? value.toFixed(1) : value}
-          </span>
-          {suffix && <span className="text-[8px] font-bold uppercase tracking-widest text-gray-400 mt-px">{suffix}</span>}
+      {/* Floating gauge with drop shadow */}
+      <div 
+        className="rounded-full bg-white"
+        style={{ 
+          width: size + 12, height: size + 12, 
+          padding: 6,
+          boxShadow: `0 4px 16px rgba(0,0,0,0.10), 0 1px 4px rgba(0,0,0,0.06), 0 8px 24px ${color}15`
+        }}
+      >
+        <div className="relative" style={{ width: size, height: size }}>
+          <svg width={size} height={size} className="-rotate-90">
+            <circle cx={size/2} cy={size/2} r={radius} fill="none" stroke="#f0f0f0" strokeWidth={strokeWidth} />
+            <circle cx={size/2} cy={size/2} r={radius} fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeDasharray={circumference} strokeDashoffset={dashOffset} style={{ transition: 'stroke-dashoffset 0.6s ease-out' }} />
+          </svg>
+          <div className="absolute inset-0 flex flex-col items-center justify-center">
+            <span className="font-oswald text-xl font-bold leading-none" style={{ color }}>
+              {typeof value === 'number' && !Number.isInteger(value) ? value.toFixed(1) : value}
+            </span>
+            {suffix && <span className="text-[8px] font-bold uppercase tracking-widest text-gray-400 mt-px">{suffix}</span>}
+          </div>
         </div>
       </div>
-      <span className="text-[9px] font-oswald font-bold uppercase tracking-widest text-navy mt-1.5 text-center leading-tight">{label}</span>
+      <span className="text-[9px] font-oswald font-bold uppercase tracking-widest text-navy mt-2 text-center leading-tight">{label}</span>
       <span className="text-[8px] font-bold uppercase tracking-widest text-gray-400 text-center leading-tight">{sublabel}</span>
+      {children}
     </div>
   );
 }
@@ -57,6 +70,7 @@ export default function CalendarDashboard({ aircraft, session }: CalendarDashboa
   const [hoursPeriod, setHoursPeriod] = useState(30);
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
+  const [showPeriodPicker, setShowPeriodPicker] = useState(false);
   const showCustom = hoursPeriod === -1;
   const isTurbine = aircraft.engine_type === 'Turbine';
 
@@ -124,38 +138,58 @@ export default function CalendarDashboard({ aircraft, session }: CalendarDashboa
     while (cursor <= limit) { unavailableDays.add(cursor.toISOString().split('T')[0]); cursor.setDate(cursor.getDate() + 1); }
   }
   const availableDays = WINDOW - unavailableDays.size;
-
-  // Color thresholds: <=5 red, <=15 orange, >15 blue
   const availColor = availableDays <= 5 ? '#CE3732' : availableDays <= 15 ? '#F08B46' : '#3AB0FF';
 
   const hours = flightHours ?? 0;
   const hoursMax = Math.max(hours * 1.5, (showCustom ? 50 : hoursPeriod <= 30 ? 30 : hoursPeriod <= 60 ? 60 : hoursPeriod <= 90 ? 100 : 150));
+  
   const periodLabel = showCustom 
     ? (customFrom && customTo ? `${new Date(customFrom).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${new Date(customTo).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` : 'Select range')
     : `Last ${hoursPeriod}d`;
 
   return (
-    <div className="bg-cream shadow-lg rounded-sm p-3 border-t-4 border-navy mb-4">
-      {/* All 3 gauges on one row */}
-      <div className="flex items-start justify-around gap-2">
+    <div className="mb-4">
+      {/* Three floating gauges */}
+      <div className="flex items-start justify-around gap-3 px-1">
         <RingGauge value={myDays} max={WINDOW} label="My Bookings" sublabel={`Next ${WINDOW}d`} color="#56B94A" suffix="days" />
         <RingGauge value={availableDays} max={WINDOW} label="Available" sublabel={`of ${WINDOW}d`} color={availColor} suffix="days" />
-        <RingGauge value={hours} max={hoursMax} label="Flight Hrs" sublabel={periodLabel} color="#091F3C" suffix="hrs" />
+        <RingGauge value={hours} max={hoursMax} label="Flight Hrs" sublabel={periodLabel} color="#091F3C" suffix="hrs">
+          {/* Period selector nested directly under the flight hours gauge */}
+          <button 
+            onClick={() => setShowPeriodPicker(!showPeriodPicker)}
+            className="mt-1.5 flex items-center gap-0.5 text-[8px] font-bold uppercase tracking-widest text-navy/60 hover:text-navy transition-colors active:scale-95"
+          >
+            Change <ChevronDown size={10} className={`transition-transform ${showPeriodPicker ? 'rotate-180' : ''}`} />
+          </button>
+        </RingGauge>
       </div>
 
-      {/* Period selector for flight hours */}
-      <div className="flex justify-center gap-1 flex-wrap mt-3 pt-3 border-t border-gray-200">
-        {[30, 60, 90, 120].map(d => (
-          <button key={d} onClick={() => setHoursPeriod(d)} className={`text-[8px] font-bold uppercase tracking-widest px-2 py-1 rounded transition-colors active:scale-95 ${hoursPeriod === d && !showCustom ? 'bg-navy text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>{d}d</button>
-        ))}
-        <button onClick={() => setHoursPeriod(-1)} className={`text-[8px] font-bold uppercase tracking-widest px-2 py-1 rounded transition-colors active:scale-95 ${showCustom ? 'bg-navy text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>Custom</button>
-      </div>
-
-      {showCustom && (
-        <div className="flex gap-2 mt-2 justify-center items-center animate-fade-in">
-          <input type="date" value={customFrom} onChange={e => setCustomFrom(e.target.value)} className="flex-1 min-w-[120px] max-w-[140px] border border-gray-300 rounded px-3 py-2 text-xs focus:border-navy outline-none text-center" />
-          <span className="text-gray-400 text-[10px] font-bold shrink-0">to</span>
-          <input type="date" value={customTo} onChange={e => setCustomTo(e.target.value)} className="flex-1 min-w-[120px] max-w-[140px] border border-gray-300 rounded px-3 py-2 text-xs focus:border-navy outline-none text-center" />
+      {/* Period picker — expands below the flight hours gauge, right-aligned */}
+      {showPeriodPicker && (
+        <div className="mt-2 flex flex-col items-end pr-1 animate-fade-in">
+          <div className="flex gap-1 flex-wrap justify-end">
+            {[30, 60, 90, 120].map(d => (
+              <button 
+                key={d} onClick={() => { setHoursPeriod(d); if (d !== -1) setShowPeriodPicker(false); }}
+                className={`text-[8px] font-bold uppercase tracking-widest px-2 py-1 rounded transition-colors active:scale-95 ${
+                  hoursPeriod === d && !showCustom ? 'bg-navy text-white' : 'bg-white text-gray-500 hover:bg-gray-100 shadow-sm'
+                }`}
+              >{d}d</button>
+            ))}
+            <button 
+              onClick={() => setHoursPeriod(-1)}
+              className={`text-[8px] font-bold uppercase tracking-widest px-2 py-1 rounded transition-colors active:scale-95 ${
+                showCustom ? 'bg-navy text-white' : 'bg-white text-gray-500 hover:bg-gray-100 shadow-sm'
+              }`}
+            >Custom</button>
+          </div>
+          {showCustom && (
+            <div className="flex gap-2 mt-1.5 items-center animate-fade-in">
+              <input type="date" value={customFrom} onChange={e => setCustomFrom(e.target.value)} className="min-w-[110px] border border-gray-300 rounded px-2.5 py-1.5 text-[10px] focus:border-navy outline-none text-center bg-white shadow-sm" />
+              <span className="text-gray-400 text-[9px] font-bold shrink-0">to</span>
+              <input type="date" value={customTo} onChange={e => setCustomTo(e.target.value)} className="min-w-[110px] border border-gray-300 rounded px-2.5 py-1.5 text-[10px] focus:border-navy outline-none text-center bg-white shadow-sm" />
+            </div>
+          )}
         </div>
       )}
     </div>
