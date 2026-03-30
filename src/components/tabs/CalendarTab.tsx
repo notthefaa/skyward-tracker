@@ -1,5 +1,4 @@
 "use client";
-// v4-modal-fix
 
 import { useState, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
@@ -8,6 +7,7 @@ import type { AircraftWithMetrics, Reservation, AircraftRole } from "@/lib/types
 import useSWR from "swr";
 import { Calendar, ChevronLeft, ChevronRight, Plus, X, Clock, MapPin, Plane, Wrench, Loader2, Users } from "lucide-react";
 import { PrimaryButton } from "@/components/AppButtons";
+import CalendarDashboard from "@/components/tabs/CalendarDashboard";
 import Toast from "@/components/Toast";
 
 type CalendarView = 'month' | 'week' | 'day';
@@ -162,6 +162,7 @@ export default function CalendarTab({
   return (
     <>
       <Toast message={toastMessage} show={showToast} onDismiss={() => setShowToast(false)} />
+      {aircraft && session && <CalendarDashboard aircraft={aircraft} session={session} />}
       <div className="mb-2"><button onClick={() => openBookingForm()} className="w-full bg-[#56B94A] text-white font-oswald tracking-widest uppercase py-3 px-4 rounded hover:bg-opacity-90 active:scale-95 transition-all duration-150 ease-out flex justify-center items-center gap-2 text-sm"><Plus size={18} /> Reserve Aircraft</button></div>
 
       <div className="bg-cream shadow-lg rounded-sm border-t-4 border-[#56B94A] mb-6 overflow-hidden">
