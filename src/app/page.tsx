@@ -39,7 +39,13 @@ export default function FleetTrackerApp() {
   // ─── Navigation State ───
   const companionUrl = process.env.NEXT_PUBLIC_COMPANION_URL || "https://your-logit-app.vercel.app";
   const [activeTail, setActiveTail] = useState<string>("");
-  const [activeTab, setActiveTab] = useState<AppTab>('fleet');
+  const [activeTab, setActiveTab] = useState<AppTab>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('aft_active_tab');
+      if (saved && ['fleet','summary','times','calendar','mx','notes'].includes(saved)) return saved as AppTab;
+    }
+    return 'fleet';
+  });
   const [unreadNotes, setUnreadNotes] = useState(0);
   const [showAdminMenu, setShowAdminMenu] = useState(false);
   const [showLogItModal, setShowLogItModal] = useState(false);
@@ -88,7 +94,6 @@ export default function FleetTrackerApp() {
       setSession(session);
       setIsAuthChecking(false);
       if (event === 'SIGNED_IN' && session) {
-        setActiveTab('fleet');
         if (!dataFetchTriggeredRef.current) {
           dataFetchTriggeredRef.current = true;
           handleInitialFetch(session.user.id);
@@ -115,6 +120,11 @@ export default function FleetTrackerApp() {
   useEffect(() => {
     if (activeTail) localStorage.setItem('aft_active_tail', activeTail);
   }, [activeTail]);
+
+  // ─── Persist active tab ───
+  useEffect(() => {
+    localStorage.setItem('aft_active_tab', activeTab);
+  }, [activeTab]);
 
   // ─── Refresh grounded status & unread notes when tail changes ───
   useEffect(() => {
