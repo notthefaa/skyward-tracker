@@ -41,7 +41,7 @@ export default function FleetTrackerApp() {
   const [activeTail, setActiveTail] = useState<string>("");
   const [activeTab, setActiveTab] = useState<AppTab>(() => {
     if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('aft_active_tab');
+      const saved = sessionStorage.getItem('aft_active_tab');
       if (saved && ['fleet','summary','times','calendar','mx','notes'].includes(saved)) return saved as AppTab;
     }
     return 'fleet';
@@ -123,7 +123,7 @@ export default function FleetTrackerApp() {
 
   // ─── Persist active tab ───
   useEffect(() => {
-    localStorage.setItem('aft_active_tab', activeTab);
+    sessionStorage.setItem('aft_active_tab', activeTab);
   }, [activeTab]);
 
   // ─── Refresh grounded status & unread notes when tail changes ───
