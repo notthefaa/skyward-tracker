@@ -1,11 +1,10 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
-import { enrichAircraftWithMetrics } from "@/lib/math";
-import { useSWRConfig } from "swr";
+import { useFleetData, useRealtimeSync, useGroundedStatus, useAircraftRole } from "@/hooks";
 import dynamic from "next/dynamic";
-import type { AircraftWithMetrics, SystemSettings, AppRole, AircraftRole, AircraftStatus, AppTab } from "@/lib/types";
+import type { AircraftWithMetrics, AppTab } from "@/lib/types";
 import { 
   Wrench, AlertTriangle, FileText, Clock, LogOut, 
   ChevronDown, Home, LayoutGrid, Send, ShieldCheck, X, Share, Copy, WifiOff, Loader2, Calendar, Settings
@@ -25,24 +24,23 @@ const NotesTab = dynamic(() => import("@/components/tabs/NotesTab"));
 const FleetSummary = dynamic(() => import("@/components/tabs/FleetSummary"));
 
 export default function FleetTrackerApp() {
+  // ─── Auth State ───
   const [session, setSession] = useState<any>(null);
   const [isAuthChecking, setIsAuthChecking] = useState(true);
-  const [isDataLoaded, setIsDataLoaded] = useState(false);
   const [isNetworkTimeout, setIsNetworkTimeout] = useState(false);
-  const dataFetchTriggeredRef = useRef(false);
-  const [role, setRole] = useState<AppRole>('pilot');
-  const [userInitials, setUserInitials] = useState("");
+
+  // ─── Fleet Data (extracted hook) ───
+  const {
+    role, userInitials, allAircraftList, aircraftList, allAccessRecords,
+    isDataLoaded, sysSettings, setSysSettings, dataFetchTriggeredRef,
+    fetchAircraftData, refreshForAircraft, globalMutate,
+  } = useFleetData();
+
+  // ─── Navigation State ───
   const companionUrl = process.env.NEXT_PUBLIC_COMPANION_URL || "https://your-logit-app.vercel.app";
-  const [allAircraftList, setAllAircraftList] = useState<AircraftWithMetrics[]>([]);
-  const [aircraftList, setAircraftList] = useState<AircraftWithMetrics[]>([]);
   const [activeTail, setActiveTail] = useState<string>("");
   const [activeTab, setActiveTab] = useState<AppTab>('fleet');
-  const [aircraftStatus, setAircraftStatus] = useState<AircraftStatus>('airworthy');
-  const [groundedReason, setGroundedReason] = useState<string>("");
   const [unreadNotes, setUnreadNotes] = useState(0);
-  const [currentAircraftRole, setCurrentAircraftRole] = useState<AircraftRole | null>(null);
-  const [allAccessRecords, setAllAccessRecords] = useState<any[]>([]);
-  const [sysSettings, setSysSettings] = useState<SystemSettings>({ id: 1, reminder_1: 30, reminder_2: 15, reminder_3: 5, reminder_hours_1: 30, reminder_hours_2: 15, reminder_hours_3: 5, sched_time: 10, sched_days: 30, predictive_sched_days: 45 });
   const [showAdminMenu, setShowAdminMenu] = useState(false);
   const [showLogItModal, setShowLogItModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
@@ -50,86 +48,98 @@ export default function FleetTrackerApp() {
   const [mxSubTab, setMxSubTab] = useState<'maintenance' | 'squawks'>('maintenance');
   const [showAircraftModal, setShowAircraftModal] = useState(false);
   const [editingAircraftId, setEditingAircraftId] = useState<string | null>(null);
-  const { mutate: globalMutate } = useSWRConfig();
 
+  // ─── Derived State (extracted hooks) ───
+  const { aircraftStatus, groundedReason, checkGroundedStatus } = useGroundedStatus(allAircraftList);
+  const currentAircraftRole = useAircraftRole(activeTail, allAircraftList, allAccessRecords, session);
+
+  // ─── Realtime (extracted hook) ───
+  const boundRefresh = useCallback(
+    (aircraftId: string) => {
+      if (session?.user?.id) refreshForAircraft(aircraftId, session.user.id);
+    },
+    [session, refreshForAircraft]
+  );
+  useRealtimeSync(session, boundRefresh, globalMutate);
+
+  // ─── Auth Init ───
   useEffect(() => {
     const appVersion = process.env.NEXT_PUBLIC_APP_VERSION;
-    if (appVersion) { const lv = localStorage.getItem('aft_app_version'); if (lv && lv !== appVersion) { localStorage.setItem('aft_app_version', appVersion); window.location.reload(); } else if (!lv) { localStorage.setItem('aft_app_version', appVersion); } }
-    supabase.auth.getSession().then(({ data: { session } }) => { setSession(session); setIsAuthChecking(false); if (session && !dataFetchTriggeredRef.current) { dataFetchTriggeredRef.current = true; fetchAircraftData(session.user.id); } });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => { setSession(session); setIsAuthChecking(false); if (event === 'SIGNED_IN' && session) { setActiveTab('fleet'); if (!dataFetchTriggeredRef.current) { dataFetchTriggeredRef.current = true; fetchAircraftData(session.user.id); } } else if (event === 'SIGNED_OUT') { dataFetchTriggeredRef.current = false; setIsDataLoaded(false); setActiveTab('fleet'); } });
+    if (appVersion) {
+      const lv = localStorage.getItem('aft_app_version');
+      if (lv && lv !== appVersion) {
+        localStorage.setItem('aft_app_version', appVersion);
+        window.location.reload();
+      } else if (!lv) {
+        localStorage.setItem('aft_app_version', appVersion);
+      }
+    }
+
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setIsAuthChecking(false);
+      if (session && !dataFetchTriggeredRef.current) {
+        dataFetchTriggeredRef.current = true;
+        handleInitialFetch(session.user.id);
+      }
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      setSession(session);
+      setIsAuthChecking(false);
+      if (event === 'SIGNED_IN' && session) {
+        setActiveTab('fleet');
+        if (!dataFetchTriggeredRef.current) {
+          dataFetchTriggeredRef.current = true;
+          handleInitialFetch(session.user.id);
+        }
+      } else if (event === 'SIGNED_OUT') {
+        dataFetchTriggeredRef.current = false;
+        setActiveTab('fleet');
+      }
+    });
+
     return () => subscription.unsubscribe();
   }, []);
 
-  useEffect(() => { let t: NodeJS.Timeout; if (isAuthChecking || (session && !isDataLoaded)) { t = setTimeout(() => setIsNetworkTimeout(true), 12000); } return () => { clearTimeout(t); setIsNetworkTimeout(false); }; }, [isAuthChecking, session, isDataLoaded]);
-
+  // ─── Network Timeout ───
   useEffect(() => {
-    if (!activeTail || !session || allAccessRecords.length === 0) { setCurrentAircraftRole(null); return; }
-    const ac = allAircraftList.find(a => a.tail_number === activeTail);
-    if (!ac) { setCurrentAircraftRole(null); return; }
-    const access = allAccessRecords.find((a: any) => a.aircraft_id === ac.id && a.user_id === session.user.id);
-    setCurrentAircraftRole(access?.aircraft_role || null);
-  }, [activeTail, allAccessRecords, allAircraftList, session]);
+    let t: NodeJS.Timeout;
+    if (isAuthChecking || (session && !isDataLoaded)) {
+      t = setTimeout(() => setIsNetworkTimeout(true), 12000);
+    }
+    return () => { clearTimeout(t); setIsNetworkTimeout(false); };
+  }, [isAuthChecking, session, isDataLoaded]);
 
-  const refreshForAircraft = useCallback(async (aircraftId: string) => {
-    if (!session?.user?.id) return;
-    const ago = new Date(); ago.setDate(ago.getDate() - 180);
-    const [pR, lR] = await Promise.all([supabase.from('aft_aircraft').select('*').eq('id', aircraftId).single(), supabase.from('aft_flight_logs').select('aircraft_id, ftt, tach, created_at').eq('aircraft_id', aircraftId).gte('created_at', ago.toISOString()).order('created_at', { ascending: true })]);
-    if (pR.data) { const up = enrichAircraftWithMetrics([pR.data], lR.data || [])[0]; setAllAircraftList(prev => prev.map(a => a.id === aircraftId ? up : a)); setAircraftList(prev => prev.map(a => a.id === aircraftId ? up : a)); }
-    globalMutate((key: any) => typeof key === 'string' && key.includes(aircraftId), undefined, { revalidate: true });
-  }, [session, globalMutate]);
-
+  // ─── Persist active tail ───
   useEffect(() => {
-    if (!session) return;
-    const timers: Record<string, NodeJS.Timeout> = {};
-    const handle = (payload: any) => {
-      const nr = payload.new; if (nr) { if (nr.user_id === session.user.id || nr.reported_by === session.user.id || nr.author_id === session.user.id) return; }
-      const aid = nr?.aircraft_id || null;
-      if (aid) { if (timers[aid]) clearTimeout(timers[aid]); timers[aid] = setTimeout(() => { refreshForAircraft(aid); delete timers[aid]; }, 1500); }
-      else { if (timers['__g']) clearTimeout(timers['__g']); timers['__g'] = setTimeout(() => { globalMutate(() => true, undefined, { revalidate: true }); delete timers['__g']; }, 1500); }
-    };
-    const ch = supabase.channel('fleet-updates')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'aft_flight_logs' }, handle)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'aft_squawks' }, handle)
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'aft_squawks' }, handle)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'aft_maintenance_items' }, handle)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'aft_notes' }, handle)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'aft_maintenance_events' }, handle)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'aft_event_messages' }, handle)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'aft_reservations' }, handle)
-      .subscribe();
-    return () => { Object.values(timers).forEach(t => clearTimeout(t)); supabase.removeChannel(ch); };
-  }, [session, refreshForAircraft, globalMutate]);
+    if (activeTail) localStorage.setItem('aft_active_tail', activeTail);
+  }, [activeTail]);
 
-  useEffect(() => { if (activeTail) localStorage.setItem('aft_active_tail', activeTail); }, [activeTail]);
-  useEffect(() => { if (activeTail && allAircraftList.length > 0 && session) { checkGroundedStatus(activeTail); fetchUnreadNotes(activeTail, session.user.id); } }, [activeTail, allAircraftList, session]);
+  // ─── Refresh grounded status & unread notes when tail changes ───
+  useEffect(() => {
+    if (activeTail && allAircraftList.length > 0 && session) {
+      checkGroundedStatus(activeTail);
+      fetchUnreadNotes(activeTail, session.user.id);
+    }
+  }, [activeTail, allAircraftList, session, checkGroundedStatus]);
 
-  const fetchAircraftData = async (userId: string) => {
-    const ago = new Date(); ago.setDate(ago.getDate() - 180);
-    const [sR, rR, pR, lR, aR] = await Promise.all([
-      supabase.from('aft_system_settings').select('*').eq('id', 1).single(),
-      supabase.from('aft_user_roles').select('role, initials').eq('user_id', userId).single(),
-      supabase.from('aft_aircraft').select('*').order('tail_number'),
-      supabase.from('aft_flight_logs').select('aircraft_id, ftt, tach, created_at').gte('created_at', ago.toISOString()).order('created_at', { ascending: true }),
-      supabase.from('aft_user_aircraft_access').select('aircraft_id, aircraft_role, user_id').eq('user_id', userId),
-    ]);
-    if (sR.data) setSysSettings(sR.data as SystemSettings);
-    if (rR.data) { setRole(rR.data.role as AppRole); setUserInitials(rR.data.initials || ""); }
-    const allPlanes = enrichAircraftWithMetrics(pR.data || [], lR.data || []);
-    setAllAircraftList(allPlanes);
-    const accessData = aR.data || [];
-    setAllAccessRecords(accessData);
-    const assignedIds = accessData.map((a: any) => a.aircraft_id);
-    const assigned = allPlanes.filter(a => assignedIds.includes(a.id));
-    setAircraftList(assigned);
+  // ─── Helpers ───
+  const handleInitialFetch = async (userId: string) => {
+    const { allPlanes, assigned } = await fetchAircraftData(userId);
     const saved = localStorage.getItem('aft_active_tail');
-    if (saved && allPlanes.some(a => a.tail_number === saved)) setActiveTail(saved);
-    else if (assigned.length > 0 && !activeTail) setActiveTail(assigned[0].tail_number);
-    else if (!activeTail) setActiveTail("");
-    setIsDataLoaded(true);
+    if (saved && allPlanes.some(a => a.tail_number === saved)) {
+      setActiveTail(saved);
+    } else if (assigned.length > 0) {
+      setActiveTail(assigned[0].tail_number);
+    } else {
+      setActiveTail("");
+    }
   };
 
   const fetchUnreadNotes = async (tail: string, userId: string) => {
-    const ac = allAircraftList.find(a => a.tail_number === tail); if (!ac) return;
+    const ac = allAircraftList.find(a => a.tail_number === tail);
+    if (!ac) return;
     const { data: notes } = await supabase.from('aft_notes').select('id').eq('aircraft_id', ac.id);
     if (!notes || notes.length === 0) return setUnreadNotes(0);
     const ids = notes.map(n => n.id);
@@ -137,36 +147,72 @@ export default function FleetTrackerApp() {
     setUnreadNotes(ids.length - (reads ? reads.length : 0));
   };
 
-  const checkGroundedStatus = async (tail: string) => {
-    const ac = allAircraftList.find(a => a.tail_number === tail); if (!ac) return;
-    let isGrounded = false, hasOpen = false, reason = "";
-    const { data: mx } = await supabase.from('aft_maintenance_items').select('*').eq('aircraft_id', ac.id);
-    if (mx) { const et = ac.total_engine_time || 0; for (const item of mx) { if (!item.is_required) continue; if (item.tracking_type === 'time' && item.due_time <= et) { isGrounded = true; reason = `${item.item_name} expired by ${(et - item.due_time).toFixed(1)} hrs`; break; } if (item.tracking_type === 'date' && new Date(item.due_date + 'T00:00:00') < new Date(new Date().setHours(0,0,0,0))) { isGrounded = true; const d = Math.ceil((Date.now() - new Date(item.due_date + 'T00:00:00').getTime()) / 86400000); reason = `${item.item_name} expired ${d} day${d > 1 ? 's' : ''} ago`; break; } } }
-    if (!isGrounded) { const { data: sq } = await supabase.from('aft_squawks').select('*').eq('aircraft_id', ac.id).eq('status', 'open'); if (sq && sq.length > 0) { const g = sq.find(s => s.affects_airworthiness); if (g) { isGrounded = true; reason = `AOG squawk${g.location ? ' at ' + g.location : ''}`; } else hasOpen = true; } }
-    setGroundedReason(reason);
-    if (isGrounded) setAircraftStatus('grounded'); else if (hasOpen) setAircraftStatus('issues'); else setAircraftStatus('airworthy');
+  const handleDeleteAircraft = async (id: string) => {
+    await supabase.from('aft_aircraft').delete().eq('id', id);
+    await fetchAircraftData(session.user.id);
+    setActiveTab('fleet');
   };
 
-  const handleDeleteAircraft = async (id: string) => { await supabase.from('aft_aircraft').delete().eq('id', id); await fetchAircraftData(session.user.id); setActiveTab('fleet'); };
-  const handleTailChange = (v: string) => { if (v === '__add_new__') { setEditingAircraftId(null); setShowAircraftModal(true); } else setActiveTail(v); };
-  const handleCopyQuickLink = () => { if (navigator.clipboard?.writeText) { navigator.clipboard.writeText(companionUrl).then(() => alert("Link copied! Now open your phone's browser, paste the link, and Add to Home Screen.")).catch(() => alert(`Please manually copy this link: ${companionUrl}`)); } else alert(`Please manually copy this link: ${companionUrl}`); };
-  const handleLogout = async () => { await supabase.auth.signOut(); };
-  const openAircraftForm = (ac: AircraftWithMetrics | null = null) => { setEditingAircraftId(ac?.id || null); setShowAircraftModal(true); };
+  const handleTailChange = (v: string) => {
+    if (v === '__add_new__') {
+      setEditingAircraftId(null);
+      setShowAircraftModal(true);
+    } else {
+      setActiveTail(v);
+    }
+  };
 
-  const getTabColor = (id: string) => { if (activeTab !== id) return 'text-gray-400 hover:bg-gray-50'; const m: Record<string, string> = { summary: 'text-navy', times: 'text-[#3AB0FF]', calendar: 'text-[#3AB0FF]', mx: 'text-[#F08B46]', notes: 'text-[#525659]' }; return m[id] || 'text-brandOrange'; };
-  const getIndicatorColor = (id: string) => { const m: Record<string, string> = { summary: 'bg-navy', times: 'bg-[#3AB0FF]', calendar: 'bg-[#3AB0FF]', mx: 'bg-[#F08B46]', notes: 'bg-[#525659]' }; return m[id] || 'bg-brandOrange'; };
+  const handleCopyQuickLink = () => {
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(companionUrl)
+        .then(() => alert("Link copied! Now open your phone's browser, paste the link, and Add to Home Screen."))
+        .catch(() => alert(`Please manually copy this link: ${companionUrl}`));
+    } else {
+      alert(`Please manually copy this link: ${companionUrl}`);
+    }
+  };
+
+  const handleLogout = async () => { await supabase.auth.signOut(); };
+
+  const openAircraftForm = (ac: AircraftWithMetrics | null = null) => {
+    setEditingAircraftId(ac?.id || null);
+    setShowAircraftModal(true);
+  };
+
+  const getTabColor = (id: string) => {
+    if (activeTab !== id) return 'text-gray-400 hover:bg-gray-50';
+    const m: Record<string, string> = { summary: 'text-navy', times: 'text-[#3AB0FF]', calendar: 'text-[#3AB0FF]', mx: 'text-[#F08B46]', notes: 'text-[#525659]' };
+    return m[id] || 'text-brandOrange';
+  };
+
+  const getIndicatorColor = (id: string) => {
+    const m: Record<string, string> = { summary: 'bg-navy', times: 'bg-[#3AB0FF]', calendar: 'bg-[#3AB0FF]', mx: 'bg-[#F08B46]', notes: 'bg-[#525659]' };
+    return m[id] || 'bg-brandOrange';
+  };
 
   const canEditAircraft = role === 'admin' || currentAircraftRole === 'admin';
 
+  // ─── Loading / Auth States ───
   if (isAuthChecking) {
-    if (isNetworkTimeout) return (<div className="flex flex-col items-center justify-center p-4 bg-slateGray h-[100dvh] w-full text-white text-center"><WifiOff size={64} className="mb-6 text-brandOrange animate-pulse" /><h2 className="font-oswald text-3xl tracking-widest uppercase mb-4">Connection Timeout</h2><p className="text-sm font-roboto text-gray-300 mb-8 max-w-xs leading-relaxed">We are having trouble connecting to the database. You may be experiencing spotty cell or WiFi coverage.</p><button onClick={() => window.location.reload()} className="w-full max-w-xs bg-brandOrange text-white font-oswald text-xl tracking-widest uppercase py-4 rounded-xl shadow-lg active:scale-95 transition-transform">Refresh App</button></div>);
+    if (isNetworkTimeout) return (
+      <div className="flex flex-col items-center justify-center p-4 bg-slateGray h-[100dvh] w-full text-white text-center">
+        <WifiOff size={64} className="mb-6 text-brandOrange animate-pulse" />
+        <h2 className="font-oswald text-3xl tracking-widest uppercase mb-4">Connection Timeout</h2>
+        <p className="text-sm font-roboto text-gray-300 mb-8 max-w-xs leading-relaxed">We are having trouble connecting to the database. You may be experiencing spotty cell or WiFi coverage.</p>
+        <button onClick={() => window.location.reload()} className="w-full max-w-xs bg-brandOrange text-white font-oswald text-xl tracking-widest uppercase py-4 rounded-xl shadow-lg active:scale-95 transition-transform">Refresh App</button>
+      </div>
+    );
     return <div className="flex flex-col items-center justify-center p-4 bg-slateGray h-[100dvh] w-full text-white font-oswald text-2xl tracking-widest uppercase animate-pulse">Loading...</div>;
   }
   if (!session) return <AuthScreen />;
-  if (role === 'pilot' && aircraftList.length === 0 && isDataLoaded) return <PilotOnboarding session={session} handleLogout={handleLogout} onSuccess={() => fetchAircraftData(session.user.id)} />;
+  if (role === 'pilot' && aircraftList.length === 0 && isDataLoaded) return <PilotOnboarding session={session} handleLogout={handleLogout} onSuccess={() => handleInitialFetch(session.user.id)} />;
 
+  // ─── Derived UI values ───
   const dropdownOptions = [...aircraftList];
-  if (activeTail && !dropdownOptions.some(a => a.tail_number === activeTail)) { const o = allAircraftList.find(a => a.tail_number === activeTail); if (o) dropdownOptions.push(o); }
+  if (activeTail && !dropdownOptions.some(a => a.tail_number === activeTail)) {
+    const o = allAircraftList.find(a => a.tail_number === activeTail);
+    if (o) dropdownOptions.push(o);
+  }
   const selectedAircraftData = allAircraftList.find(a => a.tail_number === activeTail) || null;
   const showFleetButton = aircraftList.length > 1;
 
@@ -247,8 +293,7 @@ export default function FleetTrackerApp() {
           ].map(tab => (
             <button key={tab.id} onClick={() => {
               if (tab.id === 'mx') {
-                if (activeTab === 'mx') { setShowMxPicker(true); } // Already on MX — show picker to switch
-                else { setShowMxPicker(true); } // Not on MX — show picker
+                setShowMxPicker(true);
               } else {
                 setActiveTab(tab.id as AppTab);
               }

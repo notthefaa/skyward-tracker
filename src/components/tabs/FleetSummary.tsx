@@ -46,6 +46,11 @@ export default function FleetSummary({
           nextMxName: nextMx ? nextMx.item_name : 'No MX Tracked'
         };
       });
+    },
+    {
+      // Always fetch fresh fleet status when the user navigates to the Fleet tab,
+      // since individual aircraft MX/squawk status may have changed
+      revalidateOnMount: true,
     }
   );
 

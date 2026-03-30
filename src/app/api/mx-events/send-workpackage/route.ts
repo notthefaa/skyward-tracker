@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { Resend } from 'resend';
-import { requireAuth, handleApiError } from '@/lib/auth';
+import { requireAuth, requireAircraftAccess, handleApiError } from '@/lib/auth';
 import { env } from '@/lib/env';
 
 const resend = new Resend(env.RESEND_API_KEY);
@@ -8,7 +8,7 @@ const FROM_EMAIL = 'notifications@skywardsociety.com';
 
 export async function POST(req: Request) {
   try {
-    const { supabaseAdmin } = await requireAuth(req);
+    const { user, supabaseAdmin } = await requireAuth(req);
     const body = await req.json();
     const { eventId, additionalMxItemIds, additionalSquawkIds, addonServices, proposedDate } = body;
     const isResend = body.resend === true;
@@ -24,6 +24,9 @@ export async function POST(req: Request) {
     if (evErr || !event) {
       return NextResponse.json({ error: 'Event not found.' }, { status: 404 });
     }
+
+    // Verify the user has access to this aircraft
+    await requireAircraftAccess(supabaseAdmin, user.id, event.aircraft_id);
 
     // For initial sends, only drafts are allowed. For resends, any active status is fine.
     if (!isResend && event.status !== 'draft') {

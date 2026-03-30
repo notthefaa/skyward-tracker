@@ -14,7 +14,9 @@ const ctaButton = (url: string, label: string) => `
 
 export async function POST(req: Request) {
   try {
-    const { accessToken, action, proposedDate, message, lineItemUpdates } = await req.json();
+    // Parse body ONCE — all fields extracted here
+    const body = await req.json();
+    const { accessToken, action, proposedDate, message, lineItemUpdates, itemName, itemDescription } = body;
 
     if (!accessToken) {
       return NextResponse.json({ error: 'Access token is required.' }, { status: 400 });
@@ -202,7 +204,9 @@ export async function POST(req: Request) {
       }
 
     } else if (action === 'suggest_item') {
-      const { itemName, itemDescription } = await req.json().catch(() => ({ itemName: null, itemDescription: null }));
+      // FIX: Use itemName/itemDescription from the already-parsed body
+      // instead of calling req.json() a second time (which fails silently
+      // because the body stream has already been consumed).
       const suggestedName = itemName || message || 'Additional Work';
 
       await supabaseAdmin.from('aft_event_line_items').insert({

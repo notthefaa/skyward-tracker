@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { Resend } from 'resend';
-import { requireAuth, handleApiError } from '@/lib/auth';
+import { requireAuth, requireAircraftAccess, handleApiError } from '@/lib/auth';
 import { env } from '@/lib/env';
 
 const resend = new Resend(env.RESEND_API_KEY);
@@ -8,12 +8,16 @@ const FROM_EMAIL = 'notifications@skywardsociety.com';
 
 export async function POST(req: Request) {
   try {
-    // SECURITY: Require authentication (any logged-in user can trigger this)
-    const { supabaseAdmin } = await requireAuth(req);
+    const { user, supabaseAdmin } = await requireAuth(req);
     const { aircraft, mxItem } = await req.json();
 
     if (!aircraft || !mxItem) {
       return NextResponse.json({ error: 'Aircraft and maintenance item data are required.' }, { status: 400 });
+    }
+
+    // Verify the user has access to this aircraft
+    if (aircraft.id) {
+      await requireAircraftAccess(supabaseAdmin, user.id, aircraft.id);
     }
 
     if (aircraft.mx_contact_email) {

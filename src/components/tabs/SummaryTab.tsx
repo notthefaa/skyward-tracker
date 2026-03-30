@@ -47,6 +47,11 @@ export default function SummaryTab({
         activeSquawks: sqRes.data || [],
         latestNote: noteRes.data?.[0] || null
       };
+    },
+    {
+      // Always fetch fresh data when navigating to the Home tab,
+      // since MX/squawk status may have changed from other tabs
+      revalidateOnMount: true,
     }
   );
 
@@ -167,7 +172,6 @@ export default function SummaryTab({
         <div className="relative h-40 md:h-56 bg-slateGray flex items-center justify-center">
           {aircraft.avatar_url ? <img src={aircraft.avatar_url} alt="Aircraft Avatar" className="w-full h-full object-cover" /> : <PlaneTakeoff size={64} className="text-white/20" />}
           
-          {/* ─── OVERLAY BUTTONS: Invite, Edit, Delete (stacked vertically) ─── */}
           {canEdit && (
             <div className="absolute top-4 right-4 flex flex-col gap-2 z-10">
               <button onClick={() => setShowInviteModal(true)} className="bg-[#3AB0FF] text-white p-2.5 rounded-full shadow-[0_4px_10px_rgba(0,0,0,0.5)] hover:bg-blue-600 active:scale-95 transition-all" title="Invite Pilot"><UserPlus size={18} /></button>

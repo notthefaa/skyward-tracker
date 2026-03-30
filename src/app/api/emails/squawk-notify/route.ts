@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { Resend } from 'resend';
-import { requireAuth, handleApiError } from '@/lib/auth';
+import { requireAuth, requireAircraftAccess, handleApiError } from '@/lib/auth';
 import { env } from '@/lib/env';
 
 const resend = new Resend(env.RESEND_API_KEY);
@@ -8,12 +8,17 @@ const FROM_EMAIL = 'notifications@skywardsociety.com';
 
 export async function POST(req: Request) {
   try {
-    // SECURITY: Require authentication
-    const { supabaseAdmin } = await requireAuth(req);
+    // SECURITY: Require authentication and verify aircraft access
+    const { user, supabaseAdmin } = await requireAuth(req);
     const { squawk, aircraft, notifyMx } = await req.json();
 
     if (!squawk || !aircraft) {
       return NextResponse.json({ error: 'Squawk and aircraft data are required.' }, { status: 400 });
+    }
+
+    // Verify the user has access to this aircraft
+    if (aircraft.id) {
+      await requireAircraftAccess(supabaseAdmin, user.id, aircraft.id);
     }
 
     const { data: access } = await supabaseAdmin.from('aft_user_aircraft_access').select('user_id').eq('aircraft_id', aircraft.id);

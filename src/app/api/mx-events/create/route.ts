@@ -1,14 +1,17 @@
 import { NextResponse } from 'next/server';
-import { requireAuth, handleApiError } from '@/lib/auth';
+import { requireAuth, requireAircraftAccess, handleApiError } from '@/lib/auth';
 
 export async function POST(req: Request) {
   try {
-    const { supabaseAdmin } = await requireAuth(req);
+    const { user, supabaseAdmin } = await requireAuth(req);
     const { aircraftId, mxItemIds, squawkIds, addonServices, proposedDate } = await req.json();
 
     if (!aircraftId) {
       return NextResponse.json({ error: 'Aircraft ID is required.' }, { status: 400 });
     }
+
+    // Verify the user has access to this aircraft
+    await requireAircraftAccess(supabaseAdmin, user.id, aircraftId);
 
     const { data: aircraft, error: acErr } = await supabaseAdmin
       .from('aft_aircraft').select('*').eq('id', aircraftId).single();
@@ -21,7 +24,7 @@ export async function POST(req: Request) {
       .from('aft_maintenance_events')
       .insert({
         aircraft_id: aircraftId,
-        created_by: (await supabaseAdmin.auth.getUser((req.headers.get('Authorization') || '').replace('Bearer ', ''))).data.user?.id,
+        created_by: user.id,
         status: 'draft',
         proposed_date: proposedDate || null,
         proposed_by: proposedDate ? 'owner' : null,
