@@ -283,7 +283,8 @@ export async function POST(req: Request) {
       'aft_aircraft', 'aft_flight_logs', 'aft_maintenance_items',
       'aft_squawks', 'aft_notes', 'aft_note_reads',
       'aft_maintenance_events', 'aft_event_line_items', 'aft_event_messages',
-      'aft_user_roles', 'aft_user_aircraft_access'
+      'aft_user_roles', 'aft_user_aircraft_access',
+      'aft_reservations', 'aft_notification_preferences'
     ];
     for (const table of tables) {
       const { count } = await supabaseAdmin

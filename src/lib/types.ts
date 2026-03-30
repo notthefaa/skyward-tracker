@@ -3,8 +3,6 @@
 //
 // Every interface includes [key: string]: any to gracefully
 // accept extra columns from Supabase without type errors.
-// This gives us documentation + autocomplete on known fields
-// while staying compatible with the untyped Supabase client.
 // =============================================================
 
 export interface Aircraft {
@@ -37,6 +35,9 @@ export interface Aircraft {
 export interface AircraftWithMetrics extends Aircraft {
   burnRate: number;
   confidenceScore: number;
+  burnRateCV?: number;
+  burnRateLow?: number;
+  burnRateHigh?: number;
 }
 
 export interface FlightLog {
@@ -134,6 +135,54 @@ export interface UserRole {
   [key: string]: any;
 }
 
+export interface Reservation {
+  id: string;
+  aircraft_id: string;
+  user_id?: string | null;
+  start_time: string;
+  end_time: string;
+  title?: string | null;
+  route?: string | null;
+  pilot_name?: string | null;
+  pilot_initials?: string | null;
+  status: 'confirmed' | 'cancelled';
+  created_at: string;
+  [key: string]: any;
+}
+
+export interface NotificationPreference {
+  id: string;
+  user_id: string;
+  notification_type: NotificationType;
+  enabled: boolean;
+  created_at: string;
+  [key: string]: any;
+}
+
+export type NotificationType = 
+  | 'reservation_created'
+  | 'reservation_cancelled'
+  | 'squawk_reported'
+  | 'mx_reminder'
+  | 'service_update'
+  | 'note_posted';
+
+export const NOTIFICATION_TYPES: { type: NotificationType; label: string; description: string }[] = [
+  { type: 'reservation_created', label: 'New Reservations', description: 'When someone books an aircraft you are assigned to.' },
+  { type: 'reservation_cancelled', label: 'Cancelled Reservations', description: 'When a reservation is cancelled on your aircraft.' },
+  { type: 'squawk_reported', label: 'New Squawks', description: 'When a squawk is reported on your aircraft.' },
+  { type: 'mx_reminder', label: 'Maintenance Reminders', description: 'When maintenance items are approaching their due thresholds.' },
+  { type: 'service_update', label: 'Service Updates', description: 'When a service event status changes or your mechanic sends an update.' },
+  { type: 'note_posted', label: 'New Notes', description: 'When a pilot posts a note on your aircraft.' },
+];
+
+export interface UserAircraftAccess {
+  user_id: string;
+  aircraft_id: string;
+  aircraft_role: AircraftRole;
+  [key: string]: any;
+}
+
 export interface SystemSettings {
   id?: number;
   reminder_1: number;
@@ -149,5 +198,7 @@ export interface SystemSettings {
 }
 
 export type AppRole = 'admin' | 'pilot';
+export type AircraftRole = 'admin' | 'pilot';
 export type AircraftStatus = 'airworthy' | 'issues' | 'grounded';
-export type AppTab = 'fleet' | 'summary' | 'times' | 'mx' | 'squawks' | 'notes';
+export type AppTab = 'fleet' | 'summary' | 'times' | 'calendar' | 'mx' | 'notes';
+export type MxSubTab = 'maintenance' | 'squawks';
