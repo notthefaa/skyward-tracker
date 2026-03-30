@@ -148,7 +148,7 @@ export default function CalendarDashboard({ aircraft, session }: CalendarDashboa
     : `Last ${hoursPeriod}d`;
 
   return (
-    <div className="-mb-3">
+    <div className="mt-2 -mb-3">
       {/* Three floating gauges */}
       <div className="flex items-start justify-around gap-3 px-1">
         <RingGauge value={myDays} max={WINDOW} label="My Bookings" sublabel={`Next ${WINDOW}d`} color="#56B94A" suffix="days" />
