@@ -263,10 +263,8 @@ export default function FleetTrackerApp() {
 
       {/* ─── MX ENTRY PICKER ─── */}
       {showMxPicker && (
-        <div className="fixed inset-0 z-[10000] flex items-end justify-center bg-black/50 animate-fade-in" onClick={() => setShowMxPicker(false)}>
-          <div className="bg-white w-full max-w-lg rounded-t-2xl shadow-2xl p-6 pb-10 animate-slide-up" style={{ paddingBottom: 'calc(2rem + env(safe-area-inset-bottom, 0px))' }} onClick={e => e.stopPropagation()}>
-            <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-5" />
-            <h3 className="font-oswald text-xl font-bold uppercase tracking-widest text-navy text-center mb-5">What do you need?</h3>
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/50 animate-fade-in" onClick={() => setShowMxPicker(false)}>
+          <div className="bg-white w-full max-w-sm rounded-lg shadow-2xl p-5 animate-slide-up" onClick={e => e.stopPropagation()}>
             <div className="flex gap-3">
               <button 
                 onClick={() => { setMxSubTab('maintenance'); setActiveTab('mx'); setShowMxPicker(false); }} 

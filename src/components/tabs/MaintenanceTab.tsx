@@ -48,15 +48,6 @@ export default function MaintenanceTab({
     }
   );
 
-  // Squawk count for badge
-  const { data: activeSquawkCount = 0 } = useSWR(
-    aircraft ? `squawk-count-${aircraft.id}` : null,
-    async () => {
-      const { count } = await supabase.from('aft_squawks').select('*', { count: 'exact', head: true }).eq('aircraft_id', aircraft!.id).eq('status', 'open');
-      return count || 0;
-    }
-  );
-
   const [showMxModal, setShowMxModal] = useState(false);
   const [showServiceModal, setShowServiceModal] = useState(false);
   const [showGuideModal, setShowGuideModal] = useState(false);
@@ -149,14 +140,8 @@ export default function MaintenanceTab({
         <button onClick={() => setSubTab('maintenance')} className={`flex-1 py-3 text-xs font-oswald font-bold uppercase tracking-widest transition-colors active:scale-95 flex items-center justify-center gap-2 border-b-2 -mb-[2px] ${subTab === 'maintenance' ? 'border-[#F08B46] text-[#F08B46]' : 'border-transparent text-gray-400 hover:text-gray-600'}`}>
           <Wrench size={16} /> Maintenance
         </button>
-        <button onClick={() => setSubTab('squawks')} className={`flex-1 py-3 text-xs font-oswald font-bold uppercase tracking-widest transition-colors active:scale-95 flex items-center justify-center gap-2 border-b-2 -mb-[2px] relative ${subTab === 'squawks' ? 'border-[#CE3732] text-[#CE3732]' : 'border-transparent text-gray-400 hover:text-gray-600'}`}>
-          <AlertTriangle size={14} /> Squawks
-          {activeSquawkCount > 0 && subTab !== 'squawks' && (
-            <span className="flex h-2.5 w-2.5 ml-0.5">
-              <span className="animate-ping absolute inline-flex h-2.5 w-2.5 rounded-full bg-[#CE3732] opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#CE3732]"></span>
-            </span>
-          )}
+        <button onClick={() => setSubTab('squawks')} className={`flex-1 py-3 text-xs font-oswald font-bold uppercase tracking-widest transition-colors active:scale-95 flex items-center justify-center gap-2 border-b-2 -mb-[2px] ${subTab === 'squawks' ? 'border-[#CE3732] text-[#CE3732]' : 'border-transparent text-gray-400 hover:text-gray-600'}`}>
+          <AlertTriangle size={16} /> Squawks
         </button>
       </div>
 
