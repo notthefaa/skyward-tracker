@@ -1,179 +1,150 @@
-# Skyward Fleet Tracker
+# Skyward Aircraft Manager
 
-A progressive web app (PWA) for general aviation fleet management. Track aircraft, log flights, manage maintenance, report squawks, and coordinate with mechanics — all from your phone.
+A fleet management platform built for pilot-owners by **Skyward Society**. Flight logging, maintenance tracking, mechanic coordination, squawk reporting, shared scheduling, and pilot collaboration — all in one progressive web app.
 
-## Architecture
+**Live:** [track.skywardsociety.com](https://track.skywardsociety.com)  
+**Companion App:** Log It (lightweight PWA for ramp use)
 
-| Layer | Technology |
-|-------|-----------|
-| Frontend | Next.js 16, React, Tailwind CSS v4, TypeScript |
-| Backend | Next.js API Routes, Supabase (PostgreSQL + Auth + Storage + RLS) |
-| Email | Resend (transactional email) |
-| Hosting | Vercel |
-| Companion App | Skyward LogIt — separate Next.js PWA for quick flight/squawk logging |
+---
 
-Both apps share a single Supabase database. The database also serves another app with a different table prefix.
+## Stack
 
-## Repository Structure
+- **Framework:** Next.js 16 (App Router, React, TypeScript)
+- **Styling:** Tailwind CSS v4 with `@theme` custom properties
+- **Backend:** Supabase (PostgreSQL, Auth, Storage, Realtime, RLS)
+- **Email:** Resend (transactional email from `notifications@skywardsociety.com`)
+- **Hosting:** Vercel
+- **Repos:** `github.com/notthefaa/skyward-tracker` (main) + `github.com/notthefaa/skyward-logit` (companion)
+
+---
+
+## Features
+
+### Flight Logging
+Log flights with automatic engine-type detection. Hobbs & Tach for piston, AFTT & FTT for turbine. Built-in backward-entry validation, fuel state tracking (gallons/lbs with auto-conversion), routing (POD/POA), passenger info, trip reason codes, and full CSV export. Paginated flight log table with computed FLT column.
+
+### Maintenance Tracking
+Track items by engine hours or calendar dates with automatic interval recalculation on completion. The predictive engine analyzes 180 days of flight data to project when service will be needed, using an active-days weighted burn rate with weekly rolling variance and a four-factor confidence score. Configurable email alerts at three thresholds. Automated scheduling creates draft work packages when items approach their due points.
+
+### Mechanic Coordination
+Bundle MX items, squawks, and add-on services into a single work package. Preview the email before sending. Full lifecycle management: Draft → Scheduling → Confirmed → In Progress → Ready for Pickup → Complete. Both owner and mechanic are notified at each stage. Mechanics can upload photos and documents (up to 5 files, 10MB each) through the service portal.
+
+### Mechanic Portal
+Secure token-based access — no login required. Mechanics can propose dates, confirm appointments, update line-item work status, suggest additional items found during service, set estimated completion, upload attachments, and mark the aircraft ready for pickup. All communication is logged and visible to both sides. Portal access expires 7 days after event completion.
+
+### Squawk Reporting
+Report discrepancies with photos from the ramp. Flag anything affecting airworthiness to ground the aircraft fleet-wide. Include squawks in service events — they auto-resolve when the mechanic completes the work. Full MEL/CDL/NEF/MDL deferral support with digital signatures. Squawks and maintenance are combined under a single MX tab with a selector.
+
+### Shared Calendar
+Month, week, and day views for aircraft scheduling. Create reservations with start/end times, purpose, and optional route of flight. Hard-block on overlapping bookings — no double-booking allowed. Confirmed maintenance events automatically block calendar dates. All assigned users are notified when reservations are created or cancelled (respects notification preferences).
+
+### Pilot Invitations & Aircraft-Level Roles
+Two-tier role system: global roles (admin/pilot) and per-aircraft roles (tailnumber admin/tailnumber pilot). Tailnumber admins can edit the aircraft, invite pilots, manage reservations, and change user roles for their aircraft. Tailnumber pilots can view, log flights, report squawks, post notes, and manage their own reservations. Invitations happen through the aircraft summary page.
+
+### Notification Preferences
+Users can subscribe or unsubscribe from six notification types: new reservations, cancelled reservations, squawk reports, maintenance reminders, service updates, and new notes. Managed through the Settings screen. All preferences default to enabled.
+
+### Account Management
+Settings screen includes notification preferences, password reset via email, account info display, and account self-deletion with cascade impact preview. Deleting an account permanently removes all aircraft the user created (with their flight logs, MX items, squawks, notes, reservations, and service events). A confirmation dialog names the affected tail numbers and user count.
+
+### Companion App (Log It)
+Lightweight PWA for ramp use. Log flights and report squawks from the phone's home screen. Same secure login, instant sync. No app store required.
+
+### Additional Features
+- **Real-time sync:** Supabase Realtime with aircraft-scoped refresh — only the affected aircraft's data is refetched, not the entire fleet
+- **Fuel tracking:** Gallons and pounds with automatic conversion for W&B
+- **PWA install:** Add to home screen like a native app
+- **CSV export:** Download complete flight log history
+- **Predictive alerts:** Email notifications when MX is approaching based on flying patterns
+- **Success toasts:** Auto-dismissing confirmations for all key actions
+- **Grounded banner:** Shows the specific reason (expired MX item name + days/hours, or AOG squawk location)
+- **10MB file validation:** Client-side and server-side enforcement across all upload points
+- **DB health tool:** Automated cleanup of old records, orphaned files, and storage bucket sweeps
+
+---
+
+## Project Structure
 
 ```
 src/
 ├── app/
-│   ├── page.tsx                    # Main app shell — auth, data loading, tabs, nav
-│   ├── layout.tsx                  # Root layout — fonts, metadata, viewport, favicon
-│   ├── globals.css                 # Theme colors, body styles, animations
-│   ├── api/
-│   │   ├── admin/
-│   │   │   └── db-health/route.ts  # Database cleanup (9 stages) — admin only
-│   │   ├── aircraft/
-│   │   │   └── create/route.ts     # Create aircraft — authenticated
-│   │   ├── cron/
-│   │   │   └── mx-reminders/       # Automated MX alerts + predictive scheduling
-│   │   ├── emails/
-│   │   │   ├── mx-schedule/        # Manual MX scheduling email to mechanic
-│   │   │   └── squawk-notify/      # Squawk notification emails
-│   │   ├── invite/route.ts         # Admin invite user — admin only
-│   │   ├── resend-invite/route.ts  # Resend invite — intentionally unauthenticated
-│   │   ├── users/route.ts          # User management — admin only
-│   │   └── mx-events/
-│   │       ├── create/route.ts     # Create maintenance event — authenticated
-│   │       ├── send-workpackage/   # Send/resend work package to mechanic
-│   │       ├── respond/route.ts    # Mechanic actions (propose, confirm, decline, etc.)
-│   │       ├── owner-action/       # Owner actions (confirm, counter, cancel, comment)
-│   │       └── complete/route.ts   # Complete event + reset MX tracking
-│   ├── service/[id]/page.tsx       # Mechanic portal (accessed via secure token)
-│   ├── squawk/[id]/page.tsx        # Public squawk viewer (accessed via squawk ID)
-│   └── update-password/page.tsx    # Password update page
+│   ├── layout.tsx              # Root layout, metadata, fonts
+│   ├── manifest.ts             # PWA manifest
+│   ├── globals.css             # Tailwind v4 theme
+│   ├── page.tsx                # Main app shell (auth, routing, realtime, nav)
+│   ├── update-password/        # Password reset page
+│   ├── squawk/[id]/            # Public squawk viewer (shareable link)
+│   ├── service/[id]/           # Mechanic portal (token-based access)
+│   └── api/
+│       ├── aircraft/create/    # Create aircraft + set tailnumber admin
+│       ├── aircraft-access/    # Change roles, remove users from aircraft
+│       ├── account/delete/     # Account self-deletion with cascade
+│       ├── admin/db-health/    # Automated DB cleanup + monitoring
+│       ├── cron/mx-reminders/  # Scheduled MX alerts (Vercel CRON)
+│       ├── emails/
+│       │   ├── mx-schedule/    # MX scheduling email
+│       │   └── squawk-notify/  # Squawk notification email
+│       ├── invite/             # Global admin invite
+│       ├── pilot-invite/       # Tailnumber admin invite
+│       ├── mx-events/
+│       │   ├── complete/       # Complete service event
+│       │   ├── create/         # Create service event
+│       │   ├── manual-trigger/ # Manual MX trigger
+│       │   ├── owner-action/   # Owner scheduling actions
+│       │   ├── respond/        # Mechanic portal actions
+│       │   ├── send-workpackage/ # Send/resend work package
+│       │   └── upload-attachment/ # Mechanic file uploads
+│       ├── resend-invite/      # Re-send auth invitation
+│       └── reservations/       # Calendar CRUD + conflict detection
 ├── components/
-│   ├── AuthScreen.tsx              # Login/signup UI
-│   ├── PilotOnboarding.tsx         # First-time pilot setup wizard
-│   ├── AppButtons.tsx              # Shared button components
-│   ├── TicketField.tsx             # Reusable form field component
+│   ├── AppButtons.tsx          # Shared button components
+│   ├── AuthScreen.tsx          # Login + forgot password
+│   ├── PilotOnboarding.tsx     # First aircraft setup
+│   ├── Toast.tsx               # Auto-dismissing success notifications
 │   ├── modals/
-│   │   ├── ServiceEventModal.tsx   # Full MX event lifecycle modal
-│   │   ├── AdminModals.tsx         # Admin tools (users, settings, fleet, invites)
-│   │   ├── AircraftModal.tsx       # Add/edit aircraft form
-│   │   └── TutorialModal.tsx       # First-time user tutorial
+│   │   ├── AircraftModal.tsx   # Create/edit aircraft form
+│   │   ├── AdminModals.tsx     # Admin center (settings, users, fleet)
+│   │   ├── MxGuideModal.tsx    # Maintenance system guide
+│   │   ├── ServiceEventModal.tsx # Full service event lifecycle
+│   │   ├── SettingsModal.tsx   # Notifications, password, account deletion
+│   │   └── TutorialModal.tsx   # First-run tutorial
 │   └── tabs/
-│       ├── FleetSummary.tsx        # Fleet overview grid
-│       ├── SummaryTab.tsx          # Aircraft detail summary
-│       ├── TimesTab.tsx            # Flight log history + entry
-│       ├── MaintenanceTab.tsx      # MX tracking + service events
-│       ├── SquawksTab.tsx          # Squawk management
-│       └── NotesTab.tsx            # Pilot notes / crew communication
+│       ├── CalendarTab.tsx     # Shared scheduling calendar
+│       ├── FleetSummary.tsx    # Fleet grid overview
+│       ├── MaintenanceTab.tsx  # Combined MX + Squawks with selector
+│       ├── NotesTab.tsx        # Pilot notes with photos
+│       ├── SquawksTab.tsx      # Squawk reporting + management
+│       ├── SummaryTab.tsx      # Aircraft home (hero, times, fuel, contacts)
+│       └── TimesTab.tsx        # Flight log table + entry form
 └── lib/
-    ├── types.ts                    # Shared TypeScript interfaces
-    ├── math.ts                     # Burn rate, confidence, MX projections
-    ├── auth.ts                     # Server-side auth middleware
-    ├── authFetch.ts                # Client-side authenticated fetch wrapper
-    ├── env.ts                      # Environment variable validation
-    └── supabase.ts                 # Supabase client initialization
+    ├── auth.ts                 # Server-side auth (requireAuth, createAdminClient)
+    ├── authFetch.ts            # Client-side authenticated fetch wrapper
+    ├── constants.ts            # Shared constants (file size limits)
+    ├── env.ts                  # Environment variable validation
+    ├── math.ts                 # Predictive engine, burn rate, MX processing
+    ├── supabase.ts             # Supabase client singleton
+    └── types.ts                # All TypeScript interfaces and types
 ```
 
-## Key Features
+---
 
-### Flight Operations
-- Log flights with Hobbs/Tach (piston) or AFTT/FTT (turbine)
-- Track fuel state with gallons/lbs conversion
-- Departure/arrival airports, passengers, trip reason codes
-- CSV export of flight history
-- Backward-time validation prevents data entry errors
+## Navigation
 
-### Maintenance Tracking
-- Time-based and date-based MX item tracking
-- Predictive maintenance engine using 180-day burn rate with 4-factor confidence scoring
-- Automated draft work package creation when items approach due
-- Weekly variance analysis for projection accuracy
+**Bottom nav (5 tabs):** Home → Times → Calendar → MX → Notes
 
-### Maintenance Event Workflow
-Complete service event lifecycle between owner and mechanic:
+- **Home:** Aircraft summary with hero image, times, fuel, contacts, next MX due, active squawks, latest note. Overlay buttons for invite, edit, and delete (visible to tailnumber admins).
+- **Times:** Paginated flight log table with log entry form.
+- **Calendar:** Month/week/day views with reservation booking and MX event blocks.
+- **MX:** Tapping MX opens a centered picker modal to choose Maintenance or Squawks. An underline tab selector at the top of the page allows switching between the two views.
+- **Notes:** Pilot notes with photo attachments and read receipts.
 
-```
-Draft → Scheduling → Confirmed → In Progress → Ready for Pickup → Complete
-                                                                      ↕
-                                              Cancel/Decline ← (from any active status)
-```
+**Header:** Tail number selector (with "+ Add Aircraft" at bottom), status dot, Fleet button (only if 2+ aircraft), Log It, Admin (global admins only), Settings, Logout.
 
-- Owner creates work packages with MX items, squawks, and add-on services
-- Email preview before sending
-- Mechanic receives email with secure portal link
-- Date negotiation (propose/confirm/counter)
-- Line item status tracking with owner notifications
-- Mechanic can suggest additional discovered work
-- "Aircraft Ready for Pickup" signal
-- Owner enters logbook data to complete and reset tracking
-- Squawks auto-resolve on completion
-- Cancel (owner) and decline (mechanic) flows with notifications
-
-### Mechanic Portal
-- Secure access via 256-bit hex token (no login required)
-- View work package, aircraft details, squawk photos
-- Propose/confirm service dates with availability notes
-- Update line item statuses (pending → in progress → complete → deferred)
-- Set estimated completion date
-- Suggest additional work items
-- Mark aircraft ready for pickup
-- Decline service with reason
-- Message thread with owner
-
-### Squawk Management
-- Report squawks with photos and location
-- Airworthiness assessment (grounded vs monitor)
-- MEL/CDL/NEF/MDL deferral support for turbine aircraft
-- Digital signature capture for deferrals
-- Squawk viewer page for mechanic access
-- Auto-resolution when completed via service event
-
-### Communication
-- Pilot notes per aircraft with unread badges
-- Owner ↔ mechanic messaging through service events
-- All messages logged and timestamped
-- 15 email touchpoints across 6 routes, all with actionable links
-- Realtime updates via Supabase channels
-
-### Administration
-- Role-based access (admin/pilot)
-- User invitation and management
-- Global fleet view with aircraft assignment
-- System settings for reminder thresholds
-- Database health tool with 9 cleanup stages and row count monitoring
-
-## iOS PWA Layout
-
-The app uses `viewport-fit: cover` for the navy status bar and a three-panel fixed layout:
-
-- **Header**: `fixed top-0` with `paddingTop: env(safe-area-inset-top)`
-- **Main**: `fixed` between header and nav, `overflow-y-auto`
-- **Nav**: `fixed bottom-0` with `pb-[env(safe-area-inset-bottom)]`
-
-All modals use `z-[10000]+` to render above the header/nav (`z-[9999]`).
-
-## Performance Optimizations
-
-- All initial data queries run in parallel via `Promise.all` (~200ms vs ~1000ms)
-- App shell renders immediately after auth; content loads progressively
-- Dynamic imports for code splitting (11 components)
-- Realtime channel for cross-user updates (no polling)
-
-## Database Health Tool
-
-Automated cleanup via `POST /api/admin/db-health` (admin only):
-
-1. Read receipts — purge after 30 days
-2. Notes — purge after 6 months
-3. Squawks — never purged (permanent history)
-4. Completed MX events — purge after 12 months (completion data lives on MX items)
-5. Cancelled MX events — purge after 3 months
-6. Orphaned child records (messages, line items for deleted events)
-7. Orphaned access records (for deleted aircraft)
-8. Flight logs — purge after 5 years
-9. Orphaned images in 3 storage buckets
-10. Table row counts for monitoring
+---
 
 ## Environment Variables
 
-### Main App (skyward-tracker)
-```
+```env
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
@@ -183,34 +154,68 @@ NEXT_PUBLIC_APP_VERSION=
 NEXT_PUBLIC_COMPANION_URL=
 ```
 
-### Companion App (skyward-logit)
-```
-NEXT_PUBLIC_SUPABASE_URL=
-NEXT_PUBLIC_SUPABASE_ANON_KEY=
-SUPABASE_SERVICE_ROLE_KEY=
-RESEND_API_KEY=
-NEXT_PUBLIC_APP_VERSION=
-NEXT_PUBLIC_MAIN_APP_URL=
-```
+---
 
-## Security
+## Database Tables
 
-- All API routes authenticated via `requireAuth()` middleware
-- Admin routes require admin role check
-- CRON route protected by `CRON_SECRET` header
-- Mechanic portal uses 256-bit hex access tokens (unguessable)
-- RLS enabled on all 12 tables
-- User ID derived from session, never from client body
-- Error responses sanitized (no Supabase internals)
-- `resend-invite` intentionally unauthenticated (invite tokens are single-use)
+| Table | Purpose |
+|-------|---------|
+| `aft_aircraft` | Aircraft master records |
+| `aft_flight_logs` | Flight log entries |
+| `aft_maintenance_items` | MX tracking items (time/date based) |
+| `aft_maintenance_events` | Service event lifecycle |
+| `aft_event_line_items` | Work package line items |
+| `aft_event_messages` | Service event communication thread |
+| `aft_squawks` | Discrepancy reports |
+| `aft_notes` | Pilot notes |
+| `aft_note_reads` | Note read receipts |
+| `aft_user_roles` | Global user roles (admin/pilot) |
+| `aft_user_aircraft_access` | Per-aircraft access with aircraft_role |
+| `aft_reservations` | Calendar bookings (exclusion constraint prevents overlaps) |
+| `aft_notification_preferences` | Per-user notification toggles |
+| `aft_system_settings` | Global MX reminder thresholds |
 
-## Brand Palette
+**Storage Buckets:** `aft_squawk_images`, `aft_note_images`, `aft_aircraft_avatars`, `aft_event_attachments`
 
-| Color | Hex | Usage |
-|-------|-----|-------|
-| Navy | #091F3C | Headers, primary text |
-| Blue | #3AB0FF | Links, times, info |
-| Orange | #F08B46 | MX, warnings, actions |
-| Red | #CE3732 | Squawks, errors, grounded |
-| Green | #56B94A | Success, airworthy, complete |
-| Slate | #525659 | Notes, secondary text |
+---
+
+## Role & Permission Model
+
+### Global Roles (aft_user_roles)
+- **Admin:** Full system access. Can see Global Fleet, manage settings, run db-health, invite global admins.
+- **Pilot:** Base role. Can create aircraft (becomes tailnumber admin), log flights, report squawks, post notes.
+
+### Aircraft Roles (aft_user_aircraft_access.aircraft_role)
+- **Tailnumber Admin:** Can edit aircraft, invite pilots to that aircraft, manage reservations, change user roles, remove users. Aircraft creator is automatically tailnumber admin.
+- **Tailnumber Pilot:** Can view, log flights, report squawks, post notes, create own reservations, cancel own reservations.
+
+### Permission Matrix
+
+| Action | Global Admin | TN Admin | TN Pilot |
+|--------|:---:|:---:|:---:|
+| System settings, db-health | ✓ | | |
+| Invite global admins | ✓ | | |
+| Invite to specific aircraft | ✓ | ✓ | |
+| Edit aircraft details | ✓ | ✓ | |
+| Delete aircraft | ✓ | ✓ | |
+| Cancel others' reservations | ✓ | ✓ | |
+| Log flights, report squawks | ✓ | ✓ | ✓ |
+| Create/cancel own reservations | ✓ | ✓ | ✓ |
+
+---
+
+## Deployment
+
+1. Push to GitHub → Vercel auto-deploys
+2. Run SQL migrations in Supabase SQL Editor
+3. Create storage buckets in Supabase Storage UI
+4. Set environment variables in Vercel dashboard
+5. Configure CRON in `vercel.json` for MX reminders
+
+---
+
+## Email Notifications
+
+All emails sent from `notifications@skywardsociety.com` via Resend. Sender display names (e.g., "Skyward Operations", "Skyward Alerts") are channel labels — the actual sending address is always `notifications@`.
+
+Notification types respect user preferences stored in `aft_notification_preferences`. Users manage these through the Settings screen.

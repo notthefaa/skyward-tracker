@@ -1,306 +1,373 @@
-# Skyward Fleet Tracker — Technical Codex
+# Skyward Aircraft Manager — Technical Codex
 
-Last updated: March 27, 2026
-
-## System Overview
-
-Two Next.js 16 apps sharing one Supabase database:
-- **skyward-tracker** (main app): Fleet management dashboard
-- **skyward-logit** (companion): Mobile-first PWA for quick flight/squawk logging
-
-GitHub: `github.com/notthefaa/skyward-tracker` and `github.com/notthefaa/skyward-logit`
+Complete technical reference for developers working on the Skyward Aircraft Manager codebase. This document covers the database schema, API surface, authentication model, realtime architecture, and key implementation details.
 
 ---
 
 ## Database Schema
 
-### Tables (all prefixed `aft_`)
+### aft_aircraft
+Aircraft master records. The `created_by` field references `auth.users(id)` with `ON DELETE CASCADE` — deleting a user deletes all aircraft they created.
 
-**aft_aircraft** — Aircraft registry
-- `id` (uuid, PK), `tail_number` (text, UNIQUE), `aircraft_type`, `engine_type` (CHECK: Piston/Turbine)
-- Times: `total_airframe_time`, `total_engine_time`, `setup_aftt`, `setup_ftt`, `setup_hobbs`, `setup_tach`
-- Fuel: `current_fuel_gallons`, `fuel_last_updated`
-- Contacts: `main_contact`, `main_contact_phone`, `main_contact_email`, `mx_contact`, `mx_contact_phone`, `mx_contact_email`
-- Other: `serial_number`, `home_airport`, `avatar_url`, `created_by` (FK → auth.users)
+| Column | Type | Notes |
+|--------|------|-------|
+| id | uuid PK | Auto-generated |
+| tail_number | text UNIQUE | e.g. "N12345" |
+| serial_number | text | Optional |
+| aircraft_type | text | e.g. "Cessna 172" |
+| engine_type | text | "Piston" or "Turbine" |
+| total_airframe_time | numeric | Running total (Hobbs or AFTT) |
+| total_engine_time | numeric | Running total (Tach or FTT) |
+| setup_hobbs | numeric | Initial Hobbs at setup |
+| setup_tach | numeric | Initial Tach at setup |
+| setup_aftt | numeric | Initial AFTT at setup (turbine) |
+| setup_ftt | numeric | Initial FTT at setup (turbine) |
+| home_airport | text | ICAO identifier |
+| main_contact | text | Primary contact name |
+| main_contact_phone | text | |
+| main_contact_email | text | |
+| mx_contact | text | Maintenance contact name |
+| mx_contact_phone | text | |
+| mx_contact_email | text | |
+| avatar_url | text | Supabase Storage public URL |
+| current_fuel_gallons | numeric | Last reported fuel state |
+| fuel_last_updated | timestamptz | |
+| created_by | uuid FK → auth.users | ON DELETE CASCADE |
+| created_at | timestamptz | |
 
-**aft_flight_logs** — Flight entries
-- `id` (uuid, PK), `aircraft_id` (FK → aft_aircraft, CASCADE), `user_id` (FK → auth.users, SET NULL)
-- Times: `aftt`, `ftt`, `hobbs`, `tach`
-- Flight: `pod`, `poa`, `engine_cycles`, `landings`, `fuel_gallons`
-- Meta: `initials`, `pax_info`, `trip_reason` (CHECK: PE/BE/MX/T/null), `created_at`
+### aft_flight_logs
+One row per flight. Times are cumulative (new Hobbs, not delta).
 
-**aft_maintenance_items** — Tracked MX items
-- `id` (uuid, PK), `aircraft_id` (FK → aft_aircraft, CASCADE), `item_name`
-- Tracking: `tracking_type` (CHECK: time/date), `due_date`, `due_time`
-- Intervals: `time_interval`, `date_interval_days`
-- Completion: `last_completed_time`, `last_completed_date`
-- Flags: `is_required`, `automate_scheduling`
-- Reminders: `reminder_30_sent`, `reminder_15_sent`, `reminder_5_sent`, `mx_schedule_sent`, `primary_heads_up_sent`
+| Column | Type | Notes |
+|--------|------|-------|
+| id | uuid PK | |
+| aircraft_id | uuid FK → aft_aircraft | ON DELETE CASCADE |
+| user_id | uuid FK → auth.users | ON DELETE SET NULL |
+| pod | text | Point of departure (ICAO) |
+| poa | text | Point of arrival (ICAO) |
+| hobbs | numeric | Cumulative Hobbs (piston) |
+| tach | numeric | Cumulative Tach (piston) |
+| aftt | numeric | Cumulative AFTT (turbine) |
+| ftt | numeric | Cumulative FTT (turbine) |
+| engine_cycles | integer | Turbine only |
+| landings | integer | |
+| initials | text | Pilot initials |
+| pax_info | text | Passenger names/notes |
+| trip_reason | text | PE, BE, MX, T |
+| fuel_gallons | numeric | Fuel state after flight |
+| created_at | timestamptz | |
 
-**aft_maintenance_events** — Service event lifecycle
-- `id` (uuid, PK), `aircraft_id` (FK → aft_aircraft, CASCADE), `created_by` (FK → auth.users, SET NULL)
-- Status: `status` (CHECK: draft/scheduling/confirmed/in_progress/ready_for_pickup/complete/cancelled)
-- Scheduling: `proposed_date`, `proposed_by`, `confirmed_date`, `confirmed_at`
-- Completion: `completed_at`, `estimated_completion`, `mechanic_notes`
-- Security: `access_token` (256-bit hex, auto-generated)
-- Contacts: `mx_contact_name`, `mx_contact_email`, `primary_contact_name`, `primary_contact_email`
-- Add-ons: `addon_services` (jsonb array)
+### aft_maintenance_items
+Tracked maintenance items. Each has a tracking type (time-based or date-based) and optional automated scheduling.
 
-**aft_event_line_items** — Work package items
-- `id` (uuid, PK), `event_id` (FK → aft_maintenance_events, CASCADE)
-- Type: `item_type` (CHECK: maintenance/squawk/addon)
-- References: `maintenance_item_id` (FK → aft_maintenance_items, SET NULL), `squawk_id` (FK → aft_squawks, SET NULL)
-- Content: `item_name`, `item_description`, `line_status` (CHECK: pending/in_progress/complete/deferred)
-- Mechanic: `mechanic_comment`
-- Completion: `completion_date`, `completion_time`, `completed_by_name`, `completed_by_cert`, `work_description`
+| Column | Type | Notes |
+|--------|------|-------|
+| id | uuid PK | |
+| aircraft_id | uuid FK | ON DELETE CASCADE |
+| item_name | text | e.g. "Annual Inspection" |
+| tracking_type | text | "time" or "date" |
+| is_required | boolean | Required items ground the aircraft when expired |
+| last_completed_time | numeric | Engine time at last completion |
+| time_interval | numeric | Hours between service |
+| due_time | numeric | Computed: last + interval |
+| last_completed_date | date | |
+| date_interval_days | integer | Days between service |
+| due_date | date | Computed: last + interval |
+| automate_scheduling | boolean | Auto-create drafts when approaching |
+| mx_schedule_sent | boolean | Draft created flag |
+| primary_heads_up_sent | boolean | Low-confidence heads-up sent |
+| reminder_5_sent | boolean | Reminder threshold 3 flag |
+| reminder_15_sent | boolean | Reminder threshold 2 flag |
+| reminder_30_sent | boolean | Reminder threshold 1 flag |
+| created_at | timestamptz | |
 
-**aft_event_messages** — Owner ↔ mechanic messages
-- `id` (uuid, PK), `event_id` (FK → aft_maintenance_events, CASCADE)
-- `sender` (CHECK: owner/mechanic/system), `message_type` (CHECK: propose_date/confirm/counter/comment/status_update)
-- `proposed_date`, `message`, `created_at`
+### aft_maintenance_events
+Service event lifecycle. Status flow: draft → scheduling → confirmed → in_progress → ready_for_pickup → complete. Cancel/decline branches available at any point.
 
-**aft_squawks** — Discrepancy reports
-- `id` (uuid, PK), `aircraft_id` (FK → aft_aircraft, CASCADE), `reported_by` (FK → auth.users, SET NULL)
-- Content: `description`, `location`, `status` (CHECK: open/resolved), `affects_airworthiness`
-- Media: `pictures` (text array), `reporter_initials`
-- Deferrals: `is_deferred`, `mel_number`, `cdl_number`, `nef_number`, `mdl_number`, `mel_control_number`, `deferral_category` (CHECK: A/B/C/D/NA/null), `deferral_procedures_completed`
-- Signature: `signature_data`, `signature_date`, `full_name`, `certificate_number`
+| Column | Type | Notes |
+|--------|------|-------|
+| id | uuid PK | |
+| aircraft_id | uuid FK | ON DELETE CASCADE |
+| status | text | See status flow above |
+| access_token | text UNIQUE | 256-bit hex for mechanic portal |
+| proposed_date | date | |
+| proposed_by | text | "owner" or "mechanic" |
+| confirmed_date | date | Agreed service date |
+| confirmed_at | timestamptz | |
+| estimated_completion | date | Mechanic's estimate |
+| completed_at | timestamptz | When owner entered logbook data |
+| mechanic_notes | text | |
+| addon_services | jsonb | Array of add-on service names |
+| mx_contact_name | text | |
+| mx_contact_email | text | |
+| primary_contact_name | text | |
+| primary_contact_email | text | |
+| created_at | timestamptz | |
 
-**aft_notes** — Pilot notes per aircraft
-- `id` (uuid, PK), `aircraft_id` (FK), `content`, `author_id` (FK), `author_email`, `author_initials`
-- `pictures` (text array), `created_at`, `edited_at`
+**Portal token expiry:** Access is rejected (403) if the event was completed more than 7 days ago. Enforced both client-side (portal page shows "Link Has Expired") and server-side (respond + upload-attachment routes).
 
-**aft_note_reads** — Read receipts for notes
-- `note_id` + `user_id` (composite PK), `read_at`
+### aft_event_line_items
+Line items in a work package.
 
-**aft_user_roles** — User profiles
-- `user_id` (uuid, PK, FK → auth.users, CASCADE), `role` (CHECK: admin/pilot), `initials`, `email`
+| Column | Type | Notes |
+|--------|------|-------|
+| id | uuid PK | |
+| event_id | uuid FK → aft_maintenance_events | ON DELETE CASCADE |
+| item_type | text | "maintenance", "squawk", or "addon" |
+| maintenance_item_id | uuid FK | Nullable, links to aft_maintenance_items |
+| squawk_id | uuid FK | Nullable, links to aft_squawks |
+| item_name | text | |
+| item_description | text | |
+| line_status | text | "pending", "in_progress", "complete", "deferred" |
+| mechanic_comment | text | |
+| created_at | timestamptz | |
 
-**aft_user_aircraft_access** — Aircraft assignments
-- `user_id` + `aircraft_id` (composite PK), both FK with CASCADE
+### aft_event_messages
+Communication thread for a service event. Attachments stored as jsonb on the message.
 
-**aft_system_settings** — Global configuration (single row, id=1)
-- Reminder thresholds: `reminder_1`/`2`/`3` (days), `reminder_hours_1`/`2`/`3` (hours)
-- Scheduling: `sched_time`, `sched_days`, `predictive_sched_days`
+| Column | Type | Notes |
+|--------|------|-------|
+| id | uuid PK | |
+| event_id | uuid FK → aft_maintenance_events | ON DELETE CASCADE |
+| sender | text | "owner", "mechanic", or "system" |
+| message_type | text | "comment", "propose_date", "confirm", "status_update" |
+| message | text | |
+| proposed_date | date | For date proposals |
+| attachments | jsonb | Array of {url, filename, size, type} |
+| created_at | timestamptz | |
 
-### Indexes
-- `aft_aircraft`: tail_number (unique)
-- `aft_flight_logs`: aircraft_id, created_at DESC
-- `aft_maintenance_items`: aircraft_id
-- `aft_maintenance_events`: aircraft_id, status, access_token
-- `aft_event_line_items`: event_id
-- `aft_event_messages`: event_id
-- `aft_squawks`: aircraft_id, status
-- `aft_notes`: aircraft_id
-- `aft_note_reads`: user_id
+### aft_squawks
+Discrepancy reports with optional MEL/CDL deferral support.
 
-### Storage Buckets
-- `aft_squawk_images` — Squawk photos
-- `aft_note_images` — Note attachments
-- `aft_aircraft_avatars` — Aircraft profile images
+| Column | Type | Notes |
+|--------|------|-------|
+| id | uuid PK | |
+| aircraft_id | uuid FK | ON DELETE CASCADE |
+| reported_by | uuid FK → auth.users | |
+| reporter_initials | text | |
+| location | text | Airport ICAO |
+| description | text | |
+| affects_airworthiness | boolean | True = aircraft grounded |
+| status | text | "open" or "resolved" |
+| pictures | jsonb | Array of public URLs |
+| is_deferred | boolean | Turbine deferral |
+| mel_number | text | MEL reference |
+| cdl_number | text | CDL reference |
+| nef_number | text | NEF reference |
+| mdl_number | text | MDL reference |
+| mel_control_number | text | |
+| deferral_category | text | A, B, C, D, or N/A |
+| deferral_procedures_completed | boolean | |
+| full_name | text | Signee name |
+| certificate_number | text | |
+| signature_data | text | Base64 PNG |
+| signature_date | date | |
+| created_at | timestamptz | |
+
+### aft_notes
+Pilot-to-pilot notes with photos and read receipts.
+
+| Column | Type | Notes |
+|--------|------|-------|
+| id | uuid PK | |
+| aircraft_id | uuid FK | ON DELETE CASCADE |
+| author_id | uuid FK → auth.users | |
+| author_email | text | |
+| author_initials | text | |
+| content | text | |
+| pictures | jsonb | Array of public URLs |
+| edited_at | timestamptz | |
+| created_at | timestamptz | |
+
+### aft_note_reads
+Read receipts for notes. Unique constraint on (note_id, user_id).
+
+### aft_user_roles
+Global role assignment. One row per user.
+
+| Column | Type | Notes |
+|--------|------|-------|
+| user_id | uuid FK → auth.users | ON DELETE CASCADE |
+| role | text | "admin" or "pilot" |
+| email | text | |
+| initials | text | |
+
+### aft_user_aircraft_access
+Per-aircraft access with role. Links users to aircraft they can see.
+
+| Column | Type | Notes |
+|--------|------|-------|
+| id | uuid PK | |
+| user_id | uuid FK → auth.users | ON DELETE CASCADE |
+| aircraft_id | uuid FK → aft_aircraft | ON DELETE CASCADE |
+| aircraft_role | text | "admin" or "pilot", default "pilot" |
+
+### aft_reservations
+Calendar bookings. Exclusion constraint prevents overlapping confirmed reservations on the same aircraft using `tstzrange` with `btree_gist`.
+
+| Column | Type | Notes |
+|--------|------|-------|
+| id | uuid PK | |
+| aircraft_id | uuid FK | ON DELETE CASCADE |
+| user_id | uuid FK → auth.users | ON DELETE SET NULL |
+| start_time | timestamptz | |
+| end_time | timestamptz | Must be after start_time |
+| title | text | Purpose/description |
+| route | text | e.g. "KDAL → KAUS → KDAL" |
+| pilot_name | text | Denormalized for display |
+| pilot_initials | text | |
+| status | text | "confirmed" or "cancelled" |
+| created_at | timestamptz | |
+
+**RLS policies:** Users can view/create reservations for aircraft they have access to. Users can update/delete their own reservations or any reservation if they are a tailnumber admin for that aircraft.
+
+### aft_notification_preferences
+Per-user notification toggles. All types default to enabled (rows are only created when a user explicitly disables a type).
+
+| Column | Type | Notes |
+|--------|------|-------|
+| id | uuid PK | |
+| user_id | uuid FK → auth.users | ON DELETE CASCADE |
+| notification_type | text | See types below |
+| enabled | boolean | |
+| created_at | timestamptz | |
+
+**Notification types:** `reservation_created`, `reservation_cancelled`, `squawk_reported`, `mx_reminder`, `service_update`, `note_posted`
+
+### aft_system_settings
+Global configuration. Single row (id=1).
+
+| Column | Type | Notes |
+|--------|------|-------|
+| reminder_1 | integer | Days for first reminder (default 30) |
+| reminder_2 | integer | Days for second reminder (default 15) |
+| reminder_3 | integer | Days for third reminder (default 5) |
+| reminder_hours_1 | numeric | Hours for first reminder (default 30) |
+| reminder_hours_2 | numeric | Hours for second reminder (default 15) |
+| reminder_hours_3 | numeric | Hours for third reminder (default 5) |
+| sched_time | numeric | Hours threshold for auto-scheduling (default 10) |
+| sched_days | integer | Days threshold for auto-scheduling (default 30) |
+| predictive_sched_days | integer | Predictive threshold (default 45) |
 
 ---
 
-## RLS Policies
+## Storage Buckets
 
-All 12 tables have RLS enabled. Key patterns:
+| Bucket | Public | Purpose |
+|--------|--------|---------|
+| aft_squawk_images | Yes | Squawk photos |
+| aft_note_images | Yes | Note attachments |
+| aft_aircraft_avatars | Yes | Aircraft hero images |
+| aft_event_attachments | Yes | Mechanic file uploads |
 
-**Admin full access**: `aft_aircraft`, `aft_maintenance_items`, `aft_flight_logs` (delete/update), `aft_notes` (delete), `aft_squawks` (delete), `aft_user_aircraft_access`, `aft_maintenance_events`, `aft_event_line_items`, `aft_event_messages`, `aft_user_roles`, `aft_system_settings`
-
-**Authenticated read**: `aft_aircraft` (with access check), `aft_flight_logs`, `aft_maintenance_items`, `aft_squawks`, `aft_notes`, `aft_note_reads`, `aft_user_roles`, `aft_user_aircraft_access`, `aft_system_settings`
-
-**Anonymous read** (for mechanic portal + squawk viewer): `aft_aircraft`, `aft_squawks`, `aft_maintenance_events`, `aft_event_line_items`, `aft_event_messages`
-
-**Insert restrictions**: Flight logs require `user_id = auth.uid()`, notes require `author_id = auth.uid()`, squawks require `reported_by = auth.uid()`, note reads require `user_id = auth.uid()`
-
-**Pilot access to MX events**: via join through `aft_user_aircraft_access` (SELECT on events, line items, messages; INSERT on messages)
+All uploads use the service role key (bypasses RLS). Client-side compression via `browser-image-compression` before upload. 10MB limit enforced both client-side (`validateFileSize` / `validateFileSizes` from `@/lib/constants`) and server-side on the upload-attachment route.
 
 ---
 
 ## API Routes
 
+### Authentication Pattern
+All authenticated routes use `requireAuth(req)` from `@/lib/auth.ts`, which extracts the Bearer token, verifies it against Supabase Auth, and returns `{ user, supabaseAdmin }`. Admin-only routes use `requireAuth(req, 'admin')`. Client-side calls use `authFetch()` from `@/lib/authFetch.ts` which auto-attaches the session token.
+
+### Route Reference
+
 | Route | Method | Auth | Purpose |
 |-------|--------|------|---------|
-| `/api/aircraft/create` | POST | Auth | Create aircraft |
-| `/api/invite` | POST | Admin | Invite user |
-| `/api/resend-invite` | POST | None* | Resend invite email |
-| `/api/users` | POST | Admin | User management |
-| `/api/admin/db-health` | POST | Admin | Database cleanup + monitoring |
-| `/api/cron/mx-reminders` | GET | CRON_SECRET | Automated MX alerts |
-| `/api/emails/mx-schedule` | POST | Auth | Manual MX scheduling email |
-| `/api/emails/squawk-notify` | POST | Auth | Squawk notification emails |
-| `/api/mx-events/create` | POST | Auth | Create maintenance event |
-| `/api/mx-events/send-workpackage` | POST | Auth | Send/resend work package |
-| `/api/mx-events/owner-action` | POST | Auth | Owner confirm/counter/cancel/comment |
-| `/api/mx-events/respond` | POST | Token** | Mechanic actions via portal |
-| `/api/mx-events/complete` | POST | Auth | Complete event + reset tracking |
-
-*\* `resend-invite` uses admin client internally but accepts unauthenticated requests (invite tokens are single-use)*
-*\*\* `respond` authenticates via the event's `access_token` (256-bit hex), not user session*
+| `/api/aircraft/create` | POST | Auth | Create aircraft, set creator as tailnumber admin |
+| `/api/aircraft-access` | PUT | Auth | Change a user's aircraft role |
+| `/api/aircraft-access` | DELETE | Auth | Remove user from aircraft (cancels future reservations) |
+| `/api/account/delete` | GET | Auth | Preview deletion impact (owned aircraft, affected users) |
+| `/api/account/delete` | DELETE | Auth | Delete own account (cascades to owned aircraft) |
+| `/api/invite` | POST | Admin | Invite global admin or standalone pilot |
+| `/api/pilot-invite` | POST | Auth | Invite user to specific aircraft with role |
+| `/api/reservations` | POST | Auth | Create reservation (conflict detection + notifications) |
+| `/api/reservations` | DELETE | Auth | Cancel reservation (permission check + notifications) |
+| `/api/mx-events/create` | POST | Auth | Create service event / work package |
+| `/api/mx-events/complete` | POST | Auth | Complete event, reset MX tracking |
+| `/api/mx-events/respond` | POST | Token | Mechanic portal actions (7 action types) |
+| `/api/mx-events/upload-attachment` | POST | Token | Mechanic file uploads (10MB limit, 5 files max) |
+| `/api/mx-events/owner-action` | POST | Auth | Owner scheduling responses |
+| `/api/mx-events/send-workpackage` | POST | Auth | Send/resend work package email |
+| `/api/mx-events/manual-trigger` | POST | Auth | Manually trigger MX draft creation |
+| `/api/emails/squawk-notify` | POST | Auth | Send squawk notification emails |
+| `/api/emails/mx-schedule` | POST | Auth | Send MX scheduling email |
+| `/api/cron/mx-reminders` | GET | CRON | Automated MX reminders + draft creation |
+| `/api/admin/db-health` | POST | Admin | Cleanup old records, sweep orphaned files |
+| `/api/resend-invite` | POST | None | Re-send Supabase auth invitation |
 
 ---
 
-## Email System
+## Realtime Architecture
 
-15 emails across 6 routes. Every email includes an actionable link.
+The app subscribes to a single Supabase Realtime channel (`fleet-updates`) listening to 8 tables: `aft_flight_logs`, `aft_squawks`, `aft_maintenance_items`, `aft_notes`, `aft_maintenance_events`, `aft_event_messages`, `aft_reservations`.
 
-**Mechanic receives** (links to portal):
-- Work package (initial + resend)
-- Date confirmed by owner
-- Counter proposal from owner
-- Message from owner
-- Cancellation notice
+**Aircraft-scoped refresh:** When a realtime event fires, the handler extracts `aircraft_id` from the payload. If present, only that aircraft's master record is re-fetched and its metrics recalculated. SWR caches are invalidated only for keys containing that aircraft's ID. Events without an `aircraft_id` (like messages) trigger a lightweight SWR-only revalidation. Per-aircraft debounce timers (1.5s) prevent hammering the DB on rapid-fire changes.
 
-**Owner receives** (links to app):
-- Date proposal from mechanic
-- Date confirmed by mechanic
-- Service update / comment from mechanic
-- Estimated completion date
-- Additional work suggested by mechanic
-- Work package progress (line item status changes)
-- Aircraft ready for pickup
-- Service declined by mechanic
-- Draft work package ready for review (CRON)
-- Predictive MX heads-up (CRON)
-- MX reminder alerts (CRON)
-- New squawk notification
-
-**All mechanic emails**: CC primary contact, replyTo primary contact
-**Email provider**: Resend, from `notifications@skywardsociety.com`
+**Self-filtering:** Events caused by the current user are skipped to avoid redundant refreshes (checks `user_id`, `reported_by`, `author_id`).
 
 ---
 
 ## Predictive Maintenance Engine
 
-Located in `src/lib/math.ts`. Uses 180 days of flight logs to predict when MX items will come due.
+Located in `@/lib/math.ts`. The engine computes:
 
-**Burn Rate Calculation:**
-- Active days burn rate = total hours / number of days with flights
-- Only considers days with actual flight activity
+1. **Burn rate:** Active-days weighted average of engine time consumed per day over the last 180 days. Only counts days where flights occurred, avoiding dilution from idle periods.
+2. **Variance:** Weekly rolling coefficient of variation to detect irregular usage patterns.
+3. **Confidence score:** Four-factor composite (0-100%) based on data volume, recency, consistency, and variance. Used to gate automated actions.
+4. **Projected days:** For time-based MX items, divides remaining hours by burn rate to estimate when service will be needed.
 
-**4-Factor Confidence Score:**
-1. Data volume — more flights = higher confidence (0-25 points)
-2. Recency — flights in last 30 days boost confidence (0-25 points)
-3. Weekly variance — consistent flying patterns = higher confidence (0-25 points)
-4. Time span coverage — data spread across the 180-day window (0-25 points)
-
-**Projection Logic:**
-- If confidence ≥ 80%: Create draft work package when within `predictive_sched_days` threshold
-- If confidence < 80%: Send heads-up notification only (no draft)
-- Fixed reminders at `sched_days`/`sched_time` thresholds regardless of confidence
+**Automation thresholds:**
+- High confidence (≥80%) + within predictive window → auto-create draft work package
+- Low confidence (<80%) + within predictive window → send heads-up email only (no draft)
+- Hard threshold hit (time or date) → always create draft regardless of confidence
 
 ---
 
-## Maintenance Event Status Flow
+## Email System
 
-```
-                                    ┌─────────────┐
-                                    │    DRAFT     │ ← CRON auto-creates
-                                    └──────┬──────┘
-                                           │ Owner sends work package
-                                    ┌──────▼──────┐
-                               ┌───→│ SCHEDULING  │←──┐
-                               │    └──────┬──────┘   │
-                               │           │          │
-                          Counter    Confirm Date  Counter
-                               │           │          │
-                               │    ┌──────▼──────┐   │
-                               └────│  CONFIRMED  │───┘
-                                    └──────┬──────┘
-                                           │ Mechanic starts work
-                                    ┌──────▼──────┐
-                                    │ IN PROGRESS  │
-                                    └──────┬──────┘
-                                           │ All items complete
-                                    ┌──────▼──────┐
-                                    │READY PICKUP  │ ← Mechanic signals
-                                    └──────┬──────┘
-                                           │ Owner enters logbook data
-                                    ┌──────▼──────┐
-                                    │   COMPLETE   │
-                                    └─────────────┘
+All emails sent from `notifications@skywardsociety.com` via Resend. Sender display names are channel labels:
+- **Skyward Aircraft Manager** — scheduling drafts, heads-up alerts
+- **Skyward Operations** — mechanic portal actions, squawk notifications to mechanics
+- **Skyward Alerts** — internal team MX reminders, squawk notifications
 
-         ┌─────────────┐
-         │  CANCELLED   │ ← Owner cancel OR Mechanic decline
-         └─────────────┘   (from any active status)
-```
+All CTA buttons in emails read "OPEN AIRCRAFT MANAGER" and link to the app URL.
+
+Notifications respect user preferences stored in `aft_notification_preferences`. The backend checks for muted types before sending. Notifications are scoped to aircraft assignment — users only receive emails for aircraft they are assigned to via `aft_user_aircraft_access`.
 
 ---
 
-## iOS PWA Configuration
+## Key Technical Constraints
 
-**layout.tsx viewport settings:**
-```typescript
-viewportFit: "cover",        // Enables safe area control
-themeColor: "#091F3C",       // Navy status bar
-statusBarStyle: "black-translucent"
-```
-
-**Layout architecture (page.tsx):**
-- Header: `fixed top-0 z-[9999]` with `paddingTop: env(safe-area-inset-top)`
-- Main: `fixed` with calc'd `top`/`bottom` for safe areas, `overflow-y-auto`
-- Nav: `fixed bottom-0 z-[9999]` with `pb-[env(safe-area-inset-bottom)]`
-- All modals: `z-[10000]+` with safe-area-aware padding
-
-**globals.css:**
-- Body: `background-color: #ffffff` (matches nav, eliminates safe area gap)
-- No `overflow: hidden` or `touch-action: none` on body
-- `-webkit-overflow-scrolling: touch` on main for smooth iOS scroll
+- **tsconfig target: es5** — No `[...new Set()]`. Use `Array.from(new Set(...))` instead.
+- **tsconfig strict: false** — Supabase client typed as `SupabaseClient<any, any, any>` for admin client.
+- **Tailwind v4** — Uses `@theme` directive in `globals.css`. Some colors are in theme, others are hardcoded hex.
+- **browser-image-compression** — All image uploads are compressed client-side before uploading to Supabase Storage.
+- **Network egress** — Disabled in the sandbox/development environment.
+- **Supabase Realtime connections** — Each open browser tab holds a websocket. Free tier: 200 concurrent, Pro: 500.
 
 ---
 
-## Companion App (skyward-logit)
+## DB Health & Retention Policy
 
-Minimal mobile-first PWA for quick data entry. Shares the same Supabase database.
+The `/api/admin/db-health` route runs 9 cleanup stages:
 
-**Files:**
-- `src/app/page.tsx` — Single-page wizard for flight logs and squawks
-- `src/app/api/emails/squawk-notify/route.ts` — Squawk notification (mirrors main app)
-- `src/lib/auth.ts`, `authFetch.ts`, `env.ts`, `supabase.ts`, `types.ts` — Shared utilities
-
-**Features:**
-- Flight log entry with step-by-step wizard
-- Squawk reporting with photo capture and compression
-- Same auth system as main app
-- Parallel data fetching
-- Install prompts for iOS and Android
-
-**Required env var:** `NEXT_PUBLIC_MAIN_APP_URL` — points squawk viewer links and app buttons in emails to the main app.
+1. Read receipts older than 30 days
+2. Notes older than 6 months
+3. Squawks — kept forever (no purge)
+4. Completed MX events older than 12 months + cancelled events older than 3 months
+5. Orphaned child records (messages, line items without parent events)
+6. Orphaned access records (aircraft_id no longer exists)
+7. Flight logs older than 5 years
+8. Orphaned images across all 4 storage buckets (paginated sweep)
+9. Row count monitoring for 13 tables
 
 ---
 
-## Technical Constraints
+## Migrations
 
-- `target: "es5"` in tsconfig — no `[...new Set()]`, use `Array.from()`
-- `strict: false` in tsconfig
-- `SupabaseClient<any, any, any>` for admin client type
-- Tailwind v4 with `@theme` directive for custom colors
-- `browser-image-compression` for client-side image optimization
+| File | Contents |
+|------|----------|
+| `001_mechanic_attachments.sql` | `attachments` jsonb column on `aft_event_messages`, partial index |
+| `002_roles_calendar_notifications.sql` | `aircraft_role` column on access table, `aft_reservations` with exclusion constraint, `aft_notification_preferences`, CASCADE on `created_by` FK, `btree_gist` extension, realtime publication |
 
----
-
-## Database Health & Retention
-
-| Data Type | Retention |
-|-----------|-----------|
-| Squawks | Permanent (never purged) |
-| Flight logs | 5 years |
-| MX completed events | 12 months |
-| MX cancelled events | 3 months |
-| Notes | 6 months |
-| Read receipts | 30 days |
-| Orphaned images | Cleaned on each run |
-| Orphaned child records | Cleaned on each run |
-
----
-
-## Roadmap
-
-**Planned:**
-1. Offline support with conflict resolution
-2. Mechanic portal document/image uploads with description text
-3. Cost tracking (fuel expenses, shared expenses for leaseback/multi-owner)
-4. Dashboard analytics (fleet-wide MX timeline, hours/fuel trends, squawk frequency)
-5. Maintenance history search (searchable/exportable completed event history)
-6. Push notifications for critical events
-7. PDF export (MX logbook summaries, work orders, squawk reports)
+Migrations are run manually in the Supabase SQL Editor. Storage buckets are created via the Supabase Storage UI.
