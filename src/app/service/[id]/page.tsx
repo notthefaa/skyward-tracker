@@ -10,6 +10,8 @@ import {
   Upload, FileText, Paperclip, Loader2
 } from "lucide-react";
 
+const whiteBg = { backgroundColor: '#ffffff' } as const;
+
 export default function ServicePortal() {
   const params = useParams();
   const router = useRouter();
@@ -25,39 +27,30 @@ export default function ServicePortal() {
   const [isAppUser, setIsAppUser] = useState(false);
   const [isExpired, setIsExpired] = useState(false);
 
-  // Forms
   const [showDateForm, setShowDateForm] = useState(false);
   const [proposedDate, setProposedDate] = useState("");
   const [commentText, setCommentText] = useState("");
   const [estimatedCompletion, setEstimatedCompletion] = useState("");
   const [mechanicNotes, setMechanicNotes] = useState("");
-
-  // Availability indicator
   const [availabilityNote, setAvailabilityNote] = useState("");
 
-  // Suggest item form
   const [showSuggestForm, setShowSuggestForm] = useState(false);
   const [suggestName, setSuggestName] = useState("");
   const [suggestDescription, setSuggestDescription] = useState("");
 
-  // Photo/file viewer
   const [viewingPhoto, setViewingPhoto] = useState<string | null>(null);
 
-  // Decline confirmation
   const [showDeclineConfirm, setShowDeclineConfirm] = useState(false);
   const [declineReason, setDeclineReason] = useState("");
 
-  // Ready confirmation
   const [showReadyConfirm, setShowReadyConfirm] = useState(false);
   const [readyMessage, setReadyMessage] = useState("");
 
-  // File upload state
   const [showUploadForm, setShowUploadForm] = useState(false);
   const [uploadFiles, setUploadFiles] = useState<File[]>([]);
   const [uploadDescription, setUploadDescription] = useState("");
   const [isUploading, setIsUploading] = useState(false);
 
-  // #1 — Detect if user has an active session (app user vs mechanic from email)
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setIsAppUser(!!session);
@@ -73,7 +66,6 @@ export default function ServicePortal() {
       .from('aft_maintenance_events').select('*').eq('access_token', accessToken).single();
 
     if (evData) {
-      // Check if the portal link has expired (7 days after completion)
       if (evData.status === 'complete' && evData.completed_at) {
         const completedDate = new Date(evData.completed_at);
         const expiryDate = new Date(completedDate.getTime() + 7 * 24 * 60 * 60 * 1000);
@@ -147,7 +139,6 @@ export default function ServicePortal() {
   const handleFileUpload = async () => {
     if (uploadFiles.length === 0) return;
     setIsUploading(true);
-
     try {
       const formData = new FormData();
       formData.append('accessToken', accessToken);
@@ -155,17 +146,14 @@ export default function ServicePortal() {
       for (const file of uploadFiles) {
         formData.append('files', file);
       }
-
       const res = await fetch('/api/mx-events/upload-attachment', {
         method: 'POST',
         body: formData,
       });
-
       if (!res.ok) {
         const errData = await res.json();
         throw new Error(errData.error || 'Upload failed');
       }
-
       await fetchEventData();
       setUploadFiles([]);
       setUploadDescription("");
@@ -216,7 +204,6 @@ export default function ServicePortal() {
     <>
       <style dangerouslySetInnerHTML={{__html: `html, body { overflow: auto !important; touch-action: auto !important; height: auto !important; }` }} />
 
-      {/* PHOTO/FILE LIGHTBOX */}
       {viewingPhoto && (
         <div className="fixed inset-0 z-[80] bg-black/90 flex items-center justify-center p-4 animate-fade-in" onClick={() => setViewingPhoto(null)}>
           <button onClick={() => setViewingPhoto(null)} className="absolute top-4 right-4 text-white hover:text-gray-300"><X size={32}/></button>
@@ -224,7 +211,6 @@ export default function ServicePortal() {
         </div>
       )}
 
-      {/* Back to App — fixed header for logged-in users */}
       {isAppUser && (
         <div className="fixed top-0 left-0 right-0 z-50 bg-navy" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
           <button onClick={() => router.push('/')} className="flex items-center gap-2 px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-white hover:text-[#3AB0FF] active:scale-95 transition-all">
@@ -235,7 +221,6 @@ export default function ServicePortal() {
 
       <div className="min-h-screen bg-neutral-100 flex flex-col items-center p-4 md:p-8" style={{ paddingTop: isAppUser ? 'calc(3rem + env(safe-area-inset-top, 0px))' : 'env(safe-area-inset-top, 16px)' }}>
 
-        {/* BRANDING */}
         <div className="mb-6 mt-4">
           <img src="/logo.png" alt="Skyward" className="mx-auto h-24 object-contain mb-2 opacity-80" />
           <h1 className="font-oswald text-xl font-bold uppercase tracking-widest text-navy text-center">Service Portal</h1>
@@ -252,12 +237,9 @@ export default function ServicePortal() {
               </div>
               <div className="text-right">
                 <span className="text-[10px] font-bold uppercase tracking-widest block mb-1">Status</span>
-                <span className={`${statusColor} px-3 py-1 rounded text-xs font-bold uppercase tracking-widest`}>
-                  {statusLabel}
-                </span>
+                <span className={`${statusColor} px-3 py-1 rounded text-xs font-bold uppercase tracking-widest`}>{statusLabel}</span>
               </div>
             </div>
-
             <div className="p-6 grid grid-cols-2 gap-4">
               <div>
                 <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 block">Primary Contact</span>
@@ -294,12 +276,8 @@ export default function ServicePortal() {
                 <div className="space-y-3">
                   <p className="text-sm text-gray-600">The owner has proposed <strong>{event.proposed_date}</strong>. Does this date work for your shop?</p>
                   <div className="flex gap-3">
-                    <button onClick={() => handleAction('confirm')} disabled={isSubmitting} className="flex-1 bg-[#56B94A] text-white font-oswald font-bold uppercase tracking-widest py-3 rounded active:scale-95 transition-transform disabled:opacity-50">
-                      Confirm Date
-                    </button>
-                    <button onClick={() => setShowDateForm(true)} disabled={isSubmitting} className="flex-1 bg-[#F08B46] text-white font-oswald font-bold uppercase tracking-widest py-3 rounded active:scale-95 transition-transform disabled:opacity-50">
-                      Propose Different
-                    </button>
+                    <button onClick={() => handleAction('confirm')} disabled={isSubmitting} className="flex-1 bg-[#56B94A] text-white font-oswald font-bold uppercase tracking-widest py-3 rounded active:scale-95 transition-transform disabled:opacity-50">Confirm Date</button>
+                    <button onClick={() => setShowDateForm(true)} disabled={isSubmitting} className="flex-1 bg-[#F08B46] text-white font-oswald font-bold uppercase tracking-widest py-3 rounded active:scale-95 transition-transform disabled:opacity-50">Propose Different</button>
                   </div>
                 </div>
               )}
@@ -308,9 +286,7 @@ export default function ServicePortal() {
                 <div className="space-y-3">
                   <p className="text-sm text-gray-600">{event.proposed_by === 'mechanic' ? 'Waiting for owner to confirm your proposed date.' : 'Please propose a service date.'}</p>
                   {!event.proposed_date && (
-                    <button onClick={() => setShowDateForm(true)} className="w-full bg-[#091F3C] text-white font-oswald font-bold uppercase tracking-widest py-3 rounded active:scale-95 transition-transform">
-                      Propose a Date
-                    </button>
+                    <button onClick={() => setShowDateForm(true)} className="w-full bg-[#091F3C] text-white font-oswald font-bold uppercase tracking-widest py-3 rounded active:scale-95 transition-transform">Propose a Date</button>
                   )}
                 </div>
               )}
@@ -319,16 +295,16 @@ export default function ServicePortal() {
                 <div className="mt-4 p-4 bg-gray-50 rounded border border-gray-200 space-y-3 animate-fade-in">
                   <div>
                     <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Proposed Date</label>
-                    <input type="date" value={proposedDate} onChange={e => setProposedDate(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" />
+                    <input type="date" value={proposedDate} onChange={e => setProposedDate(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" />
                   </div>
                   <div>
                     <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Shop Availability (Optional)</label>
-                    <textarea value={availabilityNote} onChange={e => setAvailabilityNote(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none min-h-[60px]" placeholder="e.g. We're booked through March 15. Earliest opening is March 17-21." />
+                    <textarea value={availabilityNote} onChange={e => setAvailabilityNote(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none min-h-[60px]" placeholder="e.g. We're booked through March 15. Earliest opening is March 17-21." />
                     <p className="text-[10px] text-gray-400 mt-1">Let the owner know about your upcoming availability so they can plan accordingly.</p>
                   </div>
                   <div>
                     <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Additional Message (Optional)</label>
-                    <textarea value={commentText} onChange={e => setCommentText(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none min-h-[60px]" placeholder="Any other notes..." />
+                    <textarea value={commentText} onChange={e => setCommentText(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none min-h-[60px]" placeholder="Any other notes..." />
                   </div>
                   <button 
                     onClick={() => {
@@ -359,11 +335,7 @@ export default function ServicePortal() {
                         {li.mechanic_comment && <p className="text-xs text-[#3AB0FF] mt-2 italic">Note: {li.mechanic_comment}</p>}
                       </div>
                       {event.status !== 'complete' && (
-                        <select 
-                          value={li.line_status} 
-                          onChange={e => handleLineStatusUpdate(li.id, e.target.value)}
-                          className="text-[10px] font-bold uppercase border border-gray-300 rounded px-2 py-1 bg-white focus:border-[#F08B46] outline-none"
-                        >
+                        <select value={li.line_status} onChange={e => handleLineStatusUpdate(li.id, e.target.value)} style={whiteBg} className="text-[10px] font-bold uppercase border border-gray-300 rounded px-2 py-1 focus:border-[#F08B46] outline-none">
                           <option value="pending">Pending</option>
                           <option value="in_progress">In Progress</option>
                           <option value="complete">Complete</option>
@@ -405,11 +377,7 @@ export default function ServicePortal() {
                           )}
                         </div>
                         {event.status !== 'complete' && (
-                          <select 
-                            value={li.line_status}
-                            onChange={e => handleLineStatusUpdate(li.id, e.target.value)}
-                            className="text-[10px] font-bold uppercase border border-gray-300 rounded px-2 py-1 bg-white focus:border-[#CE3732] outline-none ml-3 shrink-0"
-                          >
+                          <select value={li.line_status} onChange={e => handleLineStatusUpdate(li.id, e.target.value)} style={whiteBg} className="text-[10px] font-bold uppercase border border-gray-300 rounded px-2 py-1 focus:border-[#CE3732] outline-none ml-3 shrink-0">
                             <option value="pending">Pending</option>
                             <option value="in_progress">In Progress</option>
                             <option value="complete">Complete</option>
@@ -434,11 +402,7 @@ export default function ServicePortal() {
                     <div className="flex justify-between items-center">
                       <span className="font-bold text-sm text-navy">{li.item_name}</span>
                       {event.status !== 'complete' && (
-                        <select 
-                          value={li.line_status}
-                          onChange={e => handleLineStatusUpdate(li.id, e.target.value)}
-                          className="text-[10px] font-bold uppercase border border-gray-300 rounded px-2 py-1 bg-white focus:border-[#3AB0FF] outline-none"
-                        >
+                        <select value={li.line_status} onChange={e => handleLineStatusUpdate(li.id, e.target.value)} style={whiteBg} className="text-[10px] font-bold uppercase border border-gray-300 rounded px-2 py-1 focus:border-[#3AB0FF] outline-none">
                           <option value="pending">Pending</option>
                           <option value="complete">Complete</option>
                         </select>
@@ -454,124 +418,62 @@ export default function ServicePortal() {
           {event.status !== 'complete' && (
             <div className="bg-white shadow-lg rounded-sm p-6 border-t-4 border-[#F08B46]">
               <h3 className="font-oswald text-lg font-bold uppercase tracking-widest text-navy mb-4 flex items-center gap-2"><Plus size={18} className="text-[#F08B46]"/> Suggest Additional Work</h3>
-              
               {!showSuggestForm ? (
-                <button onClick={() => setShowSuggestForm(true)} className="w-full border-2 border-dashed border-gray-300 text-gray-500 font-bold py-3 rounded hover:bg-gray-50 hover:border-[#F08B46] active:scale-95 transition-all text-sm uppercase tracking-widest">
-                  + Add Discovered Item
-                </button>
+                <button onClick={() => setShowSuggestForm(true)} className="w-full border-2 border-dashed border-gray-300 text-gray-500 font-bold py-3 rounded hover:bg-gray-50 hover:border-[#F08B46] active:scale-95 transition-all text-sm uppercase tracking-widest">+ Add Discovered Item</button>
               ) : (
                 <div className="space-y-3 animate-fade-in">
                   <div>
                     <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Item Name *</label>
-                    <input type="text" value={suggestName} onChange={e => setSuggestName(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" placeholder="e.g. Replace left main brake pads" />
+                    <input type="text" value={suggestName} onChange={e => setSuggestName(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" placeholder="e.g. Replace left main brake pads" />
                   </div>
                   <div>
                     <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Description / Reason (Optional)</label>
-                    <textarea value={suggestDescription} onChange={e => setSuggestDescription(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none min-h-[80px]" placeholder="Pads worn below minimum thickness during inspection..." />
+                    <textarea value={suggestDescription} onChange={e => setSuggestDescription(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none min-h-[80px]" placeholder="Pads worn below minimum thickness during inspection..." />
                   </div>
                   <div className="flex gap-2">
                     <button onClick={() => { setShowSuggestForm(false); setSuggestName(""); setSuggestDescription(""); }} className="flex-1 border border-gray-300 text-gray-600 font-bold py-2 rounded text-xs uppercase tracking-widest hover:bg-gray-50 active:scale-95">Cancel</button>
-                    <button 
-                      onClick={async () => {
-                        if (!suggestName.trim()) return alert("Item name is required.");
-                        await handleAction('suggest_item', { itemName: suggestName, itemDescription: suggestDescription, message: suggestName });
-                        setSuggestName(""); setSuggestDescription(""); setShowSuggestForm(false);
-                      }} 
-                      disabled={isSubmitting || !suggestName.trim()} 
-                      className="flex-[2] bg-[#F08B46] text-white font-bold py-2 rounded text-xs uppercase tracking-widest active:scale-95 transition-transform disabled:opacity-50"
-                    >
-                      {isSubmitting ? "Adding..." : "Add & Notify Owner"}
-                    </button>
+                    <button onClick={async () => { if (!suggestName.trim()) return alert("Item name is required."); await handleAction('suggest_item', { itemName: suggestName, itemDescription: suggestDescription, message: suggestName }); setSuggestName(""); setSuggestDescription(""); setShowSuggestForm(false); }} disabled={isSubmitting || !suggestName.trim()} className="flex-[2] bg-[#F08B46] text-white font-bold py-2 rounded text-xs uppercase tracking-widest active:scale-95 transition-transform disabled:opacity-50">{isSubmitting ? "Adding..." : "Add & Notify Owner"}</button>
                   </div>
                 </div>
               )}
             </div>
           )}
 
-          {/* ════════════════════════════════════════════════════════ */}
           {/* UPLOAD FILES / DOCUMENTS */}
-          {/* ════════════════════════════════════════════════════════ */}
           {event.status !== 'complete' && event.status !== 'cancelled' && (
             <div className="bg-white shadow-lg rounded-sm p-6 border-t-4 border-[#3AB0FF]">
               <h3 className="font-oswald text-lg font-bold uppercase tracking-widest text-navy mb-4 flex items-center gap-2"><Upload size={18} className="text-[#3AB0FF]"/> Upload Photos & Documents</h3>
-              
               {!showUploadForm ? (
-                <button onClick={() => setShowUploadForm(true)} className="w-full border-2 border-dashed border-gray-300 text-gray-500 font-bold py-3 rounded hover:bg-gray-50 hover:border-[#3AB0FF] active:scale-95 transition-all text-sm uppercase tracking-widest">
-                  + Attach Files
-                </button>
+                <button onClick={() => setShowUploadForm(true)} className="w-full border-2 border-dashed border-gray-300 text-gray-500 font-bold py-3 rounded hover:bg-gray-50 hover:border-[#3AB0FF] active:scale-95 transition-all text-sm uppercase tracking-widest">+ Attach Files</button>
               ) : (
                 <div className="space-y-3 animate-fade-in">
                   <div>
-                    <label className="text-[10px] font-bold uppercase tracking-widest text-navy flex items-center gap-2 mb-2">
-                      <Paperclip size={14}/> Select Files (Max 5, {MAX_UPLOAD_SIZE_LABEL} each)
-                    </label>
-                    <input 
-                      type="file" 
-                      multiple 
-                      accept="image/*,.pdf,.doc,.docx" 
-                      onChange={(e) => {
-                        if (e.target.files) {
-                          const newFiles = Array.from(e.target.files);
-                          const sizeError = validateFileSizes(newFiles);
-                          if (sizeError) {
-                            alert(sizeError);
-                            e.target.value = '';
-                            return;
-                          }
-                          const combined = [...uploadFiles, ...newFiles].slice(0, 5);
-                          setUploadFiles(combined);
-                        }
-                      }} 
-                      className="text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:bg-gray-100 file:text-navy cursor-pointer w-full" 
-                    />
+                    <label className="text-[10px] font-bold uppercase tracking-widest text-navy flex items-center gap-2 mb-2"><Paperclip size={14}/> Select Files (Max 5, {MAX_UPLOAD_SIZE_LABEL} each)</label>
+                    <input type="file" multiple accept="image/*,.pdf,.doc,.docx" onChange={(e) => { if (e.target.files) { const newFiles = Array.from(e.target.files); const sizeError = validateFileSizes(newFiles); if (sizeError) { alert(sizeError); e.target.value = ''; return; } const combined = [...uploadFiles, ...newFiles].slice(0, 5); setUploadFiles(combined); } }} className="text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:bg-gray-100 file:text-navy cursor-pointer w-full" />
                     <p className="text-[10px] text-gray-400 mt-1">Accepted: Photos (JPG, PNG, WebP, HEIC), PDFs, and Word documents.</p>
                   </div>
-
-                  {/* Selected files preview */}
                   {uploadFiles.length > 0 && (
                     <div className="space-y-2">
                       {uploadFiles.map((file, idx) => (
                         <div key={idx} className="flex items-center gap-3 p-2 bg-gray-50 rounded border border-gray-200">
                           {isImageType(file.type) ? (
-                            <div className="w-10 h-10 rounded overflow-hidden shrink-0 border border-gray-200">
-                              <img src={URL.createObjectURL(file)} alt="" className="w-full h-full object-cover" />
-                            </div>
+                            <div className="w-10 h-10 rounded overflow-hidden shrink-0 border border-gray-200"><img src={URL.createObjectURL(file)} alt="" className="w-full h-full object-cover" /></div>
                           ) : (
-                            <div className="w-10 h-10 rounded bg-gray-200 flex items-center justify-center shrink-0">
-                              <FileText size={18} className="text-gray-500" />
-                            </div>
+                            <div className="w-10 h-10 rounded bg-gray-200 flex items-center justify-center shrink-0"><FileText size={18} className="text-gray-500" /></div>
                           )}
-                          <div className="flex-1 min-w-0">
-                            <p className="text-xs font-bold text-navy truncate">{file.name}</p>
-                            <p className="text-[10px] text-gray-400">{formatFileSize(file.size)}</p>
-                          </div>
-                          <button onClick={() => removeUploadFile(idx)} className="text-gray-400 hover:text-red-500 shrink-0 active:scale-95">
-                            <X size={16} />
-                          </button>
+                          <div className="flex-1 min-w-0"><p className="text-xs font-bold text-navy truncate">{file.name}</p><p className="text-[10px] text-gray-400">{formatFileSize(file.size)}</p></div>
+                          <button onClick={() => removeUploadFile(idx)} className="text-gray-400 hover:text-red-500 shrink-0 active:scale-95"><X size={16} /></button>
                         </div>
                       ))}
                     </div>
                   )}
-
                   <div>
                     <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Description (Optional)</label>
-                    <textarea 
-                      value={uploadDescription} 
-                      onChange={e => setUploadDescription(e.target.value)} 
-                      className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#3AB0FF] outline-none min-h-[60px]" 
-                      placeholder="e.g. Photos of corroded exhaust gasket, work order estimate attached..." 
-                    />
+                    <textarea value={uploadDescription} onChange={e => setUploadDescription(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#3AB0FF] outline-none min-h-[60px]" placeholder="e.g. Photos of corroded exhaust gasket, work order estimate attached..." />
                   </div>
-
                   <div className="flex gap-2">
                     <button onClick={() => { setShowUploadForm(false); setUploadFiles([]); setUploadDescription(""); }} className="flex-1 border border-gray-300 text-gray-600 font-bold py-2 rounded text-xs uppercase tracking-widest hover:bg-gray-50 active:scale-95">Cancel</button>
-                    <button 
-                      onClick={handleFileUpload}
-                      disabled={isUploading || uploadFiles.length === 0} 
-                      className="flex-[2] bg-[#3AB0FF] text-white font-bold py-2 rounded text-xs uppercase tracking-widest active:scale-95 transition-transform disabled:opacity-50 flex items-center justify-center gap-2"
-                    >
-                      {isUploading ? <><Loader2 size={14} className="animate-spin" /> Uploading...</> : `Upload & Notify Owner`}
-                    </button>
+                    <button onClick={handleFileUpload} disabled={isUploading || uploadFiles.length === 0} className="flex-[2] bg-[#3AB0FF] text-white font-bold py-2 rounded text-xs uppercase tracking-widest active:scale-95 transition-transform disabled:opacity-50 flex items-center justify-center gap-2">{isUploading ? <><Loader2 size={14} className="animate-spin" /> Uploading...</> : `Upload & Notify Owner`}</button>
                   </div>
                 </div>
               )}
@@ -585,15 +487,13 @@ export default function ServicePortal() {
               <div className="space-y-3">
                 <div>
                   <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Expected Ready Date</label>
-                  <input type="date" value={estimatedCompletion} onChange={e => setEstimatedCompletion(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#091F3C] outline-none" />
+                  <input type="date" value={estimatedCompletion} onChange={e => setEstimatedCompletion(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#091F3C] outline-none" />
                 </div>
                 <div>
                   <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Notes for Owner</label>
-                  <textarea value={mechanicNotes} onChange={e => setMechanicNotes(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#091F3C] outline-none min-h-[80px]" placeholder="Parts on order, waiting for weather, etc." />
+                  <textarea value={mechanicNotes} onChange={e => setMechanicNotes(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#091F3C] outline-none min-h-[80px]" placeholder="Parts on order, waiting for weather, etc." />
                 </div>
-                <button onClick={() => handleAction('update_estimate', { proposedDate: estimatedCompletion, message: mechanicNotes })} disabled={isSubmitting} className="w-full bg-[#091F3C] text-white font-oswald font-bold uppercase tracking-widest py-3 rounded active:scale-95 transition-transform disabled:opacity-50">
-                  {isSubmitting ? "Updating..." : "Save & Notify Owner"}
-                </button>
+                <button onClick={() => handleAction('update_estimate', { proposedDate: estimatedCompletion, message: mechanicNotes })} disabled={isSubmitting} className="w-full bg-[#091F3C] text-white font-oswald font-bold uppercase tracking-widest py-3 rounded active:scale-95 transition-transform disabled:opacity-50">{isSubmitting ? "Updating..." : "Save & Notify Owner"}</button>
               </div>
             </div>
           )}
@@ -603,23 +503,14 @@ export default function ServicePortal() {
             <div className="bg-green-50 shadow-lg rounded-sm p-6 border-t-4 border-[#56B94A]">
               <h3 className="font-oswald text-lg font-bold uppercase tracking-widest text-navy mb-4 flex items-center gap-2"><Plane size={18} className="text-[#56B94A]"/> All Work Complete</h3>
               <p className="text-sm text-gray-600 mb-4">All line items are marked complete. Notify the owner that the aircraft is ready for pickup.</p>
-              
               {!showReadyConfirm ? (
-                <button onClick={() => setShowReadyConfirm(true)} className="w-full bg-[#56B94A] text-white font-oswald font-bold uppercase tracking-widest py-3 rounded active:scale-95 transition-transform flex items-center justify-center gap-2">
-                  <CheckCircle size={18} /> Mark Aircraft Ready for Pickup
-                </button>
+                <button onClick={() => setShowReadyConfirm(true)} className="w-full bg-[#56B94A] text-white font-oswald font-bold uppercase tracking-widest py-3 rounded active:scale-95 transition-transform flex items-center justify-center gap-2"><CheckCircle size={18} /> Mark Aircraft Ready for Pickup</button>
               ) : (
                 <div className="space-y-3 animate-fade-in">
-                  <textarea value={readyMessage} onChange={e => setReadyMessage(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-[#56B94A] outline-none bg-white min-h-[60px]" placeholder="Any pickup notes for the owner (optional)..." />
+                  <textarea value={readyMessage} onChange={e => setReadyMessage(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-[#56B94A] outline-none min-h-[60px]" placeholder="Any pickup notes for the owner (optional)..." />
                   <div className="flex gap-2">
                     <button onClick={() => { setShowReadyConfirm(false); setReadyMessage(""); }} className="flex-1 border border-gray-300 text-gray-600 font-bold py-2 rounded text-xs uppercase tracking-widest hover:bg-gray-50 active:scale-95">Cancel</button>
-                    <button 
-                      onClick={() => handleAction('mark_ready', { message: readyMessage })} 
-                      disabled={isSubmitting} 
-                      className="flex-[2] bg-[#56B94A] text-white font-bold py-2 rounded text-xs uppercase tracking-widest active:scale-95 transition-transform disabled:opacity-50"
-                    >
-                      {isSubmitting ? "Notifying..." : "Confirm & Notify Owner"}
-                    </button>
+                    <button onClick={() => handleAction('mark_ready', { message: readyMessage })} disabled={isSubmitting} className="flex-[2] bg-[#56B94A] text-white font-bold py-2 rounded text-xs uppercase tracking-widest active:scale-95 transition-transform disabled:opacity-50">{isSubmitting ? "Notifying..." : "Confirm & Notify Owner"}</button>
                   </div>
                 </div>
               )}
@@ -639,23 +530,15 @@ export default function ServicePortal() {
           {event.status !== 'complete' && event.status !== 'cancelled' && event.status !== 'ready_for_pickup' && (
             <div className="bg-white shadow-lg rounded-sm p-6 border-t-4 border-red-200">
               {!showDeclineConfirm ? (
-                <button onClick={() => setShowDeclineConfirm(true)} className="w-full text-[10px] font-bold uppercase tracking-widest text-[#CE3732] border border-red-200 bg-red-50 rounded py-2.5 hover:bg-red-100 active:scale-95 transition-all flex items-center justify-center gap-1.5">
-                  <XCircle size={12} /> Unable to Accommodate — Decline Service
-                </button>
+                <button onClick={() => setShowDeclineConfirm(true)} className="w-full text-[10px] font-bold uppercase tracking-widest text-[#CE3732] border border-red-200 bg-red-50 rounded py-2.5 hover:bg-red-100 active:scale-95 transition-all flex items-center justify-center gap-1.5"><XCircle size={12} /> Unable to Accommodate — Decline Service</button>
               ) : (
                 <div className="space-y-3 animate-fade-in">
                   <p className="text-sm font-bold text-navy">Are you sure you want to decline this service request?</p>
                   <p className="text-xs text-gray-500">The owner will be notified via email.</p>
-                  <textarea value={declineReason} onChange={e => setDeclineReason(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-[#CE3732] outline-none bg-white min-h-[60px]" placeholder="Reason (optional) — e.g. shop fully booked through Q2, recommend contacting..." />
+                  <textarea value={declineReason} onChange={e => setDeclineReason(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-[#CE3732] outline-none min-h-[60px]" placeholder="Reason (optional) — e.g. shop fully booked through Q2, recommend contacting..." />
                   <div className="flex gap-2">
                     <button onClick={() => { setShowDeclineConfirm(false); setDeclineReason(""); }} className="flex-1 border border-gray-300 text-gray-600 font-bold py-2 rounded text-xs uppercase tracking-widest hover:bg-gray-50 active:scale-95">Keep Event</button>
-                    <button 
-                      onClick={() => handleAction('decline', { message: declineReason })} 
-                      disabled={isSubmitting} 
-                      className="flex-[2] bg-[#CE3732] text-white font-bold py-2 rounded text-xs uppercase tracking-widest active:scale-95 transition-transform disabled:opacity-50"
-                    >
-                      {isSubmitting ? "Declining..." : "Decline & Notify Owner"}
-                    </button>
+                    <button onClick={() => handleAction('decline', { message: declineReason })} disabled={isSubmitting} className="flex-[2] bg-[#CE3732] text-white font-bold py-2 rounded text-xs uppercase tracking-widest active:scale-95 transition-transform disabled:opacity-50">{isSubmitting ? "Declining..." : "Decline & Notify Owner"}</button>
                   </div>
                 </div>
               )}
@@ -671,12 +554,9 @@ export default function ServicePortal() {
             </div>
           )}
 
-          {/* ════════════════════════════════════════════════════════ */}
-          {/* COMMUNICATION THREAD — with attachment rendering */}
-          {/* ════════════════════════════════════════════════════════ */}
+          {/* COMMUNICATION THREAD */}
           <div className="bg-white shadow-lg rounded-sm p-6 border-t-4 border-gray-400">
             <h3 className="font-oswald text-lg font-bold uppercase tracking-widest text-navy mb-4 flex items-center gap-2"><MessageSquare size={18} className="text-gray-500"/> Communication</h3>
-            
             <div className="space-y-3 mb-6 max-h-[400px] overflow-y-auto">
               {messages.length === 0 ? (
                 <p className="text-center text-sm text-gray-400 italic py-4">No messages yet.</p>
@@ -684,48 +564,18 @@ export default function ServicePortal() {
                 messages.map((msg: any) => (
                   <div key={msg.id} className={`p-3 rounded text-sm ${msg.sender === 'mechanic' ? 'bg-blue-50 border-l-4 border-[#3AB0FF]' : msg.sender === 'owner' ? 'bg-orange-50 border-l-4 border-[#F08B46]' : 'bg-gray-50 border-l-4 border-gray-300'}`}>
                     <div className="flex justify-between items-center mb-1">
-                      <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500">
-                        {msg.sender === 'mechanic' ? 'Maintenance' : msg.sender === 'owner' ? 'Owner' : 'System'}
-                      </span>
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500">{msg.sender === 'mechanic' ? 'Maintenance' : msg.sender === 'owner' ? 'Owner' : 'System'}</span>
                       <span className="text-[10px] text-gray-400">{new Date(msg.created_at).toLocaleString()}</span>
                     </div>
                     <p className="text-navy whitespace-pre-wrap">{msg.message}</p>
-
-                    {/* RENDER ATTACHMENTS */}
                     {msg.attachments && Array.isArray(msg.attachments) && msg.attachments.length > 0 && (
                       <div className="mt-3 pt-3 border-t border-gray-200">
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2 flex items-center gap-1">
-                          <Paperclip size={10} /> {msg.attachments.length} Attachment{msg.attachments.length > 1 ? 's' : ''}
-                        </p>
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2 flex items-center gap-1"><Paperclip size={10} /> {msg.attachments.length} Attachment{msg.attachments.length > 1 ? 's' : ''}</p>
                         <div className="flex gap-2 flex-wrap">
                           {msg.attachments.map((att: any, idx: number) => {
                             const isImg = att.type && att.type.startsWith('image/');
-                            if (isImg) {
-                              return (
-                                <button 
-                                  key={idx} 
-                                  onClick={() => setViewingPhoto(att.url)} 
-                                  className="w-20 h-20 rounded border-2 border-gray-200 overflow-hidden hover:border-[#3AB0FF] transition-colors active:scale-95"
-                                >
-                                  <img src={att.url} alt={att.filename} className="w-full h-full object-cover" />
-                                </button>
-                              );
-                            }
-                            return (
-                              <a 
-                                key={idx} 
-                                href={att.url} 
-                                target="_blank" 
-                                rel="noreferrer" 
-                                className="flex items-center gap-2 p-2 bg-white border border-gray-200 rounded hover:border-[#3AB0FF] transition-colors"
-                              >
-                                <FileText size={16} className="text-gray-500 shrink-0" />
-                                <div className="min-w-0">
-                                  <p className="text-xs font-bold text-navy truncate max-w-[120px]">{att.filename}</p>
-                                  {att.size && <p className="text-[10px] text-gray-400">{att.size < 1024 * 1024 ? (att.size / 1024).toFixed(0) + ' KB' : (att.size / (1024 * 1024)).toFixed(1) + ' MB'}</p>}
-                                </div>
-                              </a>
-                            );
+                            if (isImg) return (<button key={idx} onClick={() => setViewingPhoto(att.url)} className="w-20 h-20 rounded border-2 border-gray-200 overflow-hidden hover:border-[#3AB0FF] transition-colors active:scale-95"><img src={att.url} alt={att.filename} className="w-full h-full object-cover" /></button>);
+                            return (<a key={idx} href={att.url} target="_blank" rel="noreferrer" className="flex items-center gap-2 p-2 bg-white border border-gray-200 rounded hover:border-[#3AB0FF] transition-colors"><FileText size={16} className="text-gray-500 shrink-0" /><div className="min-w-0"><p className="text-xs font-bold text-navy truncate max-w-[120px]">{att.filename}</p>{att.size && <p className="text-[10px] text-gray-400">{att.size < 1024 * 1024 ? (att.size / 1024).toFixed(0) + ' KB' : (att.size / (1024 * 1024)).toFixed(1) + ' MB'}</p>}</div></a>);
                           })}
                         </div>
                       </div>
@@ -734,13 +584,10 @@ export default function ServicePortal() {
                 ))
               )}
             </div>
-
             {event.status !== 'complete' && (
               <div className="flex gap-2">
-                <textarea value={commentText} onChange={e => setCommentText(e.target.value)} className="flex-1 border border-gray-300 rounded p-3 text-sm focus:border-[#3AB0FF] outline-none min-h-[60px]" placeholder="Send a message..." />
-                <button onClick={() => handleAction('comment', { message: commentText })} disabled={isSubmitting || !commentText.trim()} className="bg-[#3AB0FF] text-white px-4 rounded active:scale-95 transition-transform disabled:opacity-50">
-                  <Send size={18}/>
-                </button>
+                <textarea value={commentText} onChange={e => setCommentText(e.target.value)} style={whiteBg} className="flex-1 border border-gray-300 rounded p-3 text-sm focus:border-[#3AB0FF] outline-none min-h-[60px]" placeholder="Send a message..." />
+                <button onClick={() => handleAction('comment', { message: commentText })} disabled={isSubmitting || !commentText.trim()} className="bg-[#3AB0FF] text-white px-4 rounded active:scale-95 transition-transform disabled:opacity-50"><Send size={18}/></button>
               </div>
             )}
           </div>

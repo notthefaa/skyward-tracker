@@ -10,6 +10,8 @@ import SignatureCanvas from "react-signature-canvas";
 import imageCompression from "browser-image-compression";
 import Toast from "@/components/Toast";
 
+const whiteBg = { backgroundColor: '#ffffff' } as const;
+
 export default function SquawksTab({ 
   aircraft, session, role, userInitials, onGroundedStatusChange 
 }: { 
@@ -35,7 +37,6 @@ export default function SquawksTab({
   const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [visibleArchivedCount, setVisibleArchivedCount] = useState(10);
 
-  // Toast
   const [toastMessage, setToastMessage] = useState("");
   const [showToast, setShowToast] = useState(false);
   const showSuccess = (msg: string) => { setToastMessage(msg); setShowToast(true); };
@@ -78,11 +79,7 @@ export default function SquawksTab({
     if (!e.target.files) return;
     const files = Array.from(e.target.files);
     const sizeError = validateFileSizes(files);
-    if (sizeError) {
-      alert(sizeError);
-      e.target.value = '';
-      return;
-    }
+    if (sizeError) { alert(sizeError); e.target.value = ''; return; }
     setSelectedImages(files);
   };
 
@@ -94,10 +91,7 @@ export default function SquawksTab({
         const compressedFile = await imageCompression(file, options);
         const fileName = `${aircraft!.tail_number}_${Date.now()}_${compressedFile.name}`;
         const { data } = await supabase.storage.from('aft_squawk_images').upload(fileName, compressedFile);
-        if (data) {
-          const { data: publicUrlData } = supabase.storage.from('aft_squawk_images').getPublicUrl(data.path);
-          uploadedPaths.push(publicUrlData.publicUrl);
-        }
+        if (data) { const { data: publicUrlData } = supabase.storage.from('aft_squawk_images').getPublicUrl(data.path); uploadedPaths.push(publicUrlData.publicUrl); }
       } catch (error) { console.error("Image compression/upload failed:", error); }
     }
     return uploadedPaths;
@@ -127,12 +121,7 @@ export default function SquawksTab({
     } else {
       const { data: newSquawk } = await supabase.from('aft_squawks').insert(squawkData).select().single();
       if (newSquawk) {
-        try {
-          await authFetch('/api/emails/squawk-notify', {
-            method: 'POST',
-            body: JSON.stringify({ squawk: newSquawk, aircraft, notifyMx })
-          });
-        } catch (err) { console.error("Failed to send squawk email", err); }
+        try { await authFetch('/api/emails/squawk-notify', { method: 'POST', body: JSON.stringify({ squawk: newSquawk, aircraft, notifyMx }) }); } catch (err) { console.error("Failed to send squawk email", err); }
       }
     }
 
@@ -175,7 +164,6 @@ export default function SquawksTab({
       doc.text(`Squawk Report - ${aircraft!.tail_number}`, 14, y); y += 8; 
       doc.setFontSize(10); doc.setFont("helvetica", "normal"); 
       doc.text(`Generated on ${new Date().toLocaleDateString()}`, 14, y); y += 15;
-
       for (const sq of itemsToExport) {
         if (y > 260) { doc.addPage(); y = 20; }
         doc.setFontSize(12); doc.setFont("helvetica", "bold"); 
@@ -185,16 +173,10 @@ export default function SquawksTab({
         if (sq.is_deferred) { doc.text(`Deferred (${sq.deferral_category}): MEL/CDL/NEF: ${sq.mel_number||'-'} / ${sq.cdl_number||'-'} / ${sq.nef_number||'-'}`, 14, y); y += 6; }
         const splitDesc = doc.splitTextToSize(`Description: ${sq.description}`, 180); 
         doc.text(splitDesc, 14, y); y += (splitDesc.length * 5) + 4;
-
         if (sq.pictures && sq.pictures.length > 0) {
           for (const picUrl of sq.pictures) {
             if (y > 200) { doc.addPage(); y = 20; }
-            try {
-              const img = new Image(); img.crossOrigin = "Anonymous"; img.src = picUrl;
-              await new Promise((resolve) => { img.onload = resolve; });
-              const maxW = 150; const maxH = 100; const ratio = Math.min(maxW / img.width, maxH / img.height);
-              doc.addImage(img, 'JPEG', 14, y, img.width * ratio, img.height * ratio); y += (img.height * ratio) + 8;
-            } catch (e) { doc.text("[Image failed to load]", 14, y); y += 6; }
+            try { const img = new Image(); img.crossOrigin = "Anonymous"; img.src = picUrl; await new Promise((resolve) => { img.onload = resolve; }); const maxW = 150; const maxH = 100; const ratio = Math.min(maxW / img.width, maxH / img.height); doc.addImage(img, 'JPEG', 14, y, img.width * ratio, img.height * ratio); y += (img.height * ratio) + 8; } catch (e) { doc.text("[Image failed to load]", 14, y); y += 6; }
           }
         }
         y += 5; doc.setDrawColor(200); doc.line(14, y, 196, y); y += 10;
@@ -204,9 +186,7 @@ export default function SquawksTab({
     setIsExportingPdf(false); setShowExportModal(false);
   };
 
-  const toggleExportSelection = (id: string) => {
-    setSelectedForExport(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
-  };
+  const toggleExportSelection = (id: string) => { setSelectedForExport(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]); };
 
   if (!aircraft) return null;
 
@@ -310,8 +290,8 @@ export default function SquawksTab({
       </div>
 
       {showExportModal && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-white rounded shadow-2xl w-full max-w-md p-6 border-t-4 border-[#CE3732] max-h-[90vh] overflow-y-auto animate-slide-up flex flex-col">
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-3 animate-fade-in">
+          <div className="bg-white rounded shadow-2xl w-full max-w-md p-5 border-t-4 border-[#CE3732] max-h-[90vh] overflow-y-auto animate-slide-up flex flex-col">
             <div className="flex justify-between items-center mb-4">
               <h2 className="font-oswald text-2xl font-bold uppercase text-navy flex items-center gap-2"><CheckSquare size={20} className="text-[#CE3732]" /> Export to PDF</h2>
               <button onClick={() => setShowExportModal(false)} className="text-gray-400 hover:text-red-500 transition-colors"><X size={24}/></button>
@@ -351,8 +331,8 @@ export default function SquawksTab({
       )}
 
       {showModal && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-white rounded shadow-2xl w-full max-w-lg p-6 border-t-4 border-[#CE3732] max-h-[90vh] overflow-y-auto animate-slide-up">
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-3 animate-fade-in">
+          <div className="bg-white rounded shadow-2xl w-full max-w-lg p-5 border-t-4 border-[#CE3732] max-h-[90vh] overflow-y-auto animate-slide-up">
             <div className="flex justify-between items-center mb-4">
               <h2 className="font-oswald text-2xl font-bold uppercase text-navy">{editingId ? 'Edit Squawk' : 'Report Squawk'}</h2>
               <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-red-500"><X size={24}/></button>
@@ -363,11 +343,11 @@ export default function SquawksTab({
             </div>
             <form onSubmit={submitSquawk} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
-                <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Status</label><select value={status} onChange={e=>setStatus(e.target.value as any)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#CE3732] bg-white font-bold outline-none"><option value="open">Open</option><option value="resolved">Resolved</option></select></div>
-                <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Affects Airworthiness?</label><select value={affectsAirworthiness ? "yes" : "no"} onChange={e=>setAffectsAirworthiness(e.target.value === "yes")} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-red-500 bg-white font-bold outline-none"><option value="no">No (Monitor)</option><option value="yes">YES (GROUNDED)</option></select></div>
+                <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Status</label><select value={status} onChange={e=>setStatus(e.target.value as any)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#CE3732] font-bold outline-none"><option value="open">Open</option><option value="resolved">Resolved</option></select></div>
+                <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Affects Airworthiness?</label><select value={affectsAirworthiness ? "yes" : "no"} onChange={e=>setAffectsAirworthiness(e.target.value === "yes")} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-red-500 font-bold outline-none"><option value="no">No (Monitor)</option><option value="yes">YES (GROUNDED)</option></select></div>
               </div>
-              <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Location (Airport) *</label><input type="text" required value={location} onChange={e=>setLocation(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#CE3732] outline-none" placeholder="e.g. KDFW" /></div>
-              <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Description *</label><textarea required value={description} onChange={e=>setDescription(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 min-h-[100px] focus:border-[#CE3732] outline-none" /></div>
+              <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Location (Airport) *</label><input type="text" required value={location} onChange={e=>setLocation(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#CE3732] outline-none" placeholder="e.g. KDFW" /></div>
+              <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Description *</label><textarea required value={description} onChange={e=>setDescription(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 min-h-[100px] focus:border-[#CE3732] outline-none" /></div>
               <div>
                 <label className="text-[10px] font-bold uppercase tracking-widest text-navy flex items-center gap-2 mb-2"><Upload size={14}/> Attach Photos (Max {MAX_UPLOAD_SIZE_LABEL} each)</label>
                 <input type="file" multiple accept="image/*" onChange={handleImageSelection} className="text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:bg-gray-100 file:text-navy cursor-pointer" />
@@ -381,14 +361,14 @@ export default function SquawksTab({
                   {isDeferred && (
                     <div className="space-y-4 animate-fade-in">
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                        <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">MEL #</label><input type="text" value={mel} onChange={e=>setMel(e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-[#CE3732] outline-none" /></div>
-                        <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">CDL #</label><input type="text" value={cdl} onChange={e=>setCdl(e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-[#CE3732] outline-none" /></div>
-                        <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">NEF #</label><input type="text" value={nef} onChange={e=>setNef(e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-[#CE3732] outline-none" /></div>
-                        <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">MDL #</label><input type="text" value={mdl} onChange={e=>setMdl(e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-[#CE3732] outline-none" /></div>
+                        <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">MEL #</label><input type="text" value={mel} onChange={e=>setMel(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-[#CE3732] outline-none" /></div>
+                        <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">CDL #</label><input type="text" value={cdl} onChange={e=>setCdl(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-[#CE3732] outline-none" /></div>
+                        <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">NEF #</label><input type="text" value={nef} onChange={e=>setNef(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-[#CE3732] outline-none" /></div>
+                        <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">MDL #</label><input type="text" value={mdl} onChange={e=>setMdl(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-[#CE3732] outline-none" /></div>
                       </div>
                       <div className="grid grid-cols-2 gap-3">
-                        <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Control #</label><input type="text" value={melControl} onChange={e=>setMelControl(e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-[#CE3732] outline-none" /></div>
-                        <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Category</label><select value={category} onChange={e=>setCategory(e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 bg-white focus:border-[#CE3732] outline-none"><option value="">Select...</option><option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option><option value="NA">N/A</option></select></div>
+                        <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Control #</label><input type="text" value={melControl} onChange={e=>setMelControl(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-[#CE3732] outline-none" /></div>
+                        <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Category</label><select value={category} onChange={e=>setCategory(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-[#CE3732] outline-none"><option value="">Select...</option><option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option><option value="NA">N/A</option></select></div>
                       </div>
                       <div className="pt-2">
                         <label className="flex items-start gap-2 text-xs font-bold text-navy cursor-pointer">
@@ -401,8 +381,8 @@ export default function SquawksTab({
                         <button type="button" onClick={() => sigCanvas.current?.clear()} className="text-[10px] font-bold uppercase text-gray-500 mt-1 hover:text-red-500">Clear Signature</button>
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Name (Full Name) *</label><input type="text" required value={fullName} onChange={e=>setFullName(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#CE3732] outline-none" /></div>
-                        <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Certificate Number *</label><input type="text" required value={certNum} onChange={e=>setCertNum(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#CE3732] outline-none" /></div>
+                        <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Name (Full Name) *</label><input type="text" required value={fullName} onChange={e=>setFullName(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#CE3732] outline-none" /></div>
+                        <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Certificate Number *</label><input type="text" required value={certNum} onChange={e=>setCertNum(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#CE3732] outline-none" /></div>
                       </div>
                     </div>
                   )}

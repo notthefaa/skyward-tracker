@@ -6,6 +6,8 @@ import { Download, ChevronLeft, ChevronRight, Plus, X, Edit2, Trash2, Info, MapP
 import { PrimaryButton } from "@/components/AppButtons";
 import Toast from "@/components/Toast";
 
+const whiteBg = { backgroundColor: '#ffffff' } as const;
+
 export default function TimesTab({ 
   aircraft, session, role, userInitials, onUpdate 
 }: { 
@@ -377,8 +379,8 @@ export default function TimesTab({
             </div>
             <form onSubmit={submitFlightLog} className="space-y-4">
               <div className="grid grid-cols-2 gap-4 border-b border-gray-100 pb-4 mb-2">
-                <div><label className="block text-[10px] font-bold uppercase tracking-widest text-navy mb-1">POD (Depart)</label><input type="text" maxLength={4} value={logPod} onChange={e=>setLogPod(e.target.value.toUpperCase())} className="w-full border border-gray-300 rounded p-3 text-sm uppercase focus:border-[#3AB0FF] outline-none bg-white text-center font-bold" placeholder="ICAO" /></div>
-                <div><label className="block text-[10px] font-bold uppercase tracking-widest text-navy mb-1">POA (Arrive)</label><input type="text" maxLength={4} value={logPoa} onChange={e=>setLogPoa(e.target.value.toUpperCase())} className="w-full border border-gray-300 rounded p-3 text-sm uppercase focus:border-[#3AB0FF] outline-none bg-white text-center font-bold" placeholder="ICAO" /></div>
+                <div><label className="block text-[10px] font-bold uppercase tracking-widest text-navy mb-1">POD (Depart)</label><input type="text" style={whiteBg} maxLength={4} value={logPod} onChange={e=>setLogPod(e.target.value.toUpperCase())} className="w-full border border-gray-300 rounded p-3 text-sm uppercase focus:border-[#3AB0FF] outline-none bg-white text-center font-bold" placeholder="ICAO" /></div>
+                <div><label className="block text-[10px] font-bold uppercase tracking-widest text-navy mb-1">POA (Arrive)</label><input type="text" style={whiteBg} maxLength={4} value={logPoa} onChange={e=>setLogPoa(e.target.value.toUpperCase())} className="w-full border border-gray-300 rounded p-3 text-sm uppercase focus:border-[#3AB0FF] outline-none bg-white text-center font-bold" placeholder="ICAO" /></div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -386,22 +388,22 @@ export default function TimesTab({
                   <>
                     <div>
                       <div className="flex justify-between items-center mb-1"><label className="text-[10px] font-bold uppercase tracking-widest text-navy">AFTT *</label><span className="text-[9px] font-bold uppercase text-gray-400">Last: {aircraft?.total_airframe_time?.toFixed(1) || 0}</span></div>
-                      <input type="number" step="0.1" required value={logAftt} onChange={e=>setLogAftt(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-[#3AB0FF] outline-none bg-white" />
+                      <input type="number" style={whiteBg} step="0.1" required value={logAftt} onChange={e=>setLogAftt(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-[#3AB0FF] outline-none bg-white" />
                     </div>
                     <div>
                       <div className="flex justify-between items-center mb-1"><label className="text-[10px] font-bold uppercase tracking-widest text-navy">FTT *</label><span className="text-[9px] font-bold uppercase text-gray-400">Last: {aircraft?.total_engine_time?.toFixed(1) || 0}</span></div>
-                      <input type="number" step="0.1" required value={logFtt} onChange={e=>setLogFtt(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-[#3AB0FF] outline-none bg-white" />
+                      <input type="number" style={whiteBg} step="0.1" required value={logFtt} onChange={e=>setLogFtt(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-[#3AB0FF] outline-none bg-white" />
                     </div>
                   </>
                 ) : (
                   <>
                     <div>
                       <div className="flex justify-between items-center mb-1"><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Hobbs (Opt)</label><span className="text-[9px] font-bold uppercase text-gray-400">Last: {aircraft?.total_airframe_time?.toFixed(1) || 0}</span></div>
-                      <input type="number" step="0.1" value={logHobbs} onChange={e=>setLogHobbs(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-[#3AB0FF] outline-none bg-white" />
+                      <input type="number" style={whiteBg} step="0.1" value={logHobbs} onChange={e=>setLogHobbs(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-[#3AB0FF] outline-none bg-white" />
                     </div>
                     <div>
                       <div className="flex justify-between items-center mb-1"><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Tach *</label><span className="text-[9px] font-bold uppercase text-gray-400">Last: {aircraft?.total_engine_time?.toFixed(1) || 0}</span></div>
-                      <input type="number" step="0.1" required value={logTach} onChange={e=>setLogTach(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-[#3AB0FF] outline-none bg-white" />
+                      <input type="number" style={whiteBg} step="0.1" required value={logTach} onChange={e=>setLogTach(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-[#3AB0FF] outline-none bg-white" />
                     </div>
                   </>
                 )}
@@ -410,25 +412,25 @@ export default function TimesTab({
               <div className={`grid ${isTurbine ? 'grid-cols-2' : 'grid-cols-1'} gap-4`}>
                 <div>
                   <div className="flex items-center justify-between mb-1 h-4"><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Landings</label></div>
-                  <input type="number" required value={logLandings} onChange={e=>setLogLandings(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-[#3AB0FF] outline-none bg-white" placeholder="0" />
+                  <input type="number" style={whiteBg} required value={logLandings} onChange={e=>setLogLandings(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-[#3AB0FF] outline-none bg-white" placeholder="0" />
                 </div>
                 {isTurbine && (
                   <div>
                     <div className="flex items-center justify-between mb-1 h-4"><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Engine Cycles</label></div>
-                    <input type="number" required value={logCycles} onChange={e=>setLogCycles(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-[#3AB0FF] outline-none bg-white" placeholder="0" />
+                    <input type="number" style={whiteBg} required value={logCycles} onChange={e=>setLogCycles(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-[#3AB0FF] outline-none bg-white" placeholder="0" />
                   </div>
                 )}
               </div>
 
               <div className="grid grid-cols-2 gap-4 border border-[#3AB0FF]/30 bg-[#3AB0FF]/5 p-3 rounded mt-2">
-                <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Current Fuel State (Opt)</label><input type="number" step="0.1" value={logFuel} onChange={e=>setLogFuel(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#3AB0FF] outline-none bg-white" placeholder="Quantity" /></div>
+                <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Current Fuel State (Opt)</label><input type="number" style={whiteBg} step="0.1" value={logFuel} onChange={e=>setLogFuel(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#3AB0FF] outline-none bg-white" placeholder="Quantity" /></div>
                 <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Fuel Unit</label><select value={logFuelUnit} onChange={e=>setLogFuelUnit(e.target.value as any)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 bg-white focus:border-[#3AB0FF] outline-none"><option value="gallons">Gallons</option><option value="lbs">Lbs</option></select></div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <div className="flex items-center justify-between mb-1 h-4"><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Initials</label></div>
-                  <input type="text" maxLength={3} required value={logInitials} onChange={e=>setLogInitials(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm uppercase focus:border-[#3AB0FF] outline-none bg-white" placeholder="ABC" />
+                  <input type="text" style={whiteBg} maxLength={3} required value={logInitials} onChange={e=>setLogInitials(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm uppercase focus:border-[#3AB0FF] outline-none bg-white" placeholder="ABC" />
                 </div>
                 <div>
                   <div className="flex items-center justify-between mb-1 h-4">
@@ -439,7 +441,7 @@ export default function TimesTab({
                 </div>
               </div>
 
-              <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Passengers (Opt)</label><input type="text" value={logPax} onChange={e=>setLogPax(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#3AB0FF] outline-none bg-white" placeholder="Names or notes..." /></div>
+              <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Passengers (Opt)</label><input type="text" style={whiteBg} value={logPax} onChange={e=>setLogPax(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#3AB0FF] outline-none bg-white" placeholder="Names or notes..." /></div>
               <div className="pt-4"><PrimaryButton disabled={isSubmitting}>{isSubmitting ? "Saving..." : "Save Flight Log"}</PrimaryButton></div>
             </form>
           </div>

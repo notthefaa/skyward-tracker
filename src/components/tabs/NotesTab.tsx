@@ -7,6 +7,8 @@ import { PrimaryButton } from "@/components/AppButtons";
 import imageCompression from "browser-image-compression";
 import Toast from "@/components/Toast";
 
+const whiteBg = { backgroundColor: '#ffffff' } as const;
+
 export default function NotesTab({ aircraft, session, role, userInitials, onNotesRead }: { aircraft: any, session: any, role: string, userInitials: string, onNotesRead: () => void }) {
   
   const { data: notes = [], mutate } = useSWR(
@@ -243,7 +245,7 @@ export default function NotesTab({ aircraft, session, role, userInitials, onNote
             <form onSubmit={submitNote} className="space-y-4">
               <div>
                 <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Message *</label>
-                <textarea 
+                <textarea style={whiteBg} 
                   required 
                   value={content} 
                   onChange={e=>setContent(e.target.value)} 

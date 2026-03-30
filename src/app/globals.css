@@ -24,15 +24,6 @@ html, body {
   overscroll-behavior-y: none;
 }
 
-/* ─── GLOBAL FORM ELEMENT BACKGROUNDS ───
-   Forces form fields to white. The :not([data-transparent])
-   excludes the header tail-number dropdown which opts out. */
-input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
-textarea,
-select:not([data-transparent]) {
-  background-color: #ffffff !important;
-}
-
 /* Smooth momentum scrolling for iOS */
 main {
   -webkit-overflow-scrolling: touch;

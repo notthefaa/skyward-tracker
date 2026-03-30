@@ -689,10 +689,10 @@ export default function CalendarTab({
 
       {/* ═══ BOOKING FORM MODAL ═══ */}
       {showBookingForm && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-fade-in" onClick={() => setShowBookingForm(false)}>
-          <div className="bg-white rounded shadow-2xl w-full max-w-md p-6 border-t-4 border-[#56B94A] max-h-[90vh] overflow-y-auto animate-slide-up" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-3 animate-fade-in" onClick={() => setShowBookingForm(false)}>
+          <div className="bg-white rounded shadow-2xl w-full max-w-md p-5 border-t-4 border-[#56B94A] max-h-[90vh] overflow-y-auto animate-slide-up" onClick={e => e.stopPropagation()}>
             
-            <div className="flex justify-between items-center mb-6">
+            <div className="flex justify-between items-center mb-5">
               <h2 className="font-oswald text-2xl font-bold uppercase text-navy flex items-center gap-2">
                 <Calendar size={20} className="text-[#56B94A]" /> Reserve Aircraft
               </h2>
@@ -703,14 +703,14 @@ export default function CalendarTab({
               {/* Departure */}
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Departure</p>
-                <div className="flex gap-3">
-                  <div className="flex-[3] min-w-0">
+                <div className="space-y-3">
+                  <div>
                     <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Date *</label>
-                    <input type="date" value={bookingStartDate} onChange={e => setBookingStartDate(e.target.value)} className="w-full border border-gray-300 rounded p-2.5 text-sm mt-1 focus:border-[#56B94A] outline-none bg-white" />
+                    <input type="date" value={bookingStartDate} onChange={e => setBookingStartDate(e.target.value)} style={{backgroundColor:'#ffffff'}} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#56B94A] outline-none" />
                   </div>
-                  <div className="flex-[2] min-w-0">
+                  <div>
                     <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Time *</label>
-                    <input type="time" value={bookingStartTime} onChange={e => setBookingStartTime(e.target.value)} className="w-full border border-gray-300 rounded p-2.5 text-sm mt-1 focus:border-[#56B94A] outline-none bg-white" />
+                    <input type="time" value={bookingStartTime} onChange={e => setBookingStartTime(e.target.value)} style={{backgroundColor:'#ffffff'}} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#56B94A] outline-none" />
                   </div>
                 </div>
               </div>
@@ -718,14 +718,14 @@ export default function CalendarTab({
               {/* Return */}
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Return</p>
-                <div className="flex gap-3">
-                  <div className="flex-[3] min-w-0">
+                <div className="space-y-3">
+                  <div>
                     <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Date *</label>
-                    <input type="date" value={bookingEndDate} onChange={e => setBookingEndDate(e.target.value)} className="w-full border border-gray-300 rounded p-2.5 text-sm mt-1 focus:border-[#56B94A] outline-none bg-white" />
+                    <input type="date" value={bookingEndDate} onChange={e => setBookingEndDate(e.target.value)} style={{backgroundColor:'#ffffff'}} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#56B94A] outline-none" />
                   </div>
-                  <div className="flex-[2] min-w-0">
+                  <div>
                     <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Time *</label>
-                    <input type="time" value={bookingEndTime} onChange={e => setBookingEndTime(e.target.value)} className="w-full border border-gray-300 rounded p-2.5 text-sm mt-1 focus:border-[#56B94A] outline-none bg-white" />
+                    <input type="time" value={bookingEndTime} onChange={e => setBookingEndTime(e.target.value)} style={{backgroundColor:'#ffffff'}} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#56B94A] outline-none" />
                   </div>
                 </div>
               </div>
@@ -733,13 +733,13 @@ export default function CalendarTab({
               <div className="border-t border-gray-100 pt-4">
                 <div>
                   <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Purpose (Optional)</label>
-                  <input type="text" value={bookingTitle} onChange={e => setBookingTitle(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#56B94A] outline-none bg-white" placeholder="Weekend trip, Business travel..." />
+                  <input type="text" value={bookingTitle} onChange={e => setBookingTitle(e.target.value)} style={{backgroundColor:'#ffffff'}} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#56B94A] outline-none" placeholder="Weekend trip, Business travel..." />
                 </div>
               </div>
 
               <div>
                 <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Route of Flight (Optional)</label>
-                <input type="text" value={bookingRoute} onChange={e => setBookingRoute(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#56B94A] outline-none bg-white uppercase" placeholder="KDAL → KAUS → KDAL" />
+                <input type="text" value={bookingRoute} onChange={e => setBookingRoute(e.target.value)} style={{backgroundColor:'#ffffff'}} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#56B94A] outline-none uppercase" placeholder="KDAL → KAUS → KDAL" />
               </div>
 
               <div className="pt-4">
