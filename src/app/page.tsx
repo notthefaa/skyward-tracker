@@ -46,6 +46,8 @@ export default function FleetTrackerApp() {
   const [showAdminMenu, setShowAdminMenu] = useState(false);
   const [showLogItModal, setShowLogItModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [showMxPicker, setShowMxPicker] = useState(false);
+  const [mxSubTab, setMxSubTab] = useState<'maintenance' | 'squawks'>('maintenance');
   const [showAircraftModal, setShowAircraftModal] = useState(false);
   const [editingAircraftId, setEditingAircraftId] = useState<string | null>(null);
   const { mutate: globalMutate } = useSWRConfig();
@@ -228,7 +230,7 @@ export default function FleetTrackerApp() {
             {activeTab === 'summary' && <SummaryTab aircraft={selectedAircraftData} setActiveTab={(t: AppTab) => setActiveTab(t)} role={role} aircraftRole={currentAircraftRole} onDeleteAircraft={handleDeleteAircraft} sysSettings={sysSettings} onEditAircraft={() => openAircraftForm(selectedAircraftData)} refreshData={() => fetchAircraftData(session.user.id)} session={session} />}
             {activeTab === 'times' && <TimesTab aircraft={selectedAircraftData} session={session} role={role} userInitials={userInitials} onUpdate={() => fetchAircraftData(session.user.id)} />}
             {activeTab === 'calendar' && <CalendarTab aircraft={selectedAircraftData} session={session} aircraftRole={currentAircraftRole} />}
-            {activeTab === 'mx' && <MaintenanceTab aircraft={selectedAircraftData} role={role} aircraftRole={currentAircraftRole} onGroundedStatusChange={() => checkGroundedStatus(activeTail)} sysSettings={sysSettings} session={session} userInitials={userInitials} />}
+            {activeTab === 'mx' && <MaintenanceTab aircraft={selectedAircraftData} role={role} aircraftRole={currentAircraftRole} onGroundedStatusChange={() => checkGroundedStatus(activeTail)} sysSettings={sysSettings} session={session} userInitials={userInitials} initialSubTab={mxSubTab} />}
             {activeTab === 'notes' && <NotesTab aircraft={selectedAircraftData} session={session} role={role} userInitials={userInitials} onNotesRead={() => setUnreadNotes(0)} />}
           </>)}
         </div>
@@ -243,7 +245,14 @@ export default function FleetTrackerApp() {
             { id: 'mx', icon: Wrench, label: 'MX', badge: 0 },
             { id: 'notes', icon: FileText, label: 'Notes', badge: unreadNotes }
           ].map(tab => (
-            <button key={tab.id} onClick={() => setActiveTab(tab.id as AppTab)} className={`flex-1 pb-1 flex flex-col items-center justify-center transition-all relative active:scale-95 ${getTabColor(tab.id)}`}>
+            <button key={tab.id} onClick={() => {
+              if (tab.id === 'mx') {
+                if (activeTab === 'mx') { setShowMxPicker(true); } // Already on MX — show picker to switch
+                else { setShowMxPicker(true); } // Not on MX — show picker
+              } else {
+                setActiveTab(tab.id as AppTab);
+              }
+            }} className={`flex-1 pb-1 flex flex-col items-center justify-center transition-all relative active:scale-95 ${getTabColor(tab.id)}`}>
               <div className="relative mb-1"><tab.icon size={20} />{tab.badge > 0 && <span className="absolute -top-1 -right-2 flex h-3 w-3"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#CE3732] opacity-75"></span><span className="relative inline-flex rounded-full h-3 w-3 bg-[#CE3732] text-[8px] text-white font-bold items-center justify-center border border-white"></span></span>}</div>
               <span className="text-[10px] font-bold uppercase tracking-widest">{tab.label}</span>
               {activeTab === tab.id && <div className={`absolute bottom-0 w-12 h-1 rounded-t-full ${getIndicatorColor(tab.id)}`}></div>}
@@ -251,6 +260,35 @@ export default function FleetTrackerApp() {
           ))}
         </div>
       </nav>
+
+      {/* ─── MX ENTRY PICKER ─── */}
+      {showMxPicker && (
+        <div className="fixed inset-0 z-[10000] flex items-end justify-center bg-black/50 animate-fade-in" onClick={() => setShowMxPicker(false)}>
+          <div className="bg-white w-full max-w-lg rounded-t-2xl shadow-2xl p-6 pb-10 animate-slide-up" style={{ paddingBottom: 'calc(2rem + env(safe-area-inset-bottom, 0px))' }} onClick={e => e.stopPropagation()}>
+            <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-5" />
+            <h3 className="font-oswald text-xl font-bold uppercase tracking-widest text-navy text-center mb-5">What do you need?</h3>
+            <div className="flex gap-3">
+              <button 
+                onClick={() => { setMxSubTab('maintenance'); setActiveTab('mx'); setShowMxPicker(false); }} 
+                className="flex-1 bg-cream border-2 border-[#F08B46] rounded-lg p-5 flex flex-col items-center gap-3 hover:bg-orange-50 active:scale-95 transition-all"
+              >
+                <div className="bg-[#F08B46] text-white p-3 rounded-full"><Wrench size={24} /></div>
+                <span className="font-oswald text-sm font-bold uppercase tracking-widest text-navy">Maintenance</span>
+                <span className="text-[10px] text-gray-500 text-center leading-tight">Track items, schedule service, manage work packages</span>
+              </button>
+              <button 
+                onClick={() => { setMxSubTab('squawks'); setActiveTab('mx'); setShowMxPicker(false); }} 
+                className="flex-1 bg-cream border-2 border-[#CE3732] rounded-lg p-5 flex flex-col items-center gap-3 hover:bg-red-50 active:scale-95 transition-all"
+              >
+                <div className="bg-[#CE3732] text-white p-3 rounded-full"><AlertTriangle size={24} /></div>
+                <span className="font-oswald text-sm font-bold uppercase tracking-widest text-navy">Squawks</span>
+                <span className="text-[10px] text-gray-500 text-center leading-tight">Report discrepancies, track open issues, manage deferrals</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div></>
   );
 }

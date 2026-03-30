@@ -167,9 +167,9 @@ export default function SummaryTab({
         <div className="relative h-40 md:h-56 bg-slateGray flex items-center justify-center">
           {aircraft.avatar_url ? <img src={aircraft.avatar_url} alt="Aircraft Avatar" className="w-full h-full object-cover" /> : <PlaneTakeoff size={64} className="text-white/20" />}
           
-          {/* ─── OVERLAY BUTTONS: Delete, Edit, Invite ─── */}
+          {/* ─── OVERLAY BUTTONS: Invite, Edit, Delete (stacked vertically) ─── */}
           {canEdit && (
-            <div className="absolute top-4 right-4 flex gap-2 z-10">
+            <div className="absolute top-4 right-4 flex flex-col gap-2 z-10">
               <button onClick={() => setShowInviteModal(true)} className="bg-[#3AB0FF] text-white p-2.5 rounded-full shadow-[0_4px_10px_rgba(0,0,0,0.5)] hover:bg-blue-600 active:scale-95 transition-all" title="Invite Pilot"><UserPlus size={18} /></button>
               <button onClick={onEditAircraft} className="bg-slateGray text-white p-2.5 rounded-full shadow-[0_4px_10px_rgba(0,0,0,0.5)] hover:bg-gray-500 active:scale-95 transition-all" title="Edit Aircraft"><Edit2 size={18} /></button>
               <button onClick={() => setShowDeleteModal(true)} className="bg-[#CE3732] text-white p-2.5 rounded-full shadow-[0_4px_10px_rgba(0,0,0,0.5)] hover:bg-red-700 active:scale-95 transition-all" title="Delete Aircraft"><Trash2 size={18} /></button>

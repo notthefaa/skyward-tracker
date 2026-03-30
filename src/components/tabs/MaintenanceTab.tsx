@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { authFetch } from "@/lib/authFetch";
 import { processMxItem, getMxTextColor, isMxExpired } from "@/lib/math";
@@ -11,7 +11,7 @@ import MxGuideModal from "@/components/modals/MxGuideModal";
 import SquawksTab from "@/components/tabs/SquawksTab";
 
 export default function MaintenanceTab({ 
-  aircraft, role, aircraftRole, onGroundedStatusChange, sysSettings, session, userInitials
+  aircraft, role, aircraftRole, onGroundedStatusChange, sysSettings, session, userInitials, initialSubTab
 }: { 
   aircraft: AircraftWithMetrics | null, 
   role: string,
@@ -19,9 +19,15 @@ export default function MaintenanceTab({
   onGroundedStatusChange: () => void,
   sysSettings: SystemSettings,
   session: any,
-  userInitials: string
+  userInitials: string,
+  initialSubTab?: 'maintenance' | 'squawks'
 }) {
-  const [subTab, setSubTab] = useState<MxSubTab>('maintenance');
+  const [subTab, setSubTab] = useState<MxSubTab>(initialSubTab || 'maintenance');
+
+  // Sync when picker changes the initial sub-tab
+  useEffect(() => {
+    if (initialSubTab) setSubTab(initialSubTab);
+  }, [initialSubTab]);
   const canEditMx = role === 'admin' || aircraftRole === 'admin';
   const currentEngineTime = aircraft?.total_engine_time || 0;
   const isTurbine = aircraft?.engine_type === 'Turbine';
@@ -138,12 +144,12 @@ export default function MaintenanceTab({
 
   return (
     <>
-      {/* ─── SEGMENTED TOGGLE ─── */}
-      <div className="flex gap-1 mb-4 bg-white rounded-sm p-1 shadow-lg border border-gray-200">
-        <button onClick={() => setSubTab('maintenance')} className={`flex-1 py-2.5 rounded-sm text-[10px] font-bold uppercase tracking-widest transition-colors active:scale-95 flex items-center justify-center gap-1.5 ${subTab === 'maintenance' ? 'bg-[#F08B46] text-white shadow-sm' : 'text-gray-500 hover:text-navy hover:bg-gray-50'}`}>
-          <Wrench size={14} /> Maintenance
+      {/* ─── MX / SQUAWKS TAB SELECTOR ─── */}
+      <div className="flex mb-4 border-b-2 border-gray-200">
+        <button onClick={() => setSubTab('maintenance')} className={`flex-1 py-3 text-xs font-oswald font-bold uppercase tracking-widest transition-colors active:scale-95 flex items-center justify-center gap-2 border-b-2 -mb-[2px] ${subTab === 'maintenance' ? 'border-[#F08B46] text-[#F08B46]' : 'border-transparent text-gray-400 hover:text-gray-600'}`}>
+          <Wrench size={16} /> Maintenance
         </button>
-        <button onClick={() => setSubTab('squawks')} className={`flex-1 py-2.5 rounded-sm text-[10px] font-bold uppercase tracking-widest transition-colors active:scale-95 flex items-center justify-center gap-1.5 relative ${subTab === 'squawks' ? 'bg-[#CE3732] text-white shadow-sm' : 'text-gray-500 hover:text-navy hover:bg-gray-50'}`}>
+        <button onClick={() => setSubTab('squawks')} className={`flex-1 py-3 text-xs font-oswald font-bold uppercase tracking-widest transition-colors active:scale-95 flex items-center justify-center gap-2 border-b-2 -mb-[2px] relative ${subTab === 'squawks' ? 'border-[#CE3732] text-[#CE3732]' : 'border-transparent text-gray-400 hover:text-gray-600'}`}>
           <AlertTriangle size={14} /> Squawks
           {activeSquawkCount > 0 && subTab !== 'squawks' && (
             <span className="flex h-2.5 w-2.5 ml-0.5">
