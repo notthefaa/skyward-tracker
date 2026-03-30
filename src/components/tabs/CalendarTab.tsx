@@ -12,9 +12,8 @@ import Toast from "@/components/Toast";
 type CalendarView = 'month' | 'week' | 'day';
 
 // ─── Color constants ───
-const CAL_GREEN = '#56B94A';
-const CAL_GREEN_LIGHT = 'rgba(86, 185, 74, 0.08)';
-const CAL_GREEN_BORDER = 'rgba(86, 185, 74, 0.25)';
+const CAL_BLUE = '#3AB0FF';       // Multi-day / extended trips
+const CAL_GREEN = '#56B94A';      // Day trips
 const MX_ORANGE = '#F08B46';
 const NAVY = '#091F3C';
 
@@ -265,7 +264,7 @@ export default function CalendarTab({
     return (
       <div className={`rounded border transition-all ${
         multiDay 
-          ? `bg-[${CAL_GREEN}]/10 border-[${CAL_GREEN}]/30` 
+          ? 'bg-sky-50 border-sky-200' 
           : isOwn 
             ? 'bg-emerald-50 border-emerald-200' 
             : 'bg-white border-gray-200'
@@ -275,7 +274,7 @@ export default function CalendarTab({
             {/* Pilot badge + time */}
             <div className="flex items-center gap-2 mb-1.5">
               <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded ${
-                isOwn ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-600'
+                multiDay ? 'bg-[#3AB0FF]/15 text-[#3AB0FF]' : isOwn ? 'bg-[#56B94A]/15 text-[#56B94A]' : 'bg-gray-100 text-gray-600'
               }`}>
                 {r.pilot_initials || '—'}
               </span>
@@ -296,7 +295,7 @@ export default function CalendarTab({
             {r.title && <p className="text-xs text-gray-600 mt-1.5 font-roboto">{r.title}</p>}
             {r.route && (
               <p className="text-xs text-gray-500 mt-1 flex items-center gap-1 font-roboto">
-                <MapPin size={11} className="text-emerald-500 shrink-0" /> {r.route}
+                <MapPin size={11} className="text-[#56B94A] shrink-0" /> {r.route}
               </p>
             )}
           </div>
@@ -431,8 +430,8 @@ export default function CalendarTab({
                           return (
                             <div key={idx} className={`text-[7px] font-bold px-1 py-px rounded truncate ${
                               multi 
-                                ? 'bg-[#56B94A] text-white' 
-                                : 'bg-emerald-100 text-emerald-700'
+                                ? 'bg-[#3AB0FF] text-white' 
+                                : 'bg-[#56B94A]/20 text-[#56B94A]'
                             }`}>
                               {r.pilot_initials || '—'}{!multi ? ` ${formatTime(r.start_time)}` : ''}
                             </div>
@@ -464,8 +463,8 @@ export default function CalendarTab({
 
               {/* Month legend */}
               <div className="flex items-center gap-4 mt-4 pt-3 border-t border-gray-100">
-                <div className="flex items-center gap-1.5"><div className="w-3 h-2 rounded bg-[#56B94A]" /><span className="text-[9px] font-bold uppercase tracking-widest text-gray-400">Multi-Day</span></div>
-                <div className="flex items-center gap-1.5"><div className="w-3 h-2 rounded bg-emerald-100 border border-emerald-200" /><span className="text-[9px] font-bold uppercase tracking-widest text-gray-400">Day Trip</span></div>
+                <div className="flex items-center gap-1.5"><div className="w-3 h-2 rounded bg-[#3AB0FF]" /><span className="text-[9px] font-bold uppercase tracking-widest text-gray-400">Multi-Day</span></div>
+                <div className="flex items-center gap-1.5"><div className="w-3 h-2 rounded bg-[#56B94A]" /><span className="text-[9px] font-bold uppercase tracking-widest text-gray-400">Day Trip</span></div>
                 <div className="flex items-center gap-1.5"><div className="w-3 h-2 rounded bg-[#F08B46]" /><span className="text-[9px] font-bold uppercase tracking-widest text-gray-400">Maintenance</span></div>
               </div>
             </div>
@@ -498,7 +497,7 @@ export default function CalendarTab({
                           {startIdx > 0 && <div style={{ gridColumn: `span ${startIdx}` }} />}
                           <div 
                             style={{ gridColumn: `span ${spanCols}` }}
-                            className="bg-[#56B94A] text-white rounded px-2.5 py-1.5 flex items-center gap-2 cursor-pointer active:scale-[0.99] transition-transform"
+                            className="bg-[#3AB0FF] text-white rounded px-2.5 py-1.5 flex items-center gap-2 cursor-pointer active:scale-[0.99] transition-transform"
                             onClick={() => { setCurrentDate(new Date(r.start_time)); setView('day'); }}
                           >
                             <span className="text-[10px] font-bold uppercase tracking-widest">{r.pilot_initials}</span>
@@ -602,23 +601,23 @@ export default function CalendarTab({
                 {fullDayRes.length > 0 && (
                   <div className="space-y-2">
                     {fullDayRes.map(r => (
-                      <div key={r.id} className="bg-[#56B94A]/10 border-2 border-[#56B94A]/30 rounded-sm p-4">
+                      <div key={r.id} className="bg-[#3AB0FF]/10 border-2 border-[#3AB0FF]/30 rounded-sm p-4">
                         <div className="flex justify-between items-start">
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 mb-2">
-                              <span className="bg-[#56B94A] text-white text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded">
+                              <span className="bg-[#3AB0FF] text-white text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded">
                                 {r.pilot_initials || '—'} — All Day
                               </span>
                               <span className="text-xs text-gray-500 font-roboto">{r.pilot_name}</span>
                             </div>
                             <div className="flex items-center gap-2 text-sm text-navy font-bold font-roboto">
-                              <Calendar size={13} className="text-[#56B94A] shrink-0" />
+                              <Calendar size={13} className="text-[#3AB0FF] shrink-0" />
                               {formatDateShort(r.start_time)} {formatTime(r.start_time)} — {formatDateShort(r.end_time)} {formatTime(r.end_time)}
                             </div>
                             {r.title && <p className="text-xs text-gray-600 mt-2 font-roboto">{r.title}</p>}
                             {r.route && (
                               <p className="text-xs text-gray-500 mt-1 flex items-center gap-1 font-roboto">
-                                <MapPin size={11} className="text-emerald-500 shrink-0" /> {r.route}
+                                <MapPin size={11} className="text-[#3AB0FF] shrink-0" /> {r.route}
                               </p>
                             )}
                           </div>
@@ -629,7 +628,7 @@ export default function CalendarTab({
                           )}
                         </div>
                         {cancellingId === r.id && (
-                          <div className="mt-3 pt-3 border-t border-emerald-200 flex gap-2 animate-fade-in">
+                          <div className="mt-3 pt-3 border-t border-sky-200 flex gap-2 animate-fade-in">
                             <button onClick={() => setCancellingId(null)} className="flex-1 border border-gray-300 text-gray-600 font-oswald font-bold py-2 rounded text-[10px] uppercase tracking-widest active:scale-95">Keep</button>
                             <button onClick={() => handleCancelReservation(r.id)} disabled={isSubmitting} className="flex-1 bg-[#CE3732] text-white font-oswald font-bold py-2 rounded text-[10px] uppercase tracking-widest active:scale-95 disabled:opacity-50">
                               {isSubmitting ? "..." : "Cancel Booking"}
@@ -704,14 +703,14 @@ export default function CalendarTab({
               {/* Departure */}
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Departure</p>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
+                <div className="flex gap-3">
+                  <div className="flex-[3] min-w-0">
                     <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Date *</label>
-                    <input type="date" value={bookingStartDate} onChange={e => setBookingStartDate(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#56B94A] outline-none bg-white" />
+                    <input type="date" value={bookingStartDate} onChange={e => setBookingStartDate(e.target.value)} className="w-full border border-gray-300 rounded p-2.5 text-sm mt-1 focus:border-[#56B94A] outline-none bg-white" />
                   </div>
-                  <div>
+                  <div className="flex-[2] min-w-0">
                     <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Time *</label>
-                    <input type="time" value={bookingStartTime} onChange={e => setBookingStartTime(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#56B94A] outline-none bg-white" />
+                    <input type="time" value={bookingStartTime} onChange={e => setBookingStartTime(e.target.value)} className="w-full border border-gray-300 rounded p-2.5 text-sm mt-1 focus:border-[#56B94A] outline-none bg-white" />
                   </div>
                 </div>
               </div>
@@ -719,14 +718,14 @@ export default function CalendarTab({
               {/* Return */}
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Return</p>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
+                <div className="flex gap-3">
+                  <div className="flex-[3] min-w-0">
                     <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Date *</label>
-                    <input type="date" value={bookingEndDate} onChange={e => setBookingEndDate(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#56B94A] outline-none bg-white" />
+                    <input type="date" value={bookingEndDate} onChange={e => setBookingEndDate(e.target.value)} className="w-full border border-gray-300 rounded p-2.5 text-sm mt-1 focus:border-[#56B94A] outline-none bg-white" />
                   </div>
-                  <div>
+                  <div className="flex-[2] min-w-0">
                     <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Time *</label>
-                    <input type="time" value={bookingEndTime} onChange={e => setBookingEndTime(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#56B94A] outline-none bg-white" />
+                    <input type="time" value={bookingEndTime} onChange={e => setBookingEndTime(e.target.value)} className="w-full border border-gray-300 rounded p-2.5 text-sm mt-1 focus:border-[#56B94A] outline-none bg-white" />
                   </div>
                 </div>
               </div>

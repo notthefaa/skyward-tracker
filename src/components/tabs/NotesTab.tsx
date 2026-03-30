@@ -247,7 +247,7 @@ export default function NotesTab({ aircraft, session, role, userInitials, onNote
                   required 
                   value={content} 
                   onChange={e=>setContent(e.target.value)} 
-                  className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-navy outline-none min-h-[120px]" 
+                  className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-navy outline-none bg-white min-h-[120px]" 
                   placeholder="Share info with the next pilot..." 
                 />
               </div>

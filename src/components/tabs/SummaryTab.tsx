@@ -154,8 +154,8 @@ export default function SummaryTab({
               <div>
                 <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Role for {aircraft.tail_number}</label>
                 <select value={inviteRole} onChange={e => setInviteRole(e.target.value as 'admin' | 'pilot')} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#3AB0FF] outline-none bg-white">
-                  <option value="pilot">Tailnumber Pilot — Can fly, log, and reserve</option>
-                  <option value="admin">Tailnumber Admin — Can also edit aircraft and manage users</option>
+                  <option value="pilot">Tail Pilot — Can fly, log, and reserve</option>
+                  <option value="admin">Tail Admin — Can also edit aircraft and manage users</option>
                 </select>
               </div>
               <div className="pt-2">
