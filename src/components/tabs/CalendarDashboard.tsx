@@ -148,12 +148,12 @@ export default function CalendarDashboard({ aircraft, session }: CalendarDashboa
     : `Last ${hoursPeriod}d`;
 
   return (
-    <div className="mb-2">
+    <div className="mb-1">
       {/* Three floating gauges */}
       <div className="flex items-start justify-around gap-3 px-1">
         <RingGauge value={myDays} max={WINDOW} label="My Bookings" sublabel={`Next ${WINDOW}d`} color="#56B94A" suffix="days" />
         <RingGauge value={availableDays} max={WINDOW} label="Available" sublabel={`of ${WINDOW}d`} color={availColor} suffix="days" />
-        <RingGauge value={hours} max={hoursMax} label="Flight Hrs" sublabel={periodLabel} color="#091F3C" suffix="hrs">
+        <RingGauge value={hours} max={hoursMax} label="ACFT Hrs" sublabel={periodLabel} color="#091F3C" suffix="hrs">
           {/* Period selector nested directly under the flight hours gauge */}
           <button 
             onClick={() => setShowPeriodPicker(!showPeriodPicker)}

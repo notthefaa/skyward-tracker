@@ -25,7 +25,7 @@ Aircraft master records. The `created_by` field references `auth.users(id)` with
 | home_airport | text | ICAO identifier |
 | main_contact | text | Primary contact name |
 | main_contact_phone | text | |
-| main_contact_email | text | |
+| main_contact_email | text | Used to identify the primary contact for notification routing |
 | mx_contact | text | Maintenance contact name |
 | mx_contact_phone | text | |
 | mx_contact_email | text | |
@@ -234,6 +234,8 @@ Per-user notification toggles. All types default to enabled (rows are only creat
 
 **Notification types:** `reservation_created`, `reservation_cancelled`, `squawk_reported`, `mx_reminder`, `service_update`, `note_posted`
 
+**Visibility in Settings UI:** Types flagged `primaryContactOnly` in `NOTIFICATION_TYPES` (types.ts) are only shown in the settings modal to users whose email matches `main_contact_email` on at least one of their assigned aircraft. Regular pilots see only: reservations, squawks, and notes.
+
 ### aft_system_settings
 Global configuration. Single row (id=1).
 
@@ -267,7 +269,11 @@ All uploads use the service role key (bypasses RLS). Client-side compression via
 ## API Routes
 
 ### Authentication Pattern
-All authenticated routes use `requireAuth(req)` from `@/lib/auth.ts`, which extracts the Bearer token, verifies it against Supabase Auth, and returns `{ user, supabaseAdmin }`. Admin-only routes use `requireAuth(req, 'admin')`. Client-side calls use `authFetch()` from `@/lib/authFetch.ts` which auto-attaches the session token.
+All authenticated routes use `requireAuth(req)` from `@/lib/auth.ts`, which extracts the Bearer token, verifies it against Supabase Auth, and returns `{ user, supabaseAdmin }`. Admin-only routes use `requireAuth(req, 'admin')`.
+
+**Aircraft access verification:** Routes that operate on a specific aircraft call `requireAircraftAccess(supabaseAdmin, userId, aircraftId)` after `requireAuth()`. Global admins bypass the check. All others must have a row in `aft_user_aircraft_access`. Throws 403 if no access.
+
+Client-side calls use `authFetch()` from `@/lib/authFetch.ts` which auto-attaches the session token.
 
 ### Route Reference
 
@@ -282,18 +288,54 @@ All authenticated routes use `requireAuth(req)` from `@/lib/auth.ts`, which extr
 | `/api/pilot-invite` | POST | Auth | Invite user to specific aircraft with role |
 | `/api/reservations` | POST | Auth | Create reservation (conflict detection + notifications) |
 | `/api/reservations` | DELETE | Auth | Cancel reservation (permission check + notifications) |
-| `/api/mx-events/create` | POST | Auth | Create service event / work package |
-| `/api/mx-events/complete` | POST | Auth | Complete event, reset MX tracking |
+| `/api/mx-events/create` | POST | Auth + Aircraft | Create service event / work package |
+| `/api/mx-events/complete` | POST | Auth + Aircraft | Complete event, reset MX tracking |
 | `/api/mx-events/respond` | POST | Token | Mechanic portal actions (7 action types) |
 | `/api/mx-events/upload-attachment` | POST | Token | Mechanic file uploads (10MB limit, 5 files max) |
-| `/api/mx-events/owner-action` | POST | Auth | Owner scheduling responses |
-| `/api/mx-events/send-workpackage` | POST | Auth | Send/resend work package email |
+| `/api/mx-events/owner-action` | POST | Auth + Aircraft | Owner scheduling responses |
+| `/api/mx-events/send-workpackage` | POST | Auth + Aircraft | Send/resend work package email |
 | `/api/mx-events/manual-trigger` | POST | Auth | Manually trigger MX draft creation |
-| `/api/emails/squawk-notify` | POST | Auth | Send squawk notification emails |
-| `/api/emails/mx-schedule` | POST | Auth | Send MX scheduling email |
+| `/api/emails/squawk-notify` | POST | Auth + Aircraft | Send squawk notification emails |
+| `/api/emails/note-notify` | POST | Auth + Aircraft | Send note notification emails |
+| `/api/emails/mx-schedule` | POST | Auth + Aircraft | Send MX scheduling email |
 | `/api/cron/mx-reminders` | GET | CRON | Automated MX reminders + draft creation |
 | `/api/admin/db-health` | POST | Admin | Cleanup old records, sweep orphaned files |
 | `/api/resend-invite` | POST | None | Re-send Supabase auth invitation |
+
+---
+
+## Notification System
+
+### Recipient Matrix
+
+Notifications are divided into two categories: operational awareness (all assigned pilots) and maintenance coordination (primary contact only).
+
+| Event | Recipients | Excludes |
+|-------|-----------|----------|
+| Squawk reported | All assigned pilots | Reporter |
+| Note posted | All assigned pilots | Author |
+| Reservation created | All assigned pilots | Creator |
+| Reservation cancelled | All assigned pilots | Canceller |
+| MX reminders (cron) | Primary contact only | — |
+| Service updates (mechanic) | Primary contact only | — |
+| Draft work package created | Primary contact only | — |
+| Work package to mechanic | Mechanic + CC primary contact | — |
+
+**Primary contact** is identified by matching `aircraft.main_contact_email` on the aircraft record. This is the person responsible for maintenance coordination.
+
+### Settings UI Scoping
+
+The `NOTIFICATION_TYPES` array in `types.ts` includes a `primaryContactOnly` flag. The SettingsModal checks whether the current user's email matches `main_contact_email` on any of their assigned aircraft. If not, the `mx_reminder` and `service_update` toggles are hidden — those users would never receive those emails anyway.
+
+### Email Channels
+
+All emails sent from `notifications@skywardsociety.com` via Resend. Sender display names are channel labels:
+
+- **Skyward Aircraft Manager** — scheduling drafts, heads-up alerts
+- **Skyward Operations** — mechanic portal actions, squawk notifications to mechanics
+- **Skyward Alerts** — internal team notifications (MX reminders, squawks, notes)
+
+All CTA buttons in emails read "OPEN AIRCRAFT MANAGER" and link to the app URL.
 
 ---
 
@@ -323,27 +365,61 @@ Located in `@/lib/math.ts`. The engine computes:
 
 ---
 
-## Email System
-
-All emails sent from `notifications@skywardsociety.com` via Resend. Sender display names are channel labels:
-- **Skyward Aircraft Manager** — scheduling drafts, heads-up alerts
-- **Skyward Operations** — mechanic portal actions, squawk notifications to mechanics
-- **Skyward Alerts** — internal team MX reminders, squawk notifications
-
-All CTA buttons in emails read "OPEN AIRCRAFT MANAGER" and link to the app URL.
-
-Notifications respect user preferences stored in `aft_notification_preferences`. The backend checks for muted types before sending. Notifications are scoped to aircraft assignment — users only receive emails for aircraft they are assigned to via `aft_user_aircraft_access`.
-
----
-
 ## Key Technical Constraints
 
 - **tsconfig target: es5** — No `[...new Set()]`. Use `Array.from(new Set(...))` instead.
 - **tsconfig strict: false** — Supabase client typed as `SupabaseClient<any, any, any>` for admin client.
-- **Tailwind v4** — Uses `@theme` directive in `globals.css`. Some colors are in theme, others are hardcoded hex.
+- **Tailwind v4** — Uses `@theme` directive in `globals.css`. CSS layers give utility classes lower specificity than expected.
+- **iOS Safari forms** — Requires `-webkit-appearance: none` before `background-color` takes effect on form inputs. Applied globally in `globals.css` with `!important`. Header tail dropdown excluded via `data-tail-select` attribute.
 - **browser-image-compression** — All image uploads are compressed client-side before uploading to Supabase Storage.
+- **Supabase select() typing** — Dynamic strings in `.select()` cause TypeScript parse errors. Always select all needed columns as a static string and cast results with `as any`.
+- **Supabase auth SIGNED_IN event** — Fires on session refresh (e.g. tab switch), not just fresh logins. Do not reset UI state on this event.
+- **Modal z-index** — Nav bars at `z-[9999]`, all modals at `z-[10000]` minimum.
 - **Network egress** — Disabled in the sandbox/development environment.
 - **Supabase Realtime connections** — Each open browser tab holds a websocket. Free tier: 200 concurrent, Pro: 500.
+
+---
+
+## Hook Architecture
+
+Custom hooks extracted from `page.tsx` to improve maintainability:
+
+| Hook | Location | Purpose |
+|------|----------|---------|
+| `useFleetData` | `src/hooks/useFleetData.ts` | Session-driven data fetching, role resolution, aircraft lists, SWR mutation |
+| `useRealtimeSync` | `src/hooks/useRealtimeSync.ts` | Supabase Realtime subscription with aircraft-scoped refresh and self-filtering |
+| `useGroundedStatus` | `src/hooks/useGroundedStatus.ts` | Computes aircraft airworthiness from MX items and squawks |
+| `useAircraftRole` | `src/hooks/useAircraftRole.ts` | Resolves the current user's per-aircraft role from access records |
+
+Barrel export from `src/hooks/index.ts`.
+
+---
+
+## MX Access Control
+
+Maintenance scheduling and work package management is restricted to Tail Admins and Global Admins. This is enforced in two places:
+
+**MaintenanceTab.tsx:** The `canEditMx` flag (`role === 'admin' || aircraftRole === 'admin'`) gates the "Schedule Service" button, "Track New MX Item" form, and the entire active events section. Regular pilots see the MX item list (read-only) and can report squawks but cannot access service event management.
+
+**ServiceEventModal.tsx:** Accepts a `canManageService` prop (passed from MaintenanceTab as `canEditMx`). Gates: "Schedule New Service" button, draft review section, confirm/counter/comment mechanic actions, "Enter Logbook Data & Complete" button, and "Cancel Service Event" button. The work package details and message history remain visible for read-only context.
+
+---
+
+## Calendar Dashboard
+
+Located in `src/components/tabs/CalendarDashboard.tsx`. Renders above the "Reserve Aircraft" button on the Calendar tab. Three floating SVG ring gauges with drop shadows:
+
+1. **My Bookings** (green, `#56B94A`): Unique days the current user has reserved in the next 30 days.
+2. **Available** (dynamic color): Days the aircraft is free in the next 30 days. Color thresholds: blue (`#3AB0FF`) if >15, orange (`#F08B46`) if ≤15, red (`#CE3732`) if ≤5. Accounts for both reservations and confirmed MX events.
+3. **Flight Hours** (navy, `#091F3C`): Total hours flown in a selectable period (30/60/90/120 days or custom date range). Calculated by comparing the most recent flight log's AFTT/Hobbs/Tach within the period against the last log before the period started. Falls back to aircraft setup values if no prior log exists.
+
+The period selector is nested directly under the Flight Hours gauge via a "Change ▾" toggle, keeping it visually associated with the correct gauge.
+
+---
+
+## Tab Persistence
+
+The active tab is persisted to `localStorage` as `aft_active_tab`. On mount, the app reads the saved tab and restores it. The auth listener no longer resets the tab on `SIGNED_IN` (which fires on session refresh, not just fresh logins). Only `SIGNED_OUT` and explicit navigation actions reset the tab.
 
 ---
 
