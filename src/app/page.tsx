@@ -181,12 +181,12 @@ export default function FleetTrackerApp() {
 
   const getTabColor = (id: string) => {
     if (activeTab !== id) return 'text-gray-400 hover:bg-gray-50';
-    const m: Record<string, string> = { summary: 'text-navy', times: 'text-[#3AB0FF]', calendar: 'text-[#3AB0FF]', mx: 'text-[#F08B46]', notes: 'text-[#525659]' };
+    const m: Record<string, string> = { summary: 'text-navy', times: 'text-[#3AB0FF]', calendar: 'text-[#56B94A]', mx: 'text-[#F08B46]', notes: 'text-[#525659]' };
     return m[id] || 'text-brandOrange';
   };
 
   const getIndicatorColor = (id: string) => {
-    const m: Record<string, string> = { summary: 'bg-navy', times: 'bg-[#3AB0FF]', calendar: 'bg-[#3AB0FF]', mx: 'bg-[#F08B46]', notes: 'bg-[#525659]' };
+    const m: Record<string, string> = { summary: 'bg-navy', times: 'bg-[#3AB0FF]', calendar: 'bg-[#56B94A]', mx: 'bg-[#F08B46]', notes: 'bg-[#525659]' };
     return m[id] || 'bg-brandOrange';
   };
 
@@ -242,7 +242,7 @@ export default function FleetTrackerApp() {
             <div className="flex items-center gap-3">
               <div className={`w-3.5 h-3.5 rounded-full shrink-0 shadow-inner ${aircraftStatus === 'grounded' ? 'bg-red-500' : aircraftStatus === 'issues' ? 'bg-[#F08B46]' : 'bg-success'}`} />
               <div className="relative flex items-center">
-                <select className="appearance-none bg-transparent text-xl font-oswald font-bold uppercase tracking-wide focus:outline-none cursor-pointer w-[140px] shrink-0 text-white pr-6 truncate" value={activeTail} onChange={e => handleTailChange(e.target.value)}>
+                <select className="appearance-none bg-transparent text-xl font-oswald font-bold uppercase tracking-wide focus:outline-none cursor-pointer w-[100px] shrink-0 text-white pr-6 truncate" value={activeTail} onChange={e => handleTailChange(e.target.value)}>
                   {dropdownOptions.length > 0 ? dropdownOptions.map(a => <option key={a.id} value={a.tail_number} className="text-white">{a.tail_number}</option>) : <option value="">—</option>}
                   <option value="__add_new__" className="text-white">+ Add Aircraft</option>
                 </select>
