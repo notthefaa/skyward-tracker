@@ -139,11 +139,11 @@ export default function MaintenanceTab({
   return (
     <>
       {/* ─── SEGMENTED TOGGLE ─── */}
-      <div className="flex gap-1 mb-4 bg-gray-100 rounded p-1">
-        <button onClick={() => setSubTab('maintenance')} className={`flex-1 py-2 rounded text-[10px] font-bold uppercase tracking-widest transition-colors active:scale-95 flex items-center justify-center gap-1.5 ${subTab === 'maintenance' ? 'bg-white text-[#F08B46] shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+      <div className="flex gap-1 mb-4 bg-white rounded-sm p-1 shadow-lg border border-gray-200">
+        <button onClick={() => setSubTab('maintenance')} className={`flex-1 py-2.5 rounded-sm text-[10px] font-bold uppercase tracking-widest transition-colors active:scale-95 flex items-center justify-center gap-1.5 ${subTab === 'maintenance' ? 'bg-[#F08B46] text-white shadow-sm' : 'text-gray-500 hover:text-navy hover:bg-gray-50'}`}>
           <Wrench size={14} /> Maintenance
         </button>
-        <button onClick={() => setSubTab('squawks')} className={`flex-1 py-2 rounded text-[10px] font-bold uppercase tracking-widest transition-colors active:scale-95 flex items-center justify-center gap-1.5 relative ${subTab === 'squawks' ? 'bg-white text-[#CE3732] shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+        <button onClick={() => setSubTab('squawks')} className={`flex-1 py-2.5 rounded-sm text-[10px] font-bold uppercase tracking-widest transition-colors active:scale-95 flex items-center justify-center gap-1.5 relative ${subTab === 'squawks' ? 'bg-[#CE3732] text-white shadow-sm' : 'text-gray-500 hover:text-navy hover:bg-gray-50'}`}>
           <AlertTriangle size={14} /> Squawks
           {activeSquawkCount > 0 && subTab !== 'squawks' && (
             <span className="flex h-2.5 w-2.5 ml-0.5">
