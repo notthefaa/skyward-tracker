@@ -25,21 +25,12 @@ html, body {
 }
 
 /* ─── GLOBAL FORM ELEMENT BACKGROUNDS ───
-   Forces form fields to white inside main content and modals.
-   Uses !important to override Tailwind v4 layer ordering.
-   Excludes header (nav/header selects like the tail picker). */
-main input,
-main textarea,
-main select,
-[class*="fixed"] input,
-[class*="fixed"] textarea,
-[class*="fixed"] select {
+   Forces form fields to white. The :not([data-transparent])
+   excludes the header tail-number dropdown which opts out. */
+input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+textarea,
+select:not([data-transparent]) {
   background-color: #ffffff !important;
-}
-
-/* Re-allow transparent bg on the header tail-number dropdown */
-header select {
-  background-color: transparent !important;
 }
 
 /* Smooth momentum scrolling for iOS */
