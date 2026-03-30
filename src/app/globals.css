@@ -25,13 +25,21 @@ html, body {
 }
 
 /* ─── GLOBAL FORM ELEMENT BACKGROUNDS ───
-   Forces all inputs, textareas, and selects to white.
-   Prevents grey/transparent backgrounds when elements sit
-   inside bg-cream, bg-gray-50, or other tinted containers. */
-input,
-textarea,
-select {
-  background-color: #ffffff;
+   Forces form fields to white inside main content and modals.
+   Uses !important to override Tailwind v4 layer ordering.
+   Excludes header (nav/header selects like the tail picker). */
+main input,
+main textarea,
+main select,
+[class*="fixed"] input,
+[class*="fixed"] textarea,
+[class*="fixed"] select {
+  background-color: #ffffff !important;
+}
+
+/* Re-allow transparent bg on the header tail-number dropdown */
+header select {
+  background-color: transparent !important;
 }
 
 /* Smooth momentum scrolling for iOS */
