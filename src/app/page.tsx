@@ -242,7 +242,7 @@ export default function FleetTrackerApp() {
             <div className="flex items-center gap-3">
               <div className={`w-3.5 h-3.5 rounded-full shrink-0 shadow-inner ${aircraftStatus === 'grounded' ? 'bg-red-500' : aircraftStatus === 'issues' ? 'bg-[#F08B46]' : 'bg-success'}`} />
               <div className="relative flex items-center">
-                <select className="appearance-none bg-transparent text-xl font-oswald font-bold uppercase tracking-wide focus:outline-none cursor-pointer w-[100px] shrink-0 text-white pr-6 truncate" value={activeTail} onChange={e => handleTailChange(e.target.value)}>
+                <select data-tail-select className="appearance-none bg-transparent text-xl font-oswald font-bold uppercase tracking-wide focus:outline-none cursor-pointer w-[100px] shrink-0 text-white pr-6 truncate" value={activeTail} onChange={e => handleTailChange(e.target.value)}>
                   {dropdownOptions.length > 0 ? dropdownOptions.map(a => <option key={a.id} value={a.tail_number} className="text-white">{a.tail_number}</option>) : <option value="">—</option>}
                   <option value="__add_new__" className="text-white">+ Add Aircraft</option>
                 </select>

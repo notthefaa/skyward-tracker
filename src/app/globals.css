@@ -2,7 +2,7 @@
 
 @theme {
   /* Brand Colors */
-  --color-navy: #091F3C; /* Original Itinerary Generator Deep Navy */
+  --color-navy: #091F3C;
   --color-cream: #FDFCF4;
   --color-brandOrange: #E68E2D;
   --color-brandOrange-alt: #FF8C00;
@@ -22,6 +22,32 @@ html, body {
   height: 100%;
   width: 100%;
   overscroll-behavior-y: none;
+}
+
+/* ─── iOS SAFARI FORM FIX ───
+   iOS Safari applies its own grey background and rounded styling
+   to form inputs. -webkit-appearance: none removes the native
+   decoration. background-color: white forces a clean white field.
+   The header tail-number dropdown is excluded via [data-tail-select]. */
+
+input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+textarea {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  background-color: #ffffff !important;
+}
+
+select:not([data-tail-select]) {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  background-color: #ffffff !important;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23525659' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  background-size: 1rem;
+  padding-right: 2.5rem;
 }
 
 /* Smooth momentum scrolling for iOS */
