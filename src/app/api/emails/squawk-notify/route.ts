@@ -8,7 +8,6 @@ const FROM_EMAIL = 'notifications@skywardsociety.com';
 
 export async function POST(req: Request) {
   try {
-    // SECURITY: Require authentication and verify aircraft access
     const { user, supabaseAdmin } = await requireAuth(req);
     const { squawk, aircraft, notifyMx } = await req.json();
 
@@ -16,26 +15,11 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Squawk and aircraft data are required.' }, { status: 400 });
     }
 
-    // Verify the user has access to this aircraft
     if (aircraft.id) {
       await requireAircraftAccess(supabaseAdmin, user.id, aircraft.id);
     }
 
-    const { data: access } = await supabaseAdmin.from('aft_user_aircraft_access').select('user_id').eq('aircraft_id', aircraft.id);
-
-    let internalEmails: string[] = [];
-    if (access && access.length > 0) {
-      const userIds = access.map(a => a.user_id);
-      const { data: assignedUsers } = await supabaseAdmin.from('aft_user_roles').select('email').in('user_id', userIds);
-      if (assignedUsers) {
-        for (const u of assignedUsers) {
-          if (u.email) internalEmails.push(u.email);
-        }
-      }
-    }
-    internalEmails = Array.from(new Set(internalEmails));
-
-    // 1. EMAIL TO MECHANIC (Unbranded & Professional)
+    // 1. EMAIL TO MECHANIC (only if reporter checked "Notify MX?")
     if (notifyMx && aircraft.mx_contact_email) {
       const mxCc = aircraft.main_contact_email ? [aircraft.main_contact_email] : [];
 
@@ -77,27 +61,51 @@ export async function POST(req: Request) {
       });
     }
 
-    // 2. EMAIL TO INTERNAL TEAM
-    if (internalEmails.length > 0) {
-      await resend.emails.send({
-        from: `Skyward Alerts <${FROM_EMAIL}>`,
-        to: internalEmails,
-        subject: `New Squawk: ${aircraft.tail_number}`,
-        html: `
-          <div style="font-family: Arial, sans-serif; font-size: 14px; color: #333333; line-height: 1.6; max-width: 600px;">
-            <p>A new squawk was reported on ${aircraft.tail_number} by ${squawk.reporter_initials || 'a pilot'}.</p>
-            
-            <p style="margin-top: 20px;"><strong>Squawk Details:</strong><br/>
-            Location: ${squawk.location}<br/>
-            Grounded: ${squawk.affects_airworthiness ? 'YES' : 'NO'}<br/>
-            Description: ${squawk.description}</p>
-            
-            <div style="margin-top: 25px; text-align: center;">
-              <a href="${new URL(req.url).origin}" style="display: inline-block; background-color: #091F3C; color: white; text-decoration: none; padding: 12px 28px; border-radius: 6px; font-weight: bold; font-size: 14px; letter-spacing: 1px;">OPEN AIRCRAFT MANAGER</a>
-            </div>
-          </div>
-        `
-      });
+    // 2. INTERNAL ALERT — All assigned pilots (operational awareness)
+    //    Excludes the reporter (they already know about the squawk)
+    const { data: access } = await supabaseAdmin
+      .from('aft_user_aircraft_access')
+      .select('user_id')
+      .eq('aircraft_id', aircraft.id);
+
+    if (access && access.length > 0) {
+      const otherUserIds = access
+        .map(a => a.user_id)
+        .filter(uid => uid !== user.id); // exclude the reporter
+
+      if (otherUserIds.length > 0) {
+        const { data: assignedUsers } = await supabaseAdmin
+          .from('aft_user_roles')
+          .select('email')
+          .in('user_id', otherUserIds);
+
+        const recipients = assignedUsers
+          ?.map(u => u.email)
+          .filter(Boolean) as string[] || [];
+        const dedupedRecipients = Array.from(new Set(recipients));
+
+        if (dedupedRecipients.length > 0) {
+          await resend.emails.send({
+            from: `Skyward Alerts <${FROM_EMAIL}>`,
+            to: dedupedRecipients,
+            subject: `New Squawk: ${aircraft.tail_number}`,
+            html: `
+              <div style="font-family: Arial, sans-serif; font-size: 14px; color: #333333; line-height: 1.6; max-width: 600px;">
+                <p>A new squawk was reported on ${aircraft.tail_number} by ${squawk.reporter_initials || 'a pilot'}.</p>
+                
+                <p style="margin-top: 20px;"><strong>Squawk Details:</strong><br/>
+                Location: ${squawk.location}<br/>
+                Grounded: ${squawk.affects_airworthiness ? 'YES' : 'NO'}<br/>
+                Description: ${squawk.description}</p>
+                
+                <div style="margin-top: 25px; text-align: center;">
+                  <a href="${new URL(req.url).origin}" style="display: inline-block; background-color: #091F3C; color: white; text-decoration: none; padding: 12px 28px; border-radius: 6px; font-weight: bold; font-size: 14px; letter-spacing: 1px;">OPEN AIRCRAFT MANAGER</a>
+                </div>
+              </div>
+            `
+          });
+        }
+      }
     }
 
     return NextResponse.json({ success: true });

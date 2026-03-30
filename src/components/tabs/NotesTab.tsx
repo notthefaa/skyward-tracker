@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { authFetch } from "@/lib/authFetch";
 import { validateFileSizes, MAX_UPLOAD_SIZE_LABEL } from "@/lib/constants";
 import useSWR from "swr";
 import { FileText, Plus, X, Upload, Edit2, ChevronLeft, ChevronRight, Trash2 } from "lucide-react";
@@ -125,6 +126,16 @@ export default function NotesTab({ aircraft, session, role, userInitials, onNote
       noteData.author_email = session.user.email;
       noteData.author_initials = userInitials; 
       await supabase.from('aft_notes').insert(noteData);
+
+      // Notify all assigned pilots about the new note
+      try {
+        await authFetch('/api/emails/note-notify', {
+          method: 'POST',
+          body: JSON.stringify({ note: { ...noteData, author_initials: userInitials }, aircraft })
+        });
+      } catch (err) {
+        console.error("Failed to send note notification", err);
+      }
     }
 
     await mutate();

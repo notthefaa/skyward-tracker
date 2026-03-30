@@ -1,5 +1,4 @@
 "use client";
-// v4-modal-fix
 
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
@@ -31,9 +30,11 @@ interface ServiceEventModalProps {
   show: boolean;
   onClose: () => void;
   onRefresh: () => void;
+  /** If false, hide create/send/manage actions (read-only view for non-admin pilots) */
+  canManageService?: boolean;
 }
 
-export default function ServiceEventModal({ aircraft, show, onClose, onRefresh }: ServiceEventModalProps) {
+export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, canManageService = true }: ServiceEventModalProps) {
   const [view, setView] = useState<'list' | 'create' | 'detail' | 'complete' | 'review_draft' | 'counter'>('list');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -261,8 +262,8 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh }
           {/* ===================== LIST VIEW ===================== */}
           {view === 'list' && (
             <div className="space-y-4">
-              <PrimaryButton onClick={openCreateFlow}><Calendar size={18} /> Schedule New Service</PrimaryButton>
-              {activeEvents.filter(e => e.status === 'draft').length > 0 && (
+              {canManageService && <PrimaryButton onClick={openCreateFlow}><Calendar size={18} /> Schedule New Service</PrimaryButton>}
+              {canManageService && activeEvents.filter(e => e.status === 'draft').length > 0 && (
                 <div className="bg-orange-50 border-2 border-orange-200 rounded p-4">
                   <p className="text-[10px] font-bold uppercase tracking-widest text-[#F08B46] mb-3 flex items-center gap-1"><AlertTriangle size={12} /> Drafts Awaiting Your Review</p>
                   {activeEvents.filter(e => e.status === 'draft').map(ev => (
@@ -317,13 +318,13 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh }
               {mxItems.length > 0 && (
                 <div>
                   <p className="text-[10px] font-bold uppercase tracking-widest text-navy mb-2 flex items-center gap-2"><Wrench size={14} className="text-[#F08B46]" /> Maintenance Items Due</p>
-                  <div className="space-y-3">{mxItems.map(mx => (<label key={mx.id} className="flex items-start gap-3 p-3 border border-gray-200 rounded cursor-pointer hover:bg-gray-50"><input type="checkbox" checked={selectedMxIds.includes(mx.id)} onChange={() => setSelectedMxIds(prev => prev.includes(mx.id) ? prev.filter(id => id !== mx.id) : [...prev, mx.id])} className="mt-1 w-4 h-4 text-[#F08B46] border-gray-300 rounded" /><div><span className="font-bold text-sm text-navy">{mx.item_name}</span><span className="block text-[10px] text-gray-500">{mx.tracking_type === 'time' ? `Due @ ${mx.due_time} hrs` : `Due ${mx.due_date}`}</span></div></label>))}</div>
+                  <div className="space-y-3 max-h-[200px] overflow-y-auto pb-1">{mxItems.map(mx => (<label key={mx.id} className="flex items-start gap-3 p-3 border border-gray-200 rounded cursor-pointer hover:bg-gray-50"><input type="checkbox" checked={selectedMxIds.includes(mx.id)} onChange={() => setSelectedMxIds(prev => prev.includes(mx.id) ? prev.filter(id => id !== mx.id) : [...prev, mx.id])} className="mt-1 w-4 h-4 text-[#F08B46] border-gray-300 rounded" /><div><span className="font-bold text-sm text-navy">{mx.item_name}</span><span className="block text-[10px] text-gray-500">{mx.tracking_type === 'time' ? `Due @ ${mx.due_time} hrs` : `Due ${mx.due_date}`}</span></div></label>))}</div>
                 </div>
               )}
               {squawks.length > 0 && (
                 <div>
                   <p className="text-[10px] font-bold uppercase tracking-widest text-navy mb-2 flex items-center gap-2"><AlertTriangle size={14} className="text-[#CE3732]" /> Open Squawks</p>
-                  <div className="space-y-3">{squawks.map(sq => (<label key={sq.id} className="flex items-start gap-3 p-3 border border-gray-200 rounded cursor-pointer hover:bg-gray-50"><input type="checkbox" checked={selectedSquawkIds.includes(sq.id)} onChange={() => setSelectedSquawkIds(prev => prev.includes(sq.id) ? prev.filter(id => id !== sq.id) : [...prev, sq.id])} className="mt-1 w-4 h-4 text-[#CE3732] border-gray-300 rounded" /><div><span className="font-bold text-sm text-navy">{sq.description || 'No description'}</span>{sq.affects_airworthiness && sq.location && <span className="block text-[10px] font-bold text-[#CE3732]">⚠ Grounded at {sq.location}</span>}<span className="block text-[10px] text-gray-500">Reported {new Date(sq.created_at).toLocaleDateString()}</span></div></label>))}</div>
+                  <div className="space-y-3 max-h-[200px] overflow-y-auto pb-1">{squawks.map(sq => (<label key={sq.id} className="flex items-start gap-3 p-3 border border-gray-200 rounded cursor-pointer hover:bg-gray-50"><input type="checkbox" checked={selectedSquawkIds.includes(sq.id)} onChange={() => setSelectedSquawkIds(prev => prev.includes(sq.id) ? prev.filter(id => id !== sq.id) : [...prev, sq.id])} className="mt-1 w-4 h-4 text-[#CE3732] border-gray-300 rounded" /><div><span className="font-bold text-sm text-navy">{sq.description || 'No description'}</span>{sq.affects_airworthiness && sq.location && <span className="block text-[10px] font-bold text-[#CE3732]">⚠ Grounded at {sq.location}</span>}<span className="block text-[10px] text-gray-500">Reported {new Date(sq.created_at).toLocaleDateString()}</span></div></label>))}</div>
                 </div>
               )}
               <div>
@@ -343,10 +344,10 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh }
               <div className="bg-orange-50 border border-orange-200 rounded p-4"><p className="text-sm text-navy font-bold mb-1">System-Generated Draft</p><p className="text-xs text-gray-600">Review the items below, add anything else you need, and send it to your mechanic.</p></div>
               {eventLineItems.length > 0 && (<div><p className="text-[10px] font-bold uppercase tracking-widest text-navy mb-2">Already Included</p><div className="space-y-2">{eventLineItems.map(li => (<div key={li.id} className="p-3 bg-white border border-gray-200 rounded"><span className="font-bold text-sm text-navy">{li.item_name}</span>{li.item_description && <span className="block text-[10px] text-gray-500">{li.item_description}</span>}</div>))}</div></div>)}
               {mxItems.filter(mx => !eventLineItems.some(li => li.maintenance_item_id === mx.id)).length > 0 && (
-                <div><p className="text-[10px] font-bold uppercase tracking-widest text-navy mb-2 flex items-center gap-2"><Wrench size={14} className="text-[#F08B46]" /> Add More Maintenance Items</p><div className="space-y-3">{mxItems.filter(mx => !eventLineItems.some(li => li.maintenance_item_id === mx.id)).map(mx => (<label key={mx.id} className="flex items-start gap-3 p-3 border border-gray-200 rounded cursor-pointer hover:bg-gray-50"><input type="checkbox" checked={selectedMxIds.includes(mx.id)} onChange={() => setSelectedMxIds(prev => prev.includes(mx.id) ? prev.filter(id => id !== mx.id) : [...prev, mx.id])} className="mt-1 w-4 h-4 text-[#F08B46] border-gray-300 rounded" /><div><span className="font-bold text-sm text-navy">{mx.item_name}</span><span className="block text-[10px] text-gray-500">{mx.tracking_type === 'time' ? `Due @ ${mx.due_time} hrs` : `Due ${mx.due_date}`}</span></div></label>))}</div></div>
+                <div><p className="text-[10px] font-bold uppercase tracking-widest text-navy mb-2 flex items-center gap-2"><Wrench size={14} className="text-[#F08B46]" /> Add More Maintenance Items</p><div className="space-y-3 max-h-[160px] overflow-y-auto pb-1">{mxItems.filter(mx => !eventLineItems.some(li => li.maintenance_item_id === mx.id)).map(mx => (<label key={mx.id} className="flex items-start gap-3 p-3 border border-gray-200 rounded cursor-pointer hover:bg-gray-50"><input type="checkbox" checked={selectedMxIds.includes(mx.id)} onChange={() => setSelectedMxIds(prev => prev.includes(mx.id) ? prev.filter(id => id !== mx.id) : [...prev, mx.id])} className="mt-1 w-4 h-4 text-[#F08B46] border-gray-300 rounded" /><div><span className="font-bold text-sm text-navy">{mx.item_name}</span><span className="block text-[10px] text-gray-500">{mx.tracking_type === 'time' ? `Due @ ${mx.due_time} hrs` : `Due ${mx.due_date}`}</span></div></label>))}</div></div>
               )}
               {squawks.filter(sq => !eventLineItems.some(li => li.squawk_id === sq.id)).length > 0 && (
-                <div><p className="text-[10px] font-bold uppercase tracking-widest text-navy mb-2 flex items-center gap-2"><AlertTriangle size={14} className="text-[#CE3732]" /> Add Squawks</p><div className="space-y-3">{squawks.filter(sq => !eventLineItems.some(li => li.squawk_id === sq.id)).map(sq => (<label key={sq.id} className="flex items-start gap-3 p-3 border border-gray-200 rounded cursor-pointer hover:bg-gray-50"><input type="checkbox" checked={selectedSquawkIds.includes(sq.id)} onChange={() => setSelectedSquawkIds(prev => prev.includes(sq.id) ? prev.filter(id => id !== sq.id) : [...prev, sq.id])} className="mt-1 w-4 h-4 text-[#CE3732] border-gray-300 rounded" /><div><span className="font-bold text-sm text-navy">{sq.description || 'No description'}</span>{sq.affects_airworthiness && sq.location && <span className="block text-[10px] font-bold text-[#CE3732]">⚠ Grounded at {sq.location}</span>}<span className="block text-[10px] text-gray-500">Reported {new Date(sq.created_at).toLocaleDateString()}</span></div></label>))}</div></div>
+                <div><p className="text-[10px] font-bold uppercase tracking-widest text-navy mb-2 flex items-center gap-2"><AlertTriangle size={14} className="text-[#CE3732]" /> Add Squawks</p><div className="space-y-3 max-h-[160px] overflow-y-auto pb-1">{squawks.filter(sq => !eventLineItems.some(li => li.squawk_id === sq.id)).map(sq => (<label key={sq.id} className="flex items-start gap-3 p-3 border border-gray-200 rounded cursor-pointer hover:bg-gray-50"><input type="checkbox" checked={selectedSquawkIds.includes(sq.id)} onChange={() => setSelectedSquawkIds(prev => prev.includes(sq.id) ? prev.filter(id => id !== sq.id) : [...prev, sq.id])} className="mt-1 w-4 h-4 text-[#CE3732] border-gray-300 rounded" /><div><span className="font-bold text-sm text-navy">{sq.description || 'No description'}</span>{sq.affects_airworthiness && sq.location && <span className="block text-[10px] font-bold text-[#CE3732]">⚠ Grounded at {sq.location}</span>}<span className="block text-[10px] text-gray-500">Reported {new Date(sq.created_at).toLocaleDateString()}</span></div></label>))}</div></div>
               )}
               <div><p className="text-[10px] font-bold uppercase tracking-widest text-navy mb-2 flex items-center gap-2"><Sparkles size={14} className="text-[#3AB0FF]" /> Additional Services</p><div className="grid grid-cols-2 gap-2">{ADDON_OPTIONS.map(addon => (<label key={addon} className="flex items-center gap-2 p-2 border border-gray-200 rounded cursor-pointer hover:bg-blue-50 text-xs"><input type="checkbox" checked={selectedAddons.includes(addon)} onChange={() => setSelectedAddons(prev => prev.includes(addon) ? prev.filter(a => a !== addon) : [...prev, addon])} className="w-3.5 h-3.5 text-[#3AB0FF] border-gray-300 rounded" /><span className="text-navy font-bold">{addon}</span></label>))}</div></div>
               <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Preferred Service Date (Optional)</label><input type="date" value={proposedDate} onChange={e => setProposedDate(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" /></div>
@@ -369,7 +370,7 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh }
                 {selectedEvent.estimated_completion && <p className="text-sm mt-1"><strong className="text-navy">Est. Completion:</strong> {selectedEvent.estimated_completion}</p>}
                 {selectedEvent.mechanic_notes && <p className="text-xs text-gray-500 mt-2 italic">{selectedEvent.mechanic_notes}</p>}
               </div>
-              {selectedEvent.status === 'scheduling' && selectedEvent.proposed_by === 'mechanic' && (
+              {canManageService && selectedEvent.status === 'scheduling' && selectedEvent.proposed_by === 'mechanic' && (
                 <div className="bg-orange-50 border border-orange-200 rounded p-4 space-y-3">
                   <p className="text-sm font-bold text-navy">{selectedEvent.mx_contact_name || 'Mechanic'} proposed <strong>{selectedEvent.proposed_date}</strong></p>
                   <div className="flex gap-2">
@@ -410,13 +411,13 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh }
                   </div>
                 </div>
               )}
-              {selectedEvent.status !== 'complete' && (
+              {canManageService && selectedEvent.status !== 'complete' && (
                 <div className="flex gap-2">
                   <textarea value={ownerMessage} onChange={e => setOwnerMessage(e.target.value)} style={whiteBg} className="flex-1 border border-gray-300 rounded p-2 text-sm focus:border-[#3AB0FF] outline-none min-h-[50px]" placeholder="Send a message..." />
                   <button onClick={handleOwnerComment} disabled={isSubmitting || !ownerMessage.trim()} className="bg-[#3AB0FF] text-white px-4 py-3 rounded active:scale-95 disabled:opacity-50"><Send size={18}/></button>
                 </div>
               )}
-              {selectedEvent.status !== 'complete' && selectedEvent.status !== 'cancelled' && (
+              {canManageService && selectedEvent.status !== 'complete' && selectedEvent.status !== 'cancelled' && (
                 <button onClick={openCompleteFlow} className="w-full bg-[#56B94A] text-white font-oswald font-bold uppercase tracking-widest py-3 rounded active:scale-95 transition-transform flex items-center justify-center gap-2"><CheckCircle size={18} /> Enter Logbook Data & Complete</button>
               )}
               {selectedEvent.status === 'ready_for_pickup' && (
@@ -425,7 +426,7 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh }
               {selectedEvent.status === 'cancelled' && (
                 <div className="bg-red-50 border-2 border-red-200 rounded p-4 text-center"><XCircle size={32} className="mx-auto text-[#CE3732] mb-2" /><p className="font-oswald text-lg font-bold uppercase tracking-widest text-navy">Event Cancelled</p></div>
               )}
-              {selectedEvent.status !== 'complete' && selectedEvent.status !== 'cancelled' && !showCancelConfirm && (
+              {canManageService && selectedEvent.status !== 'complete' && selectedEvent.status !== 'cancelled' && !showCancelConfirm && (
                 <button onClick={() => setShowCancelConfirm(true)} className="w-full text-[10px] font-bold uppercase tracking-widest text-[#CE3732] border border-red-200 bg-red-50 rounded py-2 hover:bg-red-100 active:scale-95 transition-all flex items-center justify-center gap-1.5 mt-2"><XCircle size={12} /> Cancel Service Event</button>
               )}
               {showCancelConfirm && (

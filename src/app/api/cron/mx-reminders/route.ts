@@ -9,9 +9,7 @@ const FROM_EMAIL = 'notifications@skywardsociety.com';
 
 export async function GET(req: Request) {
   try {
-    // =====================================================
-    // SECURITY: Verify this is a legitimate Vercel CRON call
-    // =====================================================
+    // Verify this is a legitimate Vercel CRON call
     if (env.CRON_SECRET) {
       const authHeader = req.headers.get('authorization');
       if (authHeader !== `Bearer ${env.CRON_SECRET}`) {
@@ -38,9 +36,6 @@ export async function GET(req: Request) {
     const schedDays = settings?.sched_days ?? 30;
     const predictiveSchedDays = settings?.predictive_sched_days ?? 45;
 
-    const { data: allRoles } = await supabaseAdmin.from('aft_user_roles').select('*');
-    const { data: allAccess } = await supabaseAdmin.from('aft_user_aircraft_access').select('*');
-
     // Fetch Flight Logs from last 180 days
     const oneEightyDaysAgo = new Date();
     oneEightyDaysAgo.setDate(oneEightyDaysAgo.getDate() - 180);
@@ -50,9 +45,7 @@ export async function GET(req: Request) {
       .gte('created_at', oneEightyDaysAgo.toISOString())
       .order('created_at', { ascending: true });
 
-    // =====================================================
-    // BUILD SET OF MX ITEMS ALREADY IN ACTIVE EVENTS
-    // =====================================================
+    // Build set of MX items already in active events
     const { data: activeEventLines } = await supabaseAdmin
       .from('aft_event_line_items')
       .select('maintenance_item_id, event_id')
@@ -107,7 +100,7 @@ export async function GET(req: Request) {
       const flagToUpdate: Record<string, boolean> = {};
 
       // ---------------------------------------------------------
-      // 1. SCHEDULING: Create DRAFT event & notify OWNER
+      // 1. SCHEDULING: Create DRAFT event & notify PRIMARY CONTACT
       // ---------------------------------------------------------
       const mxThresholdHitTime = mx.tracking_type === 'time' && remaining <= schedTime;
       const mxThresholdHitPredictive = mx.tracking_type === 'time' && projectedDays <= predictiveSchedDays;
@@ -123,7 +116,6 @@ export async function GET(req: Request) {
             dueString += ` (projected ~${Math.ceil(projectedDays)} days)`;
           }
 
-          // Create a DRAFT maintenance event
           const { data: draftEvent } = await supabaseAdmin
             .from('aft_maintenance_events')
             .insert({
@@ -220,7 +212,7 @@ export async function GET(req: Request) {
       }
 
       // ---------------------------------------------------------
-      // 2. INTERNAL PILOT/ADMIN ALERTS
+      // 2. INTERNAL MX REMINDER — Only to PRIMARY CONTACT
       // ---------------------------------------------------------
       let hitReminder3 = false, hitReminder2 = false, hitReminder1 = false;
       let internalTriggerTemplate: string | null = null;
@@ -246,25 +238,20 @@ export async function GET(req: Request) {
         flagToUpdate.reminder_30_sent = true;
       }
 
-      if (internalTriggerTemplate) {
-        const assignedUserIds = allAccess?.filter(a => a.aircraft_id === aircraft.id).map(a => a.user_id) || [];
-        const recipients = allRoles?.filter(r => assignedUserIds.includes(r.user_id)).map(r => r.email).filter(Boolean) || [];
-        const dedupedRecipients = Array.from(new Set(recipients)) as string[];
-
-        if (dedupedRecipients.length > 0) {
-          await resend.emails.send({
-            from: `Skyward Alerts <${FROM_EMAIL}>`,
-            to: dedupedRecipients,
-            subject: `Maintenance Alert: ${aircraft.tail_number} Due Soon`,
-            html: `<div style="font-family: Arial, sans-serif; font-size: 14px; color: #333333; line-height: 1.6;">
-                    <p>This is an automated reminder that required maintenance is coming due for ${aircraft.tail_number}.</p>
-                    <p style="margin-top: 20px;"><strong>Item:</strong> ${mx.item_name}<br/><strong>Status:</strong> ${internalTriggerTemplate}</p>
-                    <div style="margin-top: 25px; text-align: center;">
-                      <a href="${new URL(req.url).origin}" style="display: inline-block; background-color: #091F3C; color: white; text-decoration: none; padding: 12px 28px; border-radius: 6px; font-weight: bold; font-size: 14px; letter-spacing: 1px;">OPEN AIRCRAFT MANAGER</a>
-                    </div>
-                  </div>`
-          });
-        }
+      // FIX: Send only to primary contact, not all assigned pilots
+      if (internalTriggerTemplate && aircraft.main_contact_email) {
+        await resend.emails.send({
+          from: `Skyward Alerts <${FROM_EMAIL}>`,
+          to: [aircraft.main_contact_email],
+          subject: `Maintenance Alert: ${aircraft.tail_number} Due Soon`,
+          html: `<div style="font-family: Arial, sans-serif; font-size: 14px; color: #333333; line-height: 1.6;">
+                  <p>This is an automated reminder that required maintenance is coming due for ${aircraft.tail_number}.</p>
+                  <p style="margin-top: 20px;"><strong>Item:</strong> ${mx.item_name}<br/><strong>Status:</strong> ${internalTriggerTemplate}</p>
+                  <div style="margin-top: 25px; text-align: center;">
+                    <a href="${new URL(req.url).origin}" style="display: inline-block; background-color: #091F3C; color: white; text-decoration: none; padding: 12px 28px; border-radius: 6px; font-weight: bold; font-size: 14px; letter-spacing: 1px;">OPEN AIRCRAFT MANAGER</a>
+                  </div>
+                </div>`
+        });
       }
 
       if (Object.keys(flagToUpdate).length > 0) {

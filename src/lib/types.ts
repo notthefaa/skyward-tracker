@@ -1,8 +1,5 @@
 // =============================================================
 // SHARED TYPES — Single source of truth for all domain models
-//
-// Every interface includes [key: string]: any to gracefully
-// accept extra columns from Supabase without type errors.
 // =============================================================
 
 export interface Aircraft {
@@ -31,7 +28,6 @@ export interface Aircraft {
   [key: string]: any;
 }
 
-/** Aircraft with computed burn rate and confidence score attached */
 export interface AircraftWithMetrics extends Aircraft {
   burnRate: number;
   confidenceScore: number;
@@ -167,13 +163,21 @@ export type NotificationType =
   | 'service_update'
   | 'note_posted';
 
-export const NOTIFICATION_TYPES: { type: NotificationType; label: string; description: string }[] = [
+export const NOTIFICATION_TYPES: { 
+  type: NotificationType; 
+  label: string; 
+  description: string;
+  /** If true, only the primary contact for an aircraft receives this notification */
+  primaryContactOnly?: boolean;
+}[] = [
+  // ─── Operational (all assigned pilots) ───
   { type: 'reservation_created', label: 'New Reservations', description: 'When someone books an aircraft you are assigned to.' },
   { type: 'reservation_cancelled', label: 'Cancelled Reservations', description: 'When a reservation is cancelled on your aircraft.' },
   { type: 'squawk_reported', label: 'New Squawks', description: 'When a squawk is reported on your aircraft.' },
-  { type: 'mx_reminder', label: 'Maintenance Reminders', description: 'When maintenance items are approaching their due thresholds.' },
-  { type: 'service_update', label: 'Service Updates', description: 'When a service event status changes or your mechanic sends an update.' },
   { type: 'note_posted', label: 'New Notes', description: 'When a pilot posts a note on your aircraft.' },
+  // ─── Maintenance coordination (primary contact only) ───
+  { type: 'mx_reminder', label: 'Maintenance Reminders', description: 'When maintenance items are approaching their due thresholds.', primaryContactOnly: true },
+  { type: 'service_update', label: 'Service Updates', description: 'When a service event status changes or your mechanic sends an update.', primaryContactOnly: true },
 ];
 
 export interface UserAircraftAccess {

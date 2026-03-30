@@ -15,6 +15,7 @@ export default function SettingsModal({
   const [prefs, setPrefs] = useState<Record<NotificationType, boolean>>({} as any);
   const [isLoadingPrefs, setIsLoadingPrefs] = useState(true);
   const [savingPref, setSavingPref] = useState<string | null>(null);
+  const [isPrimaryContact, setIsPrimaryContact] = useState(false);
 
   // Delete account
   const [showDeleteSection, setShowDeleteSection] = useState(false);
@@ -28,7 +29,10 @@ export default function SettingsModal({
   const [passwordResetSent, setPasswordResetSent] = useState(false);
 
   useEffect(() => {
-    if (show && session) loadPreferences();
+    if (show && session) {
+      loadPreferences();
+      checkPrimaryContactStatus();
+    }
   }, [show, session]);
 
   const loadPreferences = async () => {
@@ -40,7 +44,7 @@ export default function SettingsModal({
 
     const prefMap: Record<string, boolean> = {};
     for (const t of NOTIFICATION_TYPES) {
-      prefMap[t.type] = true; // default all enabled
+      prefMap[t.type] = true;
     }
     if (data) {
       for (const row of data) {
@@ -49,6 +53,36 @@ export default function SettingsModal({
     }
     setPrefs(prefMap as Record<NotificationType, boolean>);
     setIsLoadingPrefs(false);
+  };
+
+  /** Check if the current user is the primary contact (main_contact_email) on any aircraft */
+  const checkPrimaryContactStatus = async () => {
+    const userEmail = session.user.email?.toLowerCase();
+    if (!userEmail) return;
+
+    // Get all aircraft the user has access to
+    const { data: accessData } = await supabase
+      .from('aft_user_aircraft_access')
+      .select('aircraft_id')
+      .eq('user_id', session.user.id);
+
+    if (!accessData || accessData.length === 0) {
+      setIsPrimaryContact(false);
+      return;
+    }
+
+    const aircraftIds = accessData.map(a => a.aircraft_id);
+    const { data: aircraftData } = await supabase
+      .from('aft_aircraft')
+      .select('main_contact_email')
+      .in('id', aircraftIds);
+
+    if (aircraftData) {
+      const isPC = aircraftData.some(
+        ac => ac.main_contact_email && ac.main_contact_email.toLowerCase() === userEmail
+      );
+      setIsPrimaryContact(isPC);
+    }
   };
 
   const togglePref = async (type: NotificationType) => {
@@ -100,7 +134,6 @@ export default function SettingsModal({
         const data = await res.json();
         throw new Error(data.error || 'Failed to delete account');
       }
-      // Account deleted — sign out
       await supabase.auth.signOut();
     } catch (err: any) {
       alert(err.message);
@@ -110,11 +143,16 @@ export default function SettingsModal({
 
   if (!show) return null;
 
+  // Filter notification types: show primary-contact-only toggles only if user IS a primary contact
+  const visibleNotifications = NOTIFICATION_TYPES.filter(nt => {
+    if (nt.primaryContactOnly && !isPrimaryContact) return false;
+    return true;
+  });
+
   return (
     <div className="fixed inset-0 bg-black/60 z-[10000] flex items-center justify-center p-4 animate-fade-in" onClick={onClose}>
       <div className="bg-white rounded shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto animate-slide-up" onClick={e => e.stopPropagation()}>
         
-        {/* Header */}
         <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center z-10">
           <h2 className="font-oswald text-2xl font-bold uppercase text-navy flex items-center gap-2">
             <Settings size={20} className="text-gray-500" /> Settings
@@ -137,7 +175,7 @@ export default function SettingsModal({
               </div>
             ) : (
               <div className="space-y-3">
-                {NOTIFICATION_TYPES.map(nt => (
+                {visibleNotifications.map(nt => (
                   <label key={nt.type} className="flex items-start gap-3 cursor-pointer group">
                     <div className="relative mt-0.5">
                       <input 

@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-// v4-modal-fix
 import { supabase } from "@/lib/supabase";
 import { authFetch } from "@/lib/authFetch";
 import { processMxItem, getMxTextColor, isMxExpired } from "@/lib/math";
@@ -162,10 +161,10 @@ export default function MaintenanceTab({
             </div>
           )}
 
-          <ServiceEventModal aircraft={aircraft} show={showServiceModal} onClose={() => { setShowServiceModal(false); mutateEvents(); }} onRefresh={() => { mutate(); mutateEvents(); }} />
+          <ServiceEventModal aircraft={aircraft} show={showServiceModal} onClose={() => { setShowServiceModal(false); mutateEvents(); }} onRefresh={() => { mutate(); mutateEvents(); }} canManageService={canEditMx} />
           <MxGuideModal show={showGuideModal} onClose={() => setShowGuideModal(false)} />
 
-          {activeEvents.length > 0 && (
+          {canEditMx && activeEvents.length > 0 && (
             <div className="mb-4 space-y-2">
               {activeEvents.map(ev => (
                 <div key={ev.id} className={`bg-white shadow-lg rounded-sm p-4 border-t-4 ${ev.status === 'draft' ? 'border-[#F08B46]' : ev.status === 'confirmed' ? 'border-[#3AB0FF]' : ev.status === 'in_progress' || ev.status === 'ready_for_pickup' ? 'border-[#56B94A]' : 'border-gray-400'}`}>
