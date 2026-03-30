@@ -226,7 +226,7 @@ export default function MaintenanceTab({
           </div>
 
           {showMxModal && canEditMx && (
-            <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-3 animate-fade-in">
+            <div className="fixed inset-0 bg-black/60 z-[10000] flex items-center justify-center p-3 animate-fade-in">
               <div className="bg-white rounded shadow-2xl w-full max-w-md p-5 border-t-4 border-[#F08B46] max-h-[90vh] overflow-y-auto animate-slide-up">
                 <div className="flex justify-between items-center mb-6">
                   <h2 className="font-oswald text-2xl font-bold uppercase text-navy">{editingId ? 'Edit MX Item' : 'Track New Item'}</h2>

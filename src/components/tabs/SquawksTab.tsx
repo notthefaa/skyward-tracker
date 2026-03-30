@@ -290,7 +290,7 @@ export default function SquawksTab({
       </div>
 
       {showExportModal && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-3 animate-fade-in">
+        <div className="fixed inset-0 bg-black/60 z-[10000] flex items-center justify-center p-3 animate-fade-in">
           <div className="bg-white rounded shadow-2xl w-full max-w-md p-5 border-t-4 border-[#CE3732] max-h-[90vh] overflow-y-auto animate-slide-up flex flex-col">
             <div className="flex justify-between items-center mb-4">
               <h2 className="font-oswald text-2xl font-bold uppercase text-navy flex items-center gap-2"><CheckSquare size={20} className="text-[#CE3732]" /> Export to PDF</h2>
@@ -321,7 +321,7 @@ export default function SquawksTab({
       )}
 
       {previewImages && (
-        <div className="fixed inset-0 z-[60] bg-black/95 flex items-center justify-center animate-fade-in" onClick={() => setPreviewImages(null)}>
+        <div className="fixed inset-0 z-[10000] bg-black/95 flex items-center justify-center animate-fade-in" onClick={() => setPreviewImages(null)}>
           <button className="absolute top-4 right-4 text-gray-400 hover:text-white z-50 p-2"><X size={32}/></button>
           {previewImages.length > 1 && <button onClick={(e) => { e.stopPropagation(); setPreviewIndex(prev => prev === 0 ? previewImages.length - 1 : prev - 1); }} className="absolute left-4 text-gray-400 hover:text-white z-50 p-2"><ChevronLeft size={48}/></button>}
           <div className="max-w-full max-h-full p-4 flex items-center justify-center" onClick={(e) => e.stopPropagation()}><img src={previewImages[previewIndex]} className="max-h-[85vh] max-w-full object-contain rounded shadow-2xl" /></div>
@@ -331,7 +331,7 @@ export default function SquawksTab({
       )}
 
       {showModal && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-3 animate-fade-in">
+        <div className="fixed inset-0 bg-black/60 z-[10000] flex items-center justify-center p-3 animate-fade-in">
           <div className="bg-white rounded shadow-2xl w-full max-w-lg p-5 border-t-4 border-[#CE3732] max-h-[90vh] overflow-y-auto animate-slide-up">
             <div className="flex justify-between items-center mb-4">
               <h2 className="font-oswald text-2xl font-bold uppercase text-navy">{editingId ? 'Edit Squawk' : 'Report Squawk'}</h2>

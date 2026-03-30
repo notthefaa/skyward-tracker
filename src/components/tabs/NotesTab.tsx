@@ -202,7 +202,7 @@ export default function NotesTab({ aircraft, session, role, userInitials, onNote
       </div>
 
       {previewImages && (
-        <div className="fixed inset-0 z-[60] bg-black/95 flex items-center justify-center animate-fade-in" onClick={() => setPreviewImages(null)}>
+        <div className="fixed inset-0 z-[10000] bg-black/95 flex items-center justify-center animate-fade-in" onClick={() => setPreviewImages(null)}>
           <button className="absolute top-4 right-4 text-gray-400 hover:text-white z-50 p-2">
             <X size={32}/>
           </button>
@@ -230,7 +230,7 @@ export default function NotesTab({ aircraft, session, role, userInitials, onNote
       )}
 
       {showModal && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-fade-in">
+        <div className="fixed inset-0 bg-black/60 z-[10000] flex items-center justify-center p-4 animate-fade-in">
           <div className="bg-white rounded shadow-2xl w-full max-w-md p-6 border-t-4 border-navy animate-slide-up max-h-[90vh] overflow-y-auto">
             
             <div className="flex justify-between items-center mb-4">
