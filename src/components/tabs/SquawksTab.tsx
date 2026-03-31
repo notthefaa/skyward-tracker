@@ -4,7 +4,7 @@ import { authFetch } from "@/lib/authFetch";
 import { validateFileSizes, MAX_UPLOAD_SIZE_LABEL } from "@/lib/constants";
 import type { AircraftWithMetrics } from "@/lib/types";
 import useSWR from "swr";
-import { AlertTriangle, Plus, X, Upload, Mail, Edit2, ChevronLeft, ChevronRight, Download, CheckSquare, Trash2, CheckCircle } from "lucide-react";
+import { AlertTriangle, Plus, X, Upload, Mail, Edit2, ChevronLeft, ChevronRight, Download, CheckSquare, Trash2, CheckCircle, Link2 } from "lucide-react";
 import { PrimaryButton } from "@/components/AppButtons";
 import SignatureCanvas from "react-signature-canvas";
 import imageCompression from "browser-image-compression";
@@ -23,6 +23,27 @@ export default function SquawksTab({
       const { data } = await supabase
         .from('aft_squawks').select('*').eq('aircraft_id', aircraft!.id)
         .order('created_at', { ascending: false });
+
+      // For resolved squawks with a service event reference, fetch event dates
+      const resolved = (data || []).filter((s: any) => s.resolved_by_event_id);
+      if (resolved.length > 0) {
+        const eventIds = resolved.map((s: any) => s.resolved_by_event_id);
+        const { data: events } = await supabase
+          .from('aft_maintenance_events')
+          .select('id, completed_at, confirmed_date')
+          .in('id', eventIds);
+        
+        if (events) {
+          const eventMap: Record<string, any> = {};
+          for (const ev of events) { eventMap[ev.id] = ev; }
+          for (const sq of (data || [])) {
+            if (sq.resolved_by_event_id && eventMap[sq.resolved_by_event_id]) {
+              sq._resolving_event = eventMap[sq.resolved_by_event_id];
+            }
+          }
+        }
+      }
+
       return data || [];
     }
   );
@@ -171,6 +192,10 @@ export default function SquawksTab({
         doc.setFontSize(10); doc.setFont("helvetica", "normal"); 
         doc.text(`Status: ${sq.status.toUpperCase()} | Airworthiness: ${sq.affects_airworthiness ? 'GROUNDED' : 'Monitor'}`, 14, y); y += 6;
         if (sq.is_deferred) { doc.text(`Deferred (${sq.deferral_category}): MEL/CDL/NEF: ${sq.mel_number||'-'} / ${sq.cdl_number||'-'} / ${sq.nef_number||'-'}`, 14, y); y += 6; }
+        if (sq._resolving_event) {
+          const evDate = sq._resolving_event.completed_at ? new Date(sq._resolving_event.completed_at).toLocaleDateString() : sq._resolving_event.confirmed_date || 'Unknown';
+          doc.text(`Resolved by Service Event on ${evDate}`, 14, y); y += 6;
+        }
         const splitDesc = doc.splitTextToSize(`Description: ${sq.description}`, 180); 
         doc.text(splitDesc, 14, y); y += (splitDesc.length * 5) + 4;
         if (sq.pictures && sq.pictures.length > 0) {
@@ -187,6 +212,19 @@ export default function SquawksTab({
   };
 
   const toggleExportSelection = (id: string) => { setSelectedForExport(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]); };
+
+  /** Renders the cross-reference badge for a resolved squawk */
+  const renderResolvedBy = (sq: any) => {
+    if (!sq._resolving_event) return null;
+    const evDate = sq._resolving_event.completed_at 
+      ? new Date(sq._resolving_event.completed_at).toLocaleDateString()
+      : sq._resolving_event.confirmed_date || '';
+    return (
+      <p className="text-[10px] text-[#56B94A] mt-2 flex items-center gap-1 font-bold">
+        <Link2 size={10} /> Resolved by Service Event{evDate ? ` on ${evDate}` : ''}
+      </p>
+    );
+  };
 
   if (!aircraft) return null;
 
@@ -268,6 +306,7 @@ export default function SquawksTab({
                 <div className="mt-3">
                   <p className="text-xs text-gray-500 font-bold uppercase tracking-widest">{new Date(sq.created_at).toLocaleDateString()} | {sq.location} {sq.reporter_initials ? `| ${sq.reporter_initials}` : ''}</p>
                   <p className="text-sm text-gray-700 mt-1 font-roboto whitespace-pre-wrap">{sq.description}</p>
+                  {renderResolvedBy(sq)}
                 </div>
                 {sq.pictures && sq.pictures.length > 0 && (
                   <div className="mt-3 flex gap-2 overflow-x-auto pb-2">

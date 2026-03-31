@@ -4,9 +4,11 @@ import { authFetch } from "@/lib/authFetch";
 import { processMxItem, getMxTextColor } from "@/lib/math";
 import type { AircraftWithMetrics, SystemSettings, AppTab, AppRole, AircraftRole } from "@/lib/types";
 import useSWR from "swr";
-import { PlaneTakeoff, MapPin, Droplet, Phone, Mail, Wrench, AlertTriangle, FileText, Clock, X, Trash2, Edit2, UserPlus, Loader2 } from "lucide-react";
+import { PlaneTakeoff, MapPin, Droplet, Phone, Mail, Wrench, AlertTriangle, FileText, Clock, X, Trash2, Edit2, UserPlus, Loader2, Users, ChevronDown, Calendar } from "lucide-react";
 import { PrimaryButton } from "@/components/AppButtons";
 import Toast from "@/components/Toast";
+
+const whiteBg = { backgroundColor: '#ffffff' } as const;
 
 export default function SummaryTab({ 
   aircraft, setActiveTab, role, aircraftRole, onDeleteAircraft, sysSettings, onEditAircraft, refreshData, session
@@ -26,10 +28,13 @@ export default function SummaryTab({
   const { data, isLoading } = useSWR(
     aircraft ? `summary-${aircraft.id}` : null,
     async () => {
-      const [mxRes, sqRes, noteRes] = await Promise.all([
+      const [mxRes, sqRes, noteRes, logRes, resRes, crewRes] = await Promise.all([
         supabase.from('aft_maintenance_items').select('*').eq('aircraft_id', aircraft!.id),
         supabase.from('aft_squawks').select('*').eq('aircraft_id', aircraft!.id).eq('status', 'open').order('created_at', { ascending: false }),
-        supabase.from('aft_notes').select('*').eq('aircraft_id', aircraft!.id).order('created_at', { ascending: false }).limit(1)
+        supabase.from('aft_notes').select('*').eq('aircraft_id', aircraft!.id).order('created_at', { ascending: false }).limit(1),
+        supabase.from('aft_flight_logs').select('created_at, initials').eq('aircraft_id', aircraft!.id).order('created_at', { ascending: false }).limit(1),
+        supabase.from('aft_reservations').select('*').eq('aircraft_id', aircraft!.id).eq('status', 'confirmed').gt('start_time', new Date().toISOString()).order('start_time').limit(2),
+        supabase.from('aft_user_aircraft_access').select('user_id, aircraft_role').eq('aircraft_id', aircraft!.id),
       ]);
 
       let nextMx = null;
@@ -42,21 +47,49 @@ export default function SummaryTab({
         nextMx = processedMx[0];
       }
 
+      // Fetch crew member details
+      let crewMembers: any[] = [];
+      if (crewRes.data && crewRes.data.length > 0) {
+        const userIds = crewRes.data.map((a: any) => a.user_id);
+        const { data: usersData } = await supabase
+          .from('aft_user_roles')
+          .select('user_id, email, initials')
+          .in('user_id', userIds);
+        
+        if (usersData) {
+          crewMembers = crewRes.data.map((access: any) => {
+            const user = usersData.find((u: any) => u.user_id === access.user_id);
+            return {
+              user_id: access.user_id,
+              aircraft_role: access.aircraft_role,
+              email: user?.email || '',
+              initials: user?.initials || '',
+            };
+          });
+        }
+      }
+
       return {
         nextMx,
         activeSquawks: sqRes.data || [],
-        latestNote: noteRes.data?.[0] || null
+        latestNote: noteRes.data?.[0] || null,
+        lastFlight: logRes.data?.[0] || null,
+        nextReservations: resRes.data || [],
+        crewMembers,
       };
     },
-    {
-      // Always fetch fresh data when navigating to the Home tab,
-      // since MX/squawk status may have changed from other tabs
-      revalidateOnMount: true,
-    }
+    { revalidateOnMount: true }
   );
 
   const [showNoteModal, setShowNoteModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showCrewList, setShowCrewList] = useState(false);
+
+  // Fuel update
+  const [showFuelModal, setShowFuelModal] = useState(false);
+  const [fuelAmount, setFuelAmount] = useState("");
+  const [fuelUnit, setFuelUnit] = useState<'gallons' | 'lbs'>('gallons');
+  const [isSavingFuel, setIsSavingFuel] = useState(false);
 
   // Invite modal state
   const [showInviteModal, setShowInviteModal] = useState(false);
@@ -64,10 +97,38 @@ export default function SummaryTab({
   const [inviteRole, setInviteRole] = useState<'admin' | 'pilot'>('pilot');
   const [isInviting, setIsInviting] = useState(false);
 
+  // Crew management
+  const [changingRoleUserId, setChangingRoleUserId] = useState<string | null>(null);
+  const [removingUserId, setRemovingUserId] = useState<string | null>(null);
+  const [isCrewUpdating, setIsCrewUpdating] = useState(false);
+
   // Toast
   const [toastMessage, setToastMessage] = useState("");
   const [showToast, setShowToast] = useState(false);
   const showSuccess = (msg: string) => { setToastMessage(msg); setShowToast(true); };
+
+  const handleFuelUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!fuelAmount || !aircraft) return;
+    setIsSavingFuel(true);
+
+    let gallons = parseFloat(fuelAmount);
+    if (fuelUnit === 'lbs') {
+      const weightPerGal = aircraft.engine_type === 'Turbine' ? 6.7 : 6.0;
+      gallons = gallons / weightPerGal;
+    }
+
+    await supabase.from('aft_aircraft').update({
+      current_fuel_gallons: gallons,
+      fuel_last_updated: new Date().toISOString(),
+    }).eq('id', aircraft.id);
+
+    setShowFuelModal(false);
+    setFuelAmount("");
+    setIsSavingFuel(false);
+    refreshData();
+    showSuccess("Fuel state updated");
+  };
 
   const handleInvitePilot = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -95,6 +156,51 @@ export default function SummaryTab({
     setIsInviting(false);
   };
 
+  const handleChangeRole = async (targetUserId: string, newRole: 'admin' | 'pilot') => {
+    if (!aircraft) return;
+    setIsCrewUpdating(true);
+    try {
+      const res = await authFetch('/api/aircraft-access', {
+        method: 'PUT',
+        body: JSON.stringify({
+          targetUserId,
+          aircraftId: aircraft.id,
+          newRole,
+        })
+      });
+      const resData = await res.json();
+      if (!res.ok) throw new Error(resData.error || 'Failed to update role');
+      showSuccess("Role updated");
+      setChangingRoleUserId(null);
+      refreshData();
+    } catch (err: any) {
+      alert(err.message);
+    }
+    setIsCrewUpdating(false);
+  };
+
+  const handleRemovePilot = async (targetUserId: string) => {
+    if (!aircraft) return;
+    setIsCrewUpdating(true);
+    try {
+      const res = await authFetch('/api/aircraft-access', {
+        method: 'DELETE',
+        body: JSON.stringify({
+          targetUserId,
+          aircraftId: aircraft.id,
+        })
+      });
+      const resData = await res.json();
+      if (!res.ok) throw new Error(resData.error || 'Failed to remove user');
+      showSuccess("Pilot removed");
+      setRemovingUserId(null);
+      refreshData();
+    } catch (err: any) {
+      alert(err.message);
+    }
+    setIsCrewUpdating(false);
+  };
+
   if (!aircraft) return null;
 
   const isTurbine = aircraft.engine_type === 'Turbine';
@@ -105,6 +211,9 @@ export default function SummaryTab({
   const activeSquawks = data?.activeSquawks || [];
   const nextMx = data?.nextMx;
   const latestNote = data?.latestNote;
+  const lastFlight = data?.lastFlight;
+  const nextReservations = data?.nextReservations || [];
+  const crewMembers = data?.crewMembers || [];
 
   const isGrounded = nextMx?.isExpired || activeSquawks.some(sq => sq.affects_airworthiness);
   const hasIssues = activeSquawks.length > 0;
@@ -112,6 +221,19 @@ export default function SummaryTab({
   const statusIconColor = isGrounded ? 'text-[#CE3732]' : hasIssues ? 'text-[#F08B46]' : 'text-success';
 
   const mxTextColor = nextMx ? getMxTextColor(nextMx, sysSettings) : 'text-gray-500';
+
+  // Last flown helper
+  const lastFlownLabel = (() => {
+    if (!lastFlight) return null;
+    const flightDate = new Date(lastFlight.created_at);
+    const now = new Date();
+    const diffDays = Math.floor((now.getTime() - flightDate.getTime()) / (1000 * 60 * 60 * 24));
+    let timeAgo = '';
+    if (diffDays === 0) timeAgo = 'Today';
+    else if (diffDays === 1) timeAgo = 'Yesterday';
+    else timeAgo = `${diffDays} days ago`;
+    return `${timeAgo} by ${lastFlight.initials || 'Unknown'}`;
+  })();
 
   return (
     <div className="flex flex-col gap-4 animate-fade-in relative">
@@ -137,6 +259,39 @@ export default function SummaryTab({
         </div>
       )}
 
+      {/* ─── FUEL UPDATE MODAL ─── */}
+      {showFuelModal && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/80 animate-fade-in" onClick={() => setShowFuelModal(false)}>
+          <div className="bg-white rounded shadow-2xl w-full max-w-sm p-6 border-t-4 border-blue-500 animate-slide-up" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="font-oswald text-xl font-bold uppercase text-navy flex items-center gap-2"><Droplet size={20} className="text-blue-500" /> Update Fuel State</h2>
+              <button onClick={() => setShowFuelModal(false)} className="text-gray-400 hover:text-red-500"><X size={24} /></button>
+            </div>
+            <p className="text-xs text-gray-500 mb-4">Record the current fuel quantity without logging a flight — useful after a top-off, fuel truck visit, or ground run.</p>
+            <form onSubmit={handleFuelUpdate} className="space-y-4">
+              <div className="grid grid-cols-5 gap-3">
+                <div className="col-span-3">
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Current Fuel *</label>
+                  <input type="number" step="0.1" required value={fuelAmount} onChange={e => setFuelAmount(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-blue-500 outline-none" placeholder="Quantity" />
+                </div>
+                <div className="col-span-2">
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Unit</label>
+                  <select value={fuelUnit} onChange={e => setFuelUnit(e.target.value as any)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-blue-500 outline-none">
+                    <option value="gallons">Gallons</option>
+                    <option value="lbs">Lbs</option>
+                  </select>
+                </div>
+              </div>
+              <div className="pt-2">
+                <PrimaryButton disabled={isSavingFuel}>
+                  {isSavingFuel ? "Saving..." : "Update Fuel State"}
+                </PrimaryButton>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* ─── INVITE PILOT MODAL ─── */}
       {showInviteModal && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/80 animate-fade-in" onClick={() => setShowInviteModal(false)}>
@@ -149,11 +304,11 @@ export default function SummaryTab({
             <form onSubmit={handleInvitePilot} className="space-y-4">
               <div>
                 <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Email Address *</label>
-                <input type="email" required value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#3AB0FF] outline-none bg-white" placeholder="pilot@example.com" />
+                <input type="email" required value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#3AB0FF] outline-none" placeholder="pilot@example.com" />
               </div>
               <div>
                 <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Role for {aircraft.tail_number}</label>
-                <select value={inviteRole} onChange={e => setInviteRole(e.target.value as 'admin' | 'pilot')} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#3AB0FF] outline-none bg-white">
+                <select value={inviteRole} onChange={e => setInviteRole(e.target.value as 'admin' | 'pilot')} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#3AB0FF] outline-none">
                   <option value="pilot">Tail Pilot — Can fly, log, and reserve</option>
                   <option value="admin">Tail Admin — Can also edit aircraft and manage users</option>
                 </select>
@@ -220,6 +375,7 @@ export default function SummaryTab({
         </div>
       </div>
 
+      {/* ─── FLIGHT TIMES + LAST FLOWN ─── */}
       <div className={`bg-white shadow-lg rounded-sm p-4 border-t-4 ${statusBorderColor} flex flex-col`}>
         <div className="flex justify-between items-center mb-3 border-b border-gray-100 pb-3">
           <div className="flex items-center gap-2"><Clock size={20} className={statusIconColor} /><h3 className="font-oswald text-xl font-bold uppercase text-navy m-0 leading-none">Flight Times</h3></div>
@@ -235,15 +391,25 @@ export default function SummaryTab({
             <p className="text-3xl font-roboto font-bold text-navy">{aircraft.total_engine_time?.toFixed(1) || 0} <span className="text-sm text-gray-400">hrs</span></p>
           </div>
         </div>
+        {lastFlownLabel && (
+          <div className="mt-3 pt-3 border-t border-gray-100">
+            <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Last Flown: </span>
+            <span className="text-[10px] font-bold uppercase tracking-widest text-navy">{lastFlownLabel}</span>
+          </div>
+        )}
       </div>
 
+      {/* ─── FUEL STATE ─── */}
       <div className="bg-white shadow-lg rounded-sm p-4 border-t-4 border-blue-500 flex flex-col">
         <div className="flex justify-between items-start mb-3 border-b border-gray-100 pb-3">
           <div className="flex flex-col gap-1">
             <div className="flex items-center gap-2"><Droplet size={20} className="text-blue-500" /><h3 className="font-oswald text-xl font-bold uppercase text-navy m-0 leading-none">Current Fuel</h3></div>
             {aircraft.fuel_last_updated && <span className="text-[9px] font-bold uppercase tracking-widest text-gray-400 mt-1">Updated: {new Date(aircraft.fuel_last_updated).toLocaleString('en-US', { month: 'numeric', day: 'numeric', year: '2-digit', hour: 'numeric', minute: '2-digit' })}</span>}
           </div>
-          <div className="text-right"><span className="text-[10px] font-bold uppercase tracking-widest bg-gray-100 px-2 py-1 rounded text-gray-600 block">{isTurbine ? 'Jet-A (6.7 lbs/gal)' : 'AvGas (6.0 lbs/gal)'}</span></div>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setShowFuelModal(true)} className="text-[10px] font-bold uppercase tracking-widest text-blue-500 bg-blue-50 border border-blue-200 px-3 py-1.5 rounded hover:bg-blue-100 active:scale-95 transition-all">Update</button>
+            <span className="text-[10px] font-bold uppercase tracking-widest bg-gray-100 px-2 py-1 rounded text-gray-600">{isTurbine ? 'Jet-A' : 'AvGas'}</span>
+          </div>
         </div>
         <div className="grid grid-cols-2 gap-4">
           <div><span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 block mb-1">Quantity</span><p className="text-3xl font-roboto font-bold text-navy">{fuelGals.toFixed(1)} <span className="text-sm text-gray-400">Gal</span></p></div>
@@ -252,7 +418,30 @@ export default function SummaryTab({
       </div>
 
       {!isLoading && (
-        <div className="grid grid-cols-1 gap-3 mb-6">
+        <div className="grid grid-cols-1 gap-3">
+
+          {/* ─── NEXT RESERVATION ─── */}
+          {nextReservations.length > 0 && (
+            <div onClick={() => setActiveTab('calendar')} className="bg-white border border-emerald-200 shadow-sm rounded-sm p-4 flex gap-4 items-center cursor-pointer hover:bg-emerald-50 transition-colors active:scale-[0.98]">
+              <div className="bg-emerald-50 p-3 rounded-full text-[#56B94A] shrink-0"><Calendar size={20}/></div>
+              <div className="flex-1">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Next Up</span>
+                {nextReservations.map((r: any, idx: number) => {
+                  const startDate = new Date(r.start_time);
+                  const dateStr = startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                  const timeStr = startDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+                  return (
+                    <p key={idx} className="text-sm text-navy leading-tight mt-1">
+                      <strong>{r.pilot_initials || '—'}</strong> — {dateStr} at {timeStr}
+                      {r.route && <span className="text-gray-400 ml-1.5">{r.route}</span>}
+                    </p>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* ─── NEXT MX ─── */}
           <div onClick={() => setActiveTab('mx')} className={`bg-white border shadow-sm rounded-sm p-4 flex gap-4 items-center transition-colors cursor-pointer active:scale-[0.98] ${nextMx ? 'border-gray-200 hover:bg-orange-50' : 'border-gray-200 opacity-70 hover:bg-gray-50'}`}>
             <div className={`p-3 rounded-full shrink-0 ${nextMx ? 'bg-orange-50 text-[#F08B46]' : 'bg-gray-100 text-gray-400'}`}><Wrench size={20}/></div>
             <div className="flex-1">
@@ -263,6 +452,7 @@ export default function SummaryTab({
             </div>
           </div>
 
+          {/* ─── SQUAWKS ─── */}
           <div onClick={() => setActiveTab('mx')} className={`bg-white border shadow-sm rounded-sm p-4 flex gap-4 items-center transition-colors cursor-pointer active:scale-[0.98] ${activeSquawks.length > 0 ? 'border-red-200 hover:bg-red-50' : 'border-gray-200 opacity-70 hover:bg-gray-50'}`}>
             <div className={`p-3 rounded-full shrink-0 ${activeSquawks.length > 0 ? 'bg-red-50 text-[#CE3732]' : 'bg-gray-100 text-gray-400'}`}><AlertTriangle size={20}/></div>
             <div className="flex-1">
@@ -273,6 +463,7 @@ export default function SummaryTab({
             </div>
           </div>
 
+          {/* ─── LATEST NOTE ─── */}
           {latestNote && (
             <>
               <div onClick={() => setShowNoteModal(true)} className="bg-white border border-gray-200 shadow-sm rounded-sm p-4 flex gap-4 items-center cursor-pointer hover:bg-blue-50 transition-colors active:scale-[0.98]">
@@ -299,6 +490,64 @@ export default function SummaryTab({
               )}
             </>
           )}
+
+          {/* ─── CREW LIST ─── */}
+          <div className="bg-white border border-gray-200 shadow-sm rounded-sm overflow-hidden">
+            <button onClick={() => setShowCrewList(!showCrewList)} className="w-full p-4 flex gap-4 items-center cursor-pointer hover:bg-gray-50 transition-colors active:scale-[0.98]">
+              <div className="bg-gray-100 p-3 rounded-full text-navy shrink-0"><Users size={20}/></div>
+              <div className="flex-1 text-left">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Assigned Crew</span>
+                <p className="text-sm font-bold text-navy leading-tight">{crewMembers.length} Pilot{crewMembers.length !== 1 ? 's' : ''}</p>
+              </div>
+              <ChevronDown size={18} className={`text-gray-400 transition-transform ${showCrewList ? 'rotate-180' : ''}`} />
+            </button>
+            {showCrewList && (
+              <div className="border-t border-gray-100 animate-fade-in">
+                {crewMembers.map((member: any) => {
+                  const isCurrentUser = member.user_id === session?.user?.id;
+                  const roleLabel = member.aircraft_role === 'admin' ? 'Tail Admin' : 'Tail Pilot';
+                  const roleColor = member.aircraft_role === 'admin' ? 'bg-navy text-white' : 'bg-gray-100 text-gray-600';
+                  return (
+                    <div key={member.user_id} className="px-4 py-3 border-b border-gray-50 last:border-b-0 flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-full bg-navy text-white flex items-center justify-center font-oswald font-bold text-sm shrink-0">{member.initials || '?'}</div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-bold text-navy truncate">{member.email}{isCurrentUser ? ' (you)' : ''}</p>
+                        <span className={`text-[8px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded ${roleColor}`}>{roleLabel}</span>
+                      </div>
+                      {canEdit && !isCurrentUser && (
+                        <div className="flex gap-2 shrink-0">
+                          {changingRoleUserId === member.user_id ? (
+                            <div className="flex gap-1 animate-fade-in">
+                              <button onClick={() => handleChangeRole(member.user_id, member.aircraft_role === 'admin' ? 'pilot' : 'admin')} disabled={isCrewUpdating} className="text-[8px] font-bold uppercase tracking-widest bg-[#3AB0FF] text-white px-2 py-1 rounded active:scale-95 disabled:opacity-50">
+                                {member.aircraft_role === 'admin' ? 'Make Pilot' : 'Make Admin'}
+                              </button>
+                              <button onClick={() => setChangingRoleUserId(null)} className="text-[8px] font-bold uppercase tracking-widest text-gray-500 px-2 py-1 active:scale-95">Cancel</button>
+                            </div>
+                          ) : removingUserId === member.user_id ? (
+                            <div className="flex gap-1 animate-fade-in">
+                              <button onClick={() => handleRemovePilot(member.user_id)} disabled={isCrewUpdating} className="text-[8px] font-bold uppercase tracking-widest bg-[#CE3732] text-white px-2 py-1 rounded active:scale-95 disabled:opacity-50">Remove</button>
+                              <button onClick={() => setRemovingUserId(null)} className="text-[8px] font-bold uppercase tracking-widest text-gray-500 px-2 py-1 active:scale-95">Cancel</button>
+                            </div>
+                          ) : (
+                            <>
+                              <button onClick={() => setChangingRoleUserId(member.user_id)} className="text-gray-300 hover:text-[#3AB0FF] active:scale-95" title="Change Role"><Edit2 size={14}/></button>
+                              <button onClick={() => setRemovingUserId(member.user_id)} className="text-gray-300 hover:text-[#CE3732] active:scale-95" title="Remove"><X size={14}/></button>
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+                {canEdit && (
+                  <button onClick={() => setShowInviteModal(true)} className="w-full px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-[#3AB0FF] hover:bg-blue-50 transition-colors active:scale-95 flex items-center justify-center gap-2">
+                    <UserPlus size={14} /> Invite Pilot
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+
         </div>
       )}
     </div>

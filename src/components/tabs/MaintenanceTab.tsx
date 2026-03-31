@@ -4,7 +4,7 @@ import { authFetch } from "@/lib/authFetch";
 import { processMxItem, getMxTextColor, isMxExpired } from "@/lib/math";
 import type { AircraftWithMetrics, SystemSettings, AircraftRole, MxSubTab } from "@/lib/types";
 import useSWR from "swr";
-import { Wrench, Trash2, Plus, X, Edit2, Calendar, Send, ExternalLink, ChevronRight, HelpCircle, AlertTriangle } from "lucide-react";
+import { Wrench, Trash2, Plus, X, Edit2, Calendar, Send, ExternalLink, ChevronRight, HelpCircle, AlertTriangle, Download } from "lucide-react";
 import { PrimaryButton } from "@/components/AppButtons";
 import ServiceEventModal from "@/components/modals/ServiceEventModal";
 import MxGuideModal from "@/components/modals/MxGuideModal";
@@ -63,6 +63,78 @@ export default function MaintenanceTab({
   const [automateScheduling, setAutomateScheduling] = useState(false);
   const [confirmResendId, setConfirmResendId] = useState<string | null>(null);
   const [resendingEventId, setResendingEventId] = useState<string | null>(null);
+  const [isExportingMx, setIsExportingMx] = useState(false);
+
+  const exportMxHistory = async () => {
+    if (!aircraft) return;
+    setIsExportingMx(true);
+    try {
+      const { data: completedEvents } = await supabase
+        .from('aft_maintenance_events').select('*')
+        .eq('aircraft_id', aircraft.id).eq('status', 'complete')
+        .order('completed_at', { ascending: false });
+
+      if (!completedEvents || completedEvents.length === 0) {
+        alert("No completed service events to export.");
+        setIsExportingMx(false);
+        return;
+      }
+
+      const eventIds = completedEvents.map((e: any) => e.id);
+      const { data: allLineItems } = await supabase
+        .from('aft_event_line_items').select('*').in('event_id', eventIds);
+
+      const { jsPDF } = await import("jspdf");
+      const doc = new jsPDF();
+      let y = 20;
+
+      doc.setFont("helvetica", "bold"); doc.setFontSize(18);
+      doc.text(`Maintenance History - ${aircraft.tail_number}`, 14, y); y += 8;
+      doc.setFontSize(10); doc.setFont("helvetica", "normal");
+      doc.text(`${aircraft.aircraft_type} | SN: ${aircraft.serial_number || 'N/A'} | Generated ${new Date().toLocaleDateString()}`, 14, y); y += 15;
+
+      for (const ev of completedEvents) {
+        if (y > 240) { doc.addPage(); y = 20; }
+
+        const evLines = (allLineItems || []).filter((li: any) => li.event_id === ev.id);
+        const completedDate = ev.completed_at ? new Date(ev.completed_at).toLocaleDateString() : 'Unknown';
+
+        doc.setDrawColor(9, 31, 60); doc.setLineWidth(0.5);
+        doc.line(14, y, 196, y); y += 8;
+
+        doc.setFont("helvetica", "bold"); doc.setFontSize(12);
+        doc.text(`Service Completed: ${completedDate}`, 14, y); y += 6;
+        doc.setFontSize(9); doc.setFont("helvetica", "normal");
+        if (ev.mx_contact_name) { doc.text(`Mechanic: ${ev.mx_contact_name}`, 14, y); y += 5; }
+        if (ev.confirmed_date) { doc.text(`Service Date: ${ev.confirmed_date}`, 14, y); y += 5; }
+        y += 3;
+
+        for (const li of evLines) {
+          if (y > 260) { doc.addPage(); y = 20; }
+          doc.setFont("helvetica", "bold"); doc.setFontSize(10);
+          doc.text(`${li.item_name}`, 18, y); y += 5;
+          doc.setFont("helvetica", "normal"); doc.setFontSize(9);
+          if (li.item_description) { doc.text(li.item_description, 22, y); y += 4; }
+          const status = (li.line_status || 'pending').toUpperCase();
+          doc.text(`Status: ${status}`, 22, y); y += 4;
+          if (li.completion_date) { doc.text(`Completed: ${li.completion_date}${li.completion_time ? ' @ ' + li.completion_time + ' hrs' : ''}`, 22, y); y += 4; }
+          if (li.completed_by_name) { doc.text(`Signed: ${li.completed_by_name}${li.completed_by_cert ? ' (Cert #' + li.completed_by_cert + ')' : ''}`, 22, y); y += 4; }
+          if (li.work_description) {
+            const splitWork = doc.splitTextToSize(`Work: ${li.work_description}`, 170);
+            doc.text(splitWork, 22, y); y += (splitWork.length * 4);
+          }
+          y += 4;
+        }
+        y += 5;
+      }
+
+      doc.save(`${aircraft.tail_number}_Maintenance_History.pdf`);
+    } catch (error) {
+      console.error("MX export error:", error);
+      alert("Failed to generate maintenance history PDF.");
+    }
+    setIsExportingMx(false);
+  };
 
   const isGroundedLocally = mxItems.some(item => {
     if (!item.is_required) return false;
@@ -188,7 +260,10 @@ export default function MaintenanceTab({
           <div className={`bg-cream shadow-lg rounded-sm p-4 md:p-6 border-t-4 mb-6 ${isGroundedLocally ? 'border-[#CE3732]' : 'border-[#F08B46]'}`}>
             <div className="flex justify-between items-end mb-6">
               <h2 className="font-oswald text-2xl md:text-3xl font-bold uppercase text-navy m-0 leading-none">Maintenance</h2>
-              <button onClick={() => setShowGuideModal(true)} className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-[#F08B46] hover:opacity-80 transition-colors active:scale-95"><HelpCircle size={14} /> Guide</button>
+              <div className="flex items-center gap-3">
+                <button onClick={exportMxHistory} disabled={isExportingMx} className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-[#3AB0FF] hover:opacity-80 transition-colors active:scale-95 disabled:opacity-50"><Download size={14} /> {isExportingMx ? 'Exporting...' : 'History'}</button>
+                <button onClick={() => setShowGuideModal(true)} className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-[#F08B46] hover:opacity-80 transition-colors active:scale-95"><HelpCircle size={14} /> Guide</button>
+              </div>
             </div>
             <div className="space-y-3">
               {mxItems.length === 0 ? (

@@ -7,7 +7,7 @@ import { PrimaryButton } from "@/components/AppButtons";
 import { 
   X, Calendar, Wrench, AlertTriangle, Sparkles, CheckCircle, 
   Send, MessageSquare, Clock, ChevronRight, ChevronDown, ExternalLink, XCircle, Plane,
-  Paperclip, FileText, Image as ImageIcon
+  Paperclip, FileText, Image as ImageIcon, Link2
 } from "lucide-react";
 import Toast from "@/components/Toast";
 
@@ -22,7 +22,6 @@ const ADDON_OPTIONS = [
   "Battery Condition Check",
 ];
 
-// Inline style to force white background on inputs (Tailwind v4 bg-white not reliable)
 const whiteBg = { backgroundColor: '#ffffff' } as const;
 
 interface ServiceEventModalProps {
@@ -30,7 +29,6 @@ interface ServiceEventModalProps {
   show: boolean;
   onClose: () => void;
   onRefresh: () => void;
-  /** If false, hide create/send/manage actions (read-only view for non-admin pilots) */
   canManageService?: boolean;
 }
 
@@ -164,27 +162,92 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
     setView('review_draft');
   };
 
+  // ─── PARTIAL COMPLETION ───
   const openCompleteFlow = () => {
     const today = new Date().toISOString().split('T')[0];
     const currentTime = aircraft?.total_engine_time?.toFixed(1) || "";
-    const items = eventLineItems.filter(li => li.item_type === 'maintenance' || li.item_type === 'squawk').map(li => ({ ...li, completionDate: today, completionTime: currentTime, completedByName: "", completedByCert: "", workDescription: "" }));
-    setCompletionItems(items); setView('complete');
+    const items = eventLineItems
+      .filter(li => li.item_type === 'maintenance' || li.item_type === 'squawk')
+      .filter(li => li.line_status !== 'complete') // Only show items not already completed
+      .map(li => ({ ...li, completionDate: today, completionTime: currentTime, completedByName: "", completedByCert: "", workDescription: "", markComplete: true }));
+    setCompletionItems(items);
+    setView('complete');
   };
 
-  const handleCompleteEvent = async () => {
-    const mxCompletions = completionItems.filter(c => c.item_type === 'maintenance');
-    for (const c of mxCompletions) { if (!c.completionDate && !c.completionTime) return alert(`Please enter logbook completion data for: ${c.item_name}`); }
+  const handleCompleteItems = async () => {
+    const itemsToComplete = completionItems.filter(c => c.markComplete);
+    if (itemsToComplete.length === 0) return alert("Please select at least one item to complete.");
+    
+    const mxCompletions = itemsToComplete.filter(c => c.item_type === 'maintenance');
+    for (const c of mxCompletions) {
+      if (!c.completionDate && !c.completionTime) return alert(`Please enter logbook completion data for: ${c.item_name}`);
+    }
+
     setIsSubmitting(true);
     try {
-      const lineCompletions = completionItems.map(c => ({ lineItemId: c.id, completionDate: c.completionDate || null, completionTime: c.completionTime || null, completedByName: c.completedByName || null, completedByCert: c.completedByCert || null, workDescription: c.workDescription || null }));
-      const res = await authFetch('/api/mx-events/complete', { method: 'POST', body: JSON.stringify({ eventId: selectedEvent.id, lineCompletions }) });
-      if (!res.ok) throw new Error('Failed to complete event');
-      await fetchEvents(); onRefresh(); showSuccess("Service complete — tracking reset"); setView('list');
-    } catch (err: any) { alert("Failed to complete event: " + err.message); }
+      const lineCompletions = itemsToComplete.map(c => ({
+        lineItemId: c.id,
+        completionDate: c.completionDate || null,
+        completionTime: c.completionTime || null,
+        completedByName: c.completedByName || null,
+        completedByCert: c.completedByCert || null,
+        workDescription: c.workDescription || null,
+      }));
+
+      const res = await authFetch('/api/mx-events/complete', {
+        method: 'POST',
+        body: JSON.stringify({ eventId: selectedEvent.id, lineCompletions, partial: true })
+      });
+      if (!res.ok) throw new Error('Failed to complete items');
+
+      await fetchEventDetail(selectedEvent.id);
+      onRefresh();
+
+      // Check if all items are now resolved (complete or deferred)
+      const { data: updatedLines } = await supabase
+        .from('aft_event_line_items').select('line_status').eq('event_id', selectedEvent.id);
+      const allResolved = updatedLines && updatedLines.every(
+        (li: any) => li.line_status === 'complete' || li.line_status === 'deferred'
+      );
+
+      if (allResolved) {
+        showSuccess("All items resolved — service complete");
+        await fetchEvents();
+        setView('list');
+      } else {
+        showSuccess(`${itemsToComplete.length} item${itemsToComplete.length > 1 ? 's' : ''} completed — remaining items still open`);
+        setView('detail');
+      }
+    } catch (err: any) { alert("Failed to complete items: " + err.message); }
     setIsSubmitting(false);
   };
 
-  const updateCompletionItem = (index: number, field: string, value: string) => {
+  const handleCloseEvent = async () => {
+    if (!selectedEvent) return;
+    setIsSubmitting(true);
+    try {
+      // Mark the event as complete without processing any more line items
+      await supabase.from('aft_maintenance_events').update({
+        status: 'complete',
+        completed_at: new Date().toISOString(),
+      }).eq('id', selectedEvent.id);
+
+      await supabase.from('aft_event_messages').insert({
+        event_id: selectedEvent.id,
+        sender: 'system',
+        message_type: 'status_update',
+        message: 'Service event closed. Completed items have been reset. Deferred items remain open.',
+      } as any);
+
+      await fetchEvents();
+      onRefresh();
+      showSuccess("Service event closed");
+      setView('list');
+    } catch (err: any) { alert("Failed to close event."); }
+    setIsSubmitting(false);
+  };
+
+  const updateCompletionItem = (index: number, field: string, value: any) => {
     setCompletionItems(prev => { const updated = [...prev]; updated[index] = { ...updated[index], [field]: value }; return updated; });
   };
 
@@ -210,6 +273,11 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
   const activeEvents = events.filter(e => e.status !== 'complete' && e.status !== 'cancelled');
   const completedEvents = events.filter(e => e.status === 'complete');
   const cancelledEvents = events.filter(e => e.status === 'cancelled');
+
+  // Check if event has a mix of completed and pending items (partial completion in progress)
+  const hasCompletedItems = eventLineItems.some(li => li.line_status === 'complete');
+  const hasPendingItems = eventLineItems.some(li => li.line_status !== 'complete' && li.line_status !== 'deferred');
+  const allResolved = eventLineItems.length > 0 && eventLineItems.every(li => li.line_status === 'complete' || li.line_status === 'deferred');
 
   const renderEmailPreview = (existingLines?: any[]) => {
     const mxPreviewItems = mxItems.filter(mx => selectedMxIds.includes(mx.id));
@@ -392,6 +460,10 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
                       <div key={li.id} className={`p-3 border rounded text-sm ${li.line_status === 'complete' ? 'bg-green-50 border-green-200' : li.line_status === 'in_progress' ? 'bg-blue-50 border-blue-200' : 'bg-white border-gray-200'}`}>
                         <div className="flex justify-between items-start"><div><span className="font-bold text-navy">{li.item_name}</span>{li.item_description && <p className="text-[10px] text-gray-500 mt-0.5">{li.item_description}</p>}</div><span className={`text-[8px] font-bold uppercase tracking-widest px-2 py-0.5 rounded shrink-0 ml-2 ${li.line_status === 'complete' ? 'bg-green-100 text-green-700' : li.line_status === 'in_progress' ? 'bg-blue-100 text-blue-700' : li.line_status === 'deferred' ? 'bg-gray-100 text-gray-600' : 'bg-orange-100 text-orange-700'}`}>{li.line_status}</span></div>
                         {li.mechanic_comment && <p className="text-[10px] text-[#3AB0FF] mt-1 italic">{li.mechanic_comment}</p>}
+                        {/* Cross-reference: show completion details for completed items */}
+                        {li.line_status === 'complete' && li.completion_date && (
+                          <p className="text-[10px] text-[#56B94A] mt-1 flex items-center gap-1"><Link2 size={10} /> Completed {li.completion_date}{li.completed_by_name ? ` by ${li.completed_by_name}` : ''}{li.completion_time ? ` @ ${li.completion_time} hrs` : ''}</p>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -417,9 +489,24 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
                   <button onClick={handleOwnerComment} disabled={isSubmitting || !ownerMessage.trim()} className="bg-[#3AB0FF] text-white px-4 py-3 rounded active:scale-95 disabled:opacity-50"><Send size={18}/></button>
                 </div>
               )}
-              {canManageService && selectedEvent.status !== 'complete' && selectedEvent.status !== 'cancelled' && (
-                <button onClick={openCompleteFlow} className="w-full bg-[#56B94A] text-white font-oswald font-bold uppercase tracking-widest py-3 rounded active:scale-95 transition-transform flex items-center justify-center gap-2"><CheckCircle size={18} /> Enter Logbook Data & Complete</button>
+
+              {/* ─── COMPLETION ACTIONS ─── */}
+              {canManageService && selectedEvent.status !== 'complete' && selectedEvent.status !== 'cancelled' && hasPendingItems && (
+                <button onClick={openCompleteFlow} className="w-full bg-[#56B94A] text-white font-oswald font-bold uppercase tracking-widest py-3 rounded active:scale-95 transition-transform flex items-center justify-center gap-2">
+                  <CheckCircle size={18} /> Enter Logbook Data{hasCompletedItems ? ' (Remaining Items)' : ''}
+                </button>
               )}
+
+              {/* Show "Close Event" when all items are resolved but event is still open */}
+              {canManageService && selectedEvent.status !== 'complete' && selectedEvent.status !== 'cancelled' && allResolved && eventLineItems.length > 0 && (
+                <div className="bg-green-50 border-2 border-green-200 rounded p-4 text-center">
+                  <CheckCircle size={32} className="mx-auto text-[#56B94A] mb-2" />
+                  <p className="font-oswald text-lg font-bold uppercase tracking-widest text-navy mb-2">All Items Resolved</p>
+                  <p className="text-xs text-gray-600 mb-4">Every line item has been completed or deferred. Close this event to finalize.</p>
+                  <button onClick={handleCloseEvent} disabled={isSubmitting} className="w-full bg-[#56B94A] text-white font-oswald font-bold uppercase tracking-widest py-3 rounded active:scale-95 disabled:opacity-50">{isSubmitting ? "Closing..." : "Close Service Event"}</button>
+                </div>
+              )}
+
               {selectedEvent.status === 'ready_for_pickup' && (
                 <div className="bg-green-50 border-2 border-green-200 rounded p-4 text-center"><Plane size={32} className="mx-auto text-[#56B94A] mb-2" /><p className="font-oswald text-lg font-bold uppercase tracking-widest text-navy">Aircraft Ready</p><p className="text-sm text-gray-600 mt-1">Your mechanic has marked all work as complete. Enter logbook data above to finalize.</p></div>
               )}
@@ -442,26 +529,41 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
             </div>
           )}
 
-          {/* ===================== COMPLETION VIEW ===================== */}
+          {/* ===================== COMPLETION VIEW (PARTIAL) ===================== */}
           {view === 'complete' && selectedEvent && (
             <div className="space-y-5">
               <button onClick={() => setView('detail')} className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-[#F08B46] bg-orange-50 border border-orange-200 rounded px-3 py-1.5 hover:bg-orange-100 active:scale-95 transition-all"><ChevronDown size={12} className="rotate-90" /> Back to Event</button>
-              <p className="text-sm text-gray-600">Enter the logbook data from your mechanic's sign-off. These times and dates will reset the tracking for each item.</p>
+              <p className="text-sm text-gray-600">Enter the logbook data from your mechanic's sign-off. You can complete items individually — uncheck any items you want to leave open for now.</p>
               {completionItems.map((item, idx) => (
-                <div key={item.id} className="bg-gray-50 border border-gray-200 rounded p-4 space-y-3">
-                  <div className="flex items-center gap-2">{item.item_type === 'maintenance' ? <Wrench size={14} className="text-[#F08B46]" /> : <AlertTriangle size={14} className="text-[#CE3732]" />}<h4 className="font-oswald font-bold uppercase text-sm text-navy">{item.item_name}</h4></div>
-                  <div className="space-y-3">
-                    <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy block">Completion Date</label><input type="date" value={item.completionDate} onChange={e => updateCompletionItem(idx, 'completionDate', e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-[#56B94A] outline-none" /></div>
-                    <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy block">Completion {isTurbine ? 'FTT' : 'Tach'}</label><input type="number" step="0.1" value={item.completionTime} onChange={e => updateCompletionItem(idx, 'completionTime', e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-[#56B94A] outline-none" placeholder="Engine time at completion" /></div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="min-w-0"><label className="text-[10px] font-bold uppercase tracking-widest text-navy block">Signed By</label><input type="text" value={item.completedByName} onChange={e => updateCompletionItem(idx, 'completedByName', e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-[#56B94A] outline-none" placeholder="IA / A&P" /></div>
-                      <div className="min-w-0"><label className="text-[10px] font-bold uppercase tracking-widest text-navy block">Certificate #</label><input type="text" value={item.completedByCert} onChange={e => updateCompletionItem(idx, 'completedByCert', e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-[#56B94A] outline-none" /></div>
+                <div key={item.id} className={`border rounded p-4 space-y-3 transition-all ${item.markComplete ? 'bg-gray-50 border-gray-200' : 'bg-gray-50/50 border-gray-100 opacity-60'}`}>
+                  <div className="flex items-center gap-3">
+                    <input type="checkbox" checked={item.markComplete} onChange={e => updateCompletionItem(idx, 'markComplete', e.target.checked)} className="w-5 h-5 text-[#56B94A] border-gray-300 rounded cursor-pointer shrink-0" />
+                    <div className="flex items-center gap-2 flex-1">
+                      {item.item_type === 'maintenance' ? <Wrench size={14} className="text-[#F08B46]" /> : <AlertTriangle size={14} className="text-[#CE3732]" />}
+                      <h4 className="font-oswald font-bold uppercase text-sm text-navy">{item.item_name}</h4>
                     </div>
-                    <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy block">Work Performed</label><textarea value={item.workDescription} onChange={e => updateCompletionItem(idx, 'workDescription', e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-[#56B94A] outline-none min-h-[60px]" placeholder="Description of work from logbook entry..." /></div>
                   </div>
+                  {item.markComplete && (
+                    <div className="space-y-3 pl-8 animate-fade-in">
+                      <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy block">Completion Date</label><input type="date" value={item.completionDate} onChange={e => updateCompletionItem(idx, 'completionDate', e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-[#56B94A] outline-none" /></div>
+                      <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy block">Completion {isTurbine ? 'FTT' : 'Tach'}</label><input type="number" step="0.1" value={item.completionTime} onChange={e => updateCompletionItem(idx, 'completionTime', e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-[#56B94A] outline-none" placeholder="Engine time at completion" /></div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="min-w-0"><label className="text-[10px] font-bold uppercase tracking-widest text-navy block">Signed By</label><input type="text" value={item.completedByName} onChange={e => updateCompletionItem(idx, 'completedByName', e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-[#56B94A] outline-none" placeholder="IA / A&P" /></div>
+                        <div className="min-w-0"><label className="text-[10px] font-bold uppercase tracking-widest text-navy block">Certificate #</label><input type="text" value={item.completedByCert} onChange={e => updateCompletionItem(idx, 'completedByCert', e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-[#56B94A] outline-none" /></div>
+                      </div>
+                      <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy block">Work Performed</label><textarea value={item.workDescription} onChange={e => updateCompletionItem(idx, 'workDescription', e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-[#56B94A] outline-none min-h-[60px]" placeholder="Description of work from logbook entry..." /></div>
+                    </div>
+                  )}
                 </div>
               ))}
-              <PrimaryButton onClick={handleCompleteEvent} disabled={isSubmitting}>{isSubmitting ? "Completing..." : "Complete Event & Reset Tracking"}</PrimaryButton>
+              {completionItems.length === 0 && (
+                <p className="text-center text-sm text-gray-400 italic py-4">All items have already been completed or deferred.</p>
+              )}
+              {completionItems.length > 0 && (
+                <PrimaryButton onClick={handleCompleteItems} disabled={isSubmitting}>
+                  {isSubmitting ? "Completing..." : `Complete ${completionItems.filter(c => c.markComplete).length} Item${completionItems.filter(c => c.markComplete).length !== 1 ? 's' : ''} & Reset Tracking`}
+                </PrimaryButton>
+              )}
             </div>
           )}
 
