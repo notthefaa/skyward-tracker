@@ -121,7 +121,6 @@ export default function MaintenanceTab({
     if (editingId) { await supabase.from('aft_maintenance_items').update(payload).eq('id', editingId); }
     else {
       await supabase.from('aft_maintenance_items').insert(payload);
-      if (automateScheduling) { try { await authFetch('/api/emails/mx-schedule', { method: 'POST', body: JSON.stringify({ aircraft, mxItem: payload }) }); } catch (err) { console.error(err); } }
     }
     await mutate(); onGroundedStatusChange(); setShowMxModal(false); setIsSubmitting(false);
   };
@@ -265,7 +264,7 @@ export default function MaintenanceTab({
                     <div className="pt-2 pb-2">
                       <label className="flex items-start gap-2 text-xs font-bold text-navy cursor-pointer">
                         <input type="checkbox" checked={automateScheduling} onChange={e=>setAutomateScheduling(e.target.checked)} className="mt-0.5 w-4 h-4 text-[#F08B46] border-gray-300 rounded focus:ring-[#F08B46] cursor-pointer shrink-0" />
-                        <span className="flex flex-col"><span>Automate MX Communication</span><span className="text-[10px] text-gray-500 font-normal mt-1 leading-tight">Emails the MX contact when the item crosses global thresholds.</span></span>
+                        <span className="flex flex-col"><span>Automate Scheduling</span><span className="text-[10px] text-gray-500 font-normal mt-1 leading-tight">When this item approaches its due threshold, the system will automatically create a draft work package and notify you to review and send it to your mechanic.</span></span>
                       </label>
                     </div>
                   )}

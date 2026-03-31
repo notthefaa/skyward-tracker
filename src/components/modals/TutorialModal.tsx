@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { 
   PlaneTakeoff, LayoutGrid, Clock, Wrench, AlertTriangle, Send, ShieldCheck, 
-  ChevronRight, X, Calendar, Check
+  ChevronRight, X, Calendar, Check, FileText, Bell, UserPlus, Settings
 } from "lucide-react";
 
 export default function TutorialModal({ session, role }: { session: any, role: string }) {
@@ -10,7 +10,7 @@ export default function TutorialModal({ session, role }: { session: any, role: s
 
   useEffect(() => {
     if (session?.user?.id) {
-      const hasSeen = localStorage.getItem(`aft_tutorial_v4_${session.user.id}`);
+      const hasSeen = localStorage.getItem(`aft_tutorial_v5_${session.user.id}`);
       if (!hasSeen) {
         setIsVisible(true);
       }
@@ -19,7 +19,7 @@ export default function TutorialModal({ session, role }: { session: any, role: s
 
   const dismissTutorial = () => {
     if (session?.user?.id) {
-      localStorage.setItem(`aft_tutorial_v4_${session.user.id}`, 'true');
+      localStorage.setItem(`aft_tutorial_v5_${session.user.id}`, 'true');
     }
     setIsVisible(false);
   };
@@ -50,8 +50,8 @@ export default function TutorialModal({ session, role }: { session: any, role: s
         <div className="space-y-4 w-full">
           <p className="text-sm text-gray-600 font-roboto leading-relaxed text-center">
             {role === 'admin' 
-              ? "Your entire fleet, in one place. The Skyward Aircraft Manager keeps your aircraft organized — from flight logs and maintenance tracking to mechanic coordination and squawk reporting."
-              : "Your aircraft, simplified. The Skyward Aircraft Manager makes it easy to log flights, stay on top of maintenance, and keep your team in sync."}
+              ? "Your entire fleet, in one place. The Skyward Aircraft Manager keeps your aircraft organized — from flight logs and maintenance tracking to mechanic coordination, shared scheduling, and squawk reporting."
+              : "Your aircraft, simplified. The Skyward Aircraft Manager makes it easy to log flights, book the plane, stay on top of maintenance, and keep your team in sync."}
           </p>
           <p className="text-sm text-gray-600 font-roboto leading-relaxed text-center">
             Let's take a quick look around.
@@ -92,6 +92,23 @@ export default function TutorialModal({ session, role }: { session: any, role: s
       )
     },
     {
+      title: "Never Double-Book Again",
+      icon: <Calendar size={48} className="text-[#56B94A]" />,
+      content: (
+        <div className="space-y-4 w-full">
+          <p className="text-sm text-gray-600 font-roboto leading-relaxed text-center">
+            One shared calendar, zero scheduling headaches. Book the plane, see who has it, and know at a glance how many days are open this month — all from the Calendar tab.
+          </p>
+          <ul className="text-sm text-gray-600 font-roboto space-y-2.5 pl-1">
+            <Bullet>Reserve with a tap — add your times, purpose, and route of flight.</Bullet>
+            <Bullet>Overlapping bookings are blocked automatically. No conflicts, no surprises.</Bullet>
+            <Bullet>Maintenance events block the calendar so nobody books during service.</Bullet>
+            <Bullet>Your team gets notified whenever a reservation is created or cancelled.</Bullet>
+          </ul>
+        </div>
+      )
+    },
+    {
       title: "Maintenance That Thinks Ahead",
       icon: <Wrench size={48} className="text-[#F08B46]" />,
       content: (
@@ -105,23 +122,8 @@ export default function TutorialModal({ session, role }: { session: any, role: s
               ? <Bullet>Enable automated scheduling and the system drafts work packages as items approach their thresholds.</Bullet>
               : <Bullet>Required items that expire will automatically ground the aircraft until completed.</Bullet>
             }
-            <Bullet>Tap the <strong>Guide</strong> button on the Maintenance tab for a full walkthrough anytime.</Bullet>
-          </ul>
-        </div>
-      )
-    },
-    {
-      title: "Mechanic Coordination",
-      icon: <Calendar size={48} className="text-[#F08B46]" />,
-      content: (
-        <div className="space-y-4 w-full">
-          <p className="text-sm text-gray-600 font-roboto leading-relaxed text-center">
-            No more phone tag. Bundle everything your mechanic needs into one work package and send it in a single professional email.
-          </p>
-          <ul className="text-sm text-gray-600 font-roboto space-y-2.5 pl-1">
-            <Bullet>Combine MX items, squawks, and add-on services (wash, oil change, nav update, etc.).</Bullet>
-            <Bullet>Your mechanic gets a secure portal to propose dates, track progress, and message you directly.</Bullet>
-            <Bullet>When service is done, enter the logbook data and all tracking resets automatically.</Bullet>
+            <Bullet>Maintenance and Squawks live together under the <strong>MX</strong> tab — tap it and pick which view you need.</Bullet>
+            <Bullet>Hit the <strong>Guide</strong> button anytime for a full walkthrough of how it all works.</Bullet>
           </ul>
         </div>
       )
@@ -138,10 +140,78 @@ export default function TutorialModal({ session, role }: { session: any, role: s
             <Bullet>Flag anything that affects airworthiness to ground the aircraft instantly across the fleet.</Bullet>
             <Bullet>Include squawks in service events — they auto-resolve when your mechanic completes the work.</Bullet>
             {role === 'admin' && <Bullet>Defer items with full MEL/CDL documentation, digital signatures, and exportable PDF reports.</Bullet>}
+            <Bullet>Find squawks under the <strong>MX</strong> tab — just tap and choose <strong>Squawks</strong>.</Bullet>
           </ul>
         </div>
       )
     },
+    {
+      title: "Mechanic Coordination",
+      icon: <Send size={48} className="text-[#F08B46]" />,
+      content: (
+        <div className="space-y-4 w-full">
+          <p className="text-sm text-gray-600 font-roboto leading-relaxed text-center">
+            No more phone tag. Bundle everything your mechanic needs into one work package and send it in a single professional email.
+          </p>
+          <ul className="text-sm text-gray-600 font-roboto space-y-2.5 pl-1">
+            <Bullet>Combine MX items, squawks, and add-on services (wash, oil change, nav update, etc.).</Bullet>
+            <Bullet>Your mechanic gets a secure portal to propose dates, track progress, upload photos, and message you — no account needed.</Bullet>
+            <Bullet>Once a date is confirmed, any overlapping reservations are cleared automatically and affected pilots are notified.</Bullet>
+            <Bullet>When service is done, enter the logbook data and all tracking resets automatically.</Bullet>
+          </ul>
+        </div>
+      )
+    },
+    {
+      title: "Talk to the Next Pilot",
+      icon: <FileText size={48} className="text-navy" />,
+      content: (
+        <div className="space-y-4 w-full">
+          <p className="text-sm text-gray-600 font-roboto leading-relaxed text-center">
+            Fuel state, parking spot, a heads-up about weather — leave a note with photos and your whole team sees it instantly. Think of it as a shared crew whiteboard.
+          </p>
+          <ul className="text-sm text-gray-600 font-roboto space-y-2.5 pl-1">
+            <Bullet>Post from the <strong>Notes</strong> tab with optional photo attachments.</Bullet>
+            <Bullet>Every assigned pilot gets an email when a new note goes up.</Bullet>
+            <Bullet>Unread notes light up with a badge so nothing slips through the cracks.</Bullet>
+            <Bullet>The latest note also shows on the aircraft's Home screen for quick reference.</Bullet>
+          </ul>
+        </div>
+      )
+    },
+    ...(role === 'admin' ? [{
+      title: "Build Your Crew",
+      icon: <UserPlus size={48} className="text-[#3AB0FF]" />,
+      content: (
+        <div className="space-y-4 w-full">
+          <p className="text-sm text-gray-600 font-roboto leading-relaxed text-center">
+            Invite pilots, set their permissions, and let them hit the ground running. Everyone gets exactly the access they need — nothing more, nothing less.
+          </p>
+          <ul className="text-sm text-gray-600 font-roboto space-y-2.5 pl-1">
+            <Bullet>Tap the blue invite button on any aircraft's Home screen to add a pilot in seconds.</Bullet>
+            <Bullet><strong>Tail Admins</strong> can edit the aircraft, schedule service, manage work packages, and invite others.</Bullet>
+            <Bullet><strong>Tail Pilots</strong> can fly, log, report squawks, post notes, and manage their own reservations.</Bullet>
+            <Bullet>New users get an email invitation and are ready to go the moment they set their password.</Bullet>
+          </ul>
+        </div>
+      )
+    }] : [{
+      title: "You're Part of the Team",
+      icon: <UserPlus size={48} className="text-[#3AB0FF]" />,
+      content: (
+        <div className="space-y-4 w-full">
+          <p className="text-sm text-gray-600 font-roboto leading-relaxed text-center">
+            You've been added to one or more aircraft. Everything you need to fly, log, and stay in the loop is already at your fingertips.
+          </p>
+          <ul className="text-sm text-gray-600 font-roboto space-y-2.5 pl-1">
+            <Bullet>Log flights, report squawks, post notes, and reserve the plane.</Bullet>
+            <Bullet>See maintenance status and upcoming service at a glance.</Bullet>
+            <Bullet>Create and cancel your own reservations from the Calendar tab.</Bullet>
+            <Bullet>If you're made a <strong>Tail Admin</strong>, you'll also be able to edit the aircraft, schedule service, and invite other pilots.</Bullet>
+          </ul>
+        </div>
+      )
+    }]),
     ...(role === 'admin' ? [{
       title: "Admin Tools",
       icon: <ShieldCheck size={48} className="text-navy" />,
@@ -151,23 +221,40 @@ export default function TutorialModal({ session, role }: { session: any, role: s
             Tap the Shield icon in the top bar to access everything you need to manage the operation.
           </p>
           <ul className="text-sm text-gray-600 font-roboto space-y-2.5 pl-1">
-            <Bullet>Invite pilots, reset passwords, and assign aircraft access per user.</Bullet>
-            <Bullet>Configure global maintenance alert and scheduling thresholds.</Bullet>
-            <Bullet>Run database health checks to clean orphaned files and monitor growth.</Bullet>
+            <Bullet><strong>Global Fleet:</strong> View and jump to any aircraft in the system.</Bullet>
+            <Bullet><strong>Invite User:</strong> Invite pilots or admins and assign aircraft access.</Bullet>
+            <Bullet><strong>Aircraft Access:</strong> Manage who can see which aircraft, reset passwords, or remove users.</Bullet>
+            <Bullet><strong>System Tools:</strong> Configure maintenance alert thresholds, preview automated emails, and run database health checks.</Bullet>
           </ul>
         </div>
       )
     }] : []),
     {
-      title: "Take It With You",
-      icon: <Send size={48} className="text-[#3AB0FF]" />,
+      title: "Make It Yours",
+      icon: <Settings size={48} className="text-gray-500" />,
       content: (
         <div className="space-y-4 w-full">
           <p className="text-sm text-gray-600 font-roboto leading-relaxed text-center">
-            Need to log a flight or report a squawk from the ramp? Tap the Paper Airplane icon in the top menu to install <strong>Log It</strong> — a lightweight companion app built for speed on your phone.
+            Tap the gear icon in the top bar to dial in your preferences. Control which email notifications you receive, reset your password, or manage your account — all in one place.
+          </p>
+          <ul className="text-sm text-gray-600 font-roboto space-y-2.5 pl-1">
+            <Bullet>Toggle notifications on or off for reservations, squawks, notes, and service updates.</Bullet>
+            <Bullet>Send yourself a secure password reset link anytime.</Bullet>
+            <Bullet>View your account details or delete your account if you ever need to.</Bullet>
+          </ul>
+        </div>
+      )
+    },
+    {
+      title: "You're All Set",
+      icon: <PlaneTakeoff size={48} className="text-navy" />,
+      content: (
+        <div className="space-y-4 w-full">
+          <p className="text-sm text-gray-600 font-roboto leading-relaxed text-center">
+            Need to log a flight or report a squawk from the ramp? Tap the <strong>Log It</strong> icon in the top menu to install a lightweight companion app built for speed on your phone.
           </p>
           <p className="text-sm text-gray-600 font-roboto leading-relaxed text-center">
-            That's it — you're all set. Happy flying!
+            That's it — happy flying!
           </p>
         </div>
       )
