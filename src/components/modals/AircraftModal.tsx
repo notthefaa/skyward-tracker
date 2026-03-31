@@ -161,40 +161,32 @@ export default function AircraftModal({
         setup_tach: newType === 'Piston' ? newSetupEngine : 0,
       });
 
-      // Recalculate totals to stay in sync with setup changes.
-      // The delta is the hours accumulated from flight logs since setup.
-      // new_total = new_setup + (old_total - old_setup)
-      // If no flights have been logged, old_total == old_setup, so new_total == new_setup.
-      //
-      // Edge case: if setup fields were never recorded (null/0) but totals are nonzero
-      // (aircraft created before setup tracking existed, or setup fields not populated),
-      // fall back to using old_total as old_setup so the delta is 0.
-      const oldTotalAirframe = existingAircraft.total_airframe_time || 0;
-      const oldTotalEngine = existingAircraft.total_engine_time || 0;
+      // Determine the correct total times.
+      // If flight logs exist, the latest log's cumulative times ARE the true total —
+      // setup values don't affect them. If NO logs exist, the setup IS the total.
+      const { data: latestLog } = await supabase
+        .from('aft_flight_logs')
+        .select('aftt, ftt, hobbs, tach')
+        .eq('aircraft_id', existingAircraft.id)
+        .order('created_at', { ascending: false })
+        .limit(1);
 
-      const rawOldSetupAirframe = newType === 'Turbine'
-        ? (existingAircraft.setup_aftt || 0)
-        : (existingAircraft.setup_hobbs || 0);
-      const rawOldSetupEngine = newType === 'Turbine'
-        ? (existingAircraft.setup_ftt || 0)
-        : (existingAircraft.setup_tach || 0);
-
-      // If setup was never recorded, assume setup == total (no flight delta)
-      const oldSetupAirframe = rawOldSetupAirframe > 0 ? rawOldSetupAirframe : oldTotalAirframe;
-      const oldSetupEngine = rawOldSetupEngine > 0 ? rawOldSetupEngine : oldTotalEngine;
-
-      const flightDeltaAirframe = oldTotalAirframe - oldSetupAirframe;
-      const flightDeltaEngine = oldTotalEngine - oldSetupEngine;
-
-      basePayload.total_airframe_time = newSetupAirframe + Math.max(0, flightDeltaAirframe);
-      basePayload.total_engine_time = newSetupEngine + Math.max(0, flightDeltaEngine);
-
-      console.log('[AircraftModal] Update payload:', {
-        oldSetupAirframe, oldSetupEngine, oldTotalAirframe, oldTotalEngine,
-        flightDeltaAirframe, flightDeltaEngine,
-        newTotalAirframe: basePayload.total_airframe_time,
-        newTotalEngine: basePayload.total_engine_time,
-      });
+      if (latestLog && latestLog.length > 0) {
+        // Flight logs exist — the latest log holds the true current times.
+        // Setup changes don't affect totals when there's real flight data.
+        const log = latestLog[0] as any;
+        if (newType === 'Turbine') {
+          basePayload.total_airframe_time = log.aftt || existingAircraft.total_airframe_time || 0;
+          basePayload.total_engine_time = log.ftt || existingAircraft.total_engine_time || 0;
+        } else {
+          basePayload.total_airframe_time = log.hobbs || existingAircraft.total_airframe_time || 0;
+          basePayload.total_engine_time = log.tach || existingAircraft.total_engine_time || 0;
+        }
+      } else {
+        // No flight logs — setup values are the starting point, so totals = setup.
+        basePayload.total_airframe_time = newSetupAirframe;
+        basePayload.total_engine_time = newSetupEngine;
+      }
 
       const { error: updateError } = await supabase.from('aft_aircraft').update(basePayload).eq('id', existingAircraft.id);
       if (updateError) {
