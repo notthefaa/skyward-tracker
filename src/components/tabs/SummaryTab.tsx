@@ -267,7 +267,6 @@ export default function SummaryTab({
               <h2 className="font-oswald text-xl font-bold uppercase text-navy flex items-center gap-2"><Droplet size={20} className="text-blue-500" /> Update Fuel State</h2>
               <button onClick={() => setShowFuelModal(false)} className="text-gray-400 hover:text-red-500"><X size={24} /></button>
             </div>
-            <p className="text-xs text-gray-500 mb-4">Record the current fuel quantity without logging a flight — useful after a top-off, fuel truck visit, or ground run.</p>
             <form onSubmit={handleFuelUpdate} className="space-y-4">
               <div className="grid grid-cols-5 gap-3">
                 <div className="col-span-3">
@@ -377,8 +376,11 @@ export default function SummaryTab({
 
       {/* ─── FLIGHT TIMES + LAST FLOWN ─── */}
       <div className={`bg-white shadow-lg rounded-sm p-4 border-t-4 ${statusBorderColor} flex flex-col`}>
-        <div className="flex justify-between items-center mb-3 border-b border-gray-100 pb-3">
-          <div className="flex items-center gap-2"><Clock size={20} className={statusIconColor} /><h3 className="font-oswald text-xl font-bold uppercase text-navy m-0 leading-none">Flight Times</h3></div>
+        <div className="flex justify-between items-start mb-3 border-b border-gray-100 pb-3">
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-2"><Clock size={20} className={statusIconColor} /><h3 className="font-oswald text-xl font-bold uppercase text-navy m-0 leading-none">Flight Times</h3></div>
+            {lastFlownLabel && <span className="text-[9px] font-bold uppercase tracking-widest text-gray-400 mt-1">Last Flown: {lastFlownLabel}</span>}
+          </div>
           <span className="text-[10px] font-bold uppercase tracking-widest bg-gray-100 px-2 py-1 rounded text-gray-600">{isTurbine ? 'TURBINE' : 'PISTON'}</span>
         </div>
         <div className="grid grid-cols-2 gap-4">
@@ -391,12 +393,6 @@ export default function SummaryTab({
             <p className="text-3xl font-roboto font-bold text-navy">{aircraft.total_engine_time?.toFixed(1) || 0} <span className="text-sm text-gray-400">hrs</span></p>
           </div>
         </div>
-        {lastFlownLabel && (
-          <div className="mt-3 pt-3 border-t border-gray-100">
-            <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Last Flown: </span>
-            <span className="text-[10px] font-bold uppercase tracking-widest text-navy">{lastFlownLabel}</span>
-          </div>
-        )}
       </div>
 
       {/* ─── FUEL STATE ─── */}
@@ -496,7 +492,7 @@ export default function SummaryTab({
             <button onClick={() => setShowCrewList(!showCrewList)} className="w-full p-4 flex gap-4 items-center cursor-pointer hover:bg-gray-50 transition-colors active:scale-[0.98]">
               <div className="bg-gray-100 p-3 rounded-full text-navy shrink-0"><Users size={20}/></div>
               <div className="flex-1 text-left">
-                <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Assigned Crew</span>
+                <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Assigned Users</span>
                 <p className="text-sm font-bold text-navy leading-tight">{crewMembers.length} Pilot{crewMembers.length !== 1 ? 's' : ''}</p>
               </div>
               <ChevronDown size={18} className={`text-gray-400 transition-transform ${showCrewList ? 'rotate-180' : ''}`} />
@@ -505,8 +501,10 @@ export default function SummaryTab({
               <div className="border-t border-gray-100 animate-fade-in">
                 {crewMembers.map((member: any) => {
                   const isCurrentUser = member.user_id === session?.user?.id;
-                  const roleLabel = member.aircraft_role === 'admin' ? 'Tail Admin' : 'Tail Pilot';
-                  const roleColor = member.aircraft_role === 'admin' ? 'bg-navy text-white' : 'bg-gray-100 text-gray-600';
+                  // Show effective role: global admins always display as Admin regardless of aircraft_role
+                  const effectiveRole = (isCurrentUser && role === 'admin') ? 'admin' : member.aircraft_role;
+                  const roleLabel = effectiveRole === 'admin' ? 'Admin' : 'Pilot';
+                  const roleColor = effectiveRole === 'admin' ? 'bg-navy text-white' : 'bg-gray-100 text-gray-600';
                   return (
                     <div key={member.user_id} className="px-4 py-3 border-b border-gray-50 last:border-b-0 flex items-center gap-3">
                       <div className="w-9 h-9 rounded-full bg-navy text-white flex items-center justify-center font-oswald font-bold text-sm shrink-0">{member.initials || '?'}</div>
