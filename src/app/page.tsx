@@ -81,7 +81,7 @@ export default function FleetTrackerApp() {
     }
   }, [session, fetchAircraftData, globalMutate, activeTail, checkGroundedStatus]);
 
-  const { pullHandlers, pullDistance, pullProgress, isRefreshing, phase: pullPhase } = usePullToRefresh({
+  const { pullHandlers, pullOffset, pullProgress, isRefreshing, phase: pullPhase } = usePullToRefresh({
     onRefresh: handlePullRefresh,
   });
 
@@ -295,12 +295,18 @@ export default function FleetTrackerApp() {
       )}
 
       <main
-        className="fixed left-0 right-0 overflow-y-auto bg-neutral-100 p-4 flex justify-center w-full"
+        className="fixed left-0 right-0 overflow-y-auto bg-neutral-100 flex justify-center w-full"
         style={{ touchAction: 'auto', top: 'calc(3.5rem + env(safe-area-inset-top, 0px))', bottom: 'calc(3.5rem + env(safe-area-inset-bottom, 0px))' }}
         {...pullHandlers}
       >
-        <div className="w-full max-w-3xl flex flex-col gap-6">
-          <PullIndicator pullDistance={pullDistance} pullProgress={pullProgress} isRefreshing={isRefreshing} phase={pullPhase} />
+        <PullIndicator pullOffset={pullOffset} pullProgress={pullProgress} isRefreshing={isRefreshing} phase={pullPhase} />
+        <div
+          className="w-full max-w-3xl flex flex-col gap-6 p-4"
+          style={{
+            transform: `translateY(${pullOffset}px)`,
+            transition: (pullPhase === 'settling' || pullPhase === 'refreshing') ? 'transform 0.4s cubic-bezier(0.2, 0.9, 0.3, 1)' : 'none',
+          }}
+        >
           {!isDataLoaded ? (
             <div className="flex flex-col items-center justify-center py-20 animate-pulse"><Loader2 size={32} className="text-[#F08B46] animate-spin mb-4" /><p className="font-oswald text-sm font-bold uppercase tracking-widest text-gray-400">Loading Fleet Data...</p></div>
           ) : (<>
