@@ -1,77 +1,73 @@
 "use client";
 
-import { Loader2, ArrowDown } from "lucide-react";
+import { Loader2, ArrowDown, Check } from "lucide-react";
 
 interface PullIndicatorProps {
-  pullOffset: number;
   pullProgress: number;
-  isRefreshing: boolean;
-  phase: 'idle' | 'pulling' | 'refreshing' | 'settling';
+  phase: 'idle' | 'pulling' | 'refreshing' | 'done';
 }
 
-export default function PullIndicator({ pullOffset, pullProgress, isRefreshing, phase }: PullIndicatorProps) {
-  const isActive = phase !== 'idle';
+export default function PullIndicator({ pullProgress, phase }: PullIndicatorProps) {
+  if (phase === 'idle') return null;
+
   const reachedThreshold = pullProgress >= 1;
 
-  const label = isRefreshing
-    ? 'Refreshing...'
-    : reachedThreshold
-      ? 'Release to refresh'
-      : 'Pull to refresh';
+  let icon: React.ReactNode;
+  let label: string;
+  let colorClass: string;
+  let bgClass: string;
 
-  const colorClass = isRefreshing
-    ? 'text-[#F08B46]'
-    : reachedThreshold
-      ? 'text-[#56B94A]'
-      : 'text-gray-400';
+  if (phase === 'done') {
+    icon = <Check size={14} strokeWidth={3} />;
+    label = 'Updated';
+    colorClass = 'text-[#56B94A]';
+    bgClass = 'bg-green-50 border-green-200';
+  } else if (phase === 'refreshing') {
+    icon = <Loader2 size={14} className="animate-spin" />;
+    label = 'Refreshing...';
+    colorClass = 'text-[#F08B46]';
+    bgClass = 'bg-orange-50 border-orange-200';
+  } else if (reachedThreshold) {
+    icon = <ArrowDown size={14} style={{ transform: 'rotate(180deg)' }} />;
+    label = 'Release to refresh';
+    colorClass = 'text-[#56B94A]';
+    bgClass = 'bg-green-50 border-green-200';
+  } else {
+    icon = <ArrowDown size={14} style={{ transform: `rotate(${pullProgress * 180}deg)`, transition: 'transform 0.1s ease-out' }} />;
+    label = 'Pull to refresh';
+    colorClass = 'text-gray-500';
+    bgClass = 'bg-white border-gray-200';
+  }
 
-  // Fade in by ~30% of threshold
-  const opacity = isRefreshing ? 1 : (isActive ? Math.min(pullProgress / 0.3, 1) : 0);
-
-  // Smooth CSS transitions when settling or refreshing; instant when pulling
-  const smooth = phase === 'settling' || phase === 'refreshing';
-
-  // Position the indicator: starts hidden at -40, slides in as pull grows
-  const indicatorY = isActive ? Math.min(pullOffset - 10, 30) : -40;
+  // During pull: opacity ramps up from 0.3 progress to 0.7 progress
+  // During refreshing/done: always fully visible
+  const opacity = (phase === 'refreshing' || phase === 'done')
+    ? 1
+    : Math.min(Math.max((pullProgress - 0.15) / 0.5, 0), 1);
 
   return (
     <div
+      className="fixed left-0 right-0 flex justify-center pointer-events-none"
       style={{
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        height: 40,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        pointerEvents: 'none',
-        zIndex: 5,
-        transform: `translateY(${indicatorY}px)`,
+        top: 'calc(3.5rem + env(safe-area-inset-top, 0px))',
+        zIndex: 50,
         opacity,
-        transition: smooth
-          ? 'transform 0.4s cubic-bezier(0.2, 0.9, 0.3, 1), opacity 0.3s ease-out'
-          : 'opacity 0.1s ease-out',
-        willChange: isActive ? 'transform, opacity' : 'auto',
+        transition: (phase === 'done') ? 'opacity 0.5s ease-out' : 'opacity 0.15s ease-out',
       }}
     >
-      <div className="flex items-center gap-2">
-        {isRefreshing ? (
-          <Loader2 size={16} className="text-[#F08B46] animate-spin" />
-        ) : (
-          <ArrowDown
-            size={16}
-            className={colorClass}
-            style={{
-              transition: 'transform 0.2s ease-out',
-              transform: reachedThreshold ? 'rotate(180deg)' : 'rotate(0deg)',
-            }}
-          />
-        )}
-        <span
-          className={`text-[10px] font-oswald font-bold uppercase tracking-widest ${colorClass}`}
-          style={{ transition: 'color 0.15s ease-out' }}
-        >
+      <div
+        className={`flex items-center gap-2 px-4 py-2 rounded-b-lg border border-t-0 shadow-sm ${bgClass}`}
+        style={{
+          transform: (phase === 'refreshing' || phase === 'done')
+            ? 'translateY(0)'
+            : `translateY(${Math.min(pullProgress * 8, 8) - 8}px)`,
+          transition: (phase === 'refreshing' || phase === 'done')
+            ? 'transform 0.3s cubic-bezier(0.2, 0.9, 0.3, 1)'
+            : 'none',
+        }}
+      >
+        <span className={colorClass}>{icon}</span>
+        <span className={`text-[10px] font-oswald font-bold uppercase tracking-widest whitespace-nowrap ${colorClass}`}>
           {label}
         </span>
       </div>

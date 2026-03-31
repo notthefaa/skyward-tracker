@@ -7,129 +7,89 @@ interface UsePullToRefreshOptions {
   threshold?: number;
 }
 
-export function usePullToRefresh({ onRefresh, threshold = 64 }: UsePullToRefreshOptions) {
-  const [pullOffset, setPullOffset] = useState(0);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [phase, setPhase] = useState<'idle' | 'pulling' | 'refreshing' | 'settling'>('idle');
+export function usePullToRefresh({ onRefresh, threshold = 80 }: UsePullToRefreshOptions) {
+  const [pullProgress, setPullProgress] = useState(0);
+  const [phase, setPhase] = useState<'idle' | 'pulling' | 'refreshing' | 'done'>('idle');
 
   const startY = useRef(0);
   const active = useRef(false);
   const scrollEl = useRef<HTMLElement | null>(null);
-  const wasAtTop = useRef(false);
 
-  // Attach a non-passive native touchmove listener to enable preventDefault on iOS
+  // Native non-passive touchmove to enable preventDefault on iOS
   useEffect(() => {
-    const el = scrollEl.current;
-    if (!el) return;
-
-    const handleNativeTouchMove = (e: TouchEvent) => {
-      // Only prevent default when we're actively managing a pull gesture
-      if (active.current && wasAtTop.current) {
-        const rawDelta = e.touches[0].clientY - startY.current;
-        if (rawDelta > 0) {
-          e.preventDefault();
-        }
+    const handler = (e: TouchEvent) => {
+      if (!active.current) return;
+      const delta = e.touches[0].clientY - startY.current;
+      if (delta > 5) {
+        e.preventDefault();
       }
     };
 
-    // { passive: false } is critical — iOS Safari ignores preventDefault on passive listeners
-    el.addEventListener('touchmove', handleNativeTouchMove, { passive: false });
-    return () => el.removeEventListener('touchmove', handleNativeTouchMove);
+    // We attach to document so it catches the event before iOS does
+    document.addEventListener('touchmove', handler, { passive: false });
+    return () => document.removeEventListener('touchmove', handler);
   }, []);
 
   const onTouchStart = useCallback((e: React.TouchEvent) => {
-    if (isRefreshing) return;
+    if (phase === 'refreshing' || phase === 'done') return;
     const el = e.currentTarget as HTMLElement;
     scrollEl.current = el;
-
-    // Only engage if scrolled to the very top
-    wasAtTop.current = el.scrollTop <= 0;
-    if (!wasAtTop.current) return;
-
+    if (el.scrollTop > 0) return;
     startY.current = e.touches[0].clientY;
     active.current = true;
-  }, [isRefreshing]);
+  }, [phase]);
 
   const onTouchMove = useCallback((e: React.TouchEvent) => {
-    if (!active.current || isRefreshing || !wasAtTop.current) return;
-
-    const el = e.currentTarget as HTMLElement;
-
-    // If somehow scrolled down, cancel the pull
-    if (el.scrollTop > 0) {
+    if (!active.current) return;
+    const el = scrollEl.current;
+    if (el && el.scrollTop > 0) {
       active.current = false;
-      wasAtTop.current = false;
-      setPullOffset(0);
+      setPullProgress(0);
       setPhase('idle');
       return;
     }
 
-    const rawDelta = e.touches[0].clientY - startY.current;
-
-    if (rawDelta <= 0) {
-      // Pushing up — let normal scroll handle it
-      if (pullOffset !== 0) {
-        setPullOffset(0);
-        setPhase('idle');
-      }
+    const delta = e.touches[0].clientY - startY.current;
+    if (delta <= 0) {
+      setPullProgress(0);
+      if (phase === 'pulling') setPhase('idle');
       return;
     }
 
-    // Lock scrolling on the container while pulling down
-    el.style.overflow = 'hidden';
-
-    // Rubber-band resistance curve
-    const resisted = Math.min(rawDelta * 0.42, 120);
-    setPullOffset(resisted);
-    setPhase('pulling');
-  }, [isRefreshing, pullOffset]);
+    // Progress 0 to 1+ with diminishing returns
+    const progress = Math.min((delta * 0.5) / threshold, 1.4);
+    setPullProgress(progress);
+    if (phase !== 'pulling') setPhase('pulling');
+  }, [phase, threshold]);
 
   const onTouchEnd = useCallback(async () => {
-    // Re-enable scrolling
-    if (scrollEl.current) {
-      scrollEl.current.style.overflow = '';
-    }
-
-    if (!active.current || isRefreshing) return;
+    if (!active.current) return;
     active.current = false;
-    wasAtTop.current = false;
 
-    if (pullOffset >= threshold) {
-      // Threshold reached — show refreshing state
+    if (pullProgress >= 1) {
       setPhase('refreshing');
-      setIsRefreshing(true);
-      setPullOffset(56);
+      setPullProgress(1);
 
       try {
         await onRefresh();
       } catch (err) {
-        console.error('[PullToRefresh] Refresh error:', err);
+        console.error('[PullToRefresh]', err);
       }
 
-      // Brief pause so React can paint updated data before we animate away
-      await new Promise(resolve => setTimeout(resolve, 250));
-
-      // Smooth spring-back
-      setPhase('settling');
-      setPullOffset(0);
-
-      setTimeout(() => {
-        setIsRefreshing(false);
-        setPhase('idle');
-      }, 400);
+      // Show "done" briefly before hiding
+      setPhase('done');
+      setPullProgress(0);
+      await new Promise(r => setTimeout(r, 600));
+      setPhase('idle');
     } else {
-      // Didn't pull far enough — spring back
-      setPhase('settling');
-      setPullOffset(0);
-      setTimeout(() => setPhase('idle'), 400);
+      setPullProgress(0);
+      setPhase('idle');
     }
-  }, [pullOffset, threshold, isRefreshing, onRefresh]);
+  }, [pullProgress, onRefresh]);
 
   return {
     pullHandlers: { onTouchStart, onTouchMove, onTouchEnd },
-    pullOffset,
-    isRefreshing,
+    pullProgress,
     phase,
-    pullProgress: Math.min(pullOffset / threshold, 1),
   };
 }
