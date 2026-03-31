@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2 } from "lucide-react";
+import { Loader2, ArrowDown } from "lucide-react";
 
 interface PullIndicatorProps {
   pullDistance: number;
@@ -13,34 +13,52 @@ export default function PullIndicator({ pullDistance, pullProgress, isRefreshing
   if (phase === 'idle') return null;
 
   const reachedThreshold = pullProgress >= 1;
-  const label = isRefreshing ? 'Refreshing...' : reachedThreshold ? 'Release to refresh' : 'Pull to refresh';
+  const label = isRefreshing 
+    ? 'Refreshing...' 
+    : reachedThreshold 
+      ? 'Release to refresh' 
+      : 'Pull to refresh';
 
-  // Use CSS transition for releasing/refreshing, no transition while actively pulling
-  const useTransition = phase === 'releasing' || phase === 'refreshing';
+  // Transition height smoothly when releasing or refreshing, follow finger exactly when pulling
+  const animateHeight = phase === 'releasing' || phase === 'refreshing';
+
+  // Fade in the content as the user pulls — fully visible by 30% progress
+  const contentOpacity = isRefreshing ? 1 : Math.min(pullProgress / 0.3, 1);
 
   return (
     <div 
-      className="flex flex-col items-center justify-end overflow-hidden pointer-events-none"
       style={{ 
         height: pullDistance,
-        transition: useTransition ? 'height 0.35s cubic-bezier(0.2, 0.9, 0.3, 1)' : 'none',
-        marginTop: -8,
-        marginBottom: pullDistance > 0 ? 4 : 0,
+        transition: animateHeight ? 'height 0.35s cubic-bezier(0.2, 0.9, 0.3, 1)' : 'none',
+        overflow: 'hidden',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        pointerEvents: 'none',
+        minHeight: 0,
       }}
     >
-      <div className="flex items-center gap-2 pb-2">
-        <Loader2
-          size={16}
-          className={isRefreshing ? 'text-[#F08B46] animate-spin' : reachedThreshold ? 'text-[#56B94A]' : 'text-gray-400'}
-          style={{
-            transition: 'transform 0.15s ease-out, color 0.15s ease-out',
-            transform: isRefreshing ? 'none' : `rotate(${pullProgress * 360}deg)`,
-          }}
-        />
+      <div 
+        className="flex items-center gap-2"
+        style={{ opacity: contentOpacity, transition: 'opacity 0.15s ease-out' }}
+      >
+        {isRefreshing ? (
+          <Loader2 size={16} className="text-[#F08B46] animate-spin" />
+        ) : (
+          <ArrowDown
+            size={16}
+            className={reachedThreshold ? 'text-[#56B94A]' : 'text-gray-400'}
+            style={{
+              transition: 'transform 0.15s ease-out',
+              transform: reachedThreshold ? 'rotate(180deg)' : 'rotate(0deg)',
+            }}
+          />
+        )}
         <span 
-          className={`text-[10px] font-bold uppercase tracking-widest transition-colors duration-150 ${
+          className={`text-[10px] font-bold uppercase tracking-widest ${
             isRefreshing ? 'text-[#F08B46]' : reachedThreshold ? 'text-[#56B94A]' : 'text-gray-400'
           }`}
+          style={{ transition: 'color 0.15s ease-out' }}
         >
           {label}
         </span>
