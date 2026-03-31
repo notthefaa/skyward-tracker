@@ -151,12 +151,33 @@ export default function AircraftModal({
     };
     
     if (existingAircraft) {
+      const newSetupAirframe = parseFloat(newAirframeTime) || 0;
+      const newSetupEngine = parseFloat(newEngineTime) || 0;
+
       Object.assign(basePayload, {
-        setup_aftt: newType === 'Turbine' ? (parseFloat(newAirframeTime) || 0) : 0,
-        setup_ftt: newType === 'Turbine' ? (parseFloat(newEngineTime) || 0) : 0,
-        setup_hobbs: newType === 'Piston' ? (parseFloat(newAirframeTime) || 0) : 0,
-        setup_tach: newType === 'Piston' ? (parseFloat(newEngineTime) || 0) : 0,
+        setup_aftt: newType === 'Turbine' ? newSetupAirframe : 0,
+        setup_ftt: newType === 'Turbine' ? newSetupEngine : 0,
+        setup_hobbs: newType === 'Piston' ? newSetupAirframe : 0,
+        setup_tach: newType === 'Piston' ? newSetupEngine : 0,
       });
+
+      // Recalculate totals to stay in sync with setup changes.
+      // The delta is the hours accumulated from flight logs since setup.
+      // new_total = new_setup + (old_total - old_setup)
+      // If no flights have been logged, old_total == old_setup, so new_total == new_setup.
+      const oldSetupAirframe = newType === 'Turbine'
+        ? (existingAircraft.setup_aftt || 0)
+        : (existingAircraft.setup_hobbs || 0);
+      const oldSetupEngine = newType === 'Turbine'
+        ? (existingAircraft.setup_ftt || 0)
+        : (existingAircraft.setup_tach || 0);
+
+      const flightDeltaAirframe = (existingAircraft.total_airframe_time || 0) - oldSetupAirframe;
+      const flightDeltaEngine = (existingAircraft.total_engine_time || 0) - oldSetupEngine;
+
+      basePayload.total_airframe_time = newSetupAirframe + Math.max(0, flightDeltaAirframe);
+      basePayload.total_engine_time = newSetupEngine + Math.max(0, flightDeltaEngine);
+
       await supabase.from('aft_aircraft').update(basePayload).eq('id', existingAircraft.id);
     } else {
       Object.assign(basePayload, {
