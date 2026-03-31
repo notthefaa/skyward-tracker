@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
-import { useFleetData, useRealtimeSync, useGroundedStatus, useAircraftRole } from "@/hooks";
+import { useFleetData, useRealtimeSync, useGroundedStatus, useAircraftRole, usePullToRefresh } from "@/hooks";
 import dynamic from "next/dynamic";
 import type { AircraftWithMetrics, AppTab } from "@/lib/types";
 import { 
@@ -16,6 +16,7 @@ const AircraftModal = dynamic(() => import("@/components/modals/AircraftModal"))
 const AdminModals = dynamic(() => import("@/components/modals/AdminModals"));
 const TutorialModal = dynamic(() => import("@/components/modals/TutorialModal"));
 const SettingsModal = dynamic(() => import("@/components/modals/SettingsModal"));
+const PullIndicator = dynamic(() => import("@/components/PullIndicator"));
 const SummaryTab = dynamic(() => import("@/components/tabs/SummaryTab"));
 const TimesTab = dynamic(() => import("@/components/tabs/TimesTab"));
 const CalendarTab = dynamic(() => import("@/components/tabs/CalendarTab"));
@@ -67,6 +68,22 @@ export default function FleetTrackerApp() {
     [session, refreshForAircraft]
   );
   useRealtimeSync(session, boundRefresh, globalMutate);
+
+  // ─── Pull to Refresh ───
+  const handlePullRefresh = useCallback(async () => {
+    if (session?.user?.id) {
+      await fetchAircraftData(session.user.id);
+      globalMutate(() => true, undefined, { revalidate: true });
+      if (activeTail) {
+        checkGroundedStatus(activeTail);
+        fetchUnreadNotes(activeTail, session.user.id);
+      }
+    }
+  }, [session, fetchAircraftData, globalMutate, activeTail, checkGroundedStatus]);
+
+  const { pullHandlers, pullDistance, pullProgress, isRefreshing } = usePullToRefresh({
+    onRefresh: handlePullRefresh,
+  });
 
   // ─── Auth Init ───
   useEffect(() => {
@@ -277,8 +294,13 @@ export default function FleetTrackerApp() {
         </div>
       )}
 
-      <main className="fixed left-0 right-0 overflow-y-auto bg-neutral-100 p-4 flex justify-center w-full" style={{ touchAction: 'auto', top: 'calc(3.5rem + env(safe-area-inset-top, 0px))', bottom: 'calc(3.5rem + env(safe-area-inset-bottom, 0px))' }}>
+      <main
+        className="fixed left-0 right-0 overflow-y-auto bg-neutral-100 p-4 flex justify-center w-full"
+        style={{ touchAction: 'auto', top: 'calc(3.5rem + env(safe-area-inset-top, 0px))', bottom: 'calc(3.5rem + env(safe-area-inset-bottom, 0px))' }}
+        {...pullHandlers}
+      >
         <div className="w-full max-w-3xl flex flex-col gap-6">
+          <PullIndicator pullDistance={pullDistance} pullProgress={pullProgress} isRefreshing={isRefreshing} />
           {!isDataLoaded ? (
             <div className="flex flex-col items-center justify-center py-20 animate-pulse"><Loader2 size={32} className="text-[#F08B46] animate-spin mb-4" /><p className="font-oswald text-sm font-bold uppercase tracking-widest text-gray-400">Loading Fleet Data...</p></div>
           ) : (<>
