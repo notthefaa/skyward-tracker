@@ -34,18 +34,23 @@ export async function POST(req: Request) {
 
     if (action === 'confirm') {
       // Owner confirms mechanic's proposed date
+      // The mechanic already set service_duration_days and estimated_completion when proposing
       await supabaseAdmin.from('aft_maintenance_events').update({
         status: 'confirmed',
         confirmed_date: event.proposed_date,
         confirmed_at: new Date().toISOString(),
       }).eq('id', eventId);
 
+      const durationLabel = event.service_duration_days 
+        ? ` (${event.service_duration_days} day${event.service_duration_days > 1 ? 's' : ''})` 
+        : '';
+
       await supabaseAdmin.from('aft_event_messages').insert({
         event_id: eventId,
         sender: 'owner',
         message_type: 'confirm',
         proposed_date: event.proposed_date,
-        message: message || `Confirmed for ${event.proposed_date}.`,
+        message: message || `Confirmed for ${event.proposed_date}${durationLabel}.`,
       } as any);
 
       // Email mechanic
@@ -60,7 +65,7 @@ export async function POST(req: Request) {
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
               <h2 style="color: #091F3C;">Date Confirmed</h2>
               <p>Hello ${mxName},</p>
-              <p>${primaryName} has confirmed the proposed service date of <strong>${event.proposed_date}</strong>.</p>
+              <p>${primaryName} has confirmed the proposed service date of <strong>${event.proposed_date}</strong>${durationLabel}.</p>
               ${message ? `<p style="margin-top: 15px; padding: 15px; background: #f9f9f9; border-left: 4px solid #56B94A; border-radius: 4px;"><em>${message}</em></p>` : ''}
               <p style="margin-top: 20px;"><a href="${portalUrl}" style="background: #091F3C; color: white; padding: 12px 24px; border-radius: 4px; text-decoration: none; font-weight: bold;">View Service Portal</a></p>
             </div>
@@ -69,7 +74,6 @@ export async function POST(req: Request) {
       }
 
       // ── MX CONFLICT RESOLUTION ──
-      // Cancel any reservations that overlap with the confirmed MX block
       const { data: aircraft } = await supabaseAdmin
         .from('aft_aircraft').select('tail_number').eq('id', event.aircraft_id).single();
 

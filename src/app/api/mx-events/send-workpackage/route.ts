@@ -99,6 +99,10 @@ export async function POST(req: Request) {
       if (proposedDate) {
         eventUpdate.proposed_date = proposedDate;
         eventUpdate.proposed_by = 'owner';
+      } else {
+        // No date proposed — owner is requesting availability
+        eventUpdate.proposed_by = 'owner';
+        eventUpdate.proposed_date = null;
       }
       await supabaseAdmin.from('aft_maintenance_events').update(eventUpdate).eq('id', eventId);
 
@@ -110,6 +114,13 @@ export async function POST(req: Request) {
           message_type: 'propose_date',
           proposed_date: proposedDate,
           message: `Requesting service on ${proposedDate}.`,
+        } as any);
+      } else {
+        await supabaseAdmin.from('aft_event_messages').insert({
+          event_id: eventId,
+          sender: 'owner',
+          message_type: 'status_update',
+          message: 'Work package sent. Requesting mechanic availability — no preferred date specified.',
         } as any);
       }
     }
@@ -141,7 +152,7 @@ export async function POST(req: Request) {
       const effectiveDate = proposedDate || event.proposed_date;
       const dateSection = effectiveDate
         ? `<p style="margin-top: 20px;"><strong>Requested Service Date:</strong> ${effectiveDate}</p>`
-        : `<p style="margin-top: 20px;">Please propose a date that works for your schedule.</p>`;
+        : `<p style="margin-top: 20px;">No preferred date has been specified. Please propose dates that work for your schedule, along with the estimated duration of service.</p>`;
 
       const subjectPrefix = isResend ? 'Reminder — ' : '';
 

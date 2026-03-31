@@ -29,6 +29,7 @@ export default function ServicePortal() {
 
   const [showDateForm, setShowDateForm] = useState(false);
   const [proposedDate, setProposedDate] = useState("");
+  const [serviceDurationDays, setServiceDurationDays] = useState("");
   const [commentText, setCommentText] = useState("");
   const [estimatedCompletion, setEstimatedCompletion] = useState("");
   const [mechanicNotes, setMechanicNotes] = useState("");
@@ -50,6 +51,11 @@ export default function ServicePortal() {
   const [uploadFiles, setUploadFiles] = useState<File[]>([]);
   const [uploadDescription, setUploadDescription] = useState("");
   const [isUploading, setIsUploading] = useState(false);
+
+  // Confirm with duration
+  const [showConfirmWithDuration, setShowConfirmWithDuration] = useState(false);
+  const [confirmDurationDays, setConfirmDurationDays] = useState("");
+  const [confirmMessage, setConfirmMessage] = useState("");
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -124,6 +130,9 @@ export default function ServicePortal() {
       setShowDateForm(false);
       setCommentText("");
       setAvailabilityNote("");
+      setShowConfirmWithDuration(false);
+      setConfirmDurationDays("");
+      setConfirmMessage("");
     } catch (err) {
       alert("Something went wrong. Please try again.");
     }
@@ -255,13 +264,13 @@ export default function ServicePortal() {
               {event.confirmed_date && (
                 <div>
                   <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 block">Confirmed Date</span>
-                  <span className="font-roboto font-bold text-[#56B94A]">{event.confirmed_date}</span>
+                  <span className="font-roboto font-bold text-[#56B94A]">{event.confirmed_date}{event.service_duration_days ? ` (${event.service_duration_days} day${event.service_duration_days > 1 ? 's' : ''})` : ''}</span>
                 </div>
               )}
               {event.proposed_date && !event.confirmed_date && (
                 <div>
                   <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 block">Proposed Date</span>
-                  <span className="font-roboto font-bold text-[#F08B46]">{event.proposed_date} (by {event.proposed_by})</span>
+                  <span className="font-roboto font-bold text-[#F08B46]">{event.proposed_date}{event.service_duration_days ? ` (${event.service_duration_days} day${event.service_duration_days > 1 ? 's' : ''})` : ''} (by {event.proposed_by})</span>
                 </div>
               )}
             </div>
@@ -274,15 +283,51 @@ export default function ServicePortal() {
               
               {event.proposed_by === 'owner' && (
                 <div className="space-y-3">
-                  <p className="text-sm text-gray-600">The owner has proposed <strong>{event.proposed_date}</strong>. Does this date work for your shop?</p>
-                  <div className="flex gap-3">
-                    <button onClick={() => handleAction('confirm')} disabled={isSubmitting} className="flex-1 bg-[#56B94A] text-white font-oswald font-bold uppercase tracking-widest py-3 rounded active:scale-95 transition-transform disabled:opacity-50">Confirm Date</button>
-                    <button onClick={() => setShowDateForm(true)} disabled={isSubmitting} className="flex-1 bg-[#F08B46] text-white font-oswald font-bold uppercase tracking-widest py-3 rounded active:scale-95 transition-transform disabled:opacity-50">Propose Different</button>
-                  </div>
+                  <p className="text-sm text-gray-600">
+                    {event.proposed_date 
+                      ? <>The owner has proposed <strong>{event.proposed_date}</strong>. Does this date work for your shop?</>
+                      : <>The owner has requested your availability. Please propose a service date below.</>
+                    }
+                  </p>
+                  {event.proposed_date && (
+                    <div className="space-y-3">
+                      {!showConfirmWithDuration ? (
+                        <div className="flex gap-3">
+                          <button onClick={() => setShowConfirmWithDuration(true)} disabled={isSubmitting} className="flex-1 bg-[#56B94A] text-white font-oswald font-bold uppercase tracking-widest py-3 rounded active:scale-95 transition-transform disabled:opacity-50">Confirm Date</button>
+                          <button onClick={() => setShowDateForm(true)} disabled={isSubmitting} className="flex-1 bg-[#F08B46] text-white font-oswald font-bold uppercase tracking-widest py-3 rounded active:scale-95 transition-transform disabled:opacity-50">Propose Different</button>
+                        </div>
+                      ) : (
+                        <div className="p-4 bg-green-50 rounded border border-green-200 space-y-3 animate-fade-in">
+                          <p className="text-sm font-bold text-navy">Confirming: {event.proposed_date}</p>
+                          <div>
+                            <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Estimated Duration (Days) *</label>
+                            <input type="number" min="1" value={confirmDurationDays} onChange={e => setConfirmDurationDays(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#56B94A] outline-none" placeholder="How many days will the aircraft be in your shop?" />
+                          </div>
+                          <div>
+                            <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Message (Optional)</label>
+                            <textarea value={confirmMessage} onChange={e => setConfirmMessage(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#56B94A] outline-none min-h-[60px]" placeholder="Any notes about the service..." />
+                          </div>
+                          <div className="flex gap-2">
+                            <button onClick={() => { setShowConfirmWithDuration(false); setConfirmDurationDays(""); setConfirmMessage(""); }} className="flex-1 border border-gray-300 text-gray-600 font-bold py-2 rounded text-xs uppercase tracking-widest active:scale-95">Cancel</button>
+                            <button 
+                              onClick={() => handleAction('confirm', { serviceDurationDays: parseInt(confirmDurationDays), message: confirmMessage || `Confirmed for ${event.proposed_date}. Estimated ${confirmDurationDays} day${parseInt(confirmDurationDays) > 1 ? 's' : ''}.` })} 
+                              disabled={isSubmitting || !confirmDurationDays || parseInt(confirmDurationDays) < 1} 
+                              className="flex-[2] bg-[#56B94A] text-white font-bold py-2 rounded text-xs uppercase tracking-widest active:scale-95 disabled:opacity-50"
+                            >
+                              {isSubmitting ? "Confirming..." : "Confirm & Notify Owner"}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {!event.proposed_date && !showDateForm && (
+                    <button onClick={() => setShowDateForm(true)} className="w-full bg-[#091F3C] text-white font-oswald font-bold uppercase tracking-widest py-3 rounded active:scale-95 transition-transform">Propose a Date</button>
+                  )}
                 </div>
               )}
 
-              {(event.proposed_by === 'mechanic' || !event.proposed_date) && (
+              {(event.proposed_by === 'mechanic' || (!event.proposed_date && event.proposed_by !== 'owner')) && (
                 <div className="space-y-3">
                   <p className="text-sm text-gray-600">{event.proposed_by === 'mechanic' ? 'Waiting for owner to confirm your proposed date.' : 'Please propose a service date.'}</p>
                   {!event.proposed_date && (
@@ -294,8 +339,12 @@ export default function ServicePortal() {
               {showDateForm && (
                 <div className="mt-4 p-4 bg-gray-50 rounded border border-gray-200 space-y-3 animate-fade-in">
                   <div>
-                    <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Proposed Date</label>
+                    <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Proposed Date *</label>
                     <input type="date" value={proposedDate} onChange={e => setProposedDate(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Estimated Duration (Days) *</label>
+                    <input type="number" min="1" value={serviceDurationDays} onChange={e => setServiceDurationDays(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" placeholder="How many days will the aircraft be in your shop?" />
                   </div>
                   <div>
                     <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Shop Availability (Optional)</label>
@@ -309,9 +358,9 @@ export default function ServicePortal() {
                   <button 
                     onClick={() => {
                       const fullMessage = [availabilityNote ? `Shop Availability: ${availabilityNote}` : '', commentText].filter(Boolean).join('\n\n');
-                      handleAction('propose_date', { proposedDate, message: fullMessage });
+                      handleAction('propose_date', { proposedDate, serviceDurationDays: parseInt(serviceDurationDays), message: fullMessage });
                     }} 
-                    disabled={isSubmitting || !proposedDate} 
+                    disabled={isSubmitting || !proposedDate || !serviceDurationDays || parseInt(serviceDurationDays) < 1} 
                     className="w-full bg-[#F08B46] text-white font-oswald font-bold uppercase tracking-widest py-3 rounded active:scale-95 transition-transform disabled:opacity-50"
                   >
                     {isSubmitting ? "Sending..." : "Send Proposal"}

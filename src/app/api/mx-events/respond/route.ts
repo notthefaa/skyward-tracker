@@ -13,11 +13,21 @@ const ctaButton = (url: string, label: string) => `
   </div>
 `;
 
+/**
+ * Computes the estimated_completion date from a start date and duration in days.
+ * If duration is e.g. 3, the completion date is startDate + 2 days (3 days inclusive).
+ */
+function computeEstimatedCompletion(startDate: string, durationDays: number): string {
+  const start = new Date(startDate + 'T00:00:00');
+  start.setDate(start.getDate() + Math.max(0, durationDays - 1));
+  return start.toISOString().split('T')[0];
+}
+
 export async function POST(req: Request) {
   try {
     // Parse body ONCE — all fields extracted here
     const body = await req.json();
-    const { accessToken, action, proposedDate, message, lineItemUpdates, itemName, itemDescription } = body;
+    const { accessToken, action, proposedDate, message, lineItemUpdates, itemName, itemDescription, serviceDurationDays } = body;
 
     if (!accessToken) {
       return NextResponse.json({ error: 'Access token is required.' }, { status: 400 });
@@ -47,17 +57,27 @@ export async function POST(req: Request) {
     const appUrl = baseUrl;
 
     if (action === 'propose_date') {
+      if (!serviceDurationDays || serviceDurationDays < 1) {
+        return NextResponse.json({ error: 'Estimated service duration in days is required.' }, { status: 400 });
+      }
+
+      const estCompletion = computeEstimatedCompletion(proposedDate, serviceDurationDays);
+
       await supabaseAdmin.from('aft_maintenance_events').update({
         proposed_date: proposedDate,
         proposed_by: 'mechanic',
+        service_duration_days: serviceDurationDays,
+        estimated_completion: estCompletion,
       }).eq('id', event.id);
+
+      const durationLabel = `${serviceDurationDays} day${serviceDurationDays > 1 ? 's' : ''}`;
 
       await supabaseAdmin.from('aft_event_messages').insert({
         event_id: event.id,
         sender: 'mechanic',
         message_type: 'propose_date',
         proposed_date: proposedDate,
-        message: message || `Proposed service date: ${proposedDate}`,
+        message: message || `Proposed service date: ${proposedDate} (estimated ${durationLabel})`,
       } as any);
 
       if (event.primary_contact_email) {
@@ -69,6 +89,7 @@ export async function POST(req: Request) {
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
               <h2 style="color: #091F3C;">Schedule Proposal</h2>
               <p>${event.mx_contact_name || 'Your maintenance provider'} has proposed <strong>${proposedDate}</strong> for service on your aircraft.</p>
+              <p style="margin-top: 10px;">Estimated duration: <strong>${durationLabel}</strong> (through ${estCompletion})</p>
               ${message ? `<p style="margin-top: 15px; padding: 15px; background: #f9f9f9; border-left: 4px solid #F08B46; border-radius: 4px;"><em>${message}</em></p>` : ''}
               <p style="margin-top: 15px; color: #666;">Open the app to confirm or propose a different date.</p>
               ${ctaButton(appUrl, 'OPEN AIRCRAFT MANAGER')}
@@ -78,29 +99,41 @@ export async function POST(req: Request) {
       }
 
     } else if (action === 'confirm') {
+      // Mechanic confirming the owner's proposed date — duration is required
+      if (!serviceDurationDays || serviceDurationDays < 1) {
+        return NextResponse.json({ error: 'Estimated service duration in days is required.' }, { status: 400 });
+      }
+
+      const confirmedDate = event.proposed_date;
+      const estCompletion = computeEstimatedCompletion(confirmedDate, serviceDurationDays);
+      const durationLabel = `${serviceDurationDays} day${serviceDurationDays > 1 ? 's' : ''}`;
+
       await supabaseAdmin.from('aft_maintenance_events').update({
         status: 'confirmed',
-        confirmed_date: event.proposed_date,
+        confirmed_date: confirmedDate,
         confirmed_at: new Date().toISOString(),
+        service_duration_days: serviceDurationDays,
+        estimated_completion: estCompletion,
       }).eq('id', event.id);
 
       await supabaseAdmin.from('aft_event_messages').insert({
         event_id: event.id,
         sender: 'mechanic',
         message_type: 'confirm',
-        proposed_date: event.proposed_date,
-        message: message || `Confirmed for ${event.proposed_date}. We'll see you then.`,
+        proposed_date: confirmedDate,
+        message: message || `Confirmed for ${confirmedDate}. Estimated ${durationLabel}.`,
       } as any);
 
       if (event.primary_contact_email) {
         await resend.emails.send({
           from: `Skyward Operations <${FROM_EMAIL}>`,
           to: [event.primary_contact_email],
-          subject: `Confirmed: ${event.proposed_date} Service Appointment`,
+          subject: `Confirmed: ${confirmedDate} Service Appointment`,
           html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
               <h2 style="color: #56B94A;">Appointment Confirmed</h2>
-              <p>${event.mx_contact_name || 'Your maintenance provider'} has confirmed service for <strong>${event.proposed_date}</strong>.</p>
+              <p>${event.mx_contact_name || 'Your maintenance provider'} has confirmed service for <strong>${confirmedDate}</strong>.</p>
+              <p style="margin-top: 10px;">Estimated duration: <strong>${durationLabel}</strong> (through ${estCompletion})</p>
               ${message ? `<p style="margin-top: 15px; padding: 15px; background: #f9f9f9; border-left: 4px solid #56B94A; border-radius: 4px;"><em>${message}</em></p>` : ''}
               ${ctaButton(appUrl, 'OPEN AIRCRAFT MANAGER')}
             </div>
@@ -109,7 +142,6 @@ export async function POST(req: Request) {
       }
 
       // ── MX CONFLICT RESOLUTION ──
-      // Cancel any reservations that overlap with the confirmed MX block
       const { data: aircraft } = await supabaseAdmin
         .from('aft_aircraft').select('tail_number').eq('id', event.aircraft_id).single();
 
@@ -117,8 +149,8 @@ export async function POST(req: Request) {
         await cancelConflictingReservations({
           supabaseAdmin,
           aircraftId: event.aircraft_id,
-          confirmedDate: event.proposed_date,
-          estimatedCompletion: event.estimated_completion || null,
+          confirmedDate: confirmedDate,
+          estimatedCompletion: estCompletion,
           tailNumber: aircraft.tail_number,
           mechanicName: event.mx_contact_name,
           appUrl: baseUrl,

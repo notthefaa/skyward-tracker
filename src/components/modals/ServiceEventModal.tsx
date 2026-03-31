@@ -7,7 +7,7 @@ import { PrimaryButton } from "@/components/AppButtons";
 import { 
   X, Calendar, Wrench, AlertTriangle, Sparkles, CheckCircle, 
   Send, MessageSquare, Clock, ChevronRight, ChevronDown, ExternalLink, XCircle, Plane,
-  Paperclip, FileText, Image as ImageIcon, Link2
+  Paperclip, FileText, Image as ImageIcon, Link2, CheckSquare
 } from "lucide-react";
 import Toast from "@/components/Toast";
 
@@ -47,6 +47,7 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
   const [selectedSquawkIds, setSelectedSquawkIds] = useState<string[]>([]);
   const [selectedAddons, setSelectedAddons] = useState<string[]>([]);
   const [proposedDate, setProposedDate] = useState("");
+  const [wantsToPropose, setWantsToPropose] = useState<boolean | null>(null);
 
   const [ownerMessage, setOwnerMessage] = useState("");
   const [completionItems, setCompletionItems] = useState<any[]>([]);
@@ -90,14 +91,17 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
     const { data: sq } = await supabase.from('aft_squawks').select('*').eq('aircraft_id', aircraft.id).eq('status', 'open').order('created_at', { ascending: false });
     setMxItems(mx || []); setSquawks(sq || []);
     setSelectedMxIds([]); setSelectedSquawkIds([]); setSelectedAddons([]); setProposedDate("");
+    setWantsToPropose(null);
     setView('create');
   };
 
   const handleCreateEvent = async () => {
     if (selectedMxIds.length === 0 && selectedSquawkIds.length === 0 && selectedAddons.length === 0) return alert("Please select at least one item for the work package.");
+    if (wantsToPropose === null) return alert("Please choose whether you'd like to propose a date or request availability.");
+    if (wantsToPropose && !proposedDate) return alert("Please select a preferred service date or choose 'Request Availability' instead.");
     setIsSubmitting(true);
     try {
-      const res = await authFetch('/api/mx-events/create', { method: 'POST', body: JSON.stringify({ aircraftId: aircraft.id, mxItemIds: selectedMxIds, squawkIds: selectedSquawkIds, addonServices: selectedAddons, proposedDate: proposedDate || null }) });
+      const res = await authFetch('/api/mx-events/create', { method: 'POST', body: JSON.stringify({ aircraftId: aircraft.id, mxItemIds: selectedMxIds, squawkIds: selectedSquawkIds, addonServices: selectedAddons, proposedDate: wantsToPropose ? proposedDate : null }) });
       if (!res.ok) throw new Error('Failed to create event');
       await fetchEvents(); showSuccess("Work package sent to mechanic"); setView('list');
     } catch (err: any) { alert("Failed to create service event: " + err.message); }
@@ -144,9 +148,12 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
   };
 
   const handleSendDraft = async () => {
-    if (!selectedEvent) return; setIsSubmitting(true);
+    if (!selectedEvent) return;
+    if (wantsToPropose === null) return alert("Please choose whether you'd like to propose a date or request availability.");
+    if (wantsToPropose && !proposedDate) return alert("Please select a preferred service date or choose 'Request Availability' instead.");
+    setIsSubmitting(true);
     try {
-      const res = await authFetch('/api/mx-events/send-workpackage', { method: 'POST', body: JSON.stringify({ eventId: selectedEvent.id, additionalMxItemIds: selectedMxIds, additionalSquawkIds: selectedSquawkIds, addonServices: selectedAddons, proposedDate: proposedDate || null }) });
+      const res = await authFetch('/api/mx-events/send-workpackage', { method: 'POST', body: JSON.stringify({ eventId: selectedEvent.id, additionalMxItemIds: selectedMxIds, additionalSquawkIds: selectedSquawkIds, addonServices: selectedAddons, proposedDate: wantsToPropose ? proposedDate : null }) });
       if (!res.ok) throw new Error('Failed to send');
       await fetchEvents(); showSuccess("Work package sent to mechanic"); setView('list');
     } catch (err: any) { alert("Failed to send work package: " + err.message); }
@@ -159,6 +166,7 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
     const { data: sq } = await supabase.from('aft_squawks').select('*').eq('aircraft_id', aircraft.id).eq('status', 'open').order('created_at', { ascending: false });
     setMxItems(mx || []); setSquawks(sq || []);
     setSelectedMxIds([]); setSelectedSquawkIds([]); setSelectedAddons([]); setProposedDate("");
+    setWantsToPropose(null);
     setView('review_draft');
   };
 
@@ -267,6 +275,59 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
     );
   };
 
+  // ─── SELECT ALL HELPERS ───
+  const toggleSelectAllMx = (items: any[]) => {
+    const allIds = items.map(mx => mx.id);
+    const allSelected = allIds.every(id => selectedMxIds.includes(id));
+    if (allSelected) {
+      setSelectedMxIds(prev => prev.filter(id => !allIds.includes(id)));
+    } else {
+      setSelectedMxIds(prev => Array.from(new Set([...prev, ...allIds])));
+    }
+  };
+
+  const toggleSelectAllSquawks = (items: any[]) => {
+    const allIds = items.map(sq => sq.id);
+    const allSelected = allIds.every(id => selectedSquawkIds.includes(id));
+    if (allSelected) {
+      setSelectedSquawkIds(prev => prev.filter(id => !allIds.includes(id)));
+    } else {
+      setSelectedSquawkIds(prev => Array.from(new Set([...prev, ...allIds])));
+    }
+  };
+
+  // ─── DATE PROPOSAL SELECTOR ───
+  const renderDateProposalSection = () => (
+    <div className="border border-gray-200 rounded p-4 bg-gray-50 space-y-3">
+      <p className="text-[10px] font-bold uppercase tracking-widest text-navy flex items-center gap-2"><Calendar size={14} className="text-[#F08B46]" /> Service Date</p>
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={() => { setWantsToPropose(true); }}
+          className={`flex-1 py-3 px-3 rounded border-2 text-xs font-bold uppercase tracking-widest transition-all active:scale-95 ${wantsToPropose === true ? 'border-[#F08B46] bg-orange-50 text-[#F08B46]' : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300'}`}
+        >
+          Propose a Date
+        </button>
+        <button
+          type="button"
+          onClick={() => { setWantsToPropose(false); setProposedDate(""); }}
+          className={`flex-1 py-3 px-3 rounded border-2 text-xs font-bold uppercase tracking-widest transition-all active:scale-95 ${wantsToPropose === false ? 'border-[#3AB0FF] bg-blue-50 text-[#3AB0FF]' : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300'}`}
+        >
+          Request Availability
+        </button>
+      </div>
+      {wantsToPropose === true && (
+        <div className="animate-fade-in">
+          <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Preferred Service Date *</label>
+          <input type="date" value={proposedDate} onChange={e => setProposedDate(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" />
+        </div>
+      )}
+      {wantsToPropose === false && (
+        <p className="text-xs text-gray-500 italic animate-fade-in">The mechanic will be asked to propose dates that work for their schedule.</p>
+      )}
+    </div>
+  );
+
   if (!show) return null;
 
   const isTurbine = aircraft?.engine_type === 'Turbine';
@@ -288,6 +349,7 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
     const allMx = [...existingMx.map(li => ({ name: li.item_name, desc: li.item_description })), ...mxPreviewItems.map(mx => ({ name: mx.item_name, desc: mx.tracking_type === 'time' ? `Due at ${mx.due_time} hrs` : `Due on ${mx.due_date}` }))];
     const allSq = [...existingSq.map(li => ({ name: li.item_name, desc: li.item_description })), ...sqPreviewItems.map(sq => ({ name: sq.description || 'No description', desc: sq.affects_airworthiness && sq.location ? `Grounded at ${sq.location}` : null }))];
     const allAddons = [...existingAddon.map(li => li.item_name), ...selectedAddons];
+    const effectiveDate = wantsToPropose ? proposedDate : null;
     return (
       <div className="bg-gray-50 border border-gray-200 rounded p-4 space-y-4 text-sm animate-fade-in">
         <div className="flex justify-between items-center border-b border-gray-200 pb-2"><span className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Email Preview</span><button onClick={() => setShowPreview(false)} className="text-gray-400 hover:text-red-500"><X size={16}/></button></div>
@@ -295,8 +357,8 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
         <div className="border-t border-gray-200 pt-3 space-y-3">
           <p className="text-navy">Hello {aircraft.mx_contact || ''},</p>
           <p className="text-gray-600">We'd like to schedule service for <strong>{aircraft.tail_number}</strong> ({aircraft.aircraft_type}).</p>
-          {proposedDate && <p className="text-navy font-bold">Requested Service Date: {proposedDate}</p>}
-          {!proposedDate && <p className="text-gray-500 italic">No preferred date — mechanic will be asked to propose one.</p>}
+          {effectiveDate && <p className="text-navy font-bold">Requested Service Date: {effectiveDate}</p>}
+          {!effectiveDate && <p className="text-gray-500 italic">No preferred date — please propose dates that work for your schedule.</p>}
           {allMx.length > 0 && <div><p className="text-[10px] font-bold uppercase tracking-widest text-[#F08B46] mb-1">Maintenance Items Due</p>{allMx.map((m, i) => <p key={i} className="text-navy ml-3">• <strong>{m.name}</strong>{m.desc ? ` — ${m.desc}` : ''}</p>)}</div>}
           {allSq.length > 0 && <div><p className="text-[10px] font-bold uppercase tracking-widest text-[#CE3732] mb-1">Squawks</p>{allSq.map((s, i) => <p key={i} className="text-navy ml-3">• <strong>{s.name}</strong>{s.desc ? ` — ${s.desc}` : ''}</p>)}</div>}
           {allAddons.length > 0 && <div><p className="text-[10px] font-bold uppercase tracking-widest text-[#3AB0FF] mb-1">Additional Services</p>{allAddons.map((a, i) => <p key={i} className="text-navy ml-3">• {a}</p>)}</div>}
@@ -385,21 +447,31 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
               <button onClick={() => setView('list')} className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-[#F08B46] bg-orange-50 border border-orange-200 rounded px-3 py-1.5 hover:bg-orange-100 active:scale-95 transition-all mb-2"><ChevronDown size={12} className="rotate-90" /> Back to Events</button>
               {mxItems.length > 0 && (
                 <div>
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-navy mb-2 flex items-center gap-2"><Wrench size={14} className="text-[#F08B46]" /> Maintenance Items Due</p>
-                  <div className="space-y-3 max-h-[200px] overflow-y-auto pb-1">{mxItems.map(mx => (<label key={mx.id} className="flex items-start gap-3 p-3 border border-gray-200 rounded cursor-pointer hover:bg-gray-50"><input type="checkbox" checked={selectedMxIds.includes(mx.id)} onChange={() => setSelectedMxIds(prev => prev.includes(mx.id) ? prev.filter(id => id !== mx.id) : [...prev, mx.id])} className="mt-1 w-4 h-4 text-[#F08B46] border-gray-300 rounded" /><div><span className="font-bold text-sm text-navy">{mx.item_name}</span><span className="block text-[10px] text-gray-500">{mx.tracking_type === 'time' ? `Due @ ${mx.due_time} hrs` : `Due ${mx.due_date}`}</span></div></label>))}</div>
+                  <div className="flex justify-between items-center mb-2">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-navy flex items-center gap-2"><Wrench size={14} className="text-[#F08B46]" /> Maintenance Items Due</p>
+                    <button type="button" onClick={() => toggleSelectAllMx(mxItems)} className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-[#F08B46] hover:opacity-80 active:scale-95 transition-all">
+                      <CheckSquare size={12} /> {mxItems.every(mx => selectedMxIds.includes(mx.id)) ? 'Deselect All' : 'Select All'}
+                    </button>
+                  </div>
+                  <div className="space-y-3 pb-1">{mxItems.map(mx => (<label key={mx.id} className="flex items-start gap-3 p-3 border border-gray-200 rounded cursor-pointer hover:bg-gray-50"><input type="checkbox" checked={selectedMxIds.includes(mx.id)} onChange={() => setSelectedMxIds(prev => prev.includes(mx.id) ? prev.filter(id => id !== mx.id) : [...prev, mx.id])} className="mt-1 w-4 h-4 text-[#F08B46] border-gray-300 rounded" /><div><span className="font-bold text-sm text-navy">{mx.item_name}</span><span className="block text-[10px] text-gray-500">{mx.tracking_type === 'time' ? `Due @ ${mx.due_time} hrs` : `Due ${mx.due_date}`}</span></div></label>))}</div>
                 </div>
               )}
               {squawks.length > 0 && (
                 <div>
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-navy mb-2 flex items-center gap-2"><AlertTriangle size={14} className="text-[#CE3732]" /> Open Squawks</p>
-                  <div className="space-y-3 max-h-[200px] overflow-y-auto pb-1">{squawks.map(sq => (<label key={sq.id} className="flex items-start gap-3 p-3 border border-gray-200 rounded cursor-pointer hover:bg-gray-50"><input type="checkbox" checked={selectedSquawkIds.includes(sq.id)} onChange={() => setSelectedSquawkIds(prev => prev.includes(sq.id) ? prev.filter(id => id !== sq.id) : [...prev, sq.id])} className="mt-1 w-4 h-4 text-[#CE3732] border-gray-300 rounded" /><div><span className="font-bold text-sm text-navy">{sq.description || 'No description'}</span>{sq.affects_airworthiness && sq.location && <span className="block text-[10px] font-bold text-[#CE3732]">⚠ Grounded at {sq.location}</span>}<span className="block text-[10px] text-gray-500">Reported {new Date(sq.created_at).toLocaleDateString()}</span></div></label>))}</div>
+                  <div className="flex justify-between items-center mb-2">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-navy flex items-center gap-2"><AlertTriangle size={14} className="text-[#CE3732]" /> Open Squawks</p>
+                    <button type="button" onClick={() => toggleSelectAllSquawks(squawks)} className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-[#CE3732] hover:opacity-80 active:scale-95 transition-all">
+                      <CheckSquare size={12} /> {squawks.every(sq => selectedSquawkIds.includes(sq.id)) ? 'Deselect All' : 'Select All'}
+                    </button>
+                  </div>
+                  <div className="space-y-3 pb-1">{squawks.map(sq => (<label key={sq.id} className="flex items-start gap-3 p-3 border border-gray-200 rounded cursor-pointer hover:bg-gray-50"><input type="checkbox" checked={selectedSquawkIds.includes(sq.id)} onChange={() => setSelectedSquawkIds(prev => prev.includes(sq.id) ? prev.filter(id => id !== sq.id) : [...prev, sq.id])} className="mt-1 w-4 h-4 text-[#CE3732] border-gray-300 rounded" /><div><span className="font-bold text-sm text-navy">{sq.description || 'No description'}</span>{sq.affects_airworthiness && sq.location && <span className="block text-[10px] font-bold text-[#CE3732]">⚠ Grounded at {sq.location}</span>}<span className="block text-[10px] text-gray-500">Reported {new Date(sq.created_at).toLocaleDateString()}</span></div></label>))}</div>
                 </div>
               )}
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-widest text-navy mb-2 flex items-center gap-2"><Sparkles size={14} className="text-[#3AB0FF]" /> Additional Services</p>
                 <div className="grid grid-cols-2 gap-2">{ADDON_OPTIONS.map(addon => (<label key={addon} className="flex items-center gap-2 p-2 border border-gray-200 rounded cursor-pointer hover:bg-blue-50 text-xs"><input type="checkbox" checked={selectedAddons.includes(addon)} onChange={() => setSelectedAddons(prev => prev.includes(addon) ? prev.filter(a => a !== addon) : [...prev, addon])} className="w-3.5 h-3.5 text-[#3AB0FF] border-gray-300 rounded" /><span className="text-navy font-bold">{addon}</span></label>))}</div>
               </div>
-              <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Preferred Service Date (Optional)</label><input type="date" value={proposedDate} onChange={e => setProposedDate(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" /></div>
+              {renderDateProposalSection()}
               {!showPreview ? (<button onClick={() => setShowPreview(true)} className="w-full text-[10px] font-bold uppercase tracking-widest text-[#3AB0FF] hover:underline py-2">Preview Email Before Sending</button>) : renderEmailPreview()}
               <PrimaryButton onClick={handleCreateEvent} disabled={isSubmitting}>{isSubmitting ? "Creating..." : "Send Work Package to Mechanic"}</PrimaryButton>
             </div>
@@ -411,14 +483,36 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
               <button onClick={() => { setSelectedEvent(null); setView('list'); }} className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-[#F08B46] bg-orange-50 border border-orange-200 rounded px-3 py-1.5 hover:bg-orange-100 active:scale-95 transition-all"><ChevronDown size={12} className="rotate-90" /> Back to Events</button>
               <div className="bg-orange-50 border border-orange-200 rounded p-4"><p className="text-sm text-navy font-bold mb-1">System-Generated Draft</p><p className="text-xs text-gray-600">Review the items below, add anything else you need, and send it to your mechanic.</p></div>
               {eventLineItems.length > 0 && (<div><p className="text-[10px] font-bold uppercase tracking-widest text-navy mb-2">Already Included</p><div className="space-y-2">{eventLineItems.map(li => (<div key={li.id} className="p-3 bg-white border border-gray-200 rounded"><span className="font-bold text-sm text-navy">{li.item_name}</span>{li.item_description && <span className="block text-[10px] text-gray-500">{li.item_description}</span>}</div>))}</div></div>)}
-              {mxItems.filter(mx => !eventLineItems.some(li => li.maintenance_item_id === mx.id)).length > 0 && (
-                <div><p className="text-[10px] font-bold uppercase tracking-widest text-navy mb-2 flex items-center gap-2"><Wrench size={14} className="text-[#F08B46]" /> Add More Maintenance Items</p><div className="space-y-3 max-h-[160px] overflow-y-auto pb-1">{mxItems.filter(mx => !eventLineItems.some(li => li.maintenance_item_id === mx.id)).map(mx => (<label key={mx.id} className="flex items-start gap-3 p-3 border border-gray-200 rounded cursor-pointer hover:bg-gray-50"><input type="checkbox" checked={selectedMxIds.includes(mx.id)} onChange={() => setSelectedMxIds(prev => prev.includes(mx.id) ? prev.filter(id => id !== mx.id) : [...prev, mx.id])} className="mt-1 w-4 h-4 text-[#F08B46] border-gray-300 rounded" /><div><span className="font-bold text-sm text-navy">{mx.item_name}</span><span className="block text-[10px] text-gray-500">{mx.tracking_type === 'time' ? `Due @ ${mx.due_time} hrs` : `Due ${mx.due_date}`}</span></div></label>))}</div></div>
-              )}
-              {squawks.filter(sq => !eventLineItems.some(li => li.squawk_id === sq.id)).length > 0 && (
-                <div><p className="text-[10px] font-bold uppercase tracking-widest text-navy mb-2 flex items-center gap-2"><AlertTriangle size={14} className="text-[#CE3732]" /> Add Squawks</p><div className="space-y-3 max-h-[160px] overflow-y-auto pb-1">{squawks.filter(sq => !eventLineItems.some(li => li.squawk_id === sq.id)).map(sq => (<label key={sq.id} className="flex items-start gap-3 p-3 border border-gray-200 rounded cursor-pointer hover:bg-gray-50"><input type="checkbox" checked={selectedSquawkIds.includes(sq.id)} onChange={() => setSelectedSquawkIds(prev => prev.includes(sq.id) ? prev.filter(id => id !== sq.id) : [...prev, sq.id])} className="mt-1 w-4 h-4 text-[#CE3732] border-gray-300 rounded" /><div><span className="font-bold text-sm text-navy">{sq.description || 'No description'}</span>{sq.affects_airworthiness && sq.location && <span className="block text-[10px] font-bold text-[#CE3732]">⚠ Grounded at {sq.location}</span>}<span className="block text-[10px] text-gray-500">Reported {new Date(sq.created_at).toLocaleDateString()}</span></div></label>))}</div></div>
-              )}
+              {(() => {
+                const availableMx = mxItems.filter(mx => !eventLineItems.some(li => li.maintenance_item_id === mx.id));
+                return availableMx.length > 0 ? (
+                  <div>
+                    <div className="flex justify-between items-center mb-2">
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-navy flex items-center gap-2"><Wrench size={14} className="text-[#F08B46]" /> Add More Maintenance Items</p>
+                      <button type="button" onClick={() => toggleSelectAllMx(availableMx)} className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-[#F08B46] hover:opacity-80 active:scale-95 transition-all">
+                        <CheckSquare size={12} /> {availableMx.every(mx => selectedMxIds.includes(mx.id)) ? 'Deselect All' : 'Select All'}
+                      </button>
+                    </div>
+                    <div className="space-y-3 pb-1">{availableMx.map(mx => (<label key={mx.id} className="flex items-start gap-3 p-3 border border-gray-200 rounded cursor-pointer hover:bg-gray-50"><input type="checkbox" checked={selectedMxIds.includes(mx.id)} onChange={() => setSelectedMxIds(prev => prev.includes(mx.id) ? prev.filter(id => id !== mx.id) : [...prev, mx.id])} className="mt-1 w-4 h-4 text-[#F08B46] border-gray-300 rounded" /><div><span className="font-bold text-sm text-navy">{mx.item_name}</span><span className="block text-[10px] text-gray-500">{mx.tracking_type === 'time' ? `Due @ ${mx.due_time} hrs` : `Due ${mx.due_date}`}</span></div></label>))}</div>
+                  </div>
+                ) : null;
+              })()}
+              {(() => {
+                const availableSquawks = squawks.filter(sq => !eventLineItems.some(li => li.squawk_id === sq.id));
+                return availableSquawks.length > 0 ? (
+                  <div>
+                    <div className="flex justify-between items-center mb-2">
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-navy flex items-center gap-2"><AlertTriangle size={14} className="text-[#CE3732]" /> Add Squawks</p>
+                      <button type="button" onClick={() => toggleSelectAllSquawks(availableSquawks)} className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-[#CE3732] hover:opacity-80 active:scale-95 transition-all">
+                        <CheckSquare size={12} /> {availableSquawks.every(sq => selectedSquawkIds.includes(sq.id)) ? 'Deselect All' : 'Select All'}
+                      </button>
+                    </div>
+                    <div className="space-y-3 pb-1">{availableSquawks.map(sq => (<label key={sq.id} className="flex items-start gap-3 p-3 border border-gray-200 rounded cursor-pointer hover:bg-gray-50"><input type="checkbox" checked={selectedSquawkIds.includes(sq.id)} onChange={() => setSelectedSquawkIds(prev => prev.includes(sq.id) ? prev.filter(id => id !== sq.id) : [...prev, sq.id])} className="mt-1 w-4 h-4 text-[#CE3732] border-gray-300 rounded" /><div><span className="font-bold text-sm text-navy">{sq.description || 'No description'}</span>{sq.affects_airworthiness && sq.location && <span className="block text-[10px] font-bold text-[#CE3732]">⚠ Grounded at {sq.location}</span>}<span className="block text-[10px] text-gray-500">Reported {new Date(sq.created_at).toLocaleDateString()}</span></div></label>))}</div>
+                  </div>
+                ) : null;
+              })()}
               <div><p className="text-[10px] font-bold uppercase tracking-widest text-navy mb-2 flex items-center gap-2"><Sparkles size={14} className="text-[#3AB0FF]" /> Additional Services</p><div className="grid grid-cols-2 gap-2">{ADDON_OPTIONS.map(addon => (<label key={addon} className="flex items-center gap-2 p-2 border border-gray-200 rounded cursor-pointer hover:bg-blue-50 text-xs"><input type="checkbox" checked={selectedAddons.includes(addon)} onChange={() => setSelectedAddons(prev => prev.includes(addon) ? prev.filter(a => a !== addon) : [...prev, addon])} className="w-3.5 h-3.5 text-[#3AB0FF] border-gray-300 rounded" /><span className="text-navy font-bold">{addon}</span></label>))}</div></div>
-              <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Preferred Service Date (Optional)</label><input type="date" value={proposedDate} onChange={e => setProposedDate(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" /></div>
+              {renderDateProposalSection()}
               {!showPreview ? (<button onClick={() => setShowPreview(true)} className="w-full text-[10px] font-bold uppercase tracking-widest text-[#3AB0FF] hover:underline py-2">Preview Email Before Sending</button>) : renderEmailPreview(eventLineItems)}
               <PrimaryButton onClick={handleSendDraft} disabled={isSubmitting}>{isSubmitting ? "Sending..." : "Send Work Package to Mechanic"}</PrimaryButton>
             </div>
@@ -436,11 +530,12 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
                 {selectedEvent.confirmed_date && <p className="text-sm"><strong className="text-navy">Confirmed:</strong> {selectedEvent.confirmed_date}</p>}
                 {selectedEvent.proposed_date && !selectedEvent.confirmed_date && <p className="text-sm"><strong className="text-navy">Proposed:</strong> {selectedEvent.proposed_date} <span className="text-gray-400">(by {selectedEvent.proposed_by})</span></p>}
                 {selectedEvent.estimated_completion && <p className="text-sm mt-1"><strong className="text-navy">Est. Completion:</strong> {selectedEvent.estimated_completion}</p>}
+                {selectedEvent.service_duration_days && <p className="text-sm mt-1"><strong className="text-navy">Duration:</strong> {selectedEvent.service_duration_days} day{selectedEvent.service_duration_days > 1 ? 's' : ''}</p>}
                 {selectedEvent.mechanic_notes && <p className="text-xs text-gray-500 mt-2 italic">{selectedEvent.mechanic_notes}</p>}
               </div>
               {canManageService && selectedEvent.status === 'scheduling' && selectedEvent.proposed_by === 'mechanic' && (
                 <div className="bg-orange-50 border border-orange-200 rounded p-4 space-y-3">
-                  <p className="text-sm font-bold text-navy">{selectedEvent.mx_contact_name || 'Mechanic'} proposed <strong>{selectedEvent.proposed_date}</strong></p>
+                  <p className="text-sm font-bold text-navy">{selectedEvent.mx_contact_name || 'Mechanic'} proposed <strong>{selectedEvent.proposed_date}</strong>{selectedEvent.service_duration_days ? ` (${selectedEvent.service_duration_days} day${selectedEvent.service_duration_days > 1 ? 's' : ''})` : ''}</p>
                   <div className="flex gap-2">
                     <button onClick={handleOwnerConfirm} disabled={isSubmitting} className="flex-1 bg-[#56B94A] text-white font-oswald font-bold uppercase tracking-widest py-2 rounded text-xs active:scale-95 disabled:opacity-50">Confirm</button>
                     <button onClick={() => setView('counter')} className="flex-1 bg-[#F08B46] text-white font-oswald font-bold uppercase tracking-widest py-2 rounded text-xs active:scale-95">Counter</button>
