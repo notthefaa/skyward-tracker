@@ -59,7 +59,7 @@ Users manage their preferences through the Settings screen. The settings UI is r
 Settings screen includes notification preferences, password reset via email, account info display, and account self-deletion with cascade impact preview. Deleting an account permanently removes all aircraft the user created (with their flight logs, MX items, squawks, notes, reservations, and service events). A confirmation dialog names the affected tail numbers and user count.
 
 ### Tab Persistence
-The active tab is saved to localStorage and restored when the user returns to the app. Switching browser tabs or backgrounding the app no longer resets to the fleet summary page.
+The active tab is preserved when switching browser tabs or backgrounding the app, so you always return to where you left off. Closing the browser or app entirely starts fresh at the fleet summary.
 
 ### Companion App (Log It)
 Lightweight PWA for ramp use. Log flights and report squawks from the phone's home screen. Includes an optional pilot notes step in the flight log flow — leave a note for the next pilot with optional photo attachments. Notes sync directly to the Notes tab in the main app, and all assigned pilots are notified. Same secure login, instant sync. No app store required.

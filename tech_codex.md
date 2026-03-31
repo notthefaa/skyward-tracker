@@ -419,7 +419,7 @@ The period selector is nested directly under the Flight Hours gauge via a "Chang
 
 ## Tab Persistence
 
-The active tab is persisted to `localStorage` as `aft_active_tab`. On mount, the app reads the saved tab and restores it. The auth listener no longer resets the tab on `SIGNED_IN` (which fires on session refresh, not just fresh logins). Only `SIGNED_OUT` and explicit navigation actions reset the tab.
+The active tab is persisted to `sessionStorage` as `aft_active_tab`. On mount, the app reads the saved tab and restores it. This means switching browser tabs or backgrounding the app preserves your place, but closing the tab or browser entirely starts fresh at the fleet summary. The auth listener no longer resets the tab on `SIGNED_IN` (which fires on session refresh, not just fresh logins). Only `SIGNED_OUT` and explicit navigation actions reset the tab.
 
 ---
 
