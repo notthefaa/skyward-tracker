@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import { authFetch } from "@/lib/authFetch";
 import { processMxItem, getMxTextColor } from "@/lib/math";
@@ -84,6 +84,7 @@ export default function SummaryTab({
   const [showNoteModal, setShowNoteModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showCrewList, setShowCrewList] = useState(false);
+  const crewListRef = useRef<HTMLDivElement>(null);
 
   // Fuel update
   const [showFuelModal, setShowFuelModal] = useState(false);
@@ -488,8 +489,16 @@ export default function SummaryTab({
           )}
 
           {/* ─── CREW LIST ─── */}
-          <div className="bg-white border border-gray-200 shadow-sm rounded-sm overflow-hidden">
-            <button onClick={() => setShowCrewList(!showCrewList)} className="w-full p-4 flex gap-4 items-center cursor-pointer hover:bg-gray-50 transition-colors active:scale-[0.98]">
+          <div ref={crewListRef} className="bg-white border border-gray-200 shadow-sm rounded-sm overflow-hidden">
+            <button onClick={() => {
+              const willOpen = !showCrewList;
+              setShowCrewList(willOpen);
+              if (willOpen) {
+                setTimeout(() => {
+                  crewListRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }, 50);
+              }
+            }} className="w-full p-4 flex gap-4 items-center cursor-pointer hover:bg-gray-50 transition-colors active:scale-[0.98]">
               <div className="bg-gray-100 p-3 rounded-full text-navy shrink-0"><Users size={20}/></div>
               <div className="flex-1 text-left">
                 <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Assigned Users</span>
