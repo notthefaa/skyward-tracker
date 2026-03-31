@@ -81,9 +81,37 @@ export default function FleetTrackerApp() {
     }
   }, [session, fetchAircraftData, globalMutate, activeTail, checkGroundedStatus]);
 
-  const { pullHandlers, pullProgress, phase: pullPhase } = usePullToRefresh({
+  const { pullHandlers, pullProgress, phase: pullPhase, setEnabled: setPullEnabled } = usePullToRefresh({
     onRefresh: handlePullRefresh,
   });
+
+  // ─── Disable pull-to-refresh when any modal is open ───
+  // This covers modals from page.tsx state AND modals opened by child components
+  // (ServiceEventModal, MxGuideModal, booking forms, etc.) by watching the DOM
+  // for any fixed overlay with z-index >= 10000.
+  useEffect(() => {
+    const anyPageModalOpen = showAdminMenu || showLogItModal || showSettingsModal || showMxPicker || showAircraftModal;
+    if (anyPageModalOpen) {
+      setPullEnabled(false);
+      return;
+    }
+
+    // For modals opened by child components, check if any high-z-index fixed overlay exists
+    const checkForChildModals = () => {
+      const fixedElements = document.querySelectorAll('[class*="fixed"][class*="inset-0"]');
+      const hasChildModal = fixedElements.length > 0;
+      setPullEnabled(!hasChildModal);
+    };
+
+    // Run check immediately
+    checkForChildModals();
+
+    // Watch for DOM changes (modals being added/removed)
+    const observer = new MutationObserver(checkForChildModals);
+    observer.observe(document.body, { childList: true, subtree: true });
+
+    return () => observer.disconnect();
+  }, [showAdminMenu, showLogItModal, showSettingsModal, showMxPicker, showAircraftModal, setPullEnabled]);
 
   // ─── Auth Init ───
   useEffect(() => {
@@ -100,7 +128,6 @@ export default function FleetTrackerApp() {
 
     supabase.auth.getSession().then(({ data: { session }, error }) => {
       if (error) {
-        // Refresh token is invalid — clear the broken session
         console.warn('[Auth] Session recovery failed:', error.message);
         supabase.auth.signOut();
         setSession(null);
@@ -117,7 +144,6 @@ export default function FleetTrackerApp() {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'TOKEN_REFRESHED' && session) {
-        // Token refreshed successfully — update session silently
         setSession(session);
         return;
       }
@@ -137,15 +163,12 @@ export default function FleetTrackerApp() {
         setActiveTab('fleet');
         return;
       }
-      // For any other event, just update the session
       setSession(session);
       setIsAuthChecking(false);
     });
 
-    // Handle app returning from background (iOS PWA, tab switch)
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible' && session) {
-        // Attempt to refresh the session when the app comes back to foreground
         supabase.auth.getSession().then(({ data: { session: freshSession }, error }) => {
           if (error || !freshSession) {
             console.warn('[Auth] Background resume failed — signing out');

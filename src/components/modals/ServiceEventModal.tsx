@@ -95,16 +95,34 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
     setView('create');
   };
 
-  const handleCreateEvent = async () => {
+  const handleSaveAsDraft = async () => {
+    if (selectedMxIds.length === 0 && selectedSquawkIds.length === 0 && selectedAddons.length === 0) return alert("Please select at least one item for the work package.");
+    setIsSubmitting(true);
+    try {
+      const res = await authFetch('/api/mx-events/create', { method: 'POST', body: JSON.stringify({ aircraftId: aircraft.id, mxItemIds: selectedMxIds, squawkIds: selectedSquawkIds, addonServices: selectedAddons, proposedDate: (wantsToPropose && proposedDate) ? proposedDate : null }) });
+      if (!res.ok) throw new Error('Failed to create draft');
+      await fetchEvents(); showSuccess("Draft saved"); setView('list');
+    } catch (err: any) { alert("Failed to save draft: " + err.message); }
+    setIsSubmitting(false);
+  };
+
+  const handleCreateAndSend = async () => {
     if (selectedMxIds.length === 0 && selectedSquawkIds.length === 0 && selectedAddons.length === 0) return alert("Please select at least one item for the work package.");
     if (wantsToPropose === null) return alert("Please choose whether you'd like to propose a date or request availability.");
     if (wantsToPropose && !proposedDate) return alert("Please select a preferred service date or choose 'Request Availability' instead.");
     setIsSubmitting(true);
     try {
-      const res = await authFetch('/api/mx-events/create', { method: 'POST', body: JSON.stringify({ aircraftId: aircraft.id, mxItemIds: selectedMxIds, squawkIds: selectedSquawkIds, addonServices: selectedAddons, proposedDate: wantsToPropose ? proposedDate : null }) });
-      if (!res.ok) throw new Error('Failed to create event');
+      // Step 1: Create the event as draft
+      const createRes = await authFetch('/api/mx-events/create', { method: 'POST', body: JSON.stringify({ aircraftId: aircraft.id, mxItemIds: selectedMxIds, squawkIds: selectedSquawkIds, addonServices: selectedAddons, proposedDate: (wantsToPropose && proposedDate) ? proposedDate : null }) });
+      if (!createRes.ok) throw new Error('Failed to create event');
+      const createData = await createRes.json();
+
+      // Step 2: Immediately send it (transitions from draft → scheduling)
+      const sendRes = await authFetch('/api/mx-events/send-workpackage', { method: 'POST', body: JSON.stringify({ eventId: createData.eventId, proposedDate: (wantsToPropose && proposedDate) ? proposedDate : null }) });
+      if (!sendRes.ok) throw new Error('Failed to send work package');
+
       await fetchEvents(); showSuccess("Work package sent to mechanic"); setView('list');
-    } catch (err: any) { alert("Failed to create service event: " + err.message); }
+    } catch (err: any) { alert("Failed to send work package: " + err.message); }
     setIsSubmitting(false);
   };
 
@@ -473,7 +491,8 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
               </div>
               {renderDateProposalSection()}
               {!showPreview ? (<button onClick={() => setShowPreview(true)} className="w-full text-[10px] font-bold uppercase tracking-widest text-[#3AB0FF] hover:underline py-2">Preview Email Before Sending</button>) : renderEmailPreview()}
-              <PrimaryButton onClick={handleCreateEvent} disabled={isSubmitting}>{isSubmitting ? "Creating..." : "Send Work Package to Mechanic"}</PrimaryButton>
+              <PrimaryButton onClick={handleCreateAndSend} disabled={isSubmitting}>{isSubmitting ? "Sending..." : "Send Work Package to Mechanic"}</PrimaryButton>
+              <button onClick={handleSaveAsDraft} disabled={isSubmitting} className="w-full text-[10px] font-bold uppercase tracking-widest text-gray-500 hover:text-navy py-2 active:scale-95 transition-all disabled:opacity-50">Save as Draft (Don't Send Yet)</button>
             </div>
           )}
 
@@ -533,6 +552,33 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
                 {selectedEvent.service_duration_days && <p className="text-sm mt-1"><strong className="text-navy">Duration:</strong> {selectedEvent.service_duration_days} day{selectedEvent.service_duration_days > 1 ? 's' : ''}</p>}
                 {selectedEvent.mechanic_notes && <p className="text-xs text-gray-500 mt-2 italic">{selectedEvent.mechanic_notes}</p>}
               </div>
+              {canManageService && selectedEvent.status === 'scheduling' && selectedEvent.proposed_by === 'owner' && (
+                <div className="bg-blue-50 border border-blue-200 rounded p-4 space-y-3">
+                  {selectedEvent.proposed_date ? (
+                    <>
+                      <p className="text-sm text-navy"><strong>Your proposed date:</strong> {selectedEvent.proposed_date}</p>
+                      <p className="text-xs text-gray-500">Waiting for {selectedEvent.mx_contact_name || 'the mechanic'} to respond.</p>
+                      <div className="border-t border-blue-200 pt-3 space-y-2">
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-navy">Change Proposed Date</p>
+                        <input type="date" value={proposedDate} onChange={e => setProposedDate(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-2 text-sm focus:border-[#F08B46] outline-none" />
+                        <textarea value={ownerMessage} onChange={e => setOwnerMessage(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-2 text-sm focus:border-[#F08B46] outline-none min-h-[50px]" placeholder="Message to mechanic (optional)" />
+                        <button onClick={handleOwnerCounter} disabled={isSubmitting || !proposedDate} className="w-full bg-[#F08B46] text-white font-oswald font-bold uppercase tracking-widest py-2 rounded text-xs active:scale-95 disabled:opacity-50">Update Proposed Date</button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-sm text-navy">Requesting availability from {selectedEvent.mx_contact_name || 'the mechanic'}.</p>
+                      <p className="text-xs text-gray-500">No preferred date was specified. Waiting for the mechanic to propose dates.</p>
+                      <div className="border-t border-blue-200 pt-3 space-y-2">
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-navy">Propose a Date Instead</p>
+                        <input type="date" value={proposedDate} onChange={e => setProposedDate(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-2 text-sm focus:border-[#F08B46] outline-none" />
+                        <textarea value={ownerMessage} onChange={e => setOwnerMessage(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-2 text-sm focus:border-[#F08B46] outline-none min-h-[50px]" placeholder="Message to mechanic (optional)" />
+                        <button onClick={handleOwnerCounter} disabled={isSubmitting || !proposedDate} className="w-full bg-[#F08B46] text-white font-oswald font-bold uppercase tracking-widest py-2 rounded text-xs active:scale-95 disabled:opacity-50">Send Date Proposal</button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
               {canManageService && selectedEvent.status === 'scheduling' && selectedEvent.proposed_by === 'mechanic' && (
                 <div className="bg-orange-50 border border-orange-200 rounded p-4 space-y-3">
                   <p className="text-sm font-bold text-navy">{selectedEvent.mx_contact_name || 'Mechanic'} proposed <strong>{selectedEvent.proposed_date}</strong>{selectedEvent.service_duration_days ? ` (${selectedEvent.service_duration_days} day${selectedEvent.service_duration_days > 1 ? 's' : ''})` : ''}</p>
