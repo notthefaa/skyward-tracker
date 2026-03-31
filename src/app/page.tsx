@@ -296,7 +296,13 @@ export default function FleetTrackerApp() {
 
       <main
         className="fixed left-0 right-0 overflow-y-auto bg-neutral-100 flex justify-center w-full"
-        style={{ touchAction: 'auto', top: 'calc(3.5rem + env(safe-area-inset-top, 0px))', bottom: 'calc(3.5rem + env(safe-area-inset-bottom, 0px))' }}
+        style={{
+          touchAction: 'manipulation',
+          overscrollBehaviorY: 'contain',
+          WebkitOverflowScrolling: 'touch',
+          top: 'calc(3.5rem + env(safe-area-inset-top, 0px))',
+          bottom: 'calc(3.5rem + env(safe-area-inset-bottom, 0px))',
+        }}
         {...pullHandlers}
       >
         <PullIndicator pullOffset={pullOffset} pullProgress={pullProgress} isRefreshing={isRefreshing} phase={pullPhase} />

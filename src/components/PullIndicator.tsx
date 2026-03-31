@@ -10,9 +10,7 @@ interface PullIndicatorProps {
 }
 
 export default function PullIndicator({ pullOffset, pullProgress, isRefreshing, phase }: PullIndicatorProps) {
-  // Always render — use opacity and transform to show/hide.
-  // This avoids mount/unmount flicker.
-  const isVisible = phase !== 'idle';
+  const isActive = phase !== 'idle';
   const reachedThreshold = pullProgress >= 1;
 
   const label = isRefreshing
@@ -27,14 +25,14 @@ export default function PullIndicator({ pullOffset, pullProgress, isRefreshing, 
       ? 'text-[#56B94A]'
       : 'text-gray-400';
 
-  // Fade in quickly — fully opaque by 35% of threshold
-  const opacity = isVisible ? Math.min(pullProgress / 0.35, 1) : 0;
-  if (isRefreshing) {
-    // Keep full opacity during refresh
-  }
+  // Fade in by ~30% of threshold
+  const opacity = isRefreshing ? 1 : (isActive ? Math.min(pullProgress / 0.3, 1) : 0);
 
-  // Animate smoothly when settling/refreshing, follow finger when pulling
-  const useTransition = phase === 'settling' || phase === 'refreshing';
+  // Smooth CSS transitions when settling or refreshing; instant when pulling
+  const smooth = phase === 'settling' || phase === 'refreshing';
+
+  // Position the indicator: starts hidden at -40, slides in as pull grows
+  const indicatorY = isActive ? Math.min(pullOffset - 10, 30) : -40;
 
   return (
     <div
@@ -43,17 +41,18 @@ export default function PullIndicator({ pullOffset, pullProgress, isRefreshing, 
         top: 0,
         left: 0,
         right: 0,
-        height: 48,
+        height: 40,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
         pointerEvents: 'none',
         zIndex: 5,
-        // Sits above main, translated down by pullOffset
-        // Start at -48 (hidden above) and slide down
-        transform: `translateY(${isVisible ? pullOffset - 48 + Math.min(pullOffset * 0.3, 16) : -48}px)`,
-        transition: useTransition ? 'transform 0.4s cubic-bezier(0.2, 0.9, 0.3, 1), opacity 0.3s ease-out' : 'none',
-        opacity: isRefreshing ? 1 : opacity,
+        transform: `translateY(${indicatorY}px)`,
+        opacity,
+        transition: smooth
+          ? 'transform 0.4s cubic-bezier(0.2, 0.9, 0.3, 1), opacity 0.3s ease-out'
+          : 'opacity 0.1s ease-out',
+        willChange: isActive ? 'transform, opacity' : 'auto',
       }}
     >
       <div className="flex items-center gap-2">
