@@ -35,6 +35,8 @@ Aircraft master records. The `created_by` field references `auth.users(id)` with
 | created_by | uuid FK → auth.users | ON DELETE CASCADE |
 | created_at | timestamptz | |
 
+**Setup vs Total times:** The `setup_*` fields record the baseline times when the aircraft was added to the system. The `total_*` fields are the current cumulative times, incremented by each flight log. When editing an aircraft, the system checks for flight logs: if none exist, totals are set equal to the new setup values. If flights exist, totals are left at the latest log's cumulative values since they represent the true current state.
+
 ### aft_flight_logs
 One row per flight. Times are cumulative (new Hobbs, not delta).
 
@@ -107,7 +109,7 @@ Service event lifecycle. Status flow: draft → scheduling → confirmed → in_
 **Portal token expiry:** Access is rejected (403) if the event was completed more than 7 days ago. Enforced both client-side (portal page shows "Link Has Expired") and server-side (respond + upload-attachment routes).
 
 ### aft_event_line_items
-Line items in a work package.
+Line items in a work package. Supports partial completion — individual items can be completed while others remain open.
 
 | Column | Type | Notes |
 |--------|------|-------|
@@ -120,6 +122,11 @@ Line items in a work package.
 | item_description | text | |
 | line_status | text | "pending", "in_progress", "complete", "deferred" |
 | mechanic_comment | text | |
+| completion_date | date | Date from mechanic's logbook entry |
+| completion_time | numeric | Engine time at completion |
+| completed_by_name | text | Mechanic/IA name |
+| completed_by_cert | text | Certificate number |
+| work_description | text | Description of work performed |
 | created_at | timestamptz | |
 
 ### aft_event_messages
@@ -137,7 +144,7 @@ Communication thread for a service event. Attachments stored as jsonb on the mes
 | created_at | timestamptz | |
 
 ### aft_squawks
-Discrepancy reports with optional MEL/CDL deferral support.
+Discrepancy reports with optional MEL/CDL deferral support and service event cross-reference.
 
 | Column | Type | Notes |
 |--------|------|-------|
@@ -162,6 +169,7 @@ Discrepancy reports with optional MEL/CDL deferral support.
 | certificate_number | text | |
 | signature_data | text | Base64 PNG |
 | signature_date | date | |
+| resolved_by_event_id | uuid FK → aft_maintenance_events | ON DELETE SET NULL. Records which service event resolved this squawk. |
 | created_at | timestamptz | |
 
 ### aft_notes
@@ -219,10 +227,8 @@ Calendar bookings. Exclusion constraint prevents overlapping confirmed reservati
 | status | text | "confirmed" or "cancelled" |
 | created_at | timestamptz | |
 
-**RLS policies:** Users can view/create reservations for aircraft they have access to. Users can update/delete their own reservations or any reservation if they are a tailnumber admin for that aircraft.
-
 ### aft_notification_preferences
-Per-user notification toggles. All types default to enabled (rows are only created when a user explicitly disables a type).
+Per-user notification toggles.
 
 | Column | Type | Notes |
 |--------|------|-------|
@@ -233,8 +239,6 @@ Per-user notification toggles. All types default to enabled (rows are only creat
 | created_at | timestamptz | |
 
 **Notification types:** `reservation_created`, `reservation_cancelled`, `squawk_reported`, `mx_reminder`, `service_update`, `note_posted`
-
-**Visibility in Settings UI:** Types flagged `primaryContactOnly` in `NOTIFICATION_TYPES` (types.ts) are only shown in the settings modal to users whose email matches `main_contact_email` on at least one of their assigned aircraft. Regular pilots see only: reservations, squawks, and notes.
 
 ### aft_system_settings
 Global configuration. Single row (id=1).
@@ -279,7 +283,7 @@ Client-side calls use `authFetch()` from `@/lib/authFetch.ts` which auto-attache
 
 | Route | Method | Auth | Purpose |
 |-------|--------|------|---------|
-| `/api/aircraft/create` | POST | Auth | Create aircraft, set creator as tailnumber admin |
+| `/api/aircraft/create` | POST | Auth | Create aircraft, set creator as admin |
 | `/api/aircraft-access` | PUT | Auth | Change a user's aircraft role |
 | `/api/aircraft-access` | DELETE | Auth | Remove user from aircraft (cancels future reservations) |
 | `/api/account/delete` | GET | Auth | Preview deletion impact (owned aircraft, affected users) |
@@ -289,18 +293,31 @@ Client-side calls use `authFetch()` from `@/lib/authFetch.ts` which auto-attache
 | `/api/reservations` | POST | Auth | Create reservation (conflict detection + notifications) |
 | `/api/reservations` | DELETE | Auth | Cancel reservation (permission check + notifications) |
 | `/api/mx-events/create` | POST | Auth + Aircraft | Create service event / work package |
-| `/api/mx-events/complete` | POST | Auth + Aircraft | Complete event, reset MX tracking |
-| `/api/mx-events/respond` | POST | Token | Mechanic portal actions (7 action types) |
+| `/api/mx-events/complete` | POST | Auth + Aircraft | Complete event items (supports partial completion) |
+| `/api/mx-events/respond` | POST | Token | Mechanic portal actions + MX conflict resolution on confirm |
 | `/api/mx-events/upload-attachment` | POST | Token | Mechanic file uploads (10MB limit, 5 files max) |
-| `/api/mx-events/owner-action` | POST | Auth + Aircraft | Owner scheduling responses |
+| `/api/mx-events/owner-action` | POST | Auth + Aircraft | Owner scheduling responses + MX conflict resolution on confirm |
 | `/api/mx-events/send-workpackage` | POST | Auth + Aircraft | Send/resend work package email |
-| `/api/mx-events/manual-trigger` | POST | Auth | Manually trigger MX draft creation |
 | `/api/emails/squawk-notify` | POST | Auth + Aircraft | Send squawk notification emails |
 | `/api/emails/note-notify` | POST | Auth + Aircraft | Send note notification emails |
 | `/api/emails/mx-schedule` | POST | Auth + Aircraft | Send MX scheduling email |
-| `/api/cron/mx-reminders` | GET | CRON | Automated MX reminders + draft creation |
+| `/api/cron/mx-reminders` | GET | CRON | Automated MX reminders + aggregate work package creation |
 | `/api/admin/db-health` | POST | Admin | Cleanup old records, sweep orphaned files |
 | `/api/resend-invite` | POST | None | Re-send Supabase auth invitation |
+
+---
+
+## Shared Libraries
+
+### `src/lib/mxConflicts.ts`
+Handles MX calendar conflict resolution. When a maintenance event date is confirmed, `cancelConflictingReservations()` finds all confirmed reservations on that aircraft whose time range overlaps with the MX block (confirmed_date through estimated_completion, or +1 day if no estimate), cancels them, and emails each affected pilot with their cancelled booking details and the maintenance dates.
+
+Called from two trigger points:
+- `owner-action/route.ts` — owner confirms mechanic's proposed date
+- `respond/route.ts` — mechanic confirms owner's proposed date
+
+### `src/lib/calendarInvite.ts`
+Generates RFC 5545-compliant `.ics` calendar files. `generateCalendarInvite()` creates a REQUEST (add to calendar) and `generateCalendarCancellation()` creates a CANCEL (remove from calendar). UIDs are deterministic from reservation IDs (`{id}@skywardsociety.com`) so cancellations match originals. Event title format: `"{Tail Number} Reservation for {Pilot Initials}"`.
 
 ---
 
@@ -308,81 +325,90 @@ Client-side calls use `authFetch()` from `@/lib/authFetch.ts` which auto-attache
 
 ### Recipient Matrix
 
-Notifications are divided into two categories: operational awareness (all assigned pilots) and maintenance coordination (primary contact only).
-
 | Event | Recipients | Excludes |
 |-------|-----------|----------|
 | Squawk reported | All assigned pilots | Reporter |
 | Note posted | All assigned pilots | Author |
 | Reservation created | All assigned pilots | Creator |
 | Reservation cancelled | All assigned pilots | Canceller |
+| MX conflict cancellation | Affected reservation owners | — |
 | MX reminders (cron) | Primary contact only | — |
 | Service updates (mechanic) | Primary contact only | — |
 | Draft work package created | Primary contact only | — |
 | Work package to mechanic | Mechanic + CC primary contact | — |
 
-**Primary contact** is identified by matching `aircraft.main_contact_email` on the aircraft record. This is the person responsible for maintenance coordination.
+**Primary contact** is identified by matching `aircraft.main_contact_email` on the aircraft record.
 
 ### Settings UI Scoping
 
-The `NOTIFICATION_TYPES` array in `types.ts` includes a `primaryContactOnly` flag. The SettingsModal checks whether the current user's email matches `main_contact_email` on any of their assigned aircraft. If not, the `mx_reminder` and `service_update` toggles are hidden — those users would never receive those emails anyway.
-
-### Email Channels
-
-All emails sent from `notifications@skywardsociety.com` via Resend. Sender display names are channel labels:
-
-- **Skyward Aircraft Manager** — scheduling drafts, heads-up alerts
-- **Skyward Operations** — mechanic portal actions, squawk notifications to mechanics
-- **Skyward Alerts** — internal team notifications (MX reminders, squawks, notes)
-
-All CTA buttons in emails read "OPEN AIRCRAFT MANAGER" and link to the app URL.
+The `NOTIFICATION_TYPES` array in `types.ts` includes a `primaryContactOnly` flag. The SettingsModal checks whether the current user's email matches `main_contact_email` on any of their assigned aircraft. If not, the `mx_reminder` and `service_update` toggles are hidden.
 
 ---
 
 ## Realtime Architecture
 
-The app subscribes to a single Supabase Realtime channel (`fleet-updates`) listening to 8 tables: `aft_flight_logs`, `aft_squawks`, `aft_maintenance_items`, `aft_notes`, `aft_maintenance_events`, `aft_event_messages`, `aft_reservations`.
-
-**Aircraft-scoped refresh:** When a realtime event fires, the handler extracts `aircraft_id` from the payload. If present, only that aircraft's master record is re-fetched and its metrics recalculated. SWR caches are invalidated only for keys containing that aircraft's ID. Events without an `aircraft_id` (like messages) trigger a lightweight SWR-only revalidation. Per-aircraft debounce timers (1.5s) prevent hammering the DB on rapid-fire changes.
-
-**Self-filtering:** Events caused by the current user are skipped to avoid redundant refreshes (checks `user_id`, `reported_by`, `author_id`).
+The app subscribes to a single Supabase Realtime channel (`fleet-updates`) listening to 8 tables. Aircraft-scoped refresh: events with `aircraft_id` trigger a targeted re-fetch of that aircraft's master record and SWR cache invalidation. Events without `aircraft_id` trigger a lightweight SWR-only revalidation. Per-aircraft debounce timers (1.5s) prevent hammering the DB. Events caused by the current user are skipped.
 
 ---
 
 ## Predictive Maintenance Engine
 
-Located in `@/lib/math.ts`. The engine computes:
+Located in `@/lib/math.ts`. Computes burn rate (active-days weighted), weekly variance, confidence score (0-100%), and projected days for time-based MX items.
 
-1. **Burn rate:** Active-days weighted average of engine time consumed per day over the last 180 days. Only counts days where flights occurred, avoiding dilution from idle periods.
-2. **Variance:** Weekly rolling coefficient of variation to detect irregular usage patterns.
-3. **Confidence score:** Four-factor composite (0-100%) based on data volume, recency, consistency, and variance. Used to gate automated actions.
-4. **Projected days:** For time-based MX items, divides remaining hours by burn rate to estimate when service will be needed.
+**CRON Automation (`/api/cron/mx-reminders`):**
+
+The CRON runs a four-phase per-aircraft pipeline:
+1. **Evaluate** — Computes remaining hours/days and projected days for every MX item.
+2. **Aggregate Scheduling** — If any item triggers a draft, creates ONE draft containing that item plus all other items within a 30-day aggregation window. Single email to primary contact listing all bundled items.
+3. **Low-Confidence Heads-Up** — Items that hit the predictive window but have low confidence get a consolidated heads-up email (no draft).
+4. **Internal Reminders** — Threshold-based awareness alerts per-item to the primary contact.
 
 **Automation thresholds:**
-- High confidence (≥80%) + within predictive window → auto-create draft work package
-- Low confidence (<80%) + within predictive window → send heads-up email only (no draft)
+- High confidence (≥80%) + within predictive window → auto-create aggregate draft
+- Low confidence (<80%) + within predictive window → send consolidated heads-up only
 - Hard threshold hit (time or date) → always create draft regardless of confidence
+
+---
+
+## Pull to Refresh
+
+Located in `src/hooks/usePullToRefresh.ts` and `src/components/PullIndicator.tsx`.
+
+Built specifically for iOS PWA standalone mode. Uses a native `document.addEventListener('touchmove', handler, { passive: false })` to intercept the vertical pull gesture before iOS can trigger its native rubber-band bounce. During a pull, the scroll container's `overflow` is temporarily set to `hidden` to prevent iOS overscroll.
+
+The page content never moves — no `transform: translateY`, no height injection, no layout shifts. The indicator is a fixed-position pill-shaped badge that slides down from behind the header bar.
+
+**Phase flow:** `idle → pulling → refreshing → done → idle`
+
+The `onRefresh` callback re-fetches all aircraft data, revalidates all SWR caches, refreshes grounded status, and rechecks unread notes. No page reload occurs.
+
+---
+
+## Session Recovery
+
+The auth initialization in `page.tsx` handles three failure scenarios:
+
+1. **Expired refresh token on load:** `getSession()` returns an error → app calls `signOut()` and shows the login screen.
+2. **Token refresh failure during use:** `onAuthStateChange` with `TOKEN_REFRESHED` event updates the session silently. If the event fires with no session, the user is signed out.
+3. **App returning from background:** A `visibilitychange` listener calls `getSession()` when the app comes to the foreground. If the session is gone, the user is signed out cleanly.
 
 ---
 
 ## Key Technical Constraints
 
-- **tsconfig target: es5** — No `[...new Set()]`. Use `Array.from(new Set(...))` instead.
+- **tsconfig target: es5** — No `[...new Set()]`. Use `Array.from(new Set(...))` or `Object.keys()` instead of `Map` iteration.
 - **tsconfig strict: false** — Supabase client typed as `SupabaseClient<any, any, any>` for admin client.
-- **Tailwind v4** — Uses `@theme` directive in `globals.css`. CSS layers give utility classes lower specificity than expected.
-- **iOS Safari forms** — Requires `-webkit-appearance: none` before `background-color` takes effect on form inputs. Applied globally in `globals.css` with `!important`. Header tail dropdown excluded via `data-tail-select` attribute.
-- **browser-image-compression** — All image uploads are compressed client-side before uploading to Supabase Storage.
-- **Supabase select() typing** — Dynamic strings in `.select()` cause TypeScript parse errors. Always select all needed columns as a static string and cast results with `as any`.
-- **Supabase auth SIGNED_IN event** — Fires on session refresh (e.g. tab switch), not just fresh logins. Do not reset UI state on this event.
+- **Tailwind v4** — Uses `@theme` directive in `globals.css`.
+- **iOS Safari forms** — Requires `-webkit-appearance: none` before `background-color` takes effect. Applied globally in `globals.css`.
+- **iOS PWA touch events** — React's synthetic touch events use passive listeners on iOS Safari. To call `preventDefault()` on touchmove, a native event listener with `{ passive: false }` must be attached via `addEventListener`.
+- **`overscroll-behavior-y: contain`** — Applied to `<main>` via both inline style and `globals.css` to prevent native pull-to-refresh in browsers and PWAs.
+- **browser-image-compression** — All image uploads are compressed client-side before uploading.
 - **Modal z-index** — Nav bars at `z-[9999]`, all modals at `z-[10000]` minimum.
 - **Network egress** — Disabled in the sandbox/development environment.
-- **Supabase Realtime connections** — Each open browser tab holds a websocket. Free tier: 200 concurrent, Pro: 500.
 
 ---
 
 ## Hook Architecture
-
-Custom hooks extracted from `page.tsx` to improve maintainability:
 
 | Hook | Location | Purpose |
 |------|----------|---------|
@@ -390,52 +416,21 @@ Custom hooks extracted from `page.tsx` to improve maintainability:
 | `useRealtimeSync` | `src/hooks/useRealtimeSync.ts` | Supabase Realtime subscription with aircraft-scoped refresh and self-filtering |
 | `useGroundedStatus` | `src/hooks/useGroundedStatus.ts` | Computes aircraft airworthiness from MX items and squawks |
 | `useAircraftRole` | `src/hooks/useAircraftRole.ts` | Resolves the current user's per-aircraft role from access records |
-
-Barrel export from `src/hooks/index.ts`.
-
----
-
-## MX Access Control
-
-Maintenance scheduling and work package management is restricted to Tail Admins and Global Admins. This is enforced in two places:
-
-**MaintenanceTab.tsx:** The `canEditMx` flag (`role === 'admin' || aircraftRole === 'admin'`) gates the "Schedule Service" button, "Track New MX Item" form, and the entire active events section. Regular pilots see the MX item list (read-only) and can report squawks but cannot access service event management.
-
-**ServiceEventModal.tsx:** Accepts a `canManageService` prop (passed from MaintenanceTab as `canEditMx`). Gates: "Schedule New Service" button, draft review section, confirm/counter/comment mechanic actions, "Enter Logbook Data & Complete" button, and "Cancel Service Event" button. The work package details and message history remain visible for read-only context.
+| `usePullToRefresh` | `src/hooks/usePullToRefresh.ts` | iOS PWA pull-to-refresh with native touch event handling |
 
 ---
 
-## Calendar Dashboard
+## Partial Completion
 
-Located in `src/components/tabs/CalendarDashboard.tsx`. Renders above the "Reserve Aircraft" button on the Calendar tab. Three floating SVG ring gauges with drop shadows:
+Service events support completing line items individually via the `/api/mx-events/complete` route. The `partial` flag in the request body indicates the caller expects to complete only some items. For each completed item:
 
-1. **My Bookings** (green, `#56B94A`): Unique days the current user has reserved in the next 30 days.
-2. **Available** (dynamic color): Days the aircraft is free in the next 30 days. Color thresholds: blue (`#3AB0FF`) if >15, orange (`#F08B46`) if ≤15, red (`#CE3732`) if ≤5. Accounts for both reservations and confirmed MX events.
-3. **Flight Hours** (navy, `#091F3C`): Total hours flown in a selectable period (30/60/90/120 days or custom date range). Calculated by comparing the most recent flight log's AFTT/Hobbs/Tach within the period against the last log before the period started. Falls back to aircraft setup values if no prior log exists.
+1. Line item status set to `complete` with logbook data (date, time, mechanic, cert, work description)
+2. If linked to an MX item, tracking resets (reminder flags cleared, due time/date recalculated from interval)
+3. If linked to a squawk, the squawk is resolved and `resolved_by_event_id` is set
 
-The period selector is nested directly under the Flight Hours gauge via a "Change ▾" toggle, keeping it visually associated with the correct gauge.
+After processing, the route checks if all items are resolved (complete or deferred). If so, the event is auto-closed. If not, the event stays open with a system message listing what was completed.
 
----
-
-## Tab Persistence
-
-The active tab is persisted to `sessionStorage` as `aft_active_tab`. On mount, the app reads the saved tab and restores it. This means switching browser tabs or backgrounding the app preserves your place, but closing the tab or browser entirely starts fresh at the fleet summary. The auth listener no longer resets the tab on `SIGNED_IN` (which fires on session refresh, not just fresh logins). Only `SIGNED_OUT` and explicit navigation actions reset the tab.
-
----
-
-## DB Health & Retention Policy
-
-The `/api/admin/db-health` route runs 9 cleanup stages:
-
-1. Read receipts older than 30 days
-2. Notes older than 6 months
-3. Squawks — kept forever (no purge)
-4. Completed MX events older than 12 months + cancelled events older than 3 months
-5. Orphaned child records (messages, line items without parent events)
-6. Orphaned access records (aircraft_id no longer exists)
-7. Flight logs older than 5 years
-8. Orphaned images across all 4 storage buckets (paginated sweep)
-9. Row count monitoring for 13 tables
+The UI (ServiceEventModal) shows checkboxes next to each pending item in the completion view. Users can uncheck items they want to leave open. The "Complete" button dynamically shows the count of selected items. When all items are eventually resolved, a "Close Service Event" banner appears.
 
 ---
 
@@ -444,6 +439,7 @@ The `/api/admin/db-health` route runs 9 cleanup stages:
 | File | Contents |
 |------|----------|
 | `001_mechanic_attachments.sql` | `attachments` jsonb column on `aft_event_messages`, partial index |
-| `002_roles_calendar_notifications.sql` | `aircraft_role` column on access table, `aft_reservations` with exclusion constraint, `aft_notification_preferences`, CASCADE on `created_by` FK, `btree_gist` extension, realtime publication |
+| `002_roles_calendar_notifications.sql` | `aircraft_role` column, `aft_reservations` with exclusion constraint, `aft_notification_preferences`, CASCADE on `created_by`, `btree_gist` extension |
+| `003_squawk_cross_reference.sql` | `resolved_by_event_id` on `aft_squawks`, completion tracking columns on `aft_event_line_items` |
 
 Migrations are run manually in the Supabase SQL Editor. Storage buckets are created via the Supabase Storage UI.

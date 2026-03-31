@@ -98,7 +98,15 @@ export default function FleetTrackerApp() {
       }
     }
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(({ data: { session }, error }) => {
+      if (error) {
+        // Refresh token is invalid — clear the broken session
+        console.warn('[Auth] Session recovery failed:', error.message);
+        supabase.auth.signOut();
+        setSession(null);
+        setIsAuthChecking(false);
+        return;
+      }
       setSession(session);
       setIsAuthChecking(false);
       if (session && !dataFetchTriggeredRef.current) {
@@ -108,20 +116,52 @@ export default function FleetTrackerApp() {
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      setSession(session);
-      setIsAuthChecking(false);
+      if (event === 'TOKEN_REFRESHED' && session) {
+        // Token refreshed successfully — update session silently
+        setSession(session);
+        return;
+      }
       if (event === 'SIGNED_IN' && session) {
+        setSession(session);
+        setIsAuthChecking(false);
         if (!dataFetchTriggeredRef.current) {
           dataFetchTriggeredRef.current = true;
           handleInitialFetch(session.user.id);
         }
-      } else if (event === 'SIGNED_OUT') {
+        return;
+      }
+      if (event === 'SIGNED_OUT') {
+        setSession(null);
+        setIsAuthChecking(false);
         dataFetchTriggeredRef.current = false;
         setActiveTab('fleet');
+        return;
       }
+      // For any other event, just update the session
+      setSession(session);
+      setIsAuthChecking(false);
     });
 
-    return () => subscription.unsubscribe();
+    // Handle app returning from background (iOS PWA, tab switch)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && session) {
+        // Attempt to refresh the session when the app comes back to foreground
+        supabase.auth.getSession().then(({ data: { session: freshSession }, error }) => {
+          if (error || !freshSession) {
+            console.warn('[Auth] Background resume failed — signing out');
+            supabase.auth.signOut();
+          } else {
+            setSession(freshSession);
+          }
+        });
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      subscription.unsubscribe();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, []);
 
   // ─── Network Timeout ───
