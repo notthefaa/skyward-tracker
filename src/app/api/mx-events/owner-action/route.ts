@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { Resend } from 'resend';
 import { requireAuth, requireAircraftAccess, handleApiError } from '@/lib/auth';
 import { env } from '@/lib/env';
+import { cancelConflictingReservations } from '@/lib/mxConflicts';
 
 const resend = new Resend(env.RESEND_API_KEY);
 const FROM_EMAIL = 'notifications@skywardsociety.com';
@@ -64,6 +65,23 @@ export async function POST(req: Request) {
               <p style="margin-top: 20px;"><a href="${portalUrl}" style="background: #091F3C; color: white; padding: 12px 24px; border-radius: 4px; text-decoration: none; font-weight: bold;">View Service Portal</a></p>
             </div>
           `
+        });
+      }
+
+      // ── MX CONFLICT RESOLUTION ──
+      // Cancel any reservations that overlap with the confirmed MX block
+      const { data: aircraft } = await supabaseAdmin
+        .from('aft_aircraft').select('tail_number').eq('id', event.aircraft_id).single();
+
+      if (aircraft) {
+        await cancelConflictingReservations({
+          supabaseAdmin,
+          aircraftId: event.aircraft_id,
+          confirmedDate: event.proposed_date,
+          estimatedCompletion: event.estimated_completion || null,
+          tailNumber: aircraft.tail_number,
+          mechanicName: event.mx_contact_name,
+          appUrl: new URL(req.url).origin,
         });
       }
 

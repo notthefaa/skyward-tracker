@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { Resend } from 'resend';
 import { createAdminClient, handleApiError } from '@/lib/auth';
 import { env } from '@/lib/env';
+import { cancelConflictingReservations } from '@/lib/mxConflicts';
 
 const resend = new Resend(env.RESEND_API_KEY);
 const FROM_EMAIL = 'notifications@skywardsociety.com';
@@ -107,6 +108,23 @@ export async function POST(req: Request) {
         });
       }
 
+      // ── MX CONFLICT RESOLUTION ──
+      // Cancel any reservations that overlap with the confirmed MX block
+      const { data: aircraft } = await supabaseAdmin
+        .from('aft_aircraft').select('tail_number').eq('id', event.aircraft_id).single();
+
+      if (aircraft) {
+        await cancelConflictingReservations({
+          supabaseAdmin,
+          aircraftId: event.aircraft_id,
+          confirmedDate: event.proposed_date,
+          estimatedCompletion: event.estimated_completion || null,
+          tailNumber: aircraft.tail_number,
+          mechanicName: event.mx_contact_name,
+          appUrl: baseUrl,
+        });
+      }
+
     } else if (action === 'comment') {
       await supabaseAdmin.from('aft_event_messages').insert({
         event_id: event.id,
@@ -204,9 +222,6 @@ export async function POST(req: Request) {
       }
 
     } else if (action === 'suggest_item') {
-      // FIX: Use itemName/itemDescription from the already-parsed body
-      // instead of calling req.json() a second time (which fails silently
-      // because the body stream has already been consumed).
       const suggestedName = itemName || message || 'Additional Work';
 
       await supabaseAdmin.from('aft_event_line_items').insert({
