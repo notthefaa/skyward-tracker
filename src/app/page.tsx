@@ -81,7 +81,7 @@ export default function FleetTrackerApp() {
     }
   }, [session, fetchAircraftData, globalMutate, activeTail, checkGroundedStatus]);
 
-  const { pullHandlers, pullDistance, pullProgress, isRefreshing } = usePullToRefresh({
+  const { pullHandlers, pullDistance, pullProgress, isRefreshing, phase: pullPhase } = usePullToRefresh({
     onRefresh: handlePullRefresh,
   });
 
@@ -300,7 +300,7 @@ export default function FleetTrackerApp() {
         {...pullHandlers}
       >
         <div className="w-full max-w-3xl flex flex-col gap-6">
-          <PullIndicator pullDistance={pullDistance} pullProgress={pullProgress} isRefreshing={isRefreshing} />
+          <PullIndicator pullDistance={pullDistance} pullProgress={pullProgress} isRefreshing={isRefreshing} phase={pullPhase} />
           {!isDataLoaded ? (
             <div className="flex flex-col items-center justify-center py-20 animate-pulse"><Loader2 size={32} className="text-[#F08B46] animate-spin mb-4" /><p className="font-oswald text-sm font-bold uppercase tracking-widest text-gray-400">Loading Fleet Data...</p></div>
           ) : (<>

@@ -1,116 +1,103 @@
 "use client";
 
-import { useRef, useState, useCallback, useEffect } from "react";
+import { useRef, useState, useCallback } from "react";
 
 interface UsePullToRefreshOptions {
   onRefresh: () => Promise<void>;
-  /** Minimum pull distance in pixels before a refresh triggers */
   threshold?: number;
-  /** CSS selector or ref for the scrollable container. Defaults to the element the handlers are attached to. */
 }
 
-interface PullToRefreshState {
-  isPulling: boolean;
-  isRefreshing: boolean;
-  pullDistance: number;
-}
-
-/**
- * Pull-to-refresh hook for mobile PWA.
- * 
- * Returns touch event handlers to attach to the scrollable container,
- * plus state for rendering the pull indicator.
- * 
- * Only activates when the container is scrolled to the top (scrollTop <= 0).
- */
-export function usePullToRefresh({ onRefresh, threshold = 80 }: UsePullToRefreshOptions) {
-  const [state, setState] = useState<PullToRefreshState>({
-    isPulling: false,
-    isRefreshing: false,
-    pullDistance: 0,
-  });
+export function usePullToRefresh({ onRefresh, threshold = 70 }: UsePullToRefreshOptions) {
+  const [pullDistance, setPullDistance] = useState(0);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [phase, setPhase] = useState<'idle' | 'pulling' | 'releasing' | 'refreshing'>('idle');
 
   const startY = useRef(0);
-  const currentY = useRef(0);
-  const isPullingRef = useRef(false);
-  const containerRef = useRef<HTMLElement | null>(null);
+  const tracking = useRef(false);
+  const rafId = useRef<number | null>(null);
+  const currentPull = useRef(0);
 
   const onTouchStart = useCallback((e: React.TouchEvent) => {
+    if (isRefreshing) return;
     const el = e.currentTarget as HTMLElement;
-    containerRef.current = el;
-
-    // Only start pull-to-refresh if scrolled to the top
     if (el.scrollTop > 0) return;
-
     startY.current = e.touches[0].clientY;
-    currentY.current = startY.current;
-    isPullingRef.current = false;
-  }, []);
+    tracking.current = true;
+  }, [isRefreshing]);
 
   const onTouchMove = useCallback((e: React.TouchEvent) => {
-    if (state.isRefreshing) return;
-
-    const el = containerRef.current;
-    if (!el || el.scrollTop > 0) return;
-
-    currentY.current = e.touches[0].clientY;
-    const delta = currentY.current - startY.current;
-
-    // Only track downward pulls
-    if (delta <= 0) {
-      if (isPullingRef.current) {
-        isPullingRef.current = false;
-        setState(prev => ({ ...prev, isPulling: false, pullDistance: 0 }));
-      }
+    if (!tracking.current || isRefreshing) return;
+    const el = e.currentTarget as HTMLElement;
+    if (el.scrollTop > 0) {
+      tracking.current = false;
+      currentPull.current = 0;
+      setPullDistance(0);
+      setPhase('idle');
       return;
     }
 
-    // Apply resistance — diminishing returns as you pull further
-    const resistedDelta = Math.min(delta * 0.4, 140);
+    const delta = e.touches[0].clientY - startY.current;
+    if (delta <= 0) {
+      currentPull.current = 0;
+      setPullDistance(0);
+      setPhase('idle');
+      return;
+    }
 
-    isPullingRef.current = true;
-    setState(prev => ({ ...prev, isPulling: true, pullDistance: resistedDelta }));
-  }, [state.isRefreshing]);
+    // Diminishing resistance — feels like pulling against a rubber band
+    const resisted = Math.pow(delta, 0.7);
+    const clamped = Math.min(resisted, 130);
+    currentPull.current = clamped;
+
+    if (rafId.current) cancelAnimationFrame(rafId.current);
+    rafId.current = requestAnimationFrame(() => {
+      setPullDistance(clamped);
+      setPhase('pulling');
+    });
+  }, [isRefreshing]);
 
   const onTouchEnd = useCallback(async () => {
-    if (!isPullingRef.current || state.isRefreshing) {
-      setState(prev => ({ ...prev, isPulling: false, pullDistance: 0 }));
-      return;
+    if (!tracking.current || isRefreshing) return;
+    tracking.current = false;
+
+    if (rafId.current) {
+      cancelAnimationFrame(rafId.current);
+      rafId.current = null;
     }
 
-    const delta = currentY.current - startY.current;
-    const resistedDelta = Math.min(delta * 0.4, 140);
+    const finalPull = currentPull.current;
 
-    if (resistedDelta >= threshold) {
-      // Threshold reached — trigger refresh
-      setState({ isPulling: false, isRefreshing: true, pullDistance: threshold * 0.6 });
+    if (finalPull >= threshold) {
+      // Threshold reached — hold at a small resting height while refreshing
+      setPhase('refreshing');
+      setIsRefreshing(true);
+      setPullDistance(48);
 
       try {
         await onRefresh();
       } finally {
-        // Brief delay so the user sees the spinner complete
+        // Smooth spring-back after refresh completes
+        setPhase('releasing');
+        setPullDistance(0);
         setTimeout(() => {
-          setState({ isPulling: false, isRefreshing: false, pullDistance: 0 });
-        }, 300);
+          setIsRefreshing(false);
+          setPhase('idle');
+        }, 350);
       }
     } else {
-      // Didn't pull far enough — snap back
-      setState({ isPulling: false, isRefreshing: false, pullDistance: 0 });
+      // Didn't reach threshold — spring back immediately
+      setPhase('releasing');
+      setPullDistance(0);
+      currentPull.current = 0;
+      setTimeout(() => setPhase('idle'), 350);
     }
-
-    isPullingRef.current = false;
-  }, [onRefresh, threshold, state.isRefreshing]);
+  }, [threshold, isRefreshing, onRefresh]);
 
   return {
-    pullHandlers: {
-      onTouchStart,
-      onTouchMove,
-      onTouchEnd,
-    },
-    isPulling: state.isPulling,
-    isRefreshing: state.isRefreshing,
-    pullDistance: state.pullDistance,
-    /** The pull progress as 0-1 (reaches 1 at threshold) */
-    pullProgress: Math.min(state.pullDistance / threshold, 1),
+    pullHandlers: { onTouchStart, onTouchMove, onTouchEnd },
+    pullDistance,
+    isRefreshing,
+    phase,
+    pullProgress: Math.min(currentPull.current / threshold, 1),
   };
 }
