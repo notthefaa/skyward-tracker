@@ -15,6 +15,19 @@
 // maintenance manual, type certificate data sheet, and
 // applicable ADs. Intervals may vary by serial number,
 // engine model, and installed equipment.
+//
+// SOURCES:
+// - FAR 91.207 (ELT), 91.409 (Annual/100hr), 91.411 (Pitot-Static/Altimeter), 91.413 (Transponder)
+// - Lycoming SI 1009BE (Engine TBO)
+// - Continental SIL98-9E (Engine TBO)
+// - Hartzell HC-SL-61-61Y (Propeller Overhaul)
+// - Cirrus SR20/SR22/SR22T AMM Section 5-10 (Time Limits)
+// - Cirrus SF50 AMM (Airworthiness Limitations)
+// - Garmin G5 Part 23 AML STC Maintenance Manual (190-01112-11)
+// - Garmin GI 275 Part 23 AML STC Maintenance Manual (190-02246-11)
+// - Garmin G1000 System Maintenance Manual (190-00907-00)
+// - Williams International FJ33-5A Operator Manual
+// - P&WC PT6A Maintenance Manual
 // =============================================================
 
 export interface MxTemplateItem {
@@ -42,6 +55,7 @@ const DAYS_1_YEAR = 365;
 const DAYS_2_YEARS = 730;
 const DAYS_5_YEARS = 1825;
 const DAYS_6_YEARS = 2190;
+const DAYS_6_MONTHS = 180;
 const DAYS_10_YEARS = 3650;
 const DAYS_3_MONTHS = 90;
 
@@ -68,6 +82,7 @@ const PISTON_SINGLE: MxTemplate = {
     { item_name: 'Engine Fuel & Air Filter Replacement', tracking_type: 'time', interval: 100, is_required: false, category: 'engine' },
     { item_name: 'Exhaust System Inspection', tracking_type: 'time', interval: 100, is_required: false, category: 'engine' },
     { item_name: 'Engine Hose Replacement', tracking_type: 'date', interval: DAYS_5_YEARS, is_required: false, category: 'engine' },
+    { item_name: 'Vacuum Pump Replacement (If Equipped)', tracking_type: 'time', interval: 500, is_required: false, category: 'engine' },
 
     // ── Propeller ──
     { item_name: 'Propeller Overhaul / Life Limit', tracking_type: 'time', interval: 2000, is_required: true, category: 'propeller' },
@@ -86,7 +101,11 @@ const PISTON_SINGLE: MxTemplate = {
     { item_name: 'Transponder / ADS-B Certification', tracking_type: 'date', interval: DAYS_2_YEARS, is_required: true, category: 'avionics' },
     { item_name: 'Pitot-Static System Check', tracking_type: 'date', interval: DAYS_2_YEARS, is_required: true, category: 'avionics' },
     { item_name: 'Altimeter Certification', tracking_type: 'date', interval: DAYS_2_YEARS, is_required: true, category: 'avionics' },
+    { item_name: 'Compass Swing / Calibration', tracking_type: 'date', interval: DAYS_2_YEARS, is_required: false, category: 'avionics' },
     { item_name: 'Nav Database Update', tracking_type: 'date', interval: 28, is_required: false, category: 'avionics' },
+    { item_name: 'Standby EFIS Battery Test (G5/GI 275)', tracking_type: 'date', interval: DAYS_1_YEAR, is_required: false, category: 'avionics' },
+    { item_name: 'G1000 Standby Battery Check (If Equipped)', tracking_type: 'date', interval: DAYS_6_MONTHS, is_required: false, category: 'avionics' },
+    { item_name: 'Avionics Cooling Fan Operational Check', tracking_type: 'time', interval: 500, is_required: false, category: 'avionics' },
 
     // ── Safety Equipment ──
     { item_name: 'ELT Battery Replacement', tracking_type: 'date', interval: DAYS_1_YEAR, is_required: true, category: 'safety' },
@@ -143,15 +162,16 @@ const CIRRUS_SR20: MxTemplate = {
     { item_name: 'Tire Condition Check', tracking_type: 'time', interval: 100, is_required: false, category: 'airframe' },
     { item_name: 'Cabin Air Control Assembly Inspection', tracking_type: 'time', interval: 500, is_required: false, category: 'airframe' },
 
-    // ── Avionics (FAR 91.411 / 91.413) ──
+    // ── Avionics (FAR 91.411 / 91.413 + Garmin Perspective) ──
     { item_name: 'Transponder / ADS-B Certification', tracking_type: 'date', interval: DAYS_2_YEARS, is_required: true, category: 'avionics' },
     { item_name: 'Pitot-Static System Check', tracking_type: 'date', interval: DAYS_2_YEARS, is_required: true, category: 'avionics' },
     { item_name: 'Altimeter Certification', tracking_type: 'date', interval: DAYS_2_YEARS, is_required: true, category: 'avionics' },
+    { item_name: 'Standby EFIS Battery Test (G5/GI 275)', tracking_type: 'date', interval: DAYS_1_YEAR, is_required: false, category: 'avionics' },
 
     // ── CAPS (Airworthiness Limitations) ──
     { item_name: 'CAPS Rocket Motor Replacement', tracking_type: 'date', interval: DAYS_10_YEARS, is_required: true, category: 'safety' },
     { item_name: 'CAPS Parachute Repack', tracking_type: 'date', interval: DAYS_10_YEARS, is_required: true, category: 'safety' },
-    { item_name: 'CAPS Line Cutter Replacement', tracking_type: 'date', interval: DAYS_1_YEAR * 3, is_required: true, category: 'safety' },
+    { item_name: 'CAPS Line Cutter Replacement', tracking_type: 'date', interval: DAYS_6_YEARS, is_required: true, category: 'safety' },
 
     // ── Safety Equipment ──
     { item_name: 'ELT Battery Replacement', tracking_type: 'date', interval: DAYS_1_YEAR, is_required: true, category: 'safety' },
@@ -210,11 +230,12 @@ const CIRRUS_SR22: MxTemplate = {
     { item_name: 'Transponder / ADS-B Certification', tracking_type: 'date', interval: DAYS_2_YEARS, is_required: true, category: 'avionics' },
     { item_name: 'Pitot-Static System Check', tracking_type: 'date', interval: DAYS_2_YEARS, is_required: true, category: 'avionics' },
     { item_name: 'Altimeter Certification', tracking_type: 'date', interval: DAYS_2_YEARS, is_required: true, category: 'avionics' },
+    { item_name: 'Standby EFIS Battery Test (G5/GI 275)', tracking_type: 'date', interval: DAYS_1_YEAR, is_required: false, category: 'avionics' },
 
     // ── CAPS ──
     { item_name: 'CAPS Rocket Motor Replacement', tracking_type: 'date', interval: DAYS_10_YEARS, is_required: true, category: 'safety' },
     { item_name: 'CAPS Parachute Repack', tracking_type: 'date', interval: DAYS_10_YEARS, is_required: true, category: 'safety' },
-    { item_name: 'CAPS Line Cutter Replacement', tracking_type: 'date', interval: DAYS_1_YEAR * 3, is_required: true, category: 'safety' },
+    { item_name: 'CAPS Line Cutter Replacement', tracking_type: 'date', interval: DAYS_6_YEARS, is_required: true, category: 'safety' },
 
     // ── Safety ──
     { item_name: 'ELT Battery Replacement', tracking_type: 'date', interval: DAYS_1_YEAR, is_required: true, category: 'safety' },
@@ -280,11 +301,12 @@ const CIRRUS_SR22T: MxTemplate = {
     { item_name: 'Transponder / ADS-B Certification', tracking_type: 'date', interval: DAYS_2_YEARS, is_required: true, category: 'avionics' },
     { item_name: 'Pitot-Static System Check', tracking_type: 'date', interval: DAYS_2_YEARS, is_required: true, category: 'avionics' },
     { item_name: 'Altimeter Certification', tracking_type: 'date', interval: DAYS_2_YEARS, is_required: true, category: 'avionics' },
+    { item_name: 'Standby EFIS Battery Test (G5/GI 275)', tracking_type: 'date', interval: DAYS_1_YEAR, is_required: false, category: 'avionics' },
 
     // ── CAPS ──
     { item_name: 'CAPS Rocket Motor Replacement', tracking_type: 'date', interval: DAYS_10_YEARS, is_required: true, category: 'safety' },
     { item_name: 'CAPS Parachute Repack', tracking_type: 'date', interval: DAYS_10_YEARS, is_required: true, category: 'safety' },
-    { item_name: 'CAPS Line Cutter Replacement', tracking_type: 'date', interval: DAYS_1_YEAR * 3, is_required: true, category: 'safety' },
+    { item_name: 'CAPS Line Cutter Replacement', tracking_type: 'date', interval: DAYS_6_YEARS, is_required: true, category: 'safety' },
 
     // ── Safety ──
     { item_name: 'ELT Battery Replacement', tracking_type: 'date', interval: DAYS_1_YEAR, is_required: true, category: 'safety' },
@@ -322,6 +344,7 @@ const PISTON_TWIN: MxTemplate = {
     { item_name: 'Engine Fuel & Air Filter Replacement', tracking_type: 'time', interval: 100, is_required: false, category: 'engine' },
     { item_name: 'Exhaust System Inspection (Both)', tracking_type: 'time', interval: 100, is_required: false, category: 'engine' },
     { item_name: 'Engine Hose Replacement', tracking_type: 'date', interval: DAYS_5_YEARS, is_required: false, category: 'engine' },
+    { item_name: 'Vacuum Pump Replacement (If Equipped)', tracking_type: 'time', interval: 500, is_required: false, category: 'engine' },
 
     // ── Propellers ──
     { item_name: 'Left Propeller Overhaul', tracking_type: 'time', interval: 2000, is_required: true, category: 'propeller' },
@@ -342,6 +365,7 @@ const PISTON_TWIN: MxTemplate = {
     { item_name: 'Transponder / ADS-B Certification', tracking_type: 'date', interval: DAYS_2_YEARS, is_required: true, category: 'avionics' },
     { item_name: 'Pitot-Static System Check', tracking_type: 'date', interval: DAYS_2_YEARS, is_required: true, category: 'avionics' },
     { item_name: 'Altimeter Certification', tracking_type: 'date', interval: DAYS_2_YEARS, is_required: true, category: 'avionics' },
+    { item_name: 'Compass Swing / Calibration', tracking_type: 'date', interval: DAYS_2_YEARS, is_required: false, category: 'avionics' },
 
     // ── Safety ──
     { item_name: 'ELT Battery Replacement', tracking_type: 'date', interval: DAYS_1_YEAR, is_required: true, category: 'safety' },
@@ -545,7 +569,7 @@ const VISION_JET: MxTemplate = {
     // ── CAPS (Cirrus Airframe Parachute System) ──
     { item_name: 'CAPS Rocket Motor Replacement', tracking_type: 'date', interval: DAYS_10_YEARS, is_required: true, category: 'safety' },
     { item_name: 'CAPS Parachute Repack', tracking_type: 'date', interval: DAYS_10_YEARS, is_required: true, category: 'safety' },
-    { item_name: 'CAPS Line Cutter Replacement', tracking_type: 'date', interval: DAYS_1_YEAR * 3, is_required: true, category: 'safety' },
+    { item_name: 'CAPS Line Cutter Replacement', tracking_type: 'date', interval: DAYS_6_YEARS, is_required: true, category: 'safety' },
     { item_name: 'CAPS Annual Inspection', tracking_type: 'date', interval: DAYS_1_YEAR, is_required: true, category: 'safety' },
 
     // ── Safety Equipment ──
