@@ -19,6 +19,13 @@ const DEFAULT_METRICS = {
   burnRateHigh: 0,
 };
 
+/** Lightweight record used only for the Global Fleet search/select modal */
+export interface FleetIndexEntry {
+  id: string;
+  tail_number: string;
+  aircraft_type: string;
+}
+
 export function useFleetData() {
   const [role, setRole] = useState<AppRole>('pilot');
   const [userInitials, setUserInitials] = useState("");
@@ -37,44 +44,109 @@ export function useFleetData() {
   // Cache of flight logs per aircraft to avoid re-fetching for metrics
   const flightLogCacheRef = useRef<Record<string, any[]>>({});
 
-  const fetchAircraftData = useCallback(async (userId: string) => {
-    const ago = new Date();
-    ago.setDate(ago.getDate() - FLIGHT_DATA_LOOKBACK_DAYS);
+  // Lightweight global fleet index for admin search modal (id, tail, type only)
+  const [globalFleetIndex, setGlobalFleetIndex] = useState<FleetIndexEntry[]>([]);
 
-    const [sR, rR, pR, aR] = await Promise.all([
+  const fetchAircraftData = useCallback(async (userId: string) => {
+    // ─── PHASE 1: Fetch user identity + access in parallel ───
+    // These are small, fast queries that tell us WHO the user is
+    // and WHICH aircraft they can see.
+    const [sR, rR, aR] = await Promise.all([
       supabase.from('aft_system_settings').select('*').eq('id', 1).single(),
       supabase.from('aft_user_roles').select('role, initials').eq('user_id', userId).single(),
-      supabase.from('aft_aircraft').select('*').order('tail_number'),
       supabase.from('aft_user_aircraft_access').select('aircraft_id, aircraft_role, user_id').eq('user_id', userId),
     ]);
 
     if (sR.data) setSysSettings(sR.data as SystemSettings);
-    if (rR.data) {
-      setRole(rR.data.role as AppRole);
-      setUserInitials(rR.data.initials || "");
-    }
 
-    // For 100+ aircraft: assign default metrics without computing burn rates.
-    // Metrics are computed lazily per-aircraft when needed (via enrichSingleAircraft).
-    const allPlanes: AircraftWithMetrics[] = (pR.data || []).map((plane: any) => ({
-      ...plane,
-      ...DEFAULT_METRICS,
-    }));
-
-    setAllAircraftList(allPlanes);
+    const userRole = (rR.data?.role || 'pilot') as AppRole;
+    setRole(userRole);
+    setUserInitials(rR.data?.initials || "");
 
     const accessData = aR.data || [];
     setAllAccessRecords(accessData);
 
     const assignedIds = accessData.map((a: any) => a.aircraft_id);
-    const assigned = allPlanes.filter(a => assignedIds.includes(a.id));
-    setAircraftList(assigned);
+
+    // ─── PHASE 2: Fetch only assigned aircraft (both admins and pilots) ───
+    // Admins lazy-load unassigned aircraft on demand from the Global Fleet modal.
+    let allPlanes: AircraftWithMetrics[];
+
+    if (assignedIds.length > 0) {
+      const { data: aircraftData } = await supabase
+        .from('aft_aircraft')
+        .select('*')
+        .in('id', assignedIds)
+        .order('tail_number');
+
+      allPlanes = (aircraftData || []).map((plane: any) => ({
+        ...plane,
+        ...DEFAULT_METRICS,
+      }));
+    } else {
+      allPlanes = [];
+    }
+
+    setAllAircraftList(allPlanes);
+    setAircraftList(allPlanes);
 
     setIsDataLoaded(true);
 
     // Return data needed by the caller to set activeTail
-    return { allPlanes, assigned };
+    return { allPlanes, assigned: allPlanes };
   }, []);
+
+  /**
+   * Fetches a lightweight index of ALL aircraft in the system (id, tail, type only).
+   * Used by the admin Global Fleet modal for search and selection.
+   * Called on-demand when the admin opens the modal, not on initial load.
+   */
+  const fetchGlobalFleetIndex = useCallback(async (): Promise<FleetIndexEntry[]> => {
+    // Return cached index if we already fetched it this session
+    if (globalFleetIndex.length > 0) return globalFleetIndex;
+
+    const { data } = await supabase
+      .from('aft_aircraft')
+      .select('id, tail_number, aircraft_type')
+      .order('tail_number');
+
+    const index = (data || []) as FleetIndexEntry[];
+    setGlobalFleetIndex(index);
+    return index;
+  }, [globalFleetIndex]);
+
+  /**
+   * Fetches a single aircraft's full record and adds it to the local lists.
+   * Used when an admin selects an aircraft from Global Fleet that isn't
+   * in their assigned set. If it's already loaded, returns it immediately.
+   */
+  const fetchSingleAircraft = useCallback(async (aircraftId: string): Promise<AircraftWithMetrics | null> => {
+    // If already in our lists, return it
+    const existing = allAircraftList.find(a => a.id === aircraftId);
+    if (existing) return existing;
+
+    const { data, error } = await supabase
+      .from('aft_aircraft')
+      .select('*')
+      .eq('id', aircraftId)
+      .single();
+
+    if (error || !data) return null;
+
+    const aircraft: AircraftWithMetrics = {
+      ...data,
+      ...DEFAULT_METRICS,
+    };
+
+    // Add to the all-aircraft list so it's available for the session
+    setAllAircraftList(prev => {
+      // Prevent duplicates in case of race conditions
+      if (prev.some(a => a.id === aircraftId)) return prev;
+      return [...prev, aircraft].sort((a, b) => a.tail_number.localeCompare(b.tail_number));
+    });
+
+    return aircraft;
+  }, [allAircraftList]);
 
   /**
    * Computes full metrics (burn rate, confidence, projections) for a single aircraft.
@@ -146,5 +218,9 @@ export function useFleetData() {
     enrichSingleAircraft,
     refreshForAircraft,
     globalMutate,
+    // New: admin global fleet support
+    globalFleetIndex,
+    fetchGlobalFleetIndex,
+    fetchSingleAircraft,
   };
 }

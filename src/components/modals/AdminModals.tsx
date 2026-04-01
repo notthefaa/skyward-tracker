@@ -4,7 +4,8 @@ import { useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { authFetch } from "@/lib/authFetch";
 import type { AircraftWithMetrics, SystemSettings, AppTab } from "@/lib/types";
-import { ShieldCheck, Settings, MailOpen, Database, Sliders, Globe, Users, PlaneTakeoff, X, ChevronRight } from "lucide-react";
+import type { FleetIndexEntry } from "@/hooks/useFleetData";
+import { ShieldCheck, Settings, MailOpen, Database, Sliders, Globe, Users, PlaneTakeoff, X, ChevronRight, Loader2 } from "lucide-react";
 import { PrimaryButton } from "@/components/AppButtons";
 
 const whiteBg = { backgroundColor: '#ffffff' } as const;
@@ -18,11 +19,14 @@ interface AdminModalsProps {
   sysSettings: SystemSettings;
   setSysSettings: (val: SystemSettings) => void;
   refreshData: () => void;
+  fetchGlobalFleetIndex: () => Promise<FleetIndexEntry[]>;
+  onGlobalFleetSelect: (tailNumber: string, aircraftId: string) => Promise<void>;
 }
 
 export default function AdminModals({ 
   showAdminMenu, setShowAdminMenu, allAircraftList, setActiveTail, 
-  setActiveTab, sysSettings, setSysSettings, refreshData 
+  setActiveTab, sysSettings, setSysSettings, refreshData,
+  fetchGlobalFleetIndex, onGlobalFleetSelect,
 }: AdminModalsProps) {
   
   const [showToolsMenu, setShowToolsMenu] = useState(false);
@@ -33,6 +37,9 @@ export default function AdminModals({
   const [showAccessModal, setShowAccessModal] = useState(false);
 
   const [globalFleetSearch, setGlobalFleetSearch] = useState("");
+  const [globalFleetList, setGlobalFleetList] = useState<FleetIndexEntry[]>([]);
+  const [isLoadingFleet, setIsLoadingFleet] = useState(false);
+  const [isSelectingAircraft, setIsSelectingAircraft] = useState<string | null>(null);
   const [emailPreviewType, setEmailPreviewType] = useState<'squawk_mx' | 'squawk_internal' | 'mx_schedule' | 'mx_reminder'>('squawk_mx');
   
   const [inviteEmail, setInviteEmail] = useState("");
@@ -63,6 +70,31 @@ export default function AdminModals({
     await supabase.from('aft_system_settings').upsert({ id: 1, ...sysSettings });
     setIsSubmitting(false); setShowSettingsModal(false); setSysSettings({ ...sysSettings });
     alert("Global maintenance triggers updated!");
+  };
+
+  const openGlobalFleetModal = async () => {
+    setShowAdminMenu(false);
+    setShowGlobalFleetModal(true);
+    setIsLoadingFleet(true);
+    try {
+      const index = await fetchGlobalFleetIndex();
+      setGlobalFleetList(index);
+    } catch (err) {
+      console.error('Failed to fetch fleet index:', err);
+    }
+    setIsLoadingFleet(false);
+  };
+
+  const handleSelectGlobalAircraft = async (ac: FleetIndexEntry) => {
+    setIsSelectingAircraft(ac.id);
+    try {
+      await onGlobalFleetSelect(ac.tail_number, ac.id);
+    } catch (err) {
+      console.error('Failed to load aircraft:', err);
+    }
+    setIsSelectingAircraft(null);
+    setShowGlobalFleetModal(false);
+    setGlobalFleetSearch("");
   };
 
   const openAccessModal = async () => {
@@ -139,7 +171,7 @@ export default function AdminModals({
           <div className="bg-white rounded shadow-2xl w-full max-w-sm p-6 border-t-4 border-navy animate-slide-up" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-6"><h2 className="font-oswald text-xl font-bold uppercase text-navy flex items-center gap-2"><ShieldCheck size={20}/> Admin Center</h2><button onClick={() => setShowAdminMenu(false)} className="text-gray-400 hover:text-red-500"><X size={24}/></button></div>
             <div className="space-y-3">
-              <button onClick={() => { setShowAdminMenu(false); setShowGlobalFleetModal(true); }} className="w-full bg-gray-50 border border-gray-200 p-4 rounded text-left flex items-center gap-3 hover:border-navy hover:bg-blue-50 transition-colors active:scale-95"><Globe size={18} className="text-navy" /><div><span className="block font-bold text-navy text-sm uppercase">Global Fleet</span><span className="block text-[10px] text-gray-500 uppercase tracking-widest mt-0.5">View all aircraft in system</span></div></button>
+              <button onClick={openGlobalFleetModal} className="w-full bg-gray-50 border border-gray-200 p-4 rounded text-left flex items-center gap-3 hover:border-navy hover:bg-blue-50 transition-colors active:scale-95"><Globe size={18} className="text-navy" /><div><span className="block font-bold text-navy text-sm uppercase">Global Fleet</span><span className="block text-[10px] text-gray-500 uppercase tracking-widest mt-0.5">View all aircraft in system</span></div></button>
               <button onClick={() => { setShowAdminMenu(false); setShowInviteModal(true); }} className="w-full bg-gray-50 border border-gray-200 p-4 rounded text-left flex items-center gap-3 hover:border-navy hover:bg-blue-50 transition-colors active:scale-95"><Users size={18} className="text-navy" /><div><span className="block font-bold text-navy text-sm uppercase">Invite User</span><span className="block text-[10px] text-gray-500 uppercase tracking-widest mt-0.5">Invite pilots & reset passwords</span></div></button>
               <button onClick={() => { setShowAdminMenu(false); openAccessModal(); }} className="w-full bg-gray-50 border border-gray-200 p-4 rounded text-left flex items-center gap-3 hover:border-navy hover:bg-blue-50 transition-colors active:scale-95"><PlaneTakeoff size={18} className="text-navy" /><div><span className="block font-bold text-navy text-sm uppercase">Aircraft Access</span><span className="block text-[10px] text-gray-500 uppercase tracking-widest mt-0.5">Assign planes to pilots & admins</span></div></button>
               <button onClick={() => { setShowAdminMenu(false); setShowToolsMenu(true); }} className="w-full bg-gray-50 border border-gray-200 p-4 rounded text-left flex items-center gap-3 hover:border-navy hover:bg-blue-50 transition-colors active:scale-95"><Settings size={18} className="text-navy" /><div><span className="block font-bold text-navy text-sm uppercase">System Tools</span><span className="block text-[10px] text-gray-500 uppercase tracking-widest mt-0.5">Database health & triggers</span></div></button>
@@ -154,13 +186,15 @@ export default function AdminModals({
             <div className="flex justify-between items-center mb-6 shrink-0"><h2 className="font-oswald text-2xl font-bold uppercase text-navy flex items-center gap-2"><Globe size={20} className="text-navy"/> Global Fleet</h2><button onClick={() => { setShowGlobalFleetModal(false); setGlobalFleetSearch(""); }} className="text-gray-400 hover:text-red-500"><X size={24}/></button></div>
             <div className="mb-4 shrink-0"><input type="text" placeholder="Search Tail Number..." value={globalFleetSearch} onChange={(e) => setGlobalFleetSearch(e.target.value.toUpperCase())} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-navy outline-none uppercase font-bold" /></div>
             <div className="overflow-y-auto space-y-2 pr-2 flex-1">
-              {allAircraftList.filter(ac => ac.tail_number.includes(globalFleetSearch)).length === 0 ? (
+              {isLoadingFleet ? (
+                <div className="flex items-center justify-center py-8"><Loader2 size={24} className="text-navy animate-spin" /></div>
+              ) : globalFleetList.filter(ac => ac.tail_number.includes(globalFleetSearch)).length === 0 ? (
                 <p className="text-center text-sm text-gray-400 italic py-4">No aircraft found.</p>
               ) : (
-                allAircraftList.filter(ac => ac.tail_number.includes(globalFleetSearch)).map(ac => (
-                  <button key={ac.id} onClick={() => { setActiveTail(ac.tail_number); setActiveTab('summary'); setShowGlobalFleetModal(false); setGlobalFleetSearch(""); }} className="w-full bg-gray-50 border border-gray-200 p-3 rounded text-left flex justify-between items-center hover:border-navy hover:bg-blue-50 transition-colors active:scale-95">
+                globalFleetList.filter(ac => ac.tail_number.includes(globalFleetSearch)).map(ac => (
+                  <button key={ac.id} onClick={() => handleSelectGlobalAircraft(ac)} disabled={isSelectingAircraft === ac.id} className="w-full bg-gray-50 border border-gray-200 p-3 rounded text-left flex justify-between items-center hover:border-navy hover:bg-blue-50 transition-colors active:scale-95 disabled:opacity-50">
                     <div><span className="font-oswald text-lg font-bold text-navy uppercase block leading-none">{ac.tail_number}</span><span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1 block">{ac.aircraft_type}</span></div>
-                    <ChevronRight size={18} className="text-gray-400" />
+                    {isSelectingAircraft === ac.id ? <Loader2 size={18} className="text-navy animate-spin" /> : <ChevronRight size={18} className="text-gray-400" />}
                   </button>
                 ))
               )}

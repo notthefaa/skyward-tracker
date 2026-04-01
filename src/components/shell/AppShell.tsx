@@ -35,6 +35,7 @@ export default function AppShell({ session }: AppShellProps) {
     role, userInitials, allAircraftList, aircraftList, allAccessRecords,
     isDataLoaded, sysSettings, setSysSettings, dataFetchTriggeredRef,
     fetchAircraftData, enrichSingleAircraft, refreshForAircraft, globalMutate,
+    globalFleetIndex, fetchGlobalFleetIndex, fetchSingleAircraft,
   } = useFleetData();
 
   // ─── Navigation State ───
@@ -203,6 +204,22 @@ export default function AppShell({ session }: AppShellProps) {
     }
   };
 
+  /**
+   * Called when an admin selects an aircraft from the Global Fleet modal.
+   * If the aircraft isn't already loaded (not in the admin's assigned set),
+   * fetches it on demand before navigating.
+   */
+  const handleGlobalFleetSelect = async (tailNumber: string, aircraftId: string) => {
+    // Check if already loaded
+    const existing = allAircraftList.find(a => a.id === aircraftId);
+    if (!existing) {
+      // Lazy-load this aircraft's full record
+      await fetchSingleAircraft(aircraftId);
+    }
+    setActiveTail(tailNumber);
+    setActiveTab('summary');
+  };
+
   const handleCopyQuickLink = () => {
     if (navigator.clipboard?.writeText) {
       navigator.clipboard.writeText(companionUrl)
@@ -254,7 +271,18 @@ export default function AppShell({ session }: AppShellProps) {
   return (
     <div className="flex flex-col bg-neutral-100 w-full min-h-screen relative">
       <TutorialModal session={session} role={role} />
-      <AdminModals showAdminMenu={showAdminMenu} setShowAdminMenu={setShowAdminMenu} allAircraftList={allAircraftList} setActiveTail={setActiveTail} setActiveTab={setActiveTab} sysSettings={sysSettings} setSysSettings={setSysSettings} refreshData={() => fetchAircraftData(session.user.id)} />
+      <AdminModals 
+        showAdminMenu={showAdminMenu} 
+        setShowAdminMenu={setShowAdminMenu} 
+        allAircraftList={allAircraftList} 
+        setActiveTail={setActiveTail} 
+        setActiveTab={setActiveTab} 
+        sysSettings={sysSettings} 
+        setSysSettings={setSysSettings} 
+        refreshData={() => fetchAircraftData(session.user.id)}
+        fetchGlobalFleetIndex={fetchGlobalFleetIndex}
+        onGlobalFleetSelect={handleGlobalFleetSelect}
+      />
       <SettingsModal show={showSettingsModal} onClose={() => setShowSettingsModal(false)} session={session} />
       {showAircraftModal && <AircraftModal session={session} existingAircraft={editingAircraftId ? allAircraftList.find(a => a.id === editingAircraftId) || null : null} onClose={() => setShowAircraftModal(false)} onSuccess={(t: string) => { setShowAircraftModal(false); fetchAircraftData(session.user.id); setActiveTail(t); }} />}
 
