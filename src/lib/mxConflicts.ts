@@ -13,6 +13,7 @@
 
 import { Resend } from 'resend';
 import { env } from '@/lib/env';
+import { escapeHtml } from '@/lib/sanitize';
 
 const resend = new Resend(env.RESEND_API_KEY);
 const FROM_EMAIL = 'notifications@skywardsociety.com';
@@ -93,6 +94,10 @@ export async function cancelConflictingReservations({
     }
   }
 
+  // Sanitize user-provided strings for email HTML
+  const safeTailNumber = escapeHtml(tailNumber);
+  const mechanicLabel = escapeHtml(mechanicName || 'the maintenance provider');
+
   // Format dates for display
   const mxStartLabel = mxStart.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
   const mxEndLabel = estimatedCompletion
@@ -102,8 +107,6 @@ export async function cancelConflictingReservations({
     ? mxStartLabel
     : `${mxStartLabel} — ${mxEndLabel}`;
 
-  const mechanicLabel = mechanicName || 'the maintenance provider';
-
   // Send a cancellation email to each affected pilot
   for (const userId of userIds) {
     const pilot = pilotMap[userId];
@@ -112,17 +115,19 @@ export async function cancelConflictingReservations({
     const reservationLines = pilot.reservations.map((r: any) => {
       const start = new Date(r.start_time).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
       const end = new Date(r.end_time).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
-      return `<li style="margin-bottom: 8px;">${start} — ${end}${r.title ? ` (${r.title})` : ''}${r.route ? ` • ${r.route}` : ''}</li>`;
+      const safeTitle = r.title ? ` (${escapeHtml(r.title)})` : '';
+      const safeRoute = r.route ? ` • ${escapeHtml(r.route)}` : '';
+      return `<li style="margin-bottom: 8px;">${start} — ${end}${safeTitle}${safeRoute}</li>`;
     }).join('');
 
     await resend.emails.send({
       from: `Skyward Alerts <${FROM_EMAIL}>`,
       to: [pilot.email],
-      subject: `Reservation Cancelled: ${tailNumber} — Maintenance Scheduled`,
+      subject: `Reservation Cancelled: ${safeTailNumber} — Maintenance Scheduled`,
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
           <h2 style="color: #CE3732;">Reservation Cancelled</h2>
-          <p>Your reservation${pilot.reservations.length > 1 ? 's' : ''} for <strong>${tailNumber}</strong> ${pilot.reservations.length > 1 ? 'have' : 'has'} been automatically cancelled due to scheduled maintenance.</p>
+          <p>Your reservation${pilot.reservations.length > 1 ? 's' : ''} for <strong>${safeTailNumber}</strong> ${pilot.reservations.length > 1 ? 'have' : 'has'} been automatically cancelled due to scheduled maintenance.</p>
           
           <div style="margin: 20px 0; padding: 15px; background: #FEF2F2; border-left: 4px solid #CE3732; border-radius: 4px;">
             <p style="margin: 0 0 8px 0; font-size: 12px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; color: #CE3732;">Cancelled Reservation${pilot.reservations.length > 1 ? 's' : ''}</p>

@@ -1,14 +1,16 @@
+"use client";
+
 import { useState, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import { authFetch } from "@/lib/authFetch";
 import { processMxItem, getMxTextColor } from "@/lib/math";
+import { getFuelWeightPerGallon } from "@/lib/constants";
+import { INPUT_WHITE_BG } from "@/lib/styles";
 import type { AircraftWithMetrics, SystemSettings, AppTab, AppRole, AircraftRole } from "@/lib/types";
 import useSWR from "swr";
 import { PlaneTakeoff, MapPin, Droplet, Phone, Mail, Wrench, AlertTriangle, FileText, Clock, X, Trash2, Edit2, UserPlus, Loader2, Users, ChevronDown, Calendar } from "lucide-react";
 import { PrimaryButton } from "@/components/AppButtons";
 import Toast from "@/components/Toast";
-
-const whiteBg = { backgroundColor: '#ffffff' } as const;
 
 export default function SummaryTab({ 
   aircraft, setActiveTab, role, aircraftRole, onDeleteAircraft, sysSettings, onEditAircraft, refreshData, session
@@ -25,58 +27,81 @@ export default function SummaryTab({
 }) {
   const canEdit = role === 'admin' || aircraftRole === 'admin';
 
-  const { data, isLoading } = useSWR(
-    aircraft ? `summary-${aircraft.id}` : null,
+  // ─── Split SWR hooks for granular cache invalidation ───
+  // Each data domain has its own cache key, so a squawk change
+  // doesn't refetch MX items, crew, notes, etc.
+
+  const { data: mxData } = useSWR(
+    aircraft ? `summary-mx-${aircraft.id}` : null,
     async () => {
-      const [mxRes, sqRes, noteRes, logRes, resRes, crewRes] = await Promise.all([
-        supabase.from('aft_maintenance_items').select('*').eq('aircraft_id', aircraft!.id),
-        supabase.from('aft_squawks').select('*').eq('aircraft_id', aircraft!.id).eq('status', 'open').order('created_at', { ascending: false }),
-        supabase.from('aft_notes').select('*').eq('aircraft_id', aircraft!.id).order('created_at', { ascending: false }).limit(1),
-        supabase.from('aft_flight_logs').select('created_at, initials').eq('aircraft_id', aircraft!.id).order('created_at', { ascending: false }).limit(1),
-        supabase.from('aft_reservations').select('*').eq('aircraft_id', aircraft!.id).eq('status', 'confirmed').gt('start_time', new Date().toISOString()).order('start_time').limit(2),
-        supabase.from('aft_user_aircraft_access').select('user_id, aircraft_role').eq('aircraft_id', aircraft!.id),
-      ]);
+      const { data } = await supabase.from('aft_maintenance_items')
+        .select('*').eq('aircraft_id', aircraft!.id);
+      if (!data || data.length === 0) return null;
+      const currentEngineTime = aircraft!.total_engine_time || 0;
+      const processed = data.map(item =>
+        processMxItem(item, currentEngineTime, aircraft!.burnRate, aircraft!.burnRateLow, aircraft!.burnRateHigh)
+      );
+      processed.sort((a, b) => a.remaining - b.remaining);
+      return processed[0];
+    },
+    { revalidateOnMount: true }
+  );
 
-      let nextMx = null;
-      if (mxRes.data && mxRes.data.length > 0) {
-        const currentEngineTime = aircraft!.total_engine_time || 0;
-        const processedMx = (mxRes.data || []).map(item => 
-          processMxItem(item, currentEngineTime, aircraft!.burnRate, aircraft!.burnRateLow, aircraft!.burnRateHigh)
-        );
-        processedMx.sort((a, b) => a.remaining - b.remaining);
-        nextMx = processedMx[0];
-      }
+  const { data: squawkData } = useSWR(
+    aircraft ? `summary-squawks-${aircraft.id}` : null,
+    async () => {
+      const { data } = await supabase.from('aft_squawks')
+        .select('id, affects_airworthiness').eq('aircraft_id', aircraft!.id).eq('status', 'open');
+      return data || [];
+    },
+    { revalidateOnMount: true }
+  );
 
-      // Fetch crew member details
-      let crewMembers: any[] = [];
-      if (crewRes.data && crewRes.data.length > 0) {
-        const userIds = crewRes.data.map((a: any) => a.user_id);
-        const { data: usersData } = await supabase
-          .from('aft_user_roles')
-          .select('user_id, email, initials')
-          .in('user_id', userIds);
-        
-        if (usersData) {
-          crewMembers = crewRes.data.map((access: any) => {
-            const user = usersData.find((u: any) => u.user_id === access.user_id);
-            return {
-              user_id: access.user_id,
-              aircraft_role: access.aircraft_role,
-              email: user?.email || '',
-              initials: user?.initials || '',
-            };
-          });
-        }
-      }
+  const { data: latestNote } = useSWR(
+    aircraft ? `summary-note-${aircraft.id}` : null,
+    async () => {
+      const { data } = await supabase.from('aft_notes')
+        .select('*').eq('aircraft_id', aircraft!.id).order('created_at', { ascending: false }).limit(1);
+      return data?.[0] || null;
+    },
+    { revalidateOnMount: true }
+  );
 
-      return {
-        nextMx,
-        activeSquawks: sqRes.data || [],
-        latestNote: noteRes.data?.[0] || null,
-        lastFlight: logRes.data?.[0] || null,
-        nextReservations: resRes.data || [],
-        crewMembers,
-      };
+  const { data: flightData } = useSWR(
+    aircraft ? `summary-flight-${aircraft.id}` : null,
+    async () => {
+      const { data } = await supabase.from('aft_flight_logs')
+        .select('created_at, initials').eq('aircraft_id', aircraft!.id).order('created_at', { ascending: false }).limit(1);
+      return data?.[0] || null;
+    },
+    { revalidateOnMount: true }
+  );
+
+  const { data: reservationData } = useSWR(
+    aircraft ? `summary-reservations-${aircraft.id}` : null,
+    async () => {
+      const { data } = await supabase.from('aft_reservations')
+        .select('*').eq('aircraft_id', aircraft!.id).eq('status', 'confirmed')
+        .gt('start_time', new Date().toISOString()).order('start_time').limit(2);
+      return data || [];
+    },
+    { revalidateOnMount: true }
+  );
+
+  const { data: crewMembers = [] } = useSWR(
+    aircraft ? `summary-crew-${aircraft.id}` : null,
+    async () => {
+      const { data: accessData } = await supabase.from('aft_user_aircraft_access')
+        .select('user_id, aircraft_role').eq('aircraft_id', aircraft!.id);
+      if (!accessData || accessData.length === 0) return [];
+      const userIds = accessData.map((a: any) => a.user_id);
+      const { data: usersData } = await supabase.from('aft_user_roles')
+        .select('user_id, email, initials').in('user_id', userIds);
+      if (!usersData) return [];
+      return accessData.map((access: any) => {
+        const user = usersData.find((u: any) => u.user_id === access.user_id);
+        return { user_id: access.user_id, aircraft_role: access.aircraft_role, email: user?.email || '', initials: user?.initials || '' };
+      });
     },
     { revalidateOnMount: true }
   );
@@ -85,25 +110,17 @@ export default function SummaryTab({
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showCrewList, setShowCrewList] = useState(false);
   const crewListEndRef = useRef<HTMLDivElement>(null);
-
-  // Fuel update
   const [showFuelModal, setShowFuelModal] = useState(false);
   const [fuelAmount, setFuelAmount] = useState("");
   const [fuelUnit, setFuelUnit] = useState<'gallons' | 'lbs'>('gallons');
   const [isSavingFuel, setIsSavingFuel] = useState(false);
-
-  // Invite modal state
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<'admin' | 'pilot'>('pilot');
   const [isInviting, setIsInviting] = useState(false);
-
-  // Crew management
   const [changingRoleUserId, setChangingRoleUserId] = useState<string | null>(null);
   const [removingUserId, setRemovingUserId] = useState<string | null>(null);
   const [isCrewUpdating, setIsCrewUpdating] = useState(false);
-
-  // Toast
   const [toastMessage, setToastMessage] = useState("");
   const [showToast, setShowToast] = useState(false);
   const showSuccess = (msg: string) => { setToastMessage(msg); setShowToast(true); };
@@ -112,23 +129,10 @@ export default function SummaryTab({
     e.preventDefault();
     if (!fuelAmount || !aircraft) return;
     setIsSavingFuel(true);
-
     let gallons = parseFloat(fuelAmount);
-    if (fuelUnit === 'lbs') {
-      const weightPerGal = aircraft.engine_type === 'Turbine' ? 6.7 : 6.0;
-      gallons = gallons / weightPerGal;
-    }
-
-    await supabase.from('aft_aircraft').update({
-      current_fuel_gallons: gallons,
-      fuel_last_updated: new Date().toISOString(),
-    }).eq('id', aircraft.id);
-
-    setShowFuelModal(false);
-    setFuelAmount("");
-    setIsSavingFuel(false);
-    refreshData();
-    showSuccess("Fuel state updated");
+    if (fuelUnit === 'lbs') gallons = gallons / getFuelWeightPerGallon(aircraft.engine_type);
+    await supabase.from('aft_aircraft').update({ current_fuel_gallons: gallons, fuel_last_updated: new Date().toISOString() }).eq('id', aircraft.id);
+    setShowFuelModal(false); setFuelAmount(""); setIsSavingFuel(false); refreshData(); showSuccess("Fuel state updated");
   };
 
   const handleInvitePilot = async (e: React.FormEvent) => {
@@ -136,24 +140,11 @@ export default function SummaryTab({
     if (!inviteEmail || !aircraft) return;
     setIsInviting(true);
     try {
-      const res = await authFetch('/api/pilot-invite', {
-        method: 'POST',
-        body: JSON.stringify({
-          email: inviteEmail,
-          aircraftId: aircraft.id,
-          aircraftRole: inviteRole,
-        })
-      });
+      const res = await authFetch('/api/pilot-invite', { method: 'POST', body: JSON.stringify({ email: inviteEmail, aircraftId: aircraft.id, aircraftRole: inviteRole }) });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to invite');
-      showSuccess(data.message || 'Invitation sent');
-      setShowInviteModal(false);
-      setInviteEmail("");
-      setInviteRole('pilot');
-      refreshData();
-    } catch (err: any) {
-      alert(err.message);
-    }
+      showSuccess(data.message || 'Invitation sent'); setShowInviteModal(false); setInviteEmail(""); setInviteRole('pilot'); refreshData();
+    } catch (err: any) { alert(err.message); }
     setIsInviting(false);
   };
 
@@ -161,22 +152,11 @@ export default function SummaryTab({
     if (!aircraft) return;
     setIsCrewUpdating(true);
     try {
-      const res = await authFetch('/api/aircraft-access', {
-        method: 'PUT',
-        body: JSON.stringify({
-          targetUserId,
-          aircraftId: aircraft.id,
-          newRole,
-        })
-      });
+      const res = await authFetch('/api/aircraft-access', { method: 'PUT', body: JSON.stringify({ targetUserId, aircraftId: aircraft.id, newRole }) });
       const resData = await res.json();
       if (!res.ok) throw new Error(resData.error || 'Failed to update role');
-      showSuccess("Role updated");
-      setChangingRoleUserId(null);
-      refreshData();
-    } catch (err: any) {
-      alert(err.message);
-    }
+      showSuccess("Role updated"); setChangingRoleUserId(null); refreshData();
+    } catch (err: any) { alert(err.message); }
     setIsCrewUpdating(false);
   };
 
@@ -184,74 +164,51 @@ export default function SummaryTab({
     if (!aircraft) return;
     setIsCrewUpdating(true);
     try {
-      const res = await authFetch('/api/aircraft-access', {
-        method: 'DELETE',
-        body: JSON.stringify({
-          targetUserId,
-          aircraftId: aircraft.id,
-        })
-      });
+      const res = await authFetch('/api/aircraft-access', { method: 'DELETE', body: JSON.stringify({ targetUserId, aircraftId: aircraft.id }) });
       const resData = await res.json();
       if (!res.ok) throw new Error(resData.error || 'Failed to remove user');
-      showSuccess("Pilot removed");
-      setRemovingUserId(null);
-      refreshData();
-    } catch (err: any) {
-      alert(err.message);
-    }
+      showSuccess("Pilot removed"); setRemovingUserId(null); refreshData();
+    } catch (err: any) { alert(err.message); }
     setIsCrewUpdating(false);
   };
 
   if (!aircraft) return null;
 
   const isTurbine = aircraft.engine_type === 'Turbine';
-  const weightPerGal = isTurbine ? 6.7 : 6.0;
+  const weightPerGal = getFuelWeightPerGallon(aircraft.engine_type);
   const fuelGals = aircraft.current_fuel_gallons || 0;
   const fuelLbs = Math.round(fuelGals * weightPerGal);
 
-  const activeSquawks = data?.activeSquawks || [];
-  const nextMx = data?.nextMx;
-  const latestNote = data?.latestNote;
-  const lastFlight = data?.lastFlight;
-  const nextReservations = data?.nextReservations || [];
-  const crewMembers = data?.crewMembers || [];
+  const activeSquawks = squawkData || [];
+  const nextMx = mxData || null;
+  const lastFlight = flightData || null;
+  const nextReservations = reservationData || [];
 
-  const isGrounded = nextMx?.isExpired || activeSquawks.some(sq => sq.affects_airworthiness);
+  const isGrounded = (nextMx?.isExpired) || activeSquawks.some(sq => sq.affects_airworthiness);
   const hasIssues = activeSquawks.length > 0;
   const statusBorderColor = isGrounded ? 'border-[#CE3732]' : hasIssues ? 'border-[#F08B46]' : 'border-success';
   const statusIconColor = isGrounded ? 'text-[#CE3732]' : hasIssues ? 'text-[#F08B46]' : 'text-success';
-
   const mxTextColor = nextMx ? getMxTextColor(nextMx, sysSettings) : 'text-gray-500';
 
-  // Last flown helper
   const lastFlownLabel = (() => {
     if (!lastFlight) return null;
     const flightDate = new Date(lastFlight.created_at);
     const now = new Date();
     const diffDays = Math.floor((now.getTime() - flightDate.getTime()) / (1000 * 60 * 60 * 24));
-    let timeAgo = '';
-    if (diffDays === 0) timeAgo = 'Today';
-    else if (diffDays === 1) timeAgo = 'Yesterday';
-    else timeAgo = `${diffDays} days ago`;
+    let timeAgo = diffDays === 0 ? 'Today' : diffDays === 1 ? 'Yesterday' : `${diffDays} days ago`;
     return `${timeAgo} by ${lastFlight.initials || 'Unknown'}`;
   })();
 
   return (
     <div className="flex flex-col gap-4 animate-fade-in relative">
-
       <Toast message={toastMessage} show={showToast} onDismiss={() => setShowToast(false)} />
       
+      {/* Delete confirmation modal */}
       {showDeleteModal && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/80 animate-fade-in" onClick={() => setShowDeleteModal(false)}>
           <div className="bg-white rounded shadow-2xl w-full max-w-sm p-6 border-t-4 border-[#CE3732] animate-slide-up relative" onClick={(e) => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="font-oswald text-2xl font-bold uppercase text-[#CE3732] flex items-center gap-2"><AlertTriangle size={24} /> Delete Aircraft</h2>
-              <button onClick={() => setShowDeleteModal(false)} className="text-gray-400 hover:text-red-500 transition-colors"><X size={24}/></button>
-            </div>
-            <p className="text-sm text-navy font-roboto mb-6 leading-relaxed">
-              <strong>WARNING:</strong> This action is strictly irreversible.<br/><br/>
-              Deleting <strong className="text-[#CE3732]">{aircraft.tail_number}</strong> will permanently erase all associated flight logs, maintenance items, squawks, and notes from the database.
-            </p>
+            <div className="flex justify-between items-center mb-4"><h2 className="font-oswald text-2xl font-bold uppercase text-[#CE3732] flex items-center gap-2"><AlertTriangle size={24} /> Delete Aircraft</h2><button onClick={() => setShowDeleteModal(false)} className="text-gray-400 hover:text-red-500 transition-colors"><X size={24}/></button></div>
+            <p className="text-sm text-navy font-roboto mb-6 leading-relaxed"><strong>WARNING:</strong> This action is strictly irreversible.<br/><br/>Deleting <strong className="text-[#CE3732]">{aircraft.tail_number}</strong> will permanently erase all associated flight logs, maintenance items, squawks, and notes from the database.</p>
             <div className="flex gap-4">
               <button onClick={() => setShowDeleteModal(false)} className="flex-1 border border-gray-300 text-gray-600 font-bold uppercase tracking-widest text-[10px] py-3 rounded hover:bg-gray-50 transition-colors active:scale-95">Cancel</button>
               <button onClick={() => { setShowDeleteModal(false); onDeleteAircraft(aircraft.id); }} className="flex-1 bg-[#CE3732] text-white font-bold uppercase tracking-widest text-[10px] py-3 rounded hover:bg-red-700 transition-colors shadow-md active:scale-95">Confirm Delete</button>
@@ -260,73 +217,41 @@ export default function SummaryTab({
         </div>
       )}
 
-      {/* ─── FUEL UPDATE MODAL ─── */}
+      {/* Fuel modal */}
       {showFuelModal && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/80 animate-fade-in" onClick={() => setShowFuelModal(false)}>
           <div className="bg-white rounded shadow-2xl w-full max-w-sm p-6 border-t-4 border-blue-500 animate-slide-up" onClick={e => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="font-oswald text-xl font-bold uppercase text-navy flex items-center gap-2"><Droplet size={20} className="text-blue-500" /> Update Fuel State</h2>
-              <button onClick={() => setShowFuelModal(false)} className="text-gray-400 hover:text-red-500"><X size={24} /></button>
-            </div>
+            <div className="flex justify-between items-center mb-4"><h2 className="font-oswald text-xl font-bold uppercase text-navy flex items-center gap-2"><Droplet size={20} className="text-blue-500" /> Update Fuel State</h2><button onClick={() => setShowFuelModal(false)} className="text-gray-400 hover:text-red-500"><X size={24} /></button></div>
             <form onSubmit={handleFuelUpdate} className="space-y-4">
               <div className="grid grid-cols-5 gap-3">
-                <div className="col-span-3">
-                  <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Current Fuel *</label>
-                  <input type="number" step="0.1" required value={fuelAmount} onChange={e => setFuelAmount(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-blue-500 outline-none" placeholder="Quantity" />
-                </div>
-                <div className="col-span-2">
-                  <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Unit</label>
-                  <select value={fuelUnit} onChange={e => setFuelUnit(e.target.value as any)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-blue-500 outline-none">
-                    <option value="gallons">Gallons</option>
-                    <option value="lbs">Lbs</option>
-                  </select>
-                </div>
+                <div className="col-span-3"><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Current Fuel *</label><input type="number" step="0.1" required value={fuelAmount} onChange={e => setFuelAmount(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-blue-500 outline-none" placeholder="Quantity" /></div>
+                <div className="col-span-2"><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Unit</label><select value={fuelUnit} onChange={e => setFuelUnit(e.target.value as any)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-blue-500 outline-none"><option value="gallons">Gallons</option><option value="lbs">Lbs</option></select></div>
               </div>
-              <div className="pt-2">
-                <PrimaryButton disabled={isSavingFuel}>
-                  {isSavingFuel ? "Saving..." : "Update Fuel State"}
-                </PrimaryButton>
-              </div>
+              <div className="pt-2"><PrimaryButton disabled={isSavingFuel}>{isSavingFuel ? "Saving..." : "Update Fuel State"}</PrimaryButton></div>
             </form>
           </div>
         </div>
       )}
 
-      {/* ─── INVITE PILOT MODAL ─── */}
+      {/* Invite modal */}
       {showInviteModal && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/80 animate-fade-in" onClick={() => setShowInviteModal(false)}>
           <div className="bg-white rounded shadow-2xl w-full max-w-sm p-6 border-t-4 border-[#3AB0FF] animate-slide-up" onClick={e => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="font-oswald text-xl font-bold uppercase text-navy flex items-center gap-2"><UserPlus size={20} className="text-[#3AB0FF]" /> Invite Pilot</h2>
-              <button onClick={() => setShowInviteModal(false)} className="text-gray-400 hover:text-red-500"><X size={24} /></button>
-            </div>
-            <p className="text-xs text-gray-500 mb-4">Invite a user to <strong>{aircraft.tail_number}</strong>. They will be assigned to this aircraft and can log flights, report squawks, and make reservations.</p>
+            <div className="flex justify-between items-center mb-4"><h2 className="font-oswald text-xl font-bold uppercase text-navy flex items-center gap-2"><UserPlus size={20} className="text-[#3AB0FF]" /> Invite Pilot</h2><button onClick={() => setShowInviteModal(false)} className="text-gray-400 hover:text-red-500"><X size={24} /></button></div>
+            <p className="text-xs text-gray-500 mb-4">Invite a user to <strong>{aircraft.tail_number}</strong>.</p>
             <form onSubmit={handleInvitePilot} className="space-y-4">
-              <div>
-                <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Email Address *</label>
-                <input type="email" required value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#3AB0FF] outline-none" placeholder="pilot@example.com" />
-              </div>
-              <div>
-                <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Role for {aircraft.tail_number}</label>
-                <select value={inviteRole} onChange={e => setInviteRole(e.target.value as 'admin' | 'pilot')} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#3AB0FF] outline-none">
-                  <option value="pilot">Tail Pilot — Can fly, log, and reserve</option>
-                  <option value="admin">Tail Admin — Can also edit aircraft and manage users</option>
-                </select>
-              </div>
-              <div className="pt-2">
-                <PrimaryButton disabled={isInviting}>
-                  {isInviting ? <><Loader2 size={16} className="animate-spin" /> Sending...</> : "Send Invitation"}
-                </PrimaryButton>
-              </div>
+              <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Email Address *</label><input type="email" required value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#3AB0FF] outline-none" placeholder="pilot@example.com" /></div>
+              <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Role for {aircraft.tail_number}</label><select value={inviteRole} onChange={e => setInviteRole(e.target.value as 'admin' | 'pilot')} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#3AB0FF] outline-none"><option value="pilot">Tail Pilot</option><option value="admin">Tail Admin</option></select></div>
+              <div className="pt-2"><PrimaryButton disabled={isInviting}>{isInviting ? <><Loader2 size={16} className="animate-spin" /> Sending...</> : "Send Invitation"}</PrimaryButton></div>
             </form>
           </div>
         </div>
       )}
 
+      {/* Hero section */}
       <div className="bg-white shadow-lg rounded-sm overflow-hidden">
         <div className="relative h-40 md:h-56 bg-slateGray flex items-center justify-center">
           {aircraft.avatar_url ? <img src={aircraft.avatar_url} alt="Aircraft Avatar" className="w-full h-full object-cover" /> : <PlaneTakeoff size={64} className="text-white/20" />}
-          
           {canEdit && (
             <div className="absolute top-4 right-4 flex flex-col gap-2 z-10">
               <button onClick={() => setShowInviteModal(true)} className="bg-[#3AB0FF] text-white p-2.5 rounded-full shadow-[0_4px_10px_rgba(0,0,0,0.5)] hover:bg-blue-600 active:scale-95 transition-all" title="Invite Pilot"><UserPlus size={18} /></button>
@@ -334,25 +259,20 @@ export default function SummaryTab({
               <button onClick={() => setShowDeleteModal(true)} className="bg-[#CE3732] text-white p-2.5 rounded-full shadow-[0_4px_10px_rgba(0,0,0,0.5)] hover:bg-red-700 active:scale-95 transition-all" title="Delete Aircraft"><Trash2 size={18} /></button>
             </div>
           )}
-
           <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent flex flex-col justify-end p-4 md:p-6 pointer-events-none">
             <h2 className="font-oswald text-4xl md:text-5xl font-bold text-white uppercase leading-none mb-1">{aircraft.tail_number}</h2>
             <p className="text-xs md:text-sm text-gray-200 font-bold uppercase tracking-widest">{aircraft.aircraft_type} • SN: {aircraft.serial_number || 'N/A'}</p>
           </div>
         </div>
 
+        {/* Contact info */}
         <div className="bg-cream px-4 py-3 flex flex-col gap-3">
           <div className="flex items-center justify-between border-b border-gray-200 pb-3">
             <div className="flex items-center gap-3 text-navy">
               <MapPin size={18} className="text-brandOrange shrink-0" />
-              <div>
-                <span className="block text-[10px] font-bold uppercase tracking-widest text-gray-400">Home Base</span>
-                <span className="font-roboto font-bold text-sm uppercase">{aircraft.home_airport || 'NOT ASSIGNED'}</span>
-              </div>
+              <div><span className="block text-[10px] font-bold uppercase tracking-widest text-gray-400">Home Base</span><span className="font-roboto font-bold text-sm uppercase">{aircraft.home_airport || 'NOT ASSIGNED'}</span></div>
             </div>
-            {aircraft.home_airport && (
-              <a href={`https://www.airnav.com/airport/${aircraft.home_airport}`} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-brandOrange hover:text-orange-600 bg-orange-50 border border-orange-200 px-3 py-1.5 rounded transition-colors active:scale-95">AirNav</a>
-            )}
+            {aircraft.home_airport && <a href={`https://www.airnav.com/airport/${aircraft.home_airport}`} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-brandOrange hover:text-orange-600 bg-orange-50 border border-orange-200 px-3 py-1.5 rounded transition-colors active:scale-95">AirNav</a>}
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="flex flex-col text-navy overflow-hidden">
@@ -375,38 +295,23 @@ export default function SummaryTab({
         </div>
       </div>
 
-      {/* ─── FLIGHT TIMES + LAST FLOWN ─── */}
+      {/* Flight Times */}
       <div className={`bg-white shadow-lg rounded-sm p-4 border-t-4 ${statusBorderColor} flex flex-col`}>
         <div className="flex justify-between items-start mb-3 border-b border-gray-100 pb-3">
-          <div className="flex flex-col gap-1">
-            <div className="flex items-center gap-2"><Clock size={20} className={statusIconColor} /><h3 className="font-oswald text-xl font-bold uppercase text-navy m-0 leading-none">Flight Times</h3></div>
-            {lastFlownLabel && <span className="text-[9px] font-bold uppercase tracking-widest text-gray-400 mt-1">Last Flown: {lastFlownLabel}</span>}
-          </div>
+          <div className="flex flex-col gap-1"><div className="flex items-center gap-2"><Clock size={20} className={statusIconColor} /><h3 className="font-oswald text-xl font-bold uppercase text-navy m-0 leading-none">Flight Times</h3></div>{lastFlownLabel && <span className="text-[9px] font-bold uppercase tracking-widest text-gray-400 mt-1">Last Flown: {lastFlownLabel}</span>}</div>
           <span className="text-[10px] font-bold uppercase tracking-widest bg-gray-100 px-2 py-1 rounded text-gray-600">{isTurbine ? 'TURBINE' : 'PISTON'}</span>
         </div>
         <div className="grid grid-cols-2 gap-4">
-          <div>
-            <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 block mb-1">{isTurbine ? "Total Airframe" : "Current Hobbs"}</span>
-            <p className="text-3xl font-roboto font-bold text-navy">{aircraft.total_airframe_time?.toFixed(1) || 0} <span className="text-sm text-gray-400">hrs</span></p>
-          </div>
-          <div>
-            <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 block mb-1">{isTurbine ? "Total Flight" : "Current Tach"}</span>
-            <p className="text-3xl font-roboto font-bold text-navy">{aircraft.total_engine_time?.toFixed(1) || 0} <span className="text-sm text-gray-400">hrs</span></p>
-          </div>
+          <div><span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 block mb-1">{isTurbine ? "Total Airframe" : "Current Hobbs"}</span><p className="text-3xl font-roboto font-bold text-navy">{aircraft.total_airframe_time?.toFixed(1) || 0} <span className="text-sm text-gray-400">hrs</span></p></div>
+          <div><span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 block mb-1">{isTurbine ? "Total Flight" : "Current Tach"}</span><p className="text-3xl font-roboto font-bold text-navy">{aircraft.total_engine_time?.toFixed(1) || 0} <span className="text-sm text-gray-400">hrs</span></p></div>
         </div>
       </div>
 
-      {/* ─── FUEL STATE ─── */}
+      {/* Fuel State */}
       <div className="bg-white shadow-lg rounded-sm p-4 border-t-4 border-blue-500 flex flex-col">
         <div className="flex justify-between items-start mb-3 border-b border-gray-100 pb-3">
-          <div className="flex flex-col gap-1">
-            <div className="flex items-center gap-2"><Droplet size={20} className="text-blue-500" /><h3 className="font-oswald text-xl font-bold uppercase text-navy m-0 leading-none">Current Fuel</h3></div>
-            {aircraft.fuel_last_updated && <span className="text-[9px] font-bold uppercase tracking-widest text-gray-400 mt-1">Updated: {new Date(aircraft.fuel_last_updated).toLocaleString('en-US', { month: 'numeric', day: 'numeric', year: '2-digit', hour: 'numeric', minute: '2-digit' })}</span>}
-          </div>
-          <div className="flex items-center gap-2">
-            <button onClick={() => setShowFuelModal(true)} className="text-[10px] font-bold uppercase tracking-widest text-blue-500 bg-blue-50 border border-blue-200 px-3 py-1.5 rounded hover:bg-blue-100 active:scale-95 transition-all">Update</button>
-            <span className="text-[10px] font-bold uppercase tracking-widest bg-gray-100 px-2 py-1 rounded text-gray-600">{isTurbine ? 'Jet-A' : 'AvGas'}</span>
-          </div>
+          <div className="flex flex-col gap-1"><div className="flex items-center gap-2"><Droplet size={20} className="text-blue-500" /><h3 className="font-oswald text-xl font-bold uppercase text-navy m-0 leading-none">Current Fuel</h3></div>{aircraft.fuel_last_updated && <span className="text-[9px] font-bold uppercase tracking-widest text-gray-400 mt-1">Updated: {new Date(aircraft.fuel_last_updated).toLocaleString('en-US', { month: 'numeric', day: 'numeric', year: '2-digit', hour: 'numeric', minute: '2-digit' })}</span>}</div>
+          <div className="flex items-center gap-2"><button onClick={() => setShowFuelModal(true)} className="text-[10px] font-bold uppercase tracking-widest text-blue-500 bg-blue-50 border border-blue-200 px-3 py-1.5 rounded hover:bg-blue-100 active:scale-95 transition-all">Update</button><span className="text-[10px] font-bold uppercase tracking-widest bg-gray-100 px-2 py-1 rounded text-gray-600">{isTurbine ? 'Jet-A' : 'AvGas'}</span></div>
         </div>
         <div className="grid grid-cols-2 gap-4">
           <div><span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 block mb-1">Quantity</span><p className="text-3xl font-roboto font-bold text-navy">{fuelGals.toFixed(1)} <span className="text-sm text-gray-400">Gal</span></p></div>
@@ -414,150 +319,87 @@ export default function SummaryTab({
         </div>
       </div>
 
-      {!isLoading && (
-        <div className="grid grid-cols-1 gap-3">
-
-          {/* ─── NEXT RESERVATION ─── */}
-          {nextReservations.length > 0 && (
-            <div onClick={() => setActiveTab('calendar')} className="bg-white border border-emerald-200 shadow-sm rounded-sm p-4 flex gap-4 items-center cursor-pointer hover:bg-emerald-50 transition-colors active:scale-[0.98]">
-              <div className="bg-emerald-50 p-3 rounded-full text-[#56B94A] shrink-0"><Calendar size={20}/></div>
-              <div className="flex-1">
-                <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Next Up</span>
-                {nextReservations.map((r: any, idx: number) => {
-                  const startDate = new Date(r.start_time);
-                  const dateStr = startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-                  const timeStr = startDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-                  return (
-                    <p key={idx} className="text-sm text-navy leading-tight mt-1">
-                      <strong>{r.pilot_initials || '—'}</strong> — {dateStr} at {timeStr}
-                      {r.route && <span className="text-gray-400 ml-1.5">{r.route}</span>}
-                    </p>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* ─── NEXT MX ─── */}
-          <div onClick={() => setActiveTab('mx')} className={`bg-white border shadow-sm rounded-sm p-4 flex gap-4 items-center transition-colors cursor-pointer active:scale-[0.98] ${nextMx ? 'border-gray-200 hover:bg-orange-50' : 'border-gray-200 opacity-70 hover:bg-gray-50'}`}>
-            <div className={`p-3 rounded-full shrink-0 ${nextMx ? 'bg-orange-50 text-[#F08B46]' : 'bg-gray-100 text-gray-400'}`}><Wrench size={20}/></div>
-            <div className="flex-1">
-              <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Next Mx Due</span>
-              {nextMx ? (
-                <><p className="text-sm font-bold text-navy leading-tight">{nextMx.item_name}</p><p className={`text-xs font-bold mt-0.5 ${mxTextColor}`}>{nextMx.dueText}</p></>
-              ) : <p className="text-sm font-bold text-gray-500 leading-tight">No Maintenance Tracked</p>}
-            </div>
+      {/* Quick info cards */}
+      <div className="grid grid-cols-1 gap-3">
+        {nextReservations.length > 0 && (
+          <div onClick={() => setActiveTab('calendar')} className="bg-white border border-emerald-200 shadow-sm rounded-sm p-4 flex gap-4 items-center cursor-pointer hover:bg-emerald-50 transition-colors active:scale-[0.98]">
+            <div className="bg-emerald-50 p-3 rounded-full text-[#56B94A] shrink-0"><Calendar size={20}/></div>
+            <div className="flex-1"><span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Next Up</span>{nextReservations.map((r: any, idx: number) => { const startDate = new Date(r.start_time); return (<p key={idx} className="text-sm text-navy leading-tight mt-1"><strong>{r.pilot_initials || '—'}</strong> — {startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} at {startDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}{r.route && <span className="text-gray-400 ml-1.5">{r.route}</span>}</p>); })}</div>
           </div>
+        )}
 
-          {/* ─── SQUAWKS ─── */}
-          <div onClick={() => setActiveTab('mx')} className={`bg-white border shadow-sm rounded-sm p-4 flex gap-4 items-center transition-colors cursor-pointer active:scale-[0.98] ${activeSquawks.length > 0 ? 'border-red-200 hover:bg-red-50' : 'border-gray-200 opacity-70 hover:bg-gray-50'}`}>
-            <div className={`p-3 rounded-full shrink-0 ${activeSquawks.length > 0 ? 'bg-red-50 text-[#CE3732]' : 'bg-gray-100 text-gray-400'}`}><AlertTriangle size={20}/></div>
-            <div className="flex-1">
-              <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Active Squawks</span>
-              {activeSquawks.length > 0 ? (
-                <><p className="text-sm font-bold text-navy leading-tight">{activeSquawks.length} Open Issue{activeSquawks.length > 1 ? 's' : ''}</p>{activeSquawks.some(sq => sq.affects_airworthiness) && <p className="text-xs font-bold text-[#CE3732] mt-0.5">Aircraft Grounded</p>}</>
-              ) : <p className="text-sm font-bold text-gray-500 leading-tight">No Active Squawks</p>}
+        <div onClick={() => setActiveTab('mx')} className={`bg-white border shadow-sm rounded-sm p-4 flex gap-4 items-center transition-colors cursor-pointer active:scale-[0.98] ${nextMx ? 'border-gray-200 hover:bg-orange-50' : 'border-gray-200 opacity-70 hover:bg-gray-50'}`}>
+          <div className={`p-3 rounded-full shrink-0 ${nextMx ? 'bg-orange-50 text-[#F08B46]' : 'bg-gray-100 text-gray-400'}`}><Wrench size={20}/></div>
+          <div className="flex-1"><span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Next Mx Due</span>{nextMx ? (<><p className="text-sm font-bold text-navy leading-tight">{nextMx.item_name}</p><p className={`text-xs font-bold mt-0.5 ${mxTextColor}`}>{nextMx.dueText}</p></>) : <p className="text-sm font-bold text-gray-500 leading-tight">No Maintenance Tracked</p>}</div>
+        </div>
+
+        <div onClick={() => setActiveTab('mx')} className={`bg-white border shadow-sm rounded-sm p-4 flex gap-4 items-center transition-colors cursor-pointer active:scale-[0.98] ${activeSquawks.length > 0 ? 'border-red-200 hover:bg-red-50' : 'border-gray-200 opacity-70 hover:bg-gray-50'}`}>
+          <div className={`p-3 rounded-full shrink-0 ${activeSquawks.length > 0 ? 'bg-red-50 text-[#CE3732]' : 'bg-gray-100 text-gray-400'}`}><AlertTriangle size={20}/></div>
+          <div className="flex-1"><span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Active Squawks</span>{activeSquawks.length > 0 ? (<><p className="text-sm font-bold text-navy leading-tight">{activeSquawks.length} Open Issue{activeSquawks.length > 1 ? 's' : ''}</p>{activeSquawks.some(sq => sq.affects_airworthiness) && <p className="text-xs font-bold text-[#CE3732] mt-0.5">Aircraft Grounded</p>}</>) : <p className="text-sm font-bold text-gray-500 leading-tight">No Active Squawks</p>}</div>
+        </div>
+
+        {latestNote && (
+          <>
+            <div onClick={() => setShowNoteModal(true)} className="bg-white border border-gray-200 shadow-sm rounded-sm p-4 flex gap-4 items-center cursor-pointer hover:bg-blue-50 transition-colors active:scale-[0.98]">
+              <div className="bg-blue-50 p-3 rounded-full text-navy shrink-0"><FileText size={20}/></div>
+              <div className="flex-1"><div className="flex justify-between items-center mb-1"><span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Latest Note</span><span className="text-[10px] text-gray-400 font-bold">{new Date(latestNote.created_at).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: '2-digit' })}</span></div><p className="text-sm font-bold text-navy leading-tight line-clamp-2">{latestNote.content}</p></div>
             </div>
-          </div>
-
-          {/* ─── LATEST NOTE ─── */}
-          {latestNote && (
-            <>
-              <div onClick={() => setShowNoteModal(true)} className="bg-white border border-gray-200 shadow-sm rounded-sm p-4 flex gap-4 items-center cursor-pointer hover:bg-blue-50 transition-colors active:scale-[0.98]">
-                <div className="bg-blue-50 p-3 rounded-full text-navy shrink-0"><FileText size={20}/></div>
-                <div className="flex-1">
-                  <div className="flex justify-between items-center mb-1">
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Latest Note</span>
-                    <span className="text-[10px] text-gray-400 font-bold">{new Date(latestNote.created_at).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: '2-digit' })}</span>
-                  </div>
-                  <p className="text-sm font-bold text-navy leading-tight line-clamp-2">{latestNote.content}</p>
+            {showNoteModal && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 animate-fade-in" onClick={() => setShowNoteModal(false)}>
+                <div className="bg-white rounded shadow-2xl w-full max-w-md p-6 border-t-4 border-navy animate-slide-up relative" onClick={(e) => e.stopPropagation()}>
+                  <button onClick={() => setShowNoteModal(false)} className="absolute top-4 right-4 text-gray-400 hover:text-red-500"><X size={20}/></button>
+                  <div className="mb-4"><span className="text-[10px] font-bold uppercase tracking-widest text-navy block">{latestNote.author_email || 'Pilot'}</span><span className="text-[10px] uppercase text-gray-400 font-bold">{new Date(latestNote.created_at).toLocaleString()}</span></div>
+                  <p className="text-sm text-navy font-roboto whitespace-pre-wrap leading-relaxed">{latestNote.content}</p>
                 </div>
-              </div>
-              {showNoteModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 animate-fade-in" onClick={() => setShowNoteModal(false)}>
-                  <div className="bg-white rounded shadow-2xl w-full max-w-md p-6 border-t-4 border-navy animate-slide-up relative" onClick={(e) => e.stopPropagation()}>
-                    <button onClick={() => setShowNoteModal(false)} className="absolute top-4 right-4 text-gray-400 hover:text-red-500"><X size={20}/></button>
-                    <div className="mb-4">
-                      <span className="text-[10px] font-bold uppercase tracking-widest text-navy block">{latestNote.author_email || 'Pilot'}</span>
-                      <span className="text-[10px] uppercase text-gray-400 font-bold">{new Date(latestNote.created_at).toLocaleString()}</span>
-                    </div>
-                    <p className="text-sm text-navy font-roboto whitespace-pre-wrap leading-relaxed">{latestNote.content}</p>
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-
-          {/* ─── CREW LIST ─── */}
-          <div className="bg-white border border-gray-200 shadow-sm rounded-sm overflow-hidden">
-            <button onClick={() => {
-              const willOpen = !showCrewList;
-              setShowCrewList(willOpen);
-              if (willOpen) {
-                setTimeout(() => {
-                  crewListEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                }, 150);
-              }
-            }} className="w-full p-4 flex gap-4 items-center cursor-pointer hover:bg-gray-50 transition-colors active:scale-[0.98]">
-              <div className="bg-gray-100 p-3 rounded-full text-navy shrink-0"><Users size={20}/></div>
-              <div className="flex-1 text-left">
-                <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Assigned Users</span>
-                <p className="text-sm font-bold text-navy leading-tight">{crewMembers.length} Pilot{crewMembers.length !== 1 ? 's' : ''}</p>
-              </div>
-              <ChevronDown size={18} className={`text-gray-400 transition-transform ${showCrewList ? 'rotate-180' : ''}`} />
-            </button>
-            {showCrewList && (
-              <div className="border-t border-gray-100 animate-fade-in">
-                {crewMembers.map((member: any) => {
-                  const isCurrentUser = member.user_id === session?.user?.id;
-                  // Show effective role: global admins always display as Admin regardless of aircraft_role
-                  const effectiveRole = (isCurrentUser && role === 'admin') ? 'admin' : member.aircraft_role;
-                  const roleLabel = effectiveRole === 'admin' ? 'Admin' : 'Pilot';
-                  const roleColor = effectiveRole === 'admin' ? 'bg-navy text-white' : 'bg-gray-100 text-gray-600';
-                  return (
-                    <div key={member.user_id} className="px-4 py-3 border-b border-gray-50 last:border-b-0 flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-full bg-navy text-white flex items-center justify-center font-oswald font-bold text-sm shrink-0">{member.initials || '?'}</div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-bold text-navy truncate">{member.email}{isCurrentUser ? ' (you)' : ''}</p>
-                        <span className={`text-[8px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded ${roleColor}`}>{roleLabel}</span>
-                      </div>
-                      {canEdit && !isCurrentUser && (
-                        <div className="flex gap-2 shrink-0">
-                          {changingRoleUserId === member.user_id ? (
-                            <div className="flex gap-1 animate-fade-in">
-                              <button onClick={() => handleChangeRole(member.user_id, member.aircraft_role === 'admin' ? 'pilot' : 'admin')} disabled={isCrewUpdating} className="text-[8px] font-bold uppercase tracking-widest bg-[#3AB0FF] text-white px-2 py-1 rounded active:scale-95 disabled:opacity-50">
-                                {member.aircraft_role === 'admin' ? 'Make Pilot' : 'Make Admin'}
-                              </button>
-                              <button onClick={() => setChangingRoleUserId(null)} className="text-[8px] font-bold uppercase tracking-widest text-gray-500 px-2 py-1 active:scale-95">Cancel</button>
-                            </div>
-                          ) : removingUserId === member.user_id ? (
-                            <div className="flex gap-1 animate-fade-in">
-                              <button onClick={() => handleRemovePilot(member.user_id)} disabled={isCrewUpdating} className="text-[8px] font-bold uppercase tracking-widest bg-[#CE3732] text-white px-2 py-1 rounded active:scale-95 disabled:opacity-50">Remove</button>
-                              <button onClick={() => setRemovingUserId(null)} className="text-[8px] font-bold uppercase tracking-widest text-gray-500 px-2 py-1 active:scale-95">Cancel</button>
-                            </div>
-                          ) : (
-                            <>
-                              <button onClick={() => setChangingRoleUserId(member.user_id)} className="text-gray-300 hover:text-[#3AB0FF] active:scale-95" title="Change Role"><Edit2 size={14}/></button>
-                              <button onClick={() => setRemovingUserId(member.user_id)} className="text-gray-300 hover:text-[#CE3732] active:scale-95" title="Remove"><X size={14}/></button>
-                            </>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-                {canEdit && (
-                  <button onClick={() => setShowInviteModal(true)} className="w-full px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-[#3AB0FF] hover:bg-blue-50 transition-colors active:scale-95 flex items-center justify-center gap-2">
-                    <UserPlus size={14} /> Invite Pilot
-                  </button>
-                )}
-                <div ref={crewListEndRef} />
               </div>
             )}
-          </div>
+          </>
+        )}
 
+        {/* Crew list */}
+        <div className="bg-white border border-gray-200 shadow-sm rounded-sm overflow-hidden">
+          <button onClick={() => { const willOpen = !showCrewList; setShowCrewList(willOpen); if (willOpen) setTimeout(() => crewListEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 150); }} className="w-full p-4 flex gap-4 items-center cursor-pointer hover:bg-gray-50 transition-colors active:scale-[0.98]">
+            <div className="bg-gray-100 p-3 rounded-full text-navy shrink-0"><Users size={20}/></div>
+            <div className="flex-1 text-left"><span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Assigned Users</span><p className="text-sm font-bold text-navy leading-tight">{crewMembers.length} Pilot{crewMembers.length !== 1 ? 's' : ''}</p></div>
+            <ChevronDown size={18} className={`text-gray-400 transition-transform ${showCrewList ? 'rotate-180' : ''}`} />
+          </button>
+          {showCrewList && (
+            <div className="border-t border-gray-100 animate-fade-in">
+              {crewMembers.map((member: any) => {
+                const isCurrentUser = member.user_id === session?.user?.id;
+                const effectiveRole = (isCurrentUser && role === 'admin') ? 'admin' : member.aircraft_role;
+                const roleLabel = effectiveRole === 'admin' ? 'Admin' : 'Pilot';
+                const roleColor = effectiveRole === 'admin' ? 'bg-navy text-white' : 'bg-gray-100 text-gray-600';
+                return (
+                  <div key={member.user_id} className="px-4 py-3 border-b border-gray-50 last:border-b-0 flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-full bg-navy text-white flex items-center justify-center font-oswald font-bold text-sm shrink-0">{member.initials || '?'}</div>
+                    <div className="flex-1 min-w-0"><p className="text-xs font-bold text-navy truncate">{member.email}{isCurrentUser ? ' (you)' : ''}</p><span className={`text-[8px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded ${roleColor}`}>{roleLabel}</span></div>
+                    {canEdit && !isCurrentUser && (
+                      <div className="flex gap-2 shrink-0">
+                        {changingRoleUserId === member.user_id ? (
+                          <div className="flex gap-1 animate-fade-in">
+                            <button onClick={() => handleChangeRole(member.user_id, member.aircraft_role === 'admin' ? 'pilot' : 'admin')} disabled={isCrewUpdating} className="text-[8px] font-bold uppercase tracking-widest bg-[#3AB0FF] text-white px-2 py-1 rounded active:scale-95 disabled:opacity-50">{member.aircraft_role === 'admin' ? 'Make Pilot' : 'Make Admin'}</button>
+                            <button onClick={() => setChangingRoleUserId(null)} className="text-[8px] font-bold uppercase tracking-widest text-gray-500 px-2 py-1 active:scale-95">Cancel</button>
+                          </div>
+                        ) : removingUserId === member.user_id ? (
+                          <div className="flex gap-1 animate-fade-in">
+                            <button onClick={() => handleRemovePilot(member.user_id)} disabled={isCrewUpdating} className="text-[8px] font-bold uppercase tracking-widest bg-[#CE3732] text-white px-2 py-1 rounded active:scale-95 disabled:opacity-50">Remove</button>
+                            <button onClick={() => setRemovingUserId(null)} className="text-[8px] font-bold uppercase tracking-widest text-gray-500 px-2 py-1 active:scale-95">Cancel</button>
+                          </div>
+                        ) : (
+                          <><button onClick={() => setChangingRoleUserId(member.user_id)} className="text-gray-300 hover:text-[#3AB0FF] active:scale-95" title="Change Role"><Edit2 size={14}/></button><button onClick={() => setRemovingUserId(member.user_id)} className="text-gray-300 hover:text-[#CE3732] active:scale-95" title="Remove"><X size={14}/></button></>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+              {canEdit && <button onClick={() => setShowInviteModal(true)} className="w-full px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-[#3AB0FF] hover:bg-blue-50 transition-colors active:scale-95 flex items-center justify-center gap-2"><UserPlus size={14} /> Invite Pilot</button>}
+              <div ref={crewListEndRef} />
+            </div>
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 }

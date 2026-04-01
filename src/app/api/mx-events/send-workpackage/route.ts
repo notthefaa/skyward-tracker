@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { Resend } from 'resend';
 import { requireAuth, requireAircraftAccess, handleApiError } from '@/lib/auth';
 import { env } from '@/lib/env';
+import { escapeHtml } from '@/lib/sanitize';
 
 const resend = new Resend(env.RESEND_API_KEY);
 const FROM_EMAIL = 'notifications@skywardsociety.com';
@@ -134,24 +135,31 @@ export async function POST(req: Request) {
       const { data: allLineItems } = await supabaseAdmin
         .from('aft_event_line_items').select('*').eq('event_id', eventId);
 
+      // Sanitize all user-provided values
+      const safeTail = escapeHtml(aircraft.tail_number);
+      const safeType = escapeHtml(aircraft.aircraft_type);
+      const safeMxContact = escapeHtml(aircraft.mx_contact);
+      const safeMainContact = escapeHtml(aircraft.main_contact || 'Skyward Operations');
+      const safeMainPhone = escapeHtml(aircraft.main_contact_phone);
+
       const mxItemsHtml = (allLineItems || [])
         .filter((li: any) => li.item_type === 'maintenance')
-        .map((li: any) => `<li style="margin-bottom: 8px;"><strong>${li.item_name}</strong>${li.item_description ? ` — ${li.item_description}` : ''}</li>`)
+        .map((li: any) => `<li style="margin-bottom: 8px;"><strong>${escapeHtml(li.item_name)}</strong>${li.item_description ? ` — ${escapeHtml(li.item_description)}` : ''}</li>`)
         .join('');
 
       const squawkItemsHtml = (allLineItems || [])
         .filter((li: any) => li.item_type === 'squawk')
-        .map((li: any) => `<li style="margin-bottom: 8px;"><strong>${li.item_name}</strong>${li.item_description ? ` — ${li.item_description}` : ''}</li>`)
+        .map((li: any) => `<li style="margin-bottom: 8px;"><strong>${escapeHtml(li.item_name)}</strong>${li.item_description ? ` — ${escapeHtml(li.item_description)}` : ''}</li>`)
         .join('');
 
       const addonItemsHtml = (allLineItems || [])
         .filter((li: any) => li.item_type === 'addon')
-        .map((li: any) => `<li style="margin-bottom: 8px;">${li.item_name}</li>`)
+        .map((li: any) => `<li style="margin-bottom: 8px;">${escapeHtml(li.item_name)}</li>`)
         .join('');
 
       const effectiveDate = proposedDate || event.proposed_date;
       const dateSection = effectiveDate
-        ? `<p style="margin-top: 20px;"><strong>Requested Service Date:</strong> ${effectiveDate}</p>`
+        ? `<p style="margin-top: 20px;"><strong>Requested Service Date:</strong> ${escapeHtml(effectiveDate)}</p>`
         : `<p style="margin-top: 20px;">No preferred date has been specified. Please propose dates that work for your schedule, along with the estimated duration of service.</p>`;
 
       const subjectPrefix = isResend ? 'Reminder — ' : '';
@@ -161,13 +169,13 @@ export async function POST(req: Request) {
         replyTo: aircraft.main_contact_email || undefined,
         to: [aircraft.mx_contact_email],
         cc: mxCc,
-        subject: `${subjectPrefix}Service Request: ${aircraft.tail_number} — Work Package`,
+        subject: `${subjectPrefix}Service Request: ${safeTail} — Work Package`,
         html: `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; border-radius: 8px;">
             <h2 style="color: #091F3C; text-transform: uppercase; letter-spacing: 2px; border-bottom: 2px solid #091F3C; padding-bottom: 10px;">Service Request</h2>
             
-            <p style="color: #525659; font-size: 16px;">Hello ${aircraft.mx_contact || ''},</p>
-            <p style="color: #525659; font-size: 16px;">We'd like to schedule service for <strong>${aircraft.tail_number}</strong> (${aircraft.aircraft_type}). Below is the full work package.</p>
+            <p style="color: #525659; font-size: 16px;">Hello ${safeMxContact || ''},</p>
+            <p style="color: #525659; font-size: 16px;">We'd like to schedule service for <strong>${safeTail}</strong> (${safeType}). Below is the full work package.</p>
             
             ${dateSection}
 
@@ -193,14 +201,14 @@ export async function POST(req: Request) {
             ` : ''}
 
             <div style="margin-top: 30px; padding: 20px; background-color: #F0F9FF; border-radius: 8px; text-align: center;">
-              <p style="margin: 0 0 12px 0; color: #091F3C; font-weight: bold;">View Full Details & Respond</p>
+              <p style="margin: 0 0 12px 0; color: #091F3C; font-weight: bold;">View Full Details &amp; Respond</p>
               <a href="${portalUrl}" style="display: inline-block; background-color: #091F3C; color: white; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: bold; letter-spacing: 1px;">OPEN SERVICE PORTAL</a>
             </div>
 
             <p style="color: #525659; font-size: 16px; margin-top: 25px;">
               Thank you,<br/>
-              <strong>${aircraft.main_contact || 'Skyward Operations'}</strong>
-              ${aircraft.main_contact_phone ? `<br/>${aircraft.main_contact_phone}` : ''}
+              <strong>${safeMainContact}</strong>
+              ${safeMainPhone ? `<br/>${safeMainPhone}` : ''}
             </p>
           </div>
         `

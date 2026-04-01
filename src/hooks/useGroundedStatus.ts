@@ -16,11 +16,13 @@ export function useGroundedStatus(allAircraftList: AircraftWithMetrics[]) {
     let hasOpen = false;
     let reason = "";
 
-    const { data: mx } = await supabase
-      .from('aft_maintenance_items')
-      .select('*')
-      .eq('aircraft_id', ac.id);
+    // Fetch MX items and squawks in parallel (single round trip)
+    const [{ data: mx }, { data: sq }] = await Promise.all([
+      supabase.from('aft_maintenance_items').select('item_name, tracking_type, is_required, due_time, due_date').eq('aircraft_id', ac.id),
+      supabase.from('aft_squawks').select('affects_airworthiness, location, status').eq('aircraft_id', ac.id).eq('status', 'open'),
+    ]);
 
+    // Check MX items
     if (mx) {
       const et = ac.total_engine_time || 0;
       for (const item of mx) {
@@ -39,20 +41,14 @@ export function useGroundedStatus(allAircraftList: AircraftWithMetrics[]) {
       }
     }
 
-    if (!isGrounded) {
-      const { data: sq } = await supabase
-        .from('aft_squawks')
-        .select('*')
-        .eq('aircraft_id', ac.id)
-        .eq('status', 'open');
-      if (sq && sq.length > 0) {
-        const g = sq.find(s => s.affects_airworthiness);
-        if (g) {
-          isGrounded = true;
-          reason = `AOG squawk${g.location ? ' at ' + g.location : ''}`;
-        } else {
-          hasOpen = true;
-        }
+    // Check squawks (only if not already grounded by MX)
+    if (!isGrounded && sq && sq.length > 0) {
+      const g = sq.find(s => s.affects_airworthiness);
+      if (g) {
+        isGrounded = true;
+        reason = `AOG squawk${g.location ? ' at ' + g.location : ''}`;
+      } else {
+        hasOpen = true;
       }
     }
 

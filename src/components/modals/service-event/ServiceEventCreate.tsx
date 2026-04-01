@@ -1,0 +1,156 @@
+"use client";
+
+import { useState } from "react";
+import { authFetch } from "@/lib/authFetch";
+import { Wrench, AlertTriangle, Sparkles, Calendar, ChevronDown, X, CheckSquare } from "lucide-react";
+import { PrimaryButton } from "@/components/AppButtons";
+import { ADDON_OPTIONS, INPUT_WHITE_BG } from "./shared";
+import type { ServiceEventChildProps } from "./shared";
+import DateProposalSection from "./DateProposalSection";
+import EmailPreview from "./EmailPreview";
+
+interface ServiceEventCreateProps extends ServiceEventChildProps {
+  mxItems: any[];
+  squawks: any[];
+}
+
+export default function ServiceEventCreate({
+  aircraft, mxItems, squawks, isSubmitting, setIsSubmitting, onNavigate, onRefresh, showSuccess, canManageService,
+}: ServiceEventCreateProps) {
+  const [selectedMxIds, setSelectedMxIds] = useState<string[]>([]);
+  const [selectedSquawkIds, setSelectedSquawkIds] = useState<string[]>([]);
+  const [selectedAddons, setSelectedAddons] = useState<string[]>([]);
+  const [proposedDate, setProposedDate] = useState("");
+  const [wantsToPropose, setWantsToPropose] = useState<boolean | null>(null);
+  const [showPreview, setShowPreview] = useState(false);
+
+  const toggleSelectAllMx = () => {
+    const allIds = mxItems.map(mx => mx.id);
+    const allSelected = allIds.every(id => selectedMxIds.includes(id));
+    if (allSelected) setSelectedMxIds(prev => prev.filter(id => !allIds.includes(id)));
+    else setSelectedMxIds(prev => Array.from(new Set([...prev, ...allIds])));
+  };
+
+  const toggleSelectAllSquawks = () => {
+    const allIds = squawks.map(sq => sq.id);
+    const allSelected = allIds.every(id => selectedSquawkIds.includes(id));
+    if (allSelected) setSelectedSquawkIds(prev => prev.filter(id => !allIds.includes(id)));
+    else setSelectedSquawkIds(prev => Array.from(new Set([...prev, ...allIds])));
+  };
+
+  const handleCreateAndSend = async () => {
+    if (selectedMxIds.length === 0 && selectedSquawkIds.length === 0 && selectedAddons.length === 0) return alert("Please select at least one item for the work package.");
+    if (wantsToPropose === null) return alert("Please choose whether you'd like to propose a date or request availability.");
+    if (wantsToPropose && !proposedDate) return alert("Please select a preferred service date or choose 'Request Availability' instead.");
+    setIsSubmitting(true);
+    try {
+      const createRes = await authFetch('/api/mx-events/create', { method: 'POST', body: JSON.stringify({ aircraftId: aircraft.id, mxItemIds: selectedMxIds, squawkIds: selectedSquawkIds, addonServices: selectedAddons, proposedDate: (wantsToPropose && proposedDate) ? proposedDate : null }) });
+      if (!createRes.ok) throw new Error('Failed to create event');
+      const createData = await createRes.json();
+
+      const sendRes = await authFetch('/api/mx-events/send-workpackage', { method: 'POST', body: JSON.stringify({ eventId: createData.eventId, proposedDate: (wantsToPropose && proposedDate) ? proposedDate : null }) });
+      if (!sendRes.ok) throw new Error('Failed to send work package');
+
+      onRefresh();
+      showSuccess("Work package sent to mechanic");
+      onNavigate('list');
+    } catch (err: any) { alert("Failed to send work package: " + err.message); }
+    setIsSubmitting(false);
+  };
+
+  const handleSaveAsDraft = async () => {
+    if (selectedMxIds.length === 0 && selectedSquawkIds.length === 0 && selectedAddons.length === 0) return alert("Please select at least one item for the work package.");
+    setIsSubmitting(true);
+    try {
+      const res = await authFetch('/api/mx-events/create', { method: 'POST', body: JSON.stringify({ aircraftId: aircraft.id, mxItemIds: selectedMxIds, squawkIds: selectedSquawkIds, addonServices: selectedAddons, proposedDate: (wantsToPropose && proposedDate) ? proposedDate : null }) });
+      if (!res.ok) throw new Error('Failed to create draft');
+      onRefresh();
+      showSuccess("Draft saved");
+      onNavigate('list');
+    } catch (err: any) { alert("Failed to save draft: " + err.message); }
+    setIsSubmitting(false);
+  };
+
+  return (
+    <div className="space-y-6">
+      <button onClick={() => onNavigate('list')} className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-[#F08B46] bg-orange-50 border border-orange-200 rounded px-3 py-1.5 hover:bg-orange-100 active:scale-95 transition-all mb-2">
+        <ChevronDown size={12} className="rotate-90" /> Back to Events
+      </button>
+
+      {/* MX Items */}
+      {mxItems.length > 0 && (
+        <div>
+          <div className="flex justify-between items-center mb-2">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-navy flex items-center gap-2"><Wrench size={14} className="text-[#F08B46]" /> Maintenance Items Due</p>
+            <button type="button" onClick={toggleSelectAllMx} className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-[#F08B46] hover:opacity-80 active:scale-95 transition-all">
+              <CheckSquare size={12} /> {mxItems.every(mx => selectedMxIds.includes(mx.id)) ? 'Deselect All' : 'Select All'}
+            </button>
+          </div>
+          <div className="space-y-3 pb-1">
+            {mxItems.map(mx => (
+              <label key={mx.id} className="flex items-start gap-3 p-3 border border-gray-200 rounded cursor-pointer hover:bg-gray-50">
+                <input type="checkbox" checked={selectedMxIds.includes(mx.id)} onChange={() => setSelectedMxIds(prev => prev.includes(mx.id) ? prev.filter(id => id !== mx.id) : [...prev, mx.id])} className="mt-1 w-4 h-4 text-[#F08B46] border-gray-300 rounded" />
+                <div>
+                  <span className="font-bold text-sm text-navy">{mx.item_name}</span>
+                  <span className="block text-[10px] text-gray-500">{mx.tracking_type === 'time' ? `Due @ ${mx.due_time} hrs` : `Due ${mx.due_date}`}</span>
+                </div>
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Squawks */}
+      {squawks.length > 0 && (
+        <div>
+          <div className="flex justify-between items-center mb-2">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-navy flex items-center gap-2"><AlertTriangle size={14} className="text-[#CE3732]" /> Open Squawks</p>
+            <button type="button" onClick={toggleSelectAllSquawks} className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-[#CE3732] hover:opacity-80 active:scale-95 transition-all">
+              <CheckSquare size={12} /> {squawks.every(sq => selectedSquawkIds.includes(sq.id)) ? 'Deselect All' : 'Select All'}
+            </button>
+          </div>
+          <div className="space-y-3 pb-1">
+            {squawks.map(sq => (
+              <label key={sq.id} className="flex items-start gap-3 p-3 border border-gray-200 rounded cursor-pointer hover:bg-gray-50">
+                <input type="checkbox" checked={selectedSquawkIds.includes(sq.id)} onChange={() => setSelectedSquawkIds(prev => prev.includes(sq.id) ? prev.filter(id => id !== sq.id) : [...prev, sq.id])} className="mt-1 w-4 h-4 text-[#CE3732] border-gray-300 rounded" />
+                <div>
+                  <span className="font-bold text-sm text-navy">{sq.description || 'No description'}</span>
+                  {sq.affects_airworthiness && sq.location && <span className="block text-[10px] font-bold text-[#CE3732]">⚠ Grounded at {sq.location}</span>}
+                  <span className="block text-[10px] text-gray-500">Reported {new Date(sq.created_at).toLocaleDateString()}</span>
+                </div>
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Add-on Services */}
+      <div>
+        <p className="text-[10px] font-bold uppercase tracking-widest text-navy mb-2 flex items-center gap-2"><Sparkles size={14} className="text-[#3AB0FF]" /> Additional Services</p>
+        <div className="grid grid-cols-2 gap-2">
+          {ADDON_OPTIONS.map(addon => (
+            <label key={addon} className="flex items-center gap-2 p-2 border border-gray-200 rounded cursor-pointer hover:bg-blue-50 text-xs">
+              <input type="checkbox" checked={selectedAddons.includes(addon)} onChange={() => setSelectedAddons(prev => prev.includes(addon) ? prev.filter(a => a !== addon) : [...prev, addon])} className="w-3.5 h-3.5 text-[#3AB0FF] border-gray-300 rounded" />
+              <span className="text-navy font-bold">{addon}</span>
+            </label>
+          ))}
+        </div>
+      </div>
+
+      <DateProposalSection wantsToPropose={wantsToPropose} setWantsToPropose={setWantsToPropose} proposedDate={proposedDate} setProposedDate={setProposedDate} />
+
+      {!showPreview ? (
+        <button onClick={() => setShowPreview(true)} className="w-full text-[10px] font-bold uppercase tracking-widest text-[#3AB0FF] hover:underline py-2">Preview Email Before Sending</button>
+      ) : (
+        <EmailPreview aircraft={aircraft} mxItems={mxItems.filter(mx => selectedMxIds.includes(mx.id))} squawks={squawks.filter(sq => selectedSquawkIds.includes(sq.id))} selectedAddons={selectedAddons} proposedDate={wantsToPropose ? proposedDate : null} onClose={() => setShowPreview(false)} />
+      )}
+
+      <PrimaryButton onClick={handleCreateAndSend} disabled={isSubmitting}>
+        {isSubmitting ? "Sending..." : "Send Work Package to Mechanic"}
+      </PrimaryButton>
+      <button onClick={handleSaveAsDraft} disabled={isSubmitting} className="w-full text-[10px] font-bold uppercase tracking-widest text-gray-500 hover:text-navy py-2 active:scale-95 transition-all disabled:opacity-50">
+        Save as Draft (Don&apos;t Send Yet)
+      </button>
+    </div>
+  );
+}

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { useBodyScrollOverride } from "@/hooks/useBodyScrollOverride";
 import { AlertTriangle, X, Image, MapPin } from "lucide-react";
 
 export default function SquawkViewer() {
@@ -13,6 +14,9 @@ export default function SquawkViewer() {
   const [aircraft, setAircraft] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [viewingPhoto, setViewingPhoto] = useState<string | null>(null);
+
+  // Replace dangerouslySetInnerHTML with hook-based style override
+  useBodyScrollOverride();
 
   useEffect(() => {
     if (squawkId) fetchSquawk();
@@ -33,19 +37,13 @@ export default function SquawkViewer() {
 
   if (isLoading) {
     return (
-      <>
-        <style dangerouslySetInnerHTML={{__html: `html, body { overflow: auto !important; touch-action: auto !important; height: auto !important; }` }} />
-        <div className="min-h-screen bg-neutral-100 flex items-center justify-center text-navy font-oswald tracking-widest uppercase text-xl">Loading Squawk Report...</div>
-      </>
+      <div className="min-h-screen bg-neutral-100 flex items-center justify-center text-navy font-oswald tracking-widest uppercase text-xl">Loading Squawk Report...</div>
     );
   }
 
   if (!squawk) {
     return (
-      <>
-        <style dangerouslySetInnerHTML={{__html: `html, body { overflow: auto !important; touch-action: auto !important; height: auto !important; }` }} />
-        <div className="min-h-screen bg-neutral-100 flex items-center justify-center text-navy font-oswald tracking-widest uppercase text-xl">Squawk Report Not Found</div>
-      </>
+      <div className="min-h-screen bg-neutral-100 flex items-center justify-center text-navy font-oswald tracking-widest uppercase text-xl">Squawk Report Not Found</div>
     );
   }
 
@@ -55,8 +53,6 @@ export default function SquawkViewer() {
 
   return (
     <>
-      <style dangerouslySetInnerHTML={{__html: `html, body { overflow: auto !important; touch-action: auto !important; height: auto !important; }` }} />
-
       {/* PHOTO LIGHTBOX */}
       {viewingPhoto && (
         <div className="fixed inset-0 z-[80] bg-black/90 flex items-center justify-center p-4 animate-fade-in" onClick={() => setViewingPhoto(null)}>

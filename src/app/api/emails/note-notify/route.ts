@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { Resend } from 'resend';
 import { requireAuth, requireAircraftAccess, handleApiError } from '@/lib/auth';
 import { env } from '@/lib/env';
+import { escapeHtml } from '@/lib/sanitize';
 
 const resend = new Resend(env.RESEND_API_KEY);
 const FROM_EMAIL = 'notifications@skywardsociety.com';
@@ -48,19 +49,21 @@ export async function POST(req: Request) {
     const dedupedRecipients = Array.from(new Set(recipients));
 
     if (dedupedRecipients.length > 0) {
-      const authorLabel = note.author_initials || 'A pilot';
-      const contentPreview = note.content.length > 200
-        ? note.content.substring(0, 200) + '...'
-        : note.content;
+      // Sanitize user-provided content
+      const safeAuthor = escapeHtml(note.author_initials || 'A pilot');
+      const safeTail = escapeHtml(aircraft.tail_number);
+      const contentPreview = escapeHtml(
+        note.content.length > 200 ? note.content.substring(0, 200) + '...' : note.content
+      );
       const hasPhotos = note.pictures && note.pictures.length > 0;
 
       await resend.emails.send({
         from: `Skyward Alerts <${FROM_EMAIL}>`,
         to: dedupedRecipients,
-        subject: `New Note: ${aircraft.tail_number}`,
+        subject: `New Note: ${safeTail}`,
         html: `
           <div style="font-family: Arial, sans-serif; font-size: 14px; color: #333333; line-height: 1.6; max-width: 600px;">
-            <p>${authorLabel} posted a note on ${aircraft.tail_number}.</p>
+            <p>${safeAuthor} posted a note on ${safeTail}.</p>
             
             <div style="margin-top: 15px; padding: 15px; background: #f9f9f9; border-left: 4px solid #091F3C; border-radius: 4px;">
               <p style="margin: 0; white-space: pre-wrap;">${contentPreview}</p>

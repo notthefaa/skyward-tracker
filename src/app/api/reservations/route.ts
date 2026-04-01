@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { Resend } from 'resend';
 import { requireAuth, handleApiError } from '@/lib/auth';
 import { env } from '@/lib/env';
+import { escapeHtml } from '@/lib/sanitize';
 
 const resend = new Resend(env.RESEND_API_KEY);
 const FROM_EMAIL = 'notifications@skywardsociety.com';
@@ -144,19 +145,25 @@ export async function POST(req: Request) {
           const startStr = new Date(startTime).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
           const endStr = new Date(endTime).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
 
+          // Sanitize user-provided values
+          const safeTail = escapeHtml(aircraft.tail_number);
+          const safeInitials = escapeHtml(userRole?.initials || 'A pilot');
+          const safeTitle = title ? escapeHtml(title) : '';
+          const safeRoute = route ? escapeHtml(route) : '';
+
           await resend.emails.send({
             from: `Skyward Aircraft Manager <${FROM_EMAIL}>`,
             to: emails,
-            subject: `${aircraft.tail_number} Reserved: ${new Date(startTime).toLocaleDateString()}`,
+            subject: `${safeTail} Reserved: ${new Date(startTime).toLocaleDateString()}`,
             html: `
               <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
                 <h2 style="color: #091F3C;">New Reservation</h2>
-                <p><strong>${userRole?.initials || 'A pilot'}</strong> has reserved <strong>${aircraft.tail_number}</strong>:</p>
+                <p><strong>${safeInitials}</strong> has reserved <strong>${safeTail}</strong>:</p>
                 <div style="margin: 20px 0; padding: 15px; background: #f9f9f9; border-left: 4px solid #3AB0FF; border-radius: 4px;">
                   <p style="margin: 0 0 8px 0;"><strong>From:</strong> ${startStr}</p>
                   <p style="margin: 0 0 8px 0;"><strong>To:</strong> ${endStr}</p>
-                  ${title ? `<p style="margin: 0 0 8px 0;"><strong>Purpose:</strong> ${title}</p>` : ''}
-                  ${route ? `<p style="margin: 0;"><strong>Route:</strong> ${route}</p>` : ''}
+                  ${safeTitle ? `<p style="margin: 0 0 8px 0;"><strong>Purpose:</strong> ${safeTitle}</p>` : ''}
+                  ${safeRoute ? `<p style="margin: 0;"><strong>Route:</strong> ${safeRoute}</p>` : ''}
                 </div>
                 <div style="margin-top: 25px; text-align: center;">
                   <a href="${new URL(req.url).origin}" style="display: inline-block; background-color: #091F3C; color: white; text-decoration: none; padding: 12px 28px; border-radius: 6px; font-weight: bold; font-size: 14px; letter-spacing: 1px;">OPEN AIRCRAFT MANAGER</a>
@@ -260,15 +267,19 @@ export async function DELETE(req: Request) {
         if (emails.length > 0) {
           const startStr = new Date(reservation.start_time).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
 
+          // Sanitize user-provided values
+          const safeTail = escapeHtml(aircraft.tail_number);
+          const safePilotName = escapeHtml(reservation.pilot_name);
+
           await resend.emails.send({
             from: `Skyward Aircraft Manager <${FROM_EMAIL}>`,
             to: emails,
-            subject: `${aircraft.tail_number} Reservation Cancelled: ${new Date(reservation.start_time).toLocaleDateString()}`,
+            subject: `${safeTail} Reservation Cancelled: ${new Date(reservation.start_time).toLocaleDateString()}`,
             html: `
               <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
                 <h2 style="color: #CE3732;">Reservation Cancelled</h2>
-                <p>A reservation for <strong>${aircraft.tail_number}</strong> on <strong>${startStr}</strong> has been cancelled.</p>
-                ${reservation.pilot_name ? `<p style="color: #666;">Originally booked by: ${reservation.pilot_name}</p>` : ''}
+                <p>A reservation for <strong>${safeTail}</strong> on <strong>${startStr}</strong> has been cancelled.</p>
+                ${safePilotName ? `<p style="color: #666;">Originally booked by: ${safePilotName}</p>` : ''}
                 <div style="margin-top: 25px; text-align: center;">
                   <a href="${new URL(req.url).origin}" style="display: inline-block; background-color: #091F3C; color: white; text-decoration: none; padding: 12px 28px; border-radius: 6px; font-weight: bold; font-size: 14px; letter-spacing: 1px;">OPEN AIRCRAFT MANAGER</a>
                 </div>

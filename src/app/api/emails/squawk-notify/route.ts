@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { Resend } from 'resend';
 import { requireAuth, requireAircraftAccess, handleApiError } from '@/lib/auth';
 import { env } from '@/lib/env';
+import { escapeHtml } from '@/lib/sanitize';
 
 const resend = new Resend(env.RESEND_API_KEY);
 const FROM_EMAIL = 'notifications@skywardsociety.com';
@@ -19,20 +20,31 @@ export async function POST(req: Request) {
       await requireAircraftAccess(supabaseAdmin, user.id, aircraft.id);
     }
 
+    // Sanitize all user-provided values for email HTML
+    const safeTail = escapeHtml(aircraft.tail_number);
+    const safeMxContact = escapeHtml(aircraft.mx_contact);
+    const safeMainContact = escapeHtml(aircraft.main_contact || 'Skyward Operations');
+    const safeMainPhone = escapeHtml(aircraft.main_contact_phone);
+    const safeMainEmail = escapeHtml(aircraft.main_contact_email);
+    const safeLocation = escapeHtml(squawk.location);
+    const safeDescription = escapeHtml(squawk.description);
+    const safeInitials = escapeHtml(squawk.reporter_initials || 'a pilot');
+    const appUrl = new URL(req.url).origin;
+
     // 1. EMAIL TO MECHANIC (only if reporter checked "Notify MX?")
     if (notifyMx && aircraft.mx_contact_email) {
       const mxCc = aircraft.main_contact_email ? [aircraft.main_contact_email] : [];
 
-      const mxGreeting = aircraft.mx_contact
-        ? `<p style="margin-bottom: 20px;">Hello ${aircraft.mx_contact},</p>`
+      const mxGreeting = safeMxContact
+        ? `<p style="margin-bottom: 20px;">Hello ${safeMxContact},</p>`
         : `<p style="margin-bottom: 20px;">Hello,</p>`;
 
       const mxSignature = `
         <p style="margin-top: 20px;">
           Thank you,<br/>
-          <strong>${aircraft.main_contact || 'Skyward Operations'}</strong><br/>
-          ${aircraft.main_contact_phone ? `${aircraft.main_contact_phone}<br/>` : ''}
-          ${aircraft.main_contact_email ? `<a href="mailto:${aircraft.main_contact_email}" style="color: #333333;">${aircraft.main_contact_email}</a>` : ''}
+          <strong>${safeMainContact}</strong><br/>
+          ${safeMainPhone ? `${safeMainPhone}<br/>` : ''}
+          ${safeMainEmail ? `<a href="mailto:${safeMainEmail}" style="color: #333333;">${safeMainEmail}</a>` : ''}
         </p>
       `;
 
@@ -40,20 +52,20 @@ export async function POST(req: Request) {
         from: `Skyward Operations <${FROM_EMAIL}>`,
         to: [aircraft.mx_contact_email],
         cc: mxCc,
-        subject: `Service Request: ${aircraft.tail_number} Squawk`,
+        subject: `Service Request: ${safeTail} Squawk`,
         html: `
           <div style="font-family: Arial, sans-serif; font-size: 14px; color: #333333; line-height: 1.6; max-width: 600px;">
             ${mxGreeting}
             
-            <p>A new squawk has been reported for ${aircraft.tail_number}. Please let us know when you are able to accommodate this aircraft in your schedule to address the issue.</p>
+            <p>A new squawk has been reported for ${safeTail}. Please let us know when you are able to accommodate this aircraft in your schedule to address the issue.</p>
             
             <p style="margin-top: 20px;"><strong>Squawk Details:</strong><br/>
-            Location: ${squawk.location}<br/>
+            Location: ${safeLocation}<br/>
             Status: ${squawk.affects_airworthiness ? 'AOG / GROUNDED' : 'Monitor'}<br/>
-            Description: ${squawk.description}</p>
+            Description: ${safeDescription}</p>
             
             <p style="margin-top: 20px;">You can view the full report and attached photos securely here:<br/>
-            <a href="${new URL(req.url).origin}/squawk/${squawk.id}">${new URL(req.url).origin}/squawk/${squawk.id}</a></p>
+            <a href="${appUrl}/squawk/${squawk.id}">${appUrl}/squawk/${squawk.id}</a></p>
             
             ${mxSignature}
           </div>
@@ -88,18 +100,18 @@ export async function POST(req: Request) {
           await resend.emails.send({
             from: `Skyward Alerts <${FROM_EMAIL}>`,
             to: dedupedRecipients,
-            subject: `New Squawk: ${aircraft.tail_number}`,
+            subject: `New Squawk: ${safeTail}`,
             html: `
               <div style="font-family: Arial, sans-serif; font-size: 14px; color: #333333; line-height: 1.6; max-width: 600px;">
-                <p>A new squawk was reported on ${aircraft.tail_number} by ${squawk.reporter_initials || 'a pilot'}.</p>
+                <p>A new squawk was reported on ${safeTail} by ${safeInitials}.</p>
                 
                 <p style="margin-top: 20px;"><strong>Squawk Details:</strong><br/>
-                Location: ${squawk.location}<br/>
+                Location: ${safeLocation}<br/>
                 Grounded: ${squawk.affects_airworthiness ? 'YES' : 'NO'}<br/>
-                Description: ${squawk.description}</p>
+                Description: ${safeDescription}</p>
                 
                 <div style="margin-top: 25px; text-align: center;">
-                  <a href="${new URL(req.url).origin}" style="display: inline-block; background-color: #091F3C; color: white; text-decoration: none; padding: 12px 28px; border-radius: 6px; font-weight: bold; font-size: 14px; letter-spacing: 1px;">OPEN AIRCRAFT MANAGER</a>
+                  <a href="${appUrl}" style="display: inline-block; background-color: #091F3C; color: white; text-decoration: none; padding: 12px 28px; border-radius: 6px; font-weight: bold; font-size: 14px; letter-spacing: 1px;">OPEN AIRCRAFT MANAGER</a>
                 </div>
               </div>
             `

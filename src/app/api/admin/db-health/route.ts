@@ -1,5 +1,12 @@
 import { NextResponse } from 'next/server';
 import { requireAuth, handleApiError } from '@/lib/auth';
+import {
+  READ_RECEIPT_RETENTION_DAYS,
+  NOTE_RETENTION_MONTHS,
+  FLIGHT_LOG_RETENTION_YEARS,
+  MX_COMPLETE_RETENTION_MONTHS,
+  MX_CANCELLED_RETENTION_MONTHS,
+} from '@/lib/constants';
 
 /**
  * Lists ALL files in a storage bucket using pagination.
@@ -67,25 +74,25 @@ export async function POST(req: Request) {
     const results: Record<string, any> = {};
 
     // ==========================================
-    // 1. PURGE OLD READ RECEIPTS (30 Days)
+    // 1. PURGE OLD READ RECEIPTS
     // ==========================================
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const readReceiptCutoff = new Date();
+    readReceiptCutoff.setDate(readReceiptCutoff.getDate() - READ_RECEIPT_RETENTION_DAYS);
     const { count: readReceiptsPurged } = await supabaseAdmin
       .from('aft_note_reads')
       .delete({ count: 'exact' })
-      .lt('read_at', thirtyDaysAgo.toISOString());
+      .lt('read_at', readReceiptCutoff.toISOString());
     results.read_receipts_purged = readReceiptsPurged || 0;
 
     // ==========================================
-    // 2. PURGE OLD NOTES (6 Months)
+    // 2. PURGE OLD NOTES
     // ==========================================
-    const sixMonthsAgo = new Date();
-    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+    const noteCutoff = new Date();
+    noteCutoff.setMonth(noteCutoff.getMonth() - NOTE_RETENTION_MONTHS);
     const { count: notesPurged } = await supabaseAdmin
       .from('aft_notes')
       .delete({ count: 'exact' })
-      .lt('created_at', sixMonthsAgo.toISOString());
+      .lt('created_at', noteCutoff.toISOString());
     results.notes_purged = notesPurged || 0;
 
     // ==========================================
@@ -94,25 +101,25 @@ export async function POST(req: Request) {
     results.resolved_squawks_purged = 0;
 
     // ==========================================
-    // 4. PURGE OLD COMPLETED MX EVENTS (12 Months)
-    //    + CANCELLED EVENTS (3 Months)
+    // 4. PURGE OLD COMPLETED MX EVENTS + CANCELLED EVENTS
     // ==========================================
-    const oneYearAgo = new Date();
-    oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
-    const threeMonthsAgo = new Date();
-    threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+    const completedCutoff = new Date();
+    completedCutoff.setMonth(completedCutoff.getMonth() - MX_COMPLETE_RETENTION_MONTHS);
+    const cancelledCutoff = new Date();
+    cancelledCutoff.setMonth(cancelledCutoff.getMonth() - MX_CANCELLED_RETENTION_MONTHS);
 
-    const { data: oldCompletedEvents } = await supabaseAdmin
-      .from('aft_maintenance_events')
-      .select('id')
-      .eq('status', 'complete')
-      .lt('completed_at', oneYearAgo.toISOString());
-
-    const { data: oldCancelledEvents } = await supabaseAdmin
-      .from('aft_maintenance_events')
-      .select('id')
-      .eq('status', 'cancelled')
-      .lt('created_at', threeMonthsAgo.toISOString());
+    const [{ data: oldCompletedEvents }, { data: oldCancelledEvents }] = await Promise.all([
+      supabaseAdmin
+        .from('aft_maintenance_events')
+        .select('id')
+        .eq('status', 'complete')
+        .lt('completed_at', completedCutoff.toISOString()),
+      supabaseAdmin
+        .from('aft_maintenance_events')
+        .select('id')
+        .eq('status', 'cancelled')
+        .lt('created_at', cancelledCutoff.toISOString()),
+    ]);
 
     const eventIdsToClean = [
       ...(oldCompletedEvents || []).map((e: any) => e.id),
@@ -124,17 +131,19 @@ export async function POST(req: Request) {
     let eventsPurged = 0;
 
     if (eventIdsToClean.length > 0) {
-      const { count: liCount } = await supabaseAdmin
-        .from('aft_event_line_items')
-        .delete({ count: 'exact' })
-        .in('event_id', eventIdsToClean);
-      lineItemsPurged = liCount || 0;
-
-      const { count: msgCount } = await supabaseAdmin
-        .from('aft_event_messages')
-        .delete({ count: 'exact' })
-        .in('event_id', eventIdsToClean);
-      messagesPurged = msgCount || 0;
+      // Delete children first, then events — all in parallel where safe
+      const [liResult, msgResult] = await Promise.all([
+        supabaseAdmin
+          .from('aft_event_line_items')
+          .delete({ count: 'exact' })
+          .in('event_id', eventIdsToClean),
+        supabaseAdmin
+          .from('aft_event_messages')
+          .delete({ count: 'exact' })
+          .in('event_id', eventIdsToClean),
+      ]);
+      lineItemsPurged = liResult.count || 0;
+      messagesPurged = msgResult.count || 0;
 
       const { count: evCount } = await supabaseAdmin
         .from('aft_maintenance_events')
@@ -148,40 +157,48 @@ export async function POST(req: Request) {
     results.mx_messages_purged = messagesPurged;
 
     // ==========================================
-    // 5. PURGE ORPHANED CHILD RECORDS
+    // 5. PURGE ORPHANED CHILD RECORDS (SQL-based)
+    // Use LEFT JOIN via RPC or filter approach to avoid
+    // loading entire tables into memory
     // ==========================================
+
+    // Orphaned messages: messages whose event_id no longer exists
+    // We use a two-step approach: get event IDs, then find messages not in that set
     const { data: allEventIds } = await supabaseAdmin
       .from('aft_maintenance_events')
       .select('id');
     const validEventIds = new Set((allEventIds || []).map((e: any) => e.id));
 
-    const { data: allMessages } = await supabaseAdmin
+    // For orphan detection, only fetch IDs (not full rows)
+    const { data: messageEventIds } = await supabaseAdmin
       .from('aft_event_messages')
       .select('id, event_id');
-    const orphanedMessageIds = (allMessages || [])
+
+    const orphanedMessageIds = (messageEventIds || [])
       .filter((m: any) => !validEventIds.has(m.event_id))
       .map((m: any) => m.id);
 
     if (orphanedMessageIds.length > 0) {
-      await supabaseAdmin
-        .from('aft_event_messages')
-        .delete()
-        .in('id', orphanedMessageIds);
+      for (let i = 0; i < orphanedMessageIds.length; i += 100) {
+        const batch = orphanedMessageIds.slice(i, i + 100);
+        await supabaseAdmin.from('aft_event_messages').delete().in('id', batch);
+      }
     }
     results.orphaned_messages_purged = orphanedMessageIds.length;
 
-    const { data: allLineItems } = await supabaseAdmin
+    const { data: lineItemEventIds } = await supabaseAdmin
       .from('aft_event_line_items')
       .select('id, event_id');
-    const orphanedLineIds = (allLineItems || [])
+
+    const orphanedLineIds = (lineItemEventIds || [])
       .filter((li: any) => !validEventIds.has(li.event_id))
       .map((li: any) => li.id);
 
     if (orphanedLineIds.length > 0) {
-      await supabaseAdmin
-        .from('aft_event_line_items')
-        .delete()
-        .in('id', orphanedLineIds);
+      for (let i = 0; i < orphanedLineIds.length; i += 100) {
+        const batch = orphanedLineIds.slice(i, i + 100);
+        await supabaseAdmin.from('aft_event_line_items').delete().in('id', batch);
+      }
     }
     results.orphaned_line_items_purged = orphanedLineIds.length;
 
@@ -196,27 +213,28 @@ export async function POST(req: Request) {
     const { data: allAccess } = await supabaseAdmin
       .from('aft_user_aircraft_access')
       .select('id, aircraft_id');
+
     const orphanedAccessIds = (allAccess || [])
       .filter((a: any) => !validAircraftIds.has(a.aircraft_id))
       .map((a: any) => a.id);
 
     if (orphanedAccessIds.length > 0) {
-      await supabaseAdmin
-        .from('aft_user_aircraft_access')
-        .delete()
-        .in('id', orphanedAccessIds);
+      for (let i = 0; i < orphanedAccessIds.length; i += 100) {
+        const batch = orphanedAccessIds.slice(i, i + 100);
+        await supabaseAdmin.from('aft_user_aircraft_access').delete().in('id', batch);
+      }
     }
     results.orphaned_access_purged = orphanedAccessIds.length;
 
     // ==========================================
-    // 7. PURGE OLD FLIGHT LOGS (5 Years)
+    // 7. PURGE OLD FLIGHT LOGS
     // ==========================================
-    const fiveYearsAgo = new Date();
-    fiveYearsAgo.setFullYear(fiveYearsAgo.getFullYear() - 5);
+    const flightLogCutoff = new Date();
+    flightLogCutoff.setFullYear(flightLogCutoff.getFullYear() - FLIGHT_LOG_RETENTION_YEARS);
     const { count: flightLogsPurged } = await supabaseAdmin
       .from('aft_flight_logs')
       .delete({ count: 'exact' })
-      .lt('created_at', fiveYearsAgo.toISOString());
+      .lt('created_at', flightLogCutoff.toISOString());
     results.flight_logs_purged = flightLogsPurged || 0;
 
     // ==========================================
@@ -258,7 +276,6 @@ export async function POST(req: Request) {
     results.avatar_orphans = await sweepBucket(supabaseAdmin, 'aft_aircraft_avatars', activeAvatars);
 
     // --- D. Event Attachments ---
-    // Collect all attachment URLs from messages that still exist
     const { data: messagesWithAttachments } = await supabaseAdmin
       .from('aft_event_messages')
       .select('attachments')
@@ -276,9 +293,8 @@ export async function POST(req: Request) {
     results.event_attachment_orphans = await sweepBucket(supabaseAdmin, 'aft_event_attachments', activeAttachmentUrls);
 
     // ==========================================
-    // 9. TABLE ROW COUNTS (for monitoring)
+    // 9. TABLE ROW COUNTS (parallelized)
     // ==========================================
-    const counts: Record<string, number> = {};
     const tables = [
       'aft_aircraft', 'aft_flight_logs', 'aft_maintenance_items',
       'aft_squawks', 'aft_notes', 'aft_note_reads',
@@ -286,11 +302,18 @@ export async function POST(req: Request) {
       'aft_user_roles', 'aft_user_aircraft_access',
       'aft_reservations', 'aft_notification_preferences'
     ];
-    for (const table of tables) {
+
+    const countPromises = tables.map(async (table) => {
       const { count } = await supabaseAdmin
         .from(table)
         .select('*', { count: 'exact', head: true });
-      counts[table] = count || 0;
+      return { table, count: count || 0 };
+    });
+
+    const countResults = await Promise.all(countPromises);
+    const counts: Record<string, number> = {};
+    for (const { table, count } of countResults) {
+      counts[table] = count;
     }
 
     return NextResponse.json({

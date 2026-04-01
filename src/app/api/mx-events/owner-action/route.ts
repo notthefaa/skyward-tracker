@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { Resend } from 'resend';
 import { requireAuth, requireAircraftAccess, handleApiError } from '@/lib/auth';
 import { env } from '@/lib/env';
+import { escapeHtml } from '@/lib/sanitize';
 import { cancelConflictingReservations } from '@/lib/mxConflicts';
 
 const resend = new Resend(env.RESEND_API_KEY);
@@ -28,13 +29,15 @@ export async function POST(req: Request) {
 
     const portalUrl = `${new URL(req.url).origin}/service/${event.access_token}`;
     const mxEmail = event.mx_contact_email;
-    const mxName = event.mx_contact_name || 'Maintenance';
     const primaryEmail = event.primary_contact_email;
-    const primaryName = event.primary_contact_name || 'Owner';
+
+    // Sanitize all user-provided strings
+    const safeMxName = escapeHtml(event.mx_contact_name || 'Maintenance');
+    const safePrimaryName = escapeHtml(event.primary_contact_name || 'Owner');
+    const safeMessage = escapeHtml(message);
 
     if (action === 'confirm') {
       // Owner confirms mechanic's proposed date
-      // The mechanic already set service_duration_days and estimated_completion when proposing
       await supabaseAdmin.from('aft_maintenance_events').update({
         status: 'confirmed',
         confirmed_date: event.proposed_date,
@@ -64,9 +67,9 @@ export async function POST(req: Request) {
           html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
               <h2 style="color: #091F3C;">Date Confirmed</h2>
-              <p>Hello ${mxName},</p>
-              <p>${primaryName} has confirmed the proposed service date of <strong>${event.proposed_date}</strong>${durationLabel}.</p>
-              ${message ? `<p style="margin-top: 15px; padding: 15px; background: #f9f9f9; border-left: 4px solid #56B94A; border-radius: 4px;"><em>${message}</em></p>` : ''}
+              <p>Hello ${safeMxName},</p>
+              <p>${safePrimaryName} has confirmed the proposed service date of <strong>${escapeHtml(event.proposed_date)}</strong>${durationLabel}.</p>
+              ${safeMessage ? `<p style="margin-top: 15px; padding: 15px; background: #f9f9f9; border-left: 4px solid #56B94A; border-radius: 4px;"><em>${safeMessage}</em></p>` : ''}
               <p style="margin-top: 20px;"><a href="${portalUrl}" style="background: #091F3C; color: white; padding: 12px 24px; border-radius: 4px; text-decoration: none; font-weight: bold;">View Service Portal</a></p>
             </div>
           `
@@ -119,9 +122,9 @@ export async function POST(req: Request) {
           html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
               <h2 style="color: #091F3C;">Counter Proposal</h2>
-              <p>Hello ${mxName},</p>
-              <p>${primaryName} has proposed a different service date: <strong>${proposedDate}</strong>.</p>
-              ${message ? `<p style="margin-top: 15px; padding: 15px; background: #f9f9f9; border-left: 4px solid #F08B46; border-radius: 4px;"><em>${message}</em></p>` : ''}
+              <p>Hello ${safeMxName},</p>
+              <p>${safePrimaryName} has proposed a different service date: <strong>${escapeHtml(proposedDate)}</strong>.</p>
+              ${safeMessage ? `<p style="margin-top: 15px; padding: 15px; background: #f9f9f9; border-left: 4px solid #F08B46; border-radius: 4px;"><em>${safeMessage}</em></p>` : ''}
               <p style="margin-top: 20px;"><a href="${portalUrl}" style="background: #091F3C; color: white; padding: 12px 24px; border-radius: 4px; text-decoration: none; font-weight: bold;">View Service Portal</a></p>
             </div>
           `
@@ -144,13 +147,13 @@ export async function POST(req: Request) {
           to: [mxEmail],
           cc: primaryEmail ? [primaryEmail] : [],
           replyTo: primaryEmail || undefined,
-          subject: `Message from ${primaryName}`,
+          subject: `Message from ${safePrimaryName}`,
           html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
               <h2 style="color: #091F3C;">New Message</h2>
-              <p>Hello ${mxName},</p>
-              <p>${primaryName} sent you a message:</p>
-              <p style="margin-top: 15px; padding: 15px; background: #f9f9f9; border-left: 4px solid #3AB0FF; border-radius: 4px;"><em>${message}</em></p>
+              <p>Hello ${safeMxName},</p>
+              <p>${safePrimaryName} sent you a message:</p>
+              <p style="margin-top: 15px; padding: 15px; background: #f9f9f9; border-left: 4px solid #3AB0FF; border-radius: 4px;"><em>${safeMessage}</em></p>
               <p style="margin-top: 20px;"><a href="${portalUrl}" style="background: #091F3C; color: white; padding: 12px 24px; border-radius: 4px; text-decoration: none; font-weight: bold;">View Service Portal</a></p>
             </div>
           `
@@ -177,13 +180,13 @@ export async function POST(req: Request) {
           to: [mxEmail],
           cc: primaryEmail ? [primaryEmail] : [],
           replyTo: primaryEmail || undefined,
-          subject: `Service Cancelled — ${event.primary_contact_name || 'Owner'}`,
+          subject: `Service Cancelled — ${safePrimaryName}`,
           html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
               <h2 style="color: #CE3732;">Service Event Cancelled</h2>
-              <p>Hello ${mxName},</p>
-              <p>${primaryName} has cancelled the pending service event.</p>
-              ${message ? `<p style="margin-top: 15px; padding: 15px; background: #f9f9f9; border-left: 4px solid #CE3732; border-radius: 4px;"><em>${message}</em></p>` : ''}
+              <p>Hello ${safeMxName},</p>
+              <p>${safePrimaryName} has cancelled the pending service event.</p>
+              ${safeMessage ? `<p style="margin-top: 15px; padding: 15px; background: #f9f9f9; border-left: 4px solid #CE3732; border-radius: 4px;"><em>${safeMessage}</em></p>` : ''}
               <p style="margin-top: 15px; color: #666;">No further action is needed on your end. We apologize for any inconvenience.</p>
             </div>
           `

@@ -11,30 +11,50 @@ export default function FleetSummary({
   onSelectAircraft: (tail: string) => void 
 }) {
   const { data: fleetData = [], isLoading } = useSWR(
-    aircraftList.length > 0 ? `fleet-${aircraftList.map(a => a.id).join('-')}` : null,
+    aircraftList.length > 0 ? `fleet-${aircraftList.length}-${aircraftList.map(a => a.id).join(',')}` : null,
     async () => {
       const aircraftIds = aircraftList.map(a => a.id);
+
+      // Fetch only the columns we need (not SELECT *)
       const [mxRes, sqRes] = await Promise.all([
-        supabase.from('aft_maintenance_items').select('*').in('aircraft_id', aircraftIds),
-        supabase.from('aft_squawks').select('*').in('aircraft_id', aircraftIds).eq('status', 'open')
+        supabase.from('aft_maintenance_items')
+          .select('aircraft_id, item_name, tracking_type, is_required, due_time, due_date, time_interval')
+          .in('aircraft_id', aircraftIds),
+        supabase.from('aft_squawks')
+          .select('aircraft_id, affects_airworthiness')
+          .in('aircraft_id', aircraftIds)
+          .eq('status', 'open')
       ]);
       const mxData = mxRes.data || [];
       const sqData = sqRes.data || [];
 
+      // Pre-index by aircraft_id for O(1) lookups instead of O(n) filters
+      const mxByAircraft: Record<string, any[]> = {};
+      const sqByAircraft: Record<string, any[]> = {};
+      
+      for (const m of mxData) {
+        if (!mxByAircraft[m.aircraft_id]) mxByAircraft[m.aircraft_id] = [];
+        mxByAircraft[m.aircraft_id].push(m);
+      }
+      for (const s of sqData) {
+        if (!sqByAircraft[s.aircraft_id]) sqByAircraft[s.aircraft_id] = [];
+        sqByAircraft[s.aircraft_id].push(s);
+      }
+
       return aircraftList.map(ac => {
-        const acMx = mxData.filter(m => m.aircraft_id === ac.id);
-        const acSq = sqData.filter(s => s.aircraft_id === ac.id);
+        const acMx = mxByAircraft[ac.id] || [];
+        const acSq = sqByAircraft[ac.id] || [];
         let isGrounded = false;
         let hasIssues = acSq.length > 0;
 
-        acMx.forEach(item => {
-          if (!item.is_required) return;
-          if (item.tracking_type === 'time' && (item.due_time ?? 0) <= (ac.total_engine_time || 0)) isGrounded = true;
-          if (item.tracking_type === 'date' && new Date((item.due_date ?? '') + 'T00:00:00') < new Date(new Date().setHours(0,0,0,0))) isGrounded = true;
-        });
+        for (const item of acMx) {
+          if (!item.is_required) continue;
+          if (item.tracking_type === 'time' && (item.due_time ?? 0) <= (ac.total_engine_time || 0)) { isGrounded = true; break; }
+          if (item.tracking_type === 'date' && new Date((item.due_date ?? '') + 'T00:00:00') < new Date(new Date().setHours(0,0,0,0))) { isGrounded = true; break; }
+        }
         if (acSq.some((sq: any) => sq.affects_airworthiness)) isGrounded = true;
 
-        // Use shared math utility
+        // Find next MX due
         const processedMx = acMx.map(item => processMxItem(item, ac.total_engine_time || 0, ac.burnRate, ac.burnRateLow, ac.burnRateHigh));
         processedMx.sort((a, b) => a.remaining - b.remaining);
         const nextMx = processedMx[0];
@@ -47,11 +67,7 @@ export default function FleetSummary({
         };
       });
     },
-    {
-      // Always fetch fresh fleet status when the user navigates to the Fleet tab,
-      // since individual aircraft MX/squawk status may have changed
-      revalidateOnMount: true,
-    }
+    { revalidateOnMount: true }
   );
 
   if (isLoading && fleetData.length === 0) {

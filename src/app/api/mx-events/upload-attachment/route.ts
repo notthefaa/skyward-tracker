@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { Resend } from 'resend';
 import { createAdminClient, handleApiError } from '@/lib/auth';
 import { env } from '@/lib/env';
+import { escapeHtml } from '@/lib/sanitize';
+import { PORTAL_EXPIRY_DAYS } from '@/lib/constants';
 
 const resend = new Resend(env.RESEND_API_KEY);
 const FROM_EMAIL = 'notifications@skywardsociety.com';
@@ -48,9 +50,9 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Service event not found.' }, { status: 404 });
     }
 
-    // Token expiry: reject uploads on events completed more than 7 days ago
+    // Token expiry: reject uploads on events completed more than PORTAL_EXPIRY_DAYS ago
     if (event.status === 'complete' && event.completed_at) {
-      const expiryDate = new Date(new Date(event.completed_at).getTime() + 7 * 24 * 60 * 60 * 1000);
+      const expiryDate = new Date(new Date(event.completed_at).getTime() + PORTAL_EXPIRY_DAYS * 24 * 60 * 60 * 1000);
       if (new Date() > expiryDate) {
         return NextResponse.json({ error: 'This service portal link has expired.' }, { status: 403 });
       }
@@ -129,23 +131,26 @@ export async function POST(req: Request) {
     // Notify the owner
     if (event.primary_contact_email) {
       const appUrl = baseUrl;
+      const safeMxName = escapeHtml(event.mx_contact_name || 'Your mechanic');
+      const safeDescription = escapeHtml(description);
 
       const fileList = attachments
         .map(a => {
           const isImage = a.type.startsWith('image/');
-          return `<li style="margin-bottom: 4px;">${isImage ? '📷' : '📎'} ${a.filename}</li>`;
+          const safeFilename = escapeHtml(a.filename);
+          return `<li style="margin-bottom: 4px;">${isImage ? '📷' : '📎'} ${safeFilename}</li>`;
         })
         .join('');
 
       await resend.emails.send({
         from: `Skyward Operations <${FROM_EMAIL}>`,
         to: [event.primary_contact_email],
-        subject: `${event.mx_contact_name || 'Your mechanic'} uploaded files to your work package`,
+        subject: `${safeMxName} uploaded files to your work package`,
         html: `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
             <h2 style="color: #091F3C;">Files Uploaded</h2>
-            <p>${event.mx_contact_name || 'Your maintenance provider'} has uploaded ${attachments.length} file${attachments.length > 1 ? 's' : ''} to your service event:</p>
-            ${description ? `<p style="margin-top: 15px; padding: 15px; background: #f9f9f9; border-left: 4px solid #3AB0FF; border-radius: 4px;"><em>${description}</em></p>` : ''}
+            <p>${safeMxName} has uploaded ${attachments.length} file${attachments.length > 1 ? 's' : ''} to your service event:</p>
+            ${safeDescription ? `<p style="margin-top: 15px; padding: 15px; background: #f9f9f9; border-left: 4px solid #3AB0FF; border-radius: 4px;"><em>${safeDescription}</em></p>` : ''}
             <ul style="margin-top: 15px; font-size: 14px; color: #333;">${fileList}</ul>
             <p style="margin-top: 15px; color: #666;">Open the app to view the full details.</p>
             <div style="margin-top: 25px; text-align: center;">

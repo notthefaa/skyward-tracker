@@ -4,8 +4,9 @@ import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import { authFetch } from "@/lib/authFetch";
 import { validateFileSize, MAX_UPLOAD_SIZE_LABEL } from "@/lib/constants";
+import { INPUT_WHITE_BG } from "@/lib/styles";
 import type { AircraftWithMetrics } from "@/lib/types";
-import { X } from "lucide-react";
+import { X, Info } from "lucide-react";
 import { PrimaryButton } from "@/components/AppButtons";
 import imageCompression from "browser-image-compression";
 import ReactCrop, { Crop } from "react-image-crop";
@@ -41,6 +42,9 @@ export default function AircraftModal({
   const [crop, setCrop] = useState<Crop>({ unit: '%', width: 100, height: 56.25, x: 0, y: 0 });
   const imageRef = useRef<HTMLImageElement>(null);
 
+  // Track whether the aircraft has flight logs (affects time field editability)
+  const [hasFlightLogs, setHasFlightLogs] = useState(false);
+
   useEffect(() => {
     if (existingAircraft) {
       setNewTail(existingAircraft.tail_number); 
@@ -63,8 +67,19 @@ export default function AircraftModal({
       setNewMxContact(existingAircraft.mx_contact || ""); 
       setNewMxContactPhone(existingAircraft.mx_contact_phone || ""); 
       setNewMxContactEmail(existingAircraft.mx_contact_email || ""); 
+
+      // Check if flight logs exist for this aircraft
+      checkForFlightLogs(existingAircraft.id);
     }
   }, [existingAircraft]);
+
+  const checkForFlightLogs = async (aircraftId: string) => {
+    const { count } = await supabase
+      .from('aft_flight_logs')
+      .select('id', { count: 'exact', head: true })
+      .eq('aircraft_id', aircraftId);
+    setHasFlightLogs((count || 0) > 0);
+  };
 
   const onSelectFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -130,7 +145,8 @@ export default function AircraftModal({
             avatarUrl = urlData.publicUrl;
           }
         } catch (err) { 
-          console.error(err); 
+          console.error('Avatar upload failed:', err); 
+          alert('Failed to upload aircraft photo. The aircraft will be saved without the photo.');
         }
       }
     }
@@ -161,26 +177,25 @@ export default function AircraftModal({
         setup_tach: newType === 'Piston' ? newSetupEngine : 0,
       });
 
-      // Determine the correct total times.
-      // If flight logs exist, the latest log's cumulative times ARE the true total —
-      // setup values don't affect them. If NO logs exist, the setup IS the total.
-      const { data: latestLog } = await supabase
-        .from('aft_flight_logs')
-        .select('aftt, ftt, hobbs, tach')
-        .eq('aircraft_id', existingAircraft.id)
-        .order('created_at', { ascending: false })
-        .limit(1);
-
-      if (latestLog && latestLog.length > 0) {
+      if (hasFlightLogs) {
         // Flight logs exist — the latest log holds the true current times.
         // Setup changes don't affect totals when there's real flight data.
-        const log = latestLog[0] as any;
-        if (newType === 'Turbine') {
-          basePayload.total_airframe_time = log.aftt || existingAircraft.total_airframe_time || 0;
-          basePayload.total_engine_time = log.ftt || existingAircraft.total_engine_time || 0;
-        } else {
-          basePayload.total_airframe_time = log.hobbs || existingAircraft.total_airframe_time || 0;
-          basePayload.total_engine_time = log.tach || existingAircraft.total_engine_time || 0;
+        const { data: latestLog } = await supabase
+          .from('aft_flight_logs')
+          .select('aftt, ftt, hobbs, tach')
+          .eq('aircraft_id', existingAircraft.id)
+          .order('created_at', { ascending: false })
+          .limit(1);
+
+        if (latestLog && latestLog.length > 0) {
+          const log = latestLog[0] as any;
+          if (newType === 'Turbine') {
+            basePayload.total_airframe_time = log.aftt || existingAircraft.total_airframe_time || 0;
+            basePayload.total_engine_time = log.ftt || existingAircraft.total_engine_time || 0;
+          } else {
+            basePayload.total_airframe_time = log.hobbs || existingAircraft.total_airframe_time || 0;
+            basePayload.total_engine_time = log.tach || existingAircraft.total_engine_time || 0;
+          }
         }
       } else {
         // No flight logs — setup values are the starting point, so totals = setup.
@@ -226,13 +241,16 @@ export default function AircraftModal({
     setIsSubmitting(false);
   };
 
+  const isEditing = !!existingAircraft;
+  const timeFieldsLocked = isEditing && hasFlightLogs;
+
   return (
     <div className="fixed inset-0 bg-black/60 z-[10000] flex items-center justify-center p-4 animate-fade-in">
       <div className="bg-white rounded shadow-2xl w-full max-w-md p-6 border-t-4 border-[#F08B46] max-h-[90vh] overflow-y-auto animate-slide-up">
         
         <div className="flex justify-between items-center mb-6">
           <h2 className="font-oswald text-2xl font-bold uppercase text-[#1B4869]">
-            {existingAircraft ? 'Edit Aircraft' : 'Add Aircraft'}
+            {isEditing ? 'Edit Aircraft' : 'Add Aircraft'}
           </h2>
           <button onClick={onClose} className="text-gray-400 hover:text-red-500 transition-colors">
             <X size={24}/>
@@ -268,22 +286,22 @@ export default function AircraftModal({
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">Tail Number</label>
-              <input type="text" required value={newTail} onChange={e => setNewTail(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 uppercase focus:border-[#F08B46] outline-none bg-white" />
+              <input type="text" required value={newTail} onChange={e => setNewTail(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 uppercase focus:border-[#F08B46] outline-none" />
             </div>
             <div>
               <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">Serial Num</label>
-              <input type="text" value={newSerial} onChange={e => setNewSerial(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 uppercase focus:border-[#F08B46] outline-none bg-white" />
+              <input type="text" value={newSerial} onChange={e => setNewSerial(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 uppercase focus:border-[#F08B46] outline-none" />
             </div>
           </div>
           
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">Model Name</label>
-              <input type="text" required value={newModel} onChange={e => setNewModel(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none bg-white" />
+              <input type="text" required value={newModel} onChange={e => setNewModel(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" />
             </div>
             <div>
               <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">Engine Type</label>
-              <select value={newType} onChange={e => setNewType(e.target.value as 'Piston'|'Turbine')} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none bg-white">
+              <select value={newType} onChange={e => setNewType(e.target.value as 'Piston'|'Turbine')} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none">
                 <option value="Piston">Piston</option>
                 <option value="Turbine">Turbine</option>
               </select>
@@ -292,52 +310,80 @@ export default function AircraftModal({
 
           <div>
             <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">Home Airport</label>
-            <input type="text" value={newHomeAirport} onChange={e => setNewHomeAirport(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 uppercase focus:border-[#F08B46] outline-none bg-white" placeholder="ICAO" />
+            <input type="text" value={newHomeAirport} onChange={e => setNewHomeAirport(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 uppercase focus:border-[#F08B46] outline-none" placeholder="ICAO" />
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">Main Contact</label>
-              <input type="text" value={newMainContact} onChange={e => setNewMainContact(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none bg-white" />
+              <input type="text" value={newMainContact} onChange={e => setNewMainContact(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" />
             </div>
             <div>
               <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">Phone</label>
-              <input type="tel" value={newMainContactPhone} onChange={e => setNewMainContactPhone(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none bg-white" />
+              <input type="tel" value={newMainContactPhone} onChange={e => setNewMainContactPhone(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" />
             </div>
             <div>
               <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">Email</label>
-              <input type="email" value={newMainContactEmail} onChange={e => setNewMainContactEmail(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none bg-white" />
+              <input type="email" value={newMainContactEmail} onChange={e => setNewMainContactEmail(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" />
             </div>
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">MX Contact</label>
-              <input type="text" value={newMxContact} onChange={e => setNewMxContact(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none bg-white" />
+              <input type="text" value={newMxContact} onChange={e => setNewMxContact(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" />
             </div>
             <div>
               <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">MX Phone</label>
-              <input type="tel" value={newMxContactPhone} onChange={e => setNewMxContactPhone(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none bg-white" />
+              <input type="tel" value={newMxContactPhone} onChange={e => setNewMxContactPhone(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" />
             </div>
             <div>
               <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">MX Email</label>
-              <input type="email" value={newMxContactEmail} onChange={e => setNewMxContactEmail(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none bg-white" />
+              <input type="email" value={newMxContactEmail} onChange={e => setNewMxContactEmail(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" />
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4 border-t border-gray-200 pt-4 mt-2">
             <div>
               <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">
-                Current {newType === 'Turbine' ? 'AFTT' : 'Hobbs'} *
+                {timeFieldsLocked ? 'Setup' : 'Current'} {newType === 'Turbine' ? 'AFTT' : 'Hobbs'} *
               </label>
-              <input type="number" step="0.1" required value={newAirframeTime} onChange={e => setNewAirframeTime(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none bg-white" />
+              <input 
+                type="number" 
+                step="0.1" 
+                required={!timeFieldsLocked} 
+                value={newAirframeTime} 
+                onChange={e => setNewAirframeTime(e.target.value)} 
+                disabled={timeFieldsLocked}
+                style={INPUT_WHITE_BG} 
+                className={`w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none ${timeFieldsLocked ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''}`}
+              />
             </div>
             <div>
               <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">
-                Current {newType === 'Turbine' ? 'FTT' : 'Tach'} *
+                {timeFieldsLocked ? 'Setup' : 'Current'} {newType === 'Turbine' ? 'FTT' : 'Tach'} *
               </label>
-              <input type="number" step="0.1" required value={newEngineTime} onChange={e => setNewEngineTime(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none bg-white" />
+              <input 
+                type="number" 
+                step="0.1" 
+                required={!timeFieldsLocked} 
+                value={newEngineTime} 
+                onChange={e => setNewEngineTime(e.target.value)} 
+                disabled={timeFieldsLocked}
+                style={INPUT_WHITE_BG} 
+                className={`w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none ${timeFieldsLocked ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''}`}
+              />
             </div>
+            {timeFieldsLocked && (
+              <div className="col-span-2 flex items-start gap-2 bg-blue-50 border border-blue-200 rounded p-3">
+                <Info size={16} className="text-[#3AB0FF] shrink-0 mt-0.5" />
+                <p className="text-[10px] text-gray-600 leading-tight">
+                  Current times are driven by flight logs and cannot be edited here. 
+                  The setup values above are preserved as your initial baseline. 
+                  To correct current times, edit or delete the latest flight log from the Times tab.
+                </p>
+              </div>
+            )}
           </div>
 
           <div className="pt-4">

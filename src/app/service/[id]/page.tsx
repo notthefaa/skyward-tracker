@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { validateFileSizes, MAX_UPLOAD_SIZE_LABEL } from "@/lib/constants";
+import { useBodyScrollOverride } from "@/hooks/useBodyScrollOverride";
+import { validateFileSizes, MAX_UPLOAD_SIZE_LABEL, PORTAL_EXPIRY_DAYS } from "@/lib/constants";
 import { 
   Wrench, AlertTriangle, CheckCircle, Clock, Send, 
   MessageSquare, Calendar, Sparkles, X, Plus, Image, ArrowLeft, XCircle, Plane,
@@ -57,6 +58,9 @@ export default function ServicePortal() {
   const [confirmDurationDays, setConfirmDurationDays] = useState("");
   const [confirmMessage, setConfirmMessage] = useState("");
 
+  // Replace dangerouslySetInnerHTML with hook-based style override
+  useBodyScrollOverride();
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setIsAppUser(!!session);
@@ -74,7 +78,7 @@ export default function ServicePortal() {
     if (evData) {
       if (evData.status === 'complete' && evData.completed_at) {
         const completedDate = new Date(evData.completed_at);
-        const expiryDate = new Date(completedDate.getTime() + 7 * 24 * 60 * 60 * 1000);
+        const expiryDate = new Date(completedDate.getTime() + PORTAL_EXPIRY_DAYS * 24 * 60 * 60 * 1000);
         if (new Date() > expiryDate) {
           setIsExpired(true);
           setIsLoading(false);
@@ -187,19 +191,13 @@ export default function ServicePortal() {
 
   if (isLoading) {
     return (
-      <>
-        <style dangerouslySetInnerHTML={{__html: `html, body { overflow: auto !important; touch-action: auto !important; height: auto !important; }` }} />
-        <div className="min-h-screen bg-neutral-100 flex items-center justify-center text-navy font-oswald tracking-widest uppercase text-xl">Loading Service Portal...</div>
-      </>
+      <div className="min-h-screen bg-neutral-100 flex items-center justify-center text-navy font-oswald tracking-widest uppercase text-xl">Loading Service Portal...</div>
     );
   }
 
   if (!event || !aircraft) {
     return (
-      <>
-        <style dangerouslySetInnerHTML={{__html: `html, body { overflow: auto !important; touch-action: auto !important; height: auto !important; }` }} />
-        <div className="min-h-screen bg-neutral-100 flex items-center justify-center text-navy font-oswald tracking-widest uppercase text-xl">{isExpired ? 'This Service Portal Link Has Expired' : 'Service Event Not Found'}</div>
-      </>
+      <div className="min-h-screen bg-neutral-100 flex items-center justify-center text-navy font-oswald tracking-widest uppercase text-xl">{isExpired ? 'This Service Portal Link Has Expired' : 'Service Event Not Found'}</div>
     );
   }
 
@@ -211,8 +209,6 @@ export default function ServicePortal() {
 
   return (
     <>
-      <style dangerouslySetInnerHTML={{__html: `html, body { overflow: auto !important; touch-action: auto !important; height: auto !important; }` }} />
-
       {viewingPhoto && (
         <div className="fixed inset-0 z-[80] bg-black/90 flex items-center justify-center p-4 animate-fade-in" onClick={() => setViewingPhoto(null)}>
           <button onClick={() => setViewingPhoto(null)} className="absolute top-4 right-4 text-white hover:text-gray-300"><X size={32}/></button>
@@ -491,7 +487,7 @@ export default function ServicePortal() {
           {/* UPLOAD FILES / DOCUMENTS */}
           {event.status !== 'complete' && event.status !== 'cancelled' && (
             <div className="bg-white shadow-lg rounded-sm p-6 border-t-4 border-[#3AB0FF]">
-              <h3 className="font-oswald text-lg font-bold uppercase tracking-widest text-navy mb-4 flex items-center gap-2"><Upload size={18} className="text-[#3AB0FF]"/> Upload Photos & Documents</h3>
+              <h3 className="font-oswald text-lg font-bold uppercase tracking-widest text-navy mb-4 flex items-center gap-2"><Upload size={18} className="text-[#3AB0FF]"/> Upload Photos &amp; Documents</h3>
               {!showUploadForm ? (
                 <button onClick={() => setShowUploadForm(true)} className="w-full border-2 border-dashed border-gray-300 text-gray-500 font-bold py-3 rounded hover:bg-gray-50 hover:border-[#3AB0FF] active:scale-95 transition-all text-sm uppercase tracking-widest">+ Attach Files</button>
               ) : (
