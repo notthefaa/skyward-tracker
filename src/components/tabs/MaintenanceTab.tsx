@@ -2,16 +2,15 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { authFetch } from "@/lib/authFetch";
 import { processMxItem, getMxTextColor, isMxExpired } from "@/lib/math";
+import { INPUT_WHITE_BG } from "@/lib/styles";
 import type { AircraftWithMetrics, SystemSettings, AircraftRole, MxSubTab } from "@/lib/types";
 import useSWR from "swr";
-import { Wrench, Trash2, Plus, X, Edit2, Calendar, Send, ExternalLink, ChevronRight, HelpCircle, AlertTriangle, Download } from "lucide-react";
+import { Wrench, Trash2, Plus, X, Edit2, Calendar, Send, ExternalLink, ChevronRight, HelpCircle, AlertTriangle, Download, Layers, Settings } from "lucide-react";
 import { PrimaryButton } from "@/components/AppButtons";
 import ServiceEventModal from "@/components/modals/ServiceEventModal";
 import MxGuideModal from "@/components/modals/MxGuideModal";
+import MxTemplatePickerModal from "@/components/modals/MxTemplatePickerModal";
 import SquawksTab from "@/components/tabs/SquawksTab";
-
-// Inline style object for forcing white backgrounds on inputs
-const whiteBg = { backgroundColor: '#ffffff' } as const;
 
 export default function MaintenanceTab({ 
   aircraft, role, aircraftRole, onGroundedStatusChange, sysSettings, session, userInitials, initialSubTab
@@ -30,6 +29,7 @@ export default function MaintenanceTab({
   useEffect(() => {
     if (initialSubTab) setSubTab(initialSubTab);
   }, [initialSubTab]);
+
   const canEditMx = role === 'admin' || aircraftRole === 'admin';
   const currentEngineTime = aircraft?.total_engine_time || 0;
   const isTurbine = aircraft?.engine_type === 'Turbine';
@@ -53,6 +53,7 @@ export default function MaintenanceTab({
   const [showMxModal, setShowMxModal] = useState(false);
   const [showServiceModal, setShowServiceModal] = useState(false);
   const [showGuideModal, setShowGuideModal] = useState(false);
+  const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [mxName, setMxName] = useState("");
@@ -64,6 +65,19 @@ export default function MaintenanceTab({
   const [confirmResendId, setConfirmResendId] = useState<string | null>(null);
   const [resendingEventId, setResendingEventId] = useState<string | null>(null);
   const [isExportingMx, setIsExportingMx] = useState(false);
+
+  // ─── Separate items into active tracking vs needs-setup ───
+  const needsSetupItems = mxItems.filter(item => {
+    if (item.tracking_type === 'time') return item.due_time === null || item.due_time === undefined;
+    if (item.tracking_type === 'date') return item.due_date === null || item.due_date === undefined;
+    return false;
+  });
+
+  const activeItems = mxItems.filter(item => {
+    if (item.tracking_type === 'time') return item.due_time !== null && item.due_time !== undefined;
+    if (item.tracking_type === 'date') return item.due_date !== null && item.due_date !== undefined;
+    return true;
+  });
 
   const exportMxHistory = async () => {
     if (!aircraft) return;
@@ -95,20 +109,16 @@ export default function MaintenanceTab({
 
       for (const ev of completedEvents) {
         if (y > 240) { doc.addPage(); y = 20; }
-
         const evLines = (allLineItems || []).filter((li: any) => li.event_id === ev.id);
         const completedDate = ev.completed_at ? new Date(ev.completed_at).toLocaleDateString() : 'Unknown';
-
         doc.setDrawColor(9, 31, 60); doc.setLineWidth(0.5);
         doc.line(14, y, 196, y); y += 8;
-
         doc.setFont("helvetica", "bold"); doc.setFontSize(12);
         doc.text(`Service Completed: ${completedDate}`, 14, y); y += 6;
         doc.setFontSize(9); doc.setFont("helvetica", "normal");
         if (ev.mx_contact_name) { doc.text(`Mechanic: ${ev.mx_contact_name}`, 14, y); y += 5; }
         if (ev.confirmed_date) { doc.text(`Service Date: ${ev.confirmed_date}`, 14, y); y += 5; }
         y += 3;
-
         for (const li of evLines) {
           if (y > 260) { doc.addPage(); y = 20; }
           doc.setFont("helvetica", "bold"); doc.setFontSize(10);
@@ -127,7 +137,6 @@ export default function MaintenanceTab({
         }
         y += 5;
       }
-
       doc.save(`${aircraft.tail_number}_Maintenance_History.pdf`);
     } catch (error) {
       console.error("MX export error:", error);
@@ -136,7 +145,8 @@ export default function MaintenanceTab({
     setIsExportingMx(false);
   };
 
-  const isGroundedLocally = mxItems.some(item => {
+  // Only check active items (not needs-setup) for grounded status
+  const isGroundedLocally = activeItems.some(item => {
     if (!item.is_required) return false;
     if (item.tracking_type === 'time') return item.due_time <= currentEngineTime;
     if (item.tracking_type === 'date') return new Date(item.due_date + 'T00:00:00') < new Date(new Date().setHours(0,0,0,0));
@@ -171,7 +181,7 @@ export default function MaintenanceTab({
   const handleResendWorkpackage = async (eventId: string) => {
     setResendingEventId(eventId); setConfirmResendId(null);
     try {
-      await authFetch('/api/mx-events/send-workpackage', { method: 'POST', body: JSON.stringify({ eventId }) });
+      await authFetch('/api/mx-events/send-workpackage', { method: 'POST', body: JSON.stringify({ eventId, resend: true }) });
     } catch (err) { console.error(err); alert("Failed to resend."); }
     setResendingEventId(null);
   };
@@ -191,9 +201,7 @@ export default function MaintenanceTab({
       payload.last_completed_time = null; payload.time_interval = null; payload.due_time = null;
     }
     if (editingId) { await supabase.from('aft_maintenance_items').update(payload).eq('id', editingId); }
-    else {
-      await supabase.from('aft_maintenance_items').insert(payload);
-    }
+    else { await supabase.from('aft_maintenance_items').insert(payload); }
     await mutate(); onGroundedStatusChange(); setShowMxModal(false); setIsSubmitting(false);
   };
 
@@ -205,6 +213,22 @@ export default function MaintenanceTab({
 
   const statusLabel = (s: string) => ({ draft: 'Draft — Review & Send', scheduling: 'Scheduling', confirmed: 'Confirmed', in_progress: 'In Progress', ready_for_pickup: 'Ready for Pickup', cancelled: 'Cancelled' }[s] || s);
   const statusColor = (s: string) => ({ draft: 'bg-[#F08B46]', scheduling: 'bg-gray-500', confirmed: 'bg-[#3AB0FF]', in_progress: 'bg-[#56B94A]', ready_for_pickup: 'bg-[#56B94A]', cancelled: 'bg-[#CE3732]' }[s] || 'bg-gray-400');
+
+  /** Format interval for display in needs-setup items */
+  const formatItemInterval = (item: any): string => {
+    if (item.tracking_type === 'time' && item.time_interval) {
+      return `Every ${item.time_interval.toLocaleString()} hrs`;
+    }
+    if (item.tracking_type === 'date' && item.date_interval_days) {
+      const days = item.date_interval_days;
+      if (days >= 365) {
+        const yrs = Math.round(days / 365);
+        return `Every ${yrs} year${yrs > 1 ? 's' : ''}`;
+      }
+      return `Every ${days} days`;
+    }
+    return '';
+  };
 
   return (
     <>
@@ -222,18 +246,27 @@ export default function MaintenanceTab({
       {subTab === 'maintenance' && (
         <>
           {canEditMx && (
-            <div className="mb-2 flex gap-2">
-              <div className="flex-1"><PrimaryButton onClick={() => openMxForm()}><Plus size={18} /> Track New MX Item</PrimaryButton></div>
-              <div className="flex-1">
-                <button onClick={() => setShowServiceModal(true)} className="w-full bg-[#F08B46] text-white font-oswald tracking-widest uppercase py-3 px-4 rounded hover:bg-opacity-90 active:scale-95 transition-all duration-150 ease-out flex justify-center items-center gap-2 text-sm">
-                  <Calendar size={18} /> Schedule Service
-                </button>
+            <div className="mb-2 space-y-2">
+              <div className="flex gap-2">
+                <div className="flex-1"><PrimaryButton onClick={() => openMxForm()}><Plus size={18} /> Track New Item</PrimaryButton></div>
+                <div className="flex-1">
+                  <button onClick={() => setShowServiceModal(true)} className="w-full bg-[#F08B46] text-white font-oswald tracking-widest uppercase py-3 px-4 rounded hover:bg-opacity-90 active:scale-95 transition-all duration-150 ease-out flex justify-center items-center gap-2 text-sm">
+                    <Calendar size={18} /> Schedule Service
+                  </button>
+                </div>
               </div>
+              <button 
+                onClick={() => setShowTemplateModal(true)} 
+                className="w-full border-2 border-dashed border-[#F08B46] text-[#F08B46] font-oswald font-bold uppercase tracking-widest py-2.5 rounded hover:bg-orange-50 active:scale-95 transition-all text-xs flex justify-center items-center gap-2"
+              >
+                <Layers size={16} /> Start from Template
+              </button>
             </div>
           )}
 
           <ServiceEventModal aircraft={aircraft} show={showServiceModal} onClose={() => { setShowServiceModal(false); mutateEvents(); }} onRefresh={() => { mutate(); mutateEvents(); }} canManageService={canEditMx} />
           <MxGuideModal show={showGuideModal} onClose={() => setShowGuideModal(false)} />
+          <MxTemplatePickerModal aircraft={aircraft} show={showTemplateModal} onClose={() => setShowTemplateModal(false)} onRefresh={() => { mutate(); onGroundedStatusChange(); }} />
 
           {canEditMx && activeEvents.length > 0 && (
             <div className="mb-4 space-y-2">
@@ -257,6 +290,46 @@ export default function MaintenanceTab({
             </div>
           )}
 
+          {/* ─── NEEDS SETUP SECTION ─── */}
+          {needsSetupItems.length > 0 && (
+            <div className="bg-[#FFF7ED] shadow-lg rounded-sm p-4 md:p-6 border-t-4 border-[#F08B46] mb-4">
+              <div className="flex justify-between items-end mb-4">
+                <div>
+                  <h2 className="font-oswald text-xl font-bold uppercase text-navy m-0 leading-none flex items-center gap-2">
+                    <Settings size={18} className="text-[#F08B46]" /> Needs Setup
+                  </h2>
+                  <p className="text-[10px] text-gray-500 mt-1">Enter last-completed data from your logbook to activate tracking</p>
+                </div>
+                <span className="text-[10px] font-bold uppercase tracking-widest bg-[#F08B46] text-white px-2 py-1 rounded">{needsSetupItems.length} item{needsSetupItems.length > 1 ? 's' : ''}</span>
+              </div>
+              <div className="space-y-2">
+                {needsSetupItems.map(item => (
+                  <div key={item.id} className="p-3 border border-orange-200 bg-white rounded flex justify-between items-center">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <h4 className="font-oswald font-bold uppercase text-sm text-navy truncate">{item.item_name}</h4>
+                        {item.is_required && <span className="text-[7px] font-bold uppercase tracking-widest px-1 py-0.5 rounded bg-red-100 text-[#CE3732] shrink-0">Required</span>}
+                      </div>
+                      <div className="flex items-center gap-3 mt-1">
+                        <span className="text-[10px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-orange-100 text-[#F08B46]">Setup Required</span>
+                        {formatItemInterval(item) && (
+                          <span className="text-[10px] text-gray-400">{formatItemInterval(item)}</span>
+                        )}
+                      </div>
+                    </div>
+                    {canEditMx && (
+                      <div className="flex gap-3 pl-3 shrink-0">
+                        <button onClick={() => openMxForm(item)} className="text-[#F08B46] hover:text-orange-600 transition-colors active:scale-95" title="Configure"><Edit2 size={16}/></button>
+                        <button onClick={() => deleteMxItem(item.id)} className="text-gray-400 hover:text-[#CE3732] transition-colors active:scale-95"><Trash2 size={16}/></button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ─── ACTIVE TRACKING ITEMS ─── */}
           <div className={`bg-cream shadow-lg rounded-sm p-4 md:p-6 border-t-4 mb-6 ${isGroundedLocally ? 'border-[#CE3732]' : 'border-[#F08B46]'}`}>
             <div className="flex justify-between items-end mb-6">
               <h2 className="font-oswald text-2xl md:text-3xl font-bold uppercase text-navy m-0 leading-none">Maintenance</h2>
@@ -266,9 +339,11 @@ export default function MaintenanceTab({
               </div>
             </div>
             <div className="space-y-3">
-              {mxItems.length === 0 ? (
-                <p className="text-center text-sm text-gray-400 italic py-4">No maintenance items tracked.</p>
-              ) : mxItems.map(item => {
+              {activeItems.length === 0 ? (
+                <p className="text-center text-sm text-gray-400 italic py-4">
+                  {needsSetupItems.length > 0 ? 'All items need setup — configure them above to start tracking.' : 'No maintenance items tracked.'}
+                </p>
+              ) : activeItems.map(item => {
                 const processed = processMxItem(item, currentEngineTime, aircraft.burnRate, aircraft.burnRateLow, aircraft.burnRateHigh);
                 const dueTextColor = getMxTextColor(processed, sysSettings);
                 const containerClass = processed.isExpired ? (item.is_required ? 'bg-red-50 border-red-200' : 'bg-orange-50 border-orange-200') : 'bg-white border-gray-200';
@@ -299,6 +374,7 @@ export default function MaintenanceTab({
             </div>
           </div>
 
+          {/* ─── MX ITEM FORM MODAL ─── */}
           {showMxModal && canEditMx && (
             <div className="fixed inset-0 bg-black/60 z-[10000] flex items-center justify-center p-3 animate-fade-in">
               <div className="bg-white rounded shadow-2xl w-full max-w-md p-5 border-t-4 border-[#F08B46] max-h-[90vh] overflow-y-auto animate-slide-up">
@@ -308,8 +384,8 @@ export default function MaintenanceTab({
                 </div>
                 <form onSubmit={submitMxItem} className="space-y-4">
                   <div className="grid grid-cols-3 gap-3">
-                    <div className="col-span-2 min-w-0"><label className="text-[10px] font-bold uppercase tracking-widest text-navy block truncate">Item Name *</label><input type="text" required value={mxName} onChange={e=>setMxName(e.target.value)} style={whiteBg} className="w-full min-w-0 border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" placeholder="e.g. Annual Inspection" /></div>
-                    <div className="min-w-0"><label className="text-[10px] font-bold uppercase tracking-widest text-navy block truncate">Required?</label><select value={mxIsRequired ? "yes" : "no"} onChange={e=>setMxIsRequired(e.target.value === "yes")} style={whiteBg} className="w-full min-w-0 border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none"><option value="yes">Yes</option><option value="no">Optional</option></select></div>
+                    <div className="col-span-2 min-w-0"><label className="text-[10px] font-bold uppercase tracking-widest text-navy block truncate">Item Name *</label><input type="text" required value={mxName} onChange={e=>setMxName(e.target.value)} style={INPUT_WHITE_BG} className="w-full min-w-0 border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" placeholder="e.g. Annual Inspection" /></div>
+                    <div className="min-w-0"><label className="text-[10px] font-bold uppercase tracking-widest text-navy block truncate">Required?</label><select value={mxIsRequired ? "yes" : "no"} onChange={e=>setMxIsRequired(e.target.value === "yes")} style={INPUT_WHITE_BG} className="w-full min-w-0 border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none"><option value="yes">Yes</option><option value="no">Optional</option></select></div>
                   </div>
                   <div className="pt-2">
                     <label className="text-[10px] font-bold uppercase tracking-widest text-navy block mb-2">Tracking Method</label>
@@ -320,18 +396,18 @@ export default function MaintenanceTab({
                   </div>
                   {mxTrackingType === 'time' ? (
                     <div className="bg-gray-50 p-3 md:p-4 rounded border border-gray-200 space-y-3">
-                      <div className="w-full min-w-0"><label className="text-[10px] font-bold uppercase tracking-widest text-navy block truncate">Last Completed ({isTurbine ? 'FTT' : 'Tach'}) *</label><input type="number" step="0.1" required value={mxLastTime} onChange={e=>setMxLastTime(e.target.value)} style={whiteBg} className="w-full min-w-0 border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" /></div>
+                      <div className="w-full min-w-0"><label className="text-[10px] font-bold uppercase tracking-widest text-navy block truncate">Last Completed ({isTurbine ? 'FTT' : 'Tach'}) *</label><input type="number" step="0.1" required value={mxLastTime} onChange={e=>setMxLastTime(e.target.value)} style={INPUT_WHITE_BG} className="w-full min-w-0 border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" /></div>
                       <div className="grid grid-cols-2 gap-3 w-full min-w-0">
-                        <div className="min-w-0"><label className="text-[10px] font-bold uppercase tracking-widest text-navy block truncate">Interval (Hrs)</label><input type="number" step="0.1" value={mxIntervalTime} onChange={e=>setMxIntervalTime(e.target.value)} style={whiteBg} className="w-full min-w-0 border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" /></div>
-                        <div className="min-w-0"><label className="text-[10px] font-bold uppercase tracking-widest text-navy block truncate">OR Exact Due</label><input type="number" step="0.1" required={!mxIntervalTime} value={mxDueTime} onChange={e=>setMxDueTime(e.target.value)} style={whiteBg} className="w-full min-w-0 border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" /></div>
+                        <div className="min-w-0"><label className="text-[10px] font-bold uppercase tracking-widest text-navy block truncate">Interval (Hrs)</label><input type="number" step="0.1" value={mxIntervalTime} onChange={e=>setMxIntervalTime(e.target.value)} style={INPUT_WHITE_BG} className="w-full min-w-0 border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" /></div>
+                        <div className="min-w-0"><label className="text-[10px] font-bold uppercase tracking-widest text-navy block truncate">OR Exact Due</label><input type="number" step="0.1" required={!mxIntervalTime} value={mxDueTime} onChange={e=>setMxDueTime(e.target.value)} style={INPUT_WHITE_BG} className="w-full min-w-0 border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" /></div>
                       </div>
                     </div>
                   ) : (
                     <div className="bg-gray-50 p-3 md:p-4 rounded border border-gray-200 space-y-3">
-                      <div className="w-full min-w-0"><label className="text-[10px] font-bold uppercase tracking-widest text-navy block truncate">Last Completed Date *</label><input type="date" required value={mxLastDate} onChange={e=>setMxLastDate(e.target.value)} style={whiteBg} className="w-full min-w-0 border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" /></div>
+                      <div className="w-full min-w-0"><label className="text-[10px] font-bold uppercase tracking-widest text-navy block truncate">Last Completed Date *</label><input type="date" required value={mxLastDate} onChange={e=>setMxLastDate(e.target.value)} style={INPUT_WHITE_BG} className="w-full min-w-0 border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" /></div>
                       <div className="grid grid-cols-2 gap-3 w-full min-w-0">
-                        <div className="min-w-0"><label className="text-[10px] font-bold uppercase tracking-widest text-navy block truncate">Interval (Days)</label><input type="number" value={mxIntervalDays} onChange={e=>setMxIntervalDays(e.target.value)} style={whiteBg} className="w-full min-w-0 border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" /></div>
-                        <div className="min-w-0"><label className="text-[10px] font-bold uppercase tracking-widest text-navy block truncate">OR Exact Due</label><input type="date" required={!mxIntervalDays} value={mxDueDate} onChange={e=>setMxDueDate(e.target.value)} style={whiteBg} className="w-full min-w-0 border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" /></div>
+                        <div className="min-w-0"><label className="text-[10px] font-bold uppercase tracking-widest text-navy block truncate">Interval (Days)</label><input type="number" value={mxIntervalDays} onChange={e=>setMxIntervalDays(e.target.value)} style={INPUT_WHITE_BG} className="w-full min-w-0 border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" /></div>
+                        <div className="min-w-0"><label className="text-[10px] font-bold uppercase tracking-widest text-navy block truncate">OR Exact Due</label><input type="date" required={!mxIntervalDays} value={mxDueDate} onChange={e=>setMxDueDate(e.target.value)} style={INPUT_WHITE_BG} className="w-full min-w-0 border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" /></div>
                       </div>
                     </div>
                   )}

@@ -114,6 +114,10 @@ export async function GET(req: Request) {
         // Skip items already in an active maintenance event
         if (mxIdsInActiveEvents.has(mx.id)) continue;
 
+        // Skip items that haven't been set up yet (null due values from templates)
+        if (mx.tracking_type === 'time' && (mx.due_time === null || mx.due_time === undefined)) continue;
+        if (mx.tracking_type === 'date' && (mx.due_date === null || mx.due_date === undefined)) continue;
+
         let remaining = 0;
         let projectedDays = Infinity;
 

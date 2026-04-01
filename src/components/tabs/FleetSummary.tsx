@@ -4,6 +4,13 @@ import type { AircraftWithMetrics } from "@/lib/types";
 import useSWR from "swr";
 import { PlaneTakeoff, Wrench, AlertTriangle, Droplet, Clock } from "lucide-react";
 
+/** Check if an MX item has been set up (has a due value) */
+function isItemSetUp(item: any): boolean {
+  if (item.tracking_type === 'time') return item.due_time !== null && item.due_time !== undefined;
+  if (item.tracking_type === 'date') return item.due_date !== null && item.due_date !== undefined;
+  return true;
+}
+
 export default function FleetSummary({ 
   aircraftList, onSelectAircraft 
 }: { 
@@ -15,7 +22,6 @@ export default function FleetSummary({
     async () => {
       const aircraftIds = aircraftList.map(a => a.id);
 
-      // Fetch only the columns we need (not SELECT *)
       const [mxRes, sqRes] = await Promise.all([
         supabase.from('aft_maintenance_items')
           .select('aircraft_id, item_name, tracking_type, is_required, due_time, due_date, time_interval')
@@ -28,7 +34,7 @@ export default function FleetSummary({
       const mxData = mxRes.data || [];
       const sqData = sqRes.data || [];
 
-      // Pre-index by aircraft_id for O(1) lookups instead of O(n) filters
+      // Pre-index by aircraft_id
       const mxByAircraft: Record<string, any[]> = {};
       const sqByAircraft: Record<string, any[]> = {};
       
@@ -47,23 +53,29 @@ export default function FleetSummary({
         let isGrounded = false;
         let hasIssues = acSq.length > 0;
 
-        for (const item of acMx) {
+        // Only check items that have been set up (non-null due values)
+        const activeItems = acMx.filter(isItemSetUp);
+
+        for (const item of activeItems) {
           if (!item.is_required) continue;
           if (item.tracking_type === 'time' && (item.due_time ?? 0) <= (ac.total_engine_time || 0)) { isGrounded = true; break; }
           if (item.tracking_type === 'date' && new Date((item.due_date ?? '') + 'T00:00:00') < new Date(new Date().setHours(0,0,0,0))) { isGrounded = true; break; }
         }
         if (acSq.some((sq: any) => sq.affects_airworthiness)) isGrounded = true;
 
-        // Find next MX due
-        const processedMx = acMx.map(item => processMxItem(item, ac.total_engine_time || 0, ac.burnRate, ac.burnRateLow, ac.burnRateHigh));
+        // Find next MX due — only from active (set up) items
+        const processedMx = activeItems.map(item => processMxItem(item, ac.total_engine_time || 0, ac.burnRate, ac.burnRateLow, ac.burnRateHigh));
         processedMx.sort((a, b) => a.remaining - b.remaining);
         const nextMx = processedMx[0];
+
+        // Count needs-setup items
+        const needsSetupCount = acMx.length - activeItems.length;
 
         return {
           ...ac,
           status: isGrounded ? 'grounded' as const : (hasIssues ? 'issues' as const : 'airworthy' as const),
           squawkCount: acSq.length,
-          nextMxName: nextMx ? nextMx.item_name : 'No MX Tracked'
+          nextMxName: nextMx ? nextMx.item_name : (needsSetupCount > 0 ? `${needsSetupCount} Need Setup` : 'No MX Tracked'),
         };
       });
     },

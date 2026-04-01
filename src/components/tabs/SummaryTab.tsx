@@ -37,8 +37,15 @@ export default function SummaryTab({
       const { data } = await supabase.from('aft_maintenance_items')
         .select('*').eq('aircraft_id', aircraft!.id);
       if (!data || data.length === 0) return null;
+      // Filter out items that haven't been set up yet (null due values from templates)
+      const activeItems = data.filter((item: any) => {
+        if (item.tracking_type === 'time') return item.due_time !== null && item.due_time !== undefined;
+        if (item.tracking_type === 'date') return item.due_date !== null && item.due_date !== undefined;
+        return true;
+      });
+      if (activeItems.length === 0) return null;
       const currentEngineTime = aircraft!.total_engine_time || 0;
-      const processed = data.map(item =>
+      const processed = activeItems.map(item =>
         processMxItem(item, currentEngineTime, aircraft!.burnRate, aircraft!.burnRateLow, aircraft!.burnRateHigh)
       );
       processed.sort((a, b) => a.remaining - b.remaining);
