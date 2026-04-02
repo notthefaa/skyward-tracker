@@ -32,6 +32,6 @@
     "@types/react-signature-canvas": "^1.0.7",
     "postcss": "^8",
     "tailwindcss": "^4.0.0",
-    "typescript": "^5"
+    "typescript": "~5.8"
   }
 }
