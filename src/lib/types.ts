@@ -106,6 +106,10 @@ export interface Squawk {
   certificate_number?: string | null;
   signature_data?: string | null;
   signature_date?: string | null;
+  resolved_note?: string | null;
+  edited_at?: string | null;
+  edited_by_initials?: string | null;
+  resolved_by_event_id?: string | null;
   created_at: string;
   [key: string]: any;
 }

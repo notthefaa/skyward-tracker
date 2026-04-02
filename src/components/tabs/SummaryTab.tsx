@@ -28,16 +28,12 @@ export default function SummaryTab({
   const canEdit = role === 'admin' || aircraftRole === 'admin';
 
   // ─── Split SWR hooks for granular cache invalidation ───
-  // Each data domain has its own cache key, so a squawk change
-  // doesn't refetch MX items, crew, notes, etc.
-
   const { data: mxData } = useSWR(
     aircraft ? `summary-mx-${aircraft.id}` : null,
     async () => {
       const { data } = await supabase.from('aft_maintenance_items')
         .select('*').eq('aircraft_id', aircraft!.id);
       if (!data || data.length === 0) return null;
-      // Filter out items that haven't been set up yet (null due values from templates)
       const activeItems = data.filter((item: any) => {
         if (item.tracking_type === 'time') return item.due_time !== null && item.due_time !== undefined;
         if (item.tracking_type === 'date') return item.due_date !== null && item.due_date !== undefined;
@@ -302,8 +298,8 @@ export default function SummaryTab({
         </div>
       </div>
 
-      {/* Flight Times */}
-      <div className={`bg-white shadow-lg rounded-sm p-4 border-t-4 ${statusBorderColor} flex flex-col`}>
+      {/* Flight Times — CLICKABLE: navigates to Times tab */}
+      <div onClick={() => setActiveTab('times')} className={`bg-white shadow-lg rounded-sm p-4 border-t-4 ${statusBorderColor} flex flex-col cursor-pointer hover:shadow-xl transition-all active:scale-[0.98]`}>
         <div className="flex justify-between items-start mb-3 border-b border-gray-100 pb-3">
           <div className="flex flex-col gap-1"><div className="flex items-center gap-2"><Clock size={20} className={statusIconColor} /><h3 className="font-oswald text-xl font-bold uppercase text-navy m-0 leading-none">Flight Times</h3></div>{lastFlownLabel && <span className="text-[9px] font-bold uppercase tracking-widest text-gray-400 mt-1">Last Flown: {lastFlownLabel}</span>}</div>
           <span className="text-[10px] font-bold uppercase tracking-widest bg-gray-100 px-2 py-1 rounded text-gray-600">{isTurbine ? 'TURBINE' : 'PISTON'}</span>

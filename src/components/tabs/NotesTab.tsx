@@ -187,7 +187,7 @@ export default function NotesTab({ aircraft, session, role, userInitials, onNote
                         <Edit2 size={14}/>
                       </button>
                     )}
-                    {role === 'admin' && (
+                    {(role === 'admin' || note.author_id === session.user.id) && (
                       <button onClick={() => deleteNote(note.id)} className="text-gray-400 hover:text-red-500 active:scale-95" title="Delete Note">
                         <Trash2 size={14}/>
                       </button>
