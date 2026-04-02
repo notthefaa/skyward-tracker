@@ -442,7 +442,7 @@ export default function MaintenanceTab({
 
       {/* ─── SQUAWKS SUB-VIEW ─── */}
       {subTab === 'squawks' && (
-        <SquawksTab aircraft={aircraft} session={session} role={role} userInitials={userInitials} onGroundedStatusChange={onGroundedStatusChange} />
+        <SquawksTab aircraft={aircraft} session={session} role={role} aircraftRole={aircraftRole} userInitials={userInitials} onGroundedStatusChange={onGroundedStatusChange} />
       )}
     </>
   );

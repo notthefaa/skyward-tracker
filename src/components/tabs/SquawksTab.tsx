@@ -1,8 +1,8 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { authFetch } from "@/lib/authFetch";
 import { validateFileSizes, MAX_UPLOAD_SIZE_LABEL } from "@/lib/constants";
-import type { AircraftWithMetrics } from "@/lib/types";
+import type { AircraftWithMetrics, AircraftRole } from "@/lib/types";
 import useSWR from "swr";
 import { AlertTriangle, Plus, X, Upload, Mail, Edit2, ChevronLeft, ChevronRight, Download, CheckSquare, Trash2, CheckCircle, Link2, Clock, MapPin, User } from "lucide-react";
 import { PrimaryButton } from "@/components/AppButtons";
@@ -13,9 +13,9 @@ import Toast from "@/components/Toast";
 const whiteBg = { backgroundColor: '#ffffff' } as const;
 
 export default function SquawksTab({ 
-  aircraft, session, role, userInitials, onGroundedStatusChange 
+  aircraft, session, role, aircraftRole, userInitials, onGroundedStatusChange 
 }: { 
-  aircraft: AircraftWithMetrics | null, session: any, role: string, userInitials: string, onGroundedStatusChange: () => void 
+  aircraft: AircraftWithMetrics | null, session: any, role: string, aircraftRole: AircraftRole | null, userInitials: string, onGroundedStatusChange: () => void 
 }) {
   const { data: squawks = [], mutate } = useSWR(
     aircraft ? `squawks-${aircraft.id}` : null,
@@ -24,7 +24,6 @@ export default function SquawksTab({
         .from('aft_squawks').select('*').eq('aircraft_id', aircraft!.id)
         .order('created_at', { ascending: false });
 
-      // For resolved squawks with a service event reference, fetch event dates
       const resolved = (data || []).filter((s: any) => s.resolved_by_event_id);
       if (resolved.length > 0) {
         const eventIds = resolved.map((s: any) => s.resolved_by_event_id);
@@ -82,10 +81,20 @@ export default function SquawksTab({
   const [notifyMx, setNotifyMx] = useState(false);
 
   const isTurbine = aircraft?.engine_type === 'Turbine';
+  const isAdmin = role === 'admin' || aircraftRole === 'admin';
+
+  // ─── Lock body scroll when any modal is open ───
+  const anyModalOpen = !!detailSquawk || showModal || showExportModal || !!previewImages;
+  useEffect(() => {
+    if (anyModalOpen) {
+      document.body.style.overflow = 'hidden';
+      return () => { document.body.style.overflow = ''; };
+    }
+  }, [anyModalOpen]);
 
   /** Check if the current user can modify a given squawk */
   const canModify = (sq: any) => {
-    if (role === 'admin') return true;
+    if (isAdmin) return true;
     return sq.reported_by === session?.user?.id;
   };
 
@@ -254,7 +263,6 @@ export default function SquawksTab({
 
   const toggleExportSelection = (id: string) => { setSelectedForExport(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]); };
 
-  /** Renders the cross-reference badge for a resolved squawk */
   const renderResolvedBy = (sq: any) => {
     if (!sq._resolving_event) return null;
     const evDate = sq._resolving_event.completed_at 
@@ -352,14 +360,13 @@ export default function SquawksTab({
 
       {/* ─── SQUAWK DETAIL MODAL ─── */}
       {detailSquawk && (
-        <div className="fixed inset-0 bg-black/60 z-[10000] flex items-center justify-center p-3 animate-fade-in" onClick={closeDetailModal}>
-          <div className="bg-white rounded shadow-2xl w-full max-w-lg p-5 border-t-4 border-[#CE3732] max-h-[90vh] overflow-y-auto animate-slide-up" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/60 z-[10000] flex items-center justify-center p-3 animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={closeDetailModal}>
+          <div className="bg-white rounded shadow-2xl w-full max-w-lg p-5 border-t-4 border-[#CE3732] max-h-[90vh] overflow-y-auto animate-slide-up" style={{ overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch' }} onClick={e => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-4">
               <h2 className="font-oswald text-2xl font-bold uppercase text-navy">Squawk Detail</h2>
               <button onClick={closeDetailModal} className="text-gray-400 hover:text-red-500"><X size={24}/></button>
             </div>
 
-            {/* Status badge */}
             <div className="flex items-center gap-2 mb-4">
               <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded text-white ${detailSquawk.status === 'resolved' ? 'bg-[#56B94A]' : detailSquawk.affects_airworthiness ? 'bg-[#CE3732]' : 'bg-[#F08B46]'}`}>
                 {detailSquawk.status === 'resolved' ? 'RESOLVED' : detailSquawk.affects_airworthiness ? 'AOG / GROUNDED' : 'OPEN'}
@@ -367,7 +374,6 @@ export default function SquawksTab({
               {detailSquawk.is_deferred && <span className="text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded bg-blue-600 text-white">DEFERRED ({detailSquawk.deferral_category})</span>}
             </div>
 
-            {/* Info grid */}
             <div className="grid grid-cols-2 gap-3 mb-4 text-sm">
               <div className="flex items-start gap-2"><MapPin size={14} className="text-[#CE3732] shrink-0 mt-0.5" /><div><span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 block">Location</span><span className="font-bold text-navy">{detailSquawk.location}</span></div></div>
               <div className="flex items-start gap-2"><User size={14} className="text-gray-500 shrink-0 mt-0.5" /><div><span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 block">Reported By</span><span className="font-bold text-navy">{detailSquawk.reporter_initials || 'Unknown'}</span></div></div>
@@ -377,13 +383,11 @@ export default function SquawksTab({
               )}
             </div>
 
-            {/* Description */}
             <div className="mb-4 p-3 bg-gray-50 border border-gray-200 rounded">
               <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 block mb-1">Description</span>
               <p className="text-sm text-navy font-roboto whitespace-pre-wrap">{detailSquawk.description}</p>
             </div>
 
-            {/* Resolved note */}
             {detailSquawk.status === 'resolved' && detailSquawk.resolved_note && (
               <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded">
                 <span className="text-[10px] font-bold uppercase tracking-widest text-[#56B94A] block mb-1">Resolution Note</span>
@@ -391,12 +395,10 @@ export default function SquawksTab({
               </div>
             )}
 
-            {/* Cross-reference */}
             {detailSquawk._resolving_event && (
               <div className="mb-4">{renderResolvedBy(detailSquawk)}</div>
             )}
 
-            {/* Deferral info */}
             {detailSquawk.is_deferred && (
               <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded">
                 <span className="text-[10px] font-bold uppercase tracking-widest text-blue-600 block mb-2">Deferral Details</span>
@@ -410,7 +412,6 @@ export default function SquawksTab({
               </div>
             )}
 
-            {/* Photos */}
             {detailSquawk.pictures && detailSquawk.pictures.length > 0 && (
               <div className="mb-4">
                 <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 block mb-2">{detailSquawk.pictures.length} Photo{detailSquawk.pictures.length > 1 ? 's' : ''}</span>
@@ -424,7 +425,6 @@ export default function SquawksTab({
               </div>
             )}
 
-            {/* Resolve form */}
             {showResolveForm && detailSquawk.status === 'open' && (
               <div className="mb-4 p-4 bg-green-50 border-2 border-green-200 rounded animate-fade-in">
                 <p className="text-sm font-bold text-navy mb-3">Resolve this squawk?</p>
@@ -439,7 +439,6 @@ export default function SquawksTab({
               </div>
             )}
 
-            {/* Action buttons */}
             <div className="border-t border-gray-200 pt-4 space-y-2">
               {canModify(detailSquawk) && (
                 <div className="flex gap-2">
@@ -461,8 +460,8 @@ export default function SquawksTab({
       )}
 
       {showExportModal && (
-        <div className="fixed inset-0 bg-black/60 z-[10000] flex items-center justify-center p-3 animate-fade-in">
-          <div className="bg-white rounded shadow-2xl w-full max-w-md p-5 border-t-4 border-[#CE3732] max-h-[90vh] overflow-y-auto animate-slide-up flex flex-col">
+        <div className="fixed inset-0 bg-black/60 z-[10000] flex items-center justify-center p-3 animate-fade-in" style={{ overscrollBehavior: 'contain' }}>
+          <div className="bg-white rounded shadow-2xl w-full max-w-md p-5 border-t-4 border-[#CE3732] max-h-[90vh] overflow-y-auto animate-slide-up flex flex-col" style={{ overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch' }}>
             <div className="flex justify-between items-center mb-4">
               <h2 className="font-oswald text-2xl font-bold uppercase text-navy flex items-center gap-2"><CheckSquare size={20} className="text-[#CE3732]" /> Export to PDF</h2>
               <button onClick={() => setShowExportModal(false)} className="text-gray-400 hover:text-red-500 transition-colors"><X size={24}/></button>
@@ -492,7 +491,7 @@ export default function SquawksTab({
       )}
 
       {previewImages && (
-        <div className="fixed inset-0 z-[10001] bg-black/95 flex items-center justify-center animate-fade-in" onClick={() => setPreviewImages(null)}>
+        <div className="fixed inset-0 z-[10001] bg-black/95 flex items-center justify-center animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => setPreviewImages(null)}>
           <button className="absolute top-4 right-4 text-gray-400 hover:text-white z-50 p-2"><X size={32}/></button>
           {previewImages.length > 1 && <button onClick={(e) => { e.stopPropagation(); setPreviewIndex(prev => prev === 0 ? previewImages.length - 1 : prev - 1); }} className="absolute left-4 text-gray-400 hover:text-white z-50 p-2"><ChevronLeft size={48}/></button>}
           <div className="max-w-full max-h-full p-4 flex items-center justify-center" onClick={(e) => e.stopPropagation()}><img src={previewImages[previewIndex]} className="max-h-[85vh] max-w-full object-contain rounded shadow-2xl" /></div>
@@ -502,8 +501,8 @@ export default function SquawksTab({
       )}
 
       {showModal && (
-        <div className="fixed inset-0 bg-black/60 z-[10000] flex items-center justify-center p-3 animate-fade-in">
-          <div className="bg-white rounded shadow-2xl w-full max-w-lg p-5 border-t-4 border-[#CE3732] max-h-[90vh] overflow-y-auto animate-slide-up">
+        <div className="fixed inset-0 bg-black/60 z-[10000] flex items-center justify-center p-3 animate-fade-in" style={{ overscrollBehavior: 'contain' }}>
+          <div className="bg-white rounded shadow-2xl w-full max-w-lg p-5 border-t-4 border-[#CE3732] max-h-[90vh] overflow-y-auto animate-slide-up" style={{ overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch' }}>
             <div className="flex justify-between items-center mb-4">
               <h2 className="font-oswald text-2xl font-bold uppercase text-navy">{editingId ? 'Edit Squawk' : 'Report Squawk'}</h2>
               <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-red-500"><X size={24}/></button>

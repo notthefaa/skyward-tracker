@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { authFetch } from "@/lib/authFetch";
 import { validateFileSizes, MAX_UPLOAD_SIZE_LABEL } from "@/lib/constants";
+import type { AircraftRole } from "@/lib/types";
 import useSWR from "swr";
 import { FileText, Plus, X, Upload, Edit2, ChevronLeft, ChevronRight, Trash2 } from "lucide-react";
 import { PrimaryButton } from "@/components/AppButtons";
@@ -10,7 +11,7 @@ import Toast from "@/components/Toast";
 
 const whiteBg = { backgroundColor: '#ffffff' } as const;
 
-export default function NotesTab({ aircraft, session, role, userInitials, onNotesRead }: { aircraft: any, session: any, role: string, userInitials: string, onNotesRead: () => void }) {
+export default function NotesTab({ aircraft, session, role, aircraftRole, userInitials, onNotesRead }: { aircraft: any, session: any, role: string, aircraftRole: AircraftRole | null, userInitials: string, onNotesRead: () => void }) {
   
   const { data: notes = [], mutate } = useSWR(
     aircraft ? `notes-${aircraft.id}` : null,
@@ -44,7 +45,6 @@ export default function NotesTab({ aircraft, session, role, userInitials, onNote
   const [showModal, setShowModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Toast
   const [toastMessage, setToastMessage] = useState("");
   const [showToast, setShowToast] = useState(false);
   const showSuccess = (msg: string) => { setToastMessage(msg); setShowToast(true); };
@@ -56,6 +56,17 @@ export default function NotesTab({ aircraft, session, role, userInitials, onNote
 
   const [previewImages, setPreviewImages] = useState<string[] | null>(null);
   const [previewIndex, setPreviewIndex] = useState<number>(0);
+
+  const isAdmin = role === 'admin' || aircraftRole === 'admin';
+
+  // ─── Lock body scroll when any modal is open ───
+  const anyModalOpen = showModal || !!previewImages;
+  useEffect(() => {
+    if (anyModalOpen) {
+      document.body.style.overflow = 'hidden';
+      return () => { document.body.style.overflow = ''; };
+    }
+  }, [anyModalOpen]);
 
   const openForm = (note: any = null) => {
     if (note) {
@@ -127,7 +138,6 @@ export default function NotesTab({ aircraft, session, role, userInitials, onNote
       noteData.author_initials = userInitials; 
       await supabase.from('aft_notes').insert(noteData);
 
-      // Notify all assigned pilots about the new note
       try {
         await authFetch('/api/emails/note-notify', {
           method: 'POST',
@@ -182,12 +192,12 @@ export default function NotesTab({ aircraft, session, role, userInitials, onNote
                   </div>
                   
                   <div className="flex gap-3 items-center">
-                    {note.author_id === session.user.id && (
+                    {(isAdmin || note.author_id === session.user.id) && (
                       <button onClick={() => openForm(note)} className="text-gray-400 hover:text-navy active:scale-95" title="Edit Note">
                         <Edit2 size={14}/>
                       </button>
                     )}
-                    {(role === 'admin' || note.author_id === session.user.id) && (
+                    {(isAdmin || note.author_id === session.user.id) && (
                       <button onClick={() => deleteNote(note.id)} className="text-gray-400 hover:text-red-500 active:scale-95" title="Delete Note">
                         <Trash2 size={14}/>
                       </button>
@@ -213,7 +223,7 @@ export default function NotesTab({ aircraft, session, role, userInitials, onNote
       </div>
 
       {previewImages && (
-        <div className="fixed inset-0 z-[10000] bg-black/95 flex items-center justify-center animate-fade-in" onClick={() => setPreviewImages(null)}>
+        <div className="fixed inset-0 z-[10000] bg-black/95 flex items-center justify-center animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => setPreviewImages(null)}>
           <button className="absolute top-4 right-4 text-gray-400 hover:text-white z-50 p-2">
             <X size={32}/>
           </button>
@@ -241,8 +251,8 @@ export default function NotesTab({ aircraft, session, role, userInitials, onNote
       )}
 
       {showModal && (
-        <div className="fixed inset-0 bg-black/60 z-[10000] flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-white rounded shadow-2xl w-full max-w-md p-6 border-t-4 border-navy animate-slide-up max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black/60 z-[10000] flex items-center justify-center p-4 animate-fade-in" style={{ overscrollBehavior: 'contain' }}>
+          <div className="bg-white rounded shadow-2xl w-full max-w-md p-6 border-t-4 border-navy animate-slide-up max-h-[90vh] overflow-y-auto" style={{ overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch' }}>
             
             <div className="flex justify-between items-center mb-4">
               <h2 className="font-oswald text-2xl font-bold uppercase text-navy flex items-center gap-2">
