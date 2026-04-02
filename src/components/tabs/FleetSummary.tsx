@@ -11,6 +11,15 @@ function isItemSetUp(item: any): boolean {
   return true;
 }
 
+/** Format a "last flown" label from a date and initials */
+function formatLastFlown(createdAt: string, initials: string | null): string {
+  const flightDate = new Date(createdAt);
+  const now = new Date();
+  const diffDays = Math.floor((now.getTime() - flightDate.getTime()) / (1000 * 60 * 60 * 24));
+  const timeAgo = diffDays === 0 ? 'Today' : diffDays === 1 ? 'Yesterday' : `${diffDays}d ago`;
+  return `${timeAgo}${initials ? ` by ${initials}` : ''}`;
+}
+
 export default function FleetSummary({ 
   aircraftList, onSelectAircraft 
 }: { 
@@ -22,21 +31,27 @@ export default function FleetSummary({
     async () => {
       const aircraftIds = aircraftList.map(a => a.id);
 
-      const [mxRes, sqRes] = await Promise.all([
+      const [mxRes, sqRes, logRes] = await Promise.all([
         supabase.from('aft_maintenance_items')
           .select('aircraft_id, item_name, tracking_type, is_required, due_time, due_date, time_interval')
           .in('aircraft_id', aircraftIds),
         supabase.from('aft_squawks')
           .select('aircraft_id, affects_airworthiness')
           .in('aircraft_id', aircraftIds)
-          .eq('status', 'open')
+          .eq('status', 'open'),
+        supabase.from('aft_flight_logs')
+          .select('aircraft_id, created_at, initials')
+          .in('aircraft_id', aircraftIds)
+          .order('created_at', { ascending: false }),
       ]);
       const mxData = mxRes.data || [];
       const sqData = sqRes.data || [];
+      const logData = logRes.data || [];
 
       // Pre-index by aircraft_id
       const mxByAircraft: Record<string, any[]> = {};
       const sqByAircraft: Record<string, any[]> = {};
+      const lastFlightByAircraft: Record<string, { created_at: string; initials: string | null }> = {};
       
       for (const m of mxData) {
         if (!mxByAircraft[m.aircraft_id]) mxByAircraft[m.aircraft_id] = [];
@@ -46,10 +61,17 @@ export default function FleetSummary({
         if (!sqByAircraft[s.aircraft_id]) sqByAircraft[s.aircraft_id] = [];
         sqByAircraft[s.aircraft_id].push(s);
       }
+      // Logs are sorted descending — first occurrence per aircraft_id is the latest
+      for (const log of logData) {
+        if (!lastFlightByAircraft[log.aircraft_id]) {
+          lastFlightByAircraft[log.aircraft_id] = { created_at: log.created_at, initials: log.initials };
+        }
+      }
 
       return aircraftList.map(ac => {
         const acMx = mxByAircraft[ac.id] || [];
         const acSq = sqByAircraft[ac.id] || [];
+        const lastFlight = lastFlightByAircraft[ac.id] || null;
         let isGrounded = false;
         let hasIssues = acSq.length > 0;
 
@@ -76,6 +98,7 @@ export default function FleetSummary({
           status: isGrounded ? 'grounded' as const : (hasIssues ? 'issues' as const : 'airworthy' as const),
           squawkCount: acSq.length,
           nextMxName: nextMx ? nextMx.item_name : (needsSetupCount > 0 ? `${needsSetupCount} Need Setup` : 'No MX Tracked'),
+          lastFlownLabel: lastFlight ? formatLastFlown(lastFlight.created_at, lastFlight.initials) : null,
         };
       });
     },
@@ -125,6 +148,11 @@ export default function FleetSummary({
                 <span className="font-bold text-navy truncate flex-1 flex items-center gap-2"><Wrench size={14} className="text-[#F08B46] shrink-0"/> {ac.nextMxName}</span>
                 {ac.squawkCount > 0 && <span className="font-bold text-[#CE3732] shrink-0 flex items-center gap-1 ml-2"><AlertTriangle size={14}/> {ac.squawkCount} Sqk</span>}
               </div>
+              {ac.lastFlownLabel && (
+                <div className="px-4 py-2 border-t border-gray-100 text-[10px] font-bold uppercase tracking-widest text-gray-400">
+                  Last Flown: {ac.lastFlownLabel}
+                </div>
+              )}
             </div>
           );
         })}

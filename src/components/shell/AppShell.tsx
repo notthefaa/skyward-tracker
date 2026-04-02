@@ -165,6 +165,13 @@ export default function AppShell({ session }: AppShellProps) {
     } else {
       setActiveTail("");
     }
+
+    // Single-aircraft users skip the fleet grid and go straight to Home,
+    // unless they had a specific tab saved from a previous session.
+    const savedTab = sessionStorage.getItem('aft_active_tab');
+    if (assigned.length <= 1 && (!savedTab || savedTab === 'fleet')) {
+      setActiveTab('summary');
+    }
   };
 
   const fetchUnreadNotes = async (tail: string, userId: string) => {

@@ -8,7 +8,7 @@ import { validateFileSizes, MAX_UPLOAD_SIZE_LABEL, PORTAL_EXPIRY_DAYS } from "@/
 import { 
   Wrench, AlertTriangle, CheckCircle, Clock, Send, 
   MessageSquare, Calendar, Sparkles, X, Plus, Image, ArrowLeft, XCircle, Plane,
-  Upload, FileText, Paperclip, Loader2
+  Upload, FileText, Paperclip, Loader2, RefreshCw
 } from "lucide-react";
 
 const whiteBg = { backgroundColor: '#ffffff' } as const;
@@ -27,6 +27,8 @@ export default function ServicePortal() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isAppUser, setIsAppUser] = useState(false);
   const [isExpired, setIsExpired] = useState(false);
+  const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const [showDateForm, setShowDateForm] = useState(false);
   const [proposedDate, setProposedDate] = useState("");
@@ -90,6 +92,7 @@ export default function ServicePortal() {
       setEstimatedCompletion(evData.estimated_completion || "");
       setMechanicNotes(evData.mechanic_notes || "");
 
+      // Always fetch fresh aircraft data so times are current
       const { data: acData } = await supabase
         .from('aft_aircraft').select('*').eq('id', evData.aircraft_id).single();
       if (acData) setAircraft(acData);
@@ -117,8 +120,16 @@ export default function ServicePortal() {
       const { data: msgData } = await supabase
         .from('aft_event_messages').select('*').eq('event_id', evData.id).order('created_at');
       if (msgData) setMessages(msgData);
+
+      setLastRefreshed(new Date());
     }
     setIsLoading(false);
+  };
+
+  const handleRefreshTimes = async () => {
+    setIsRefreshing(true);
+    await fetchEventData();
+    setIsRefreshing(false);
   };
 
   const handleAction = async (action: string, payload: any = {}) => {
@@ -252,10 +263,20 @@ export default function ServicePortal() {
                 {event.primary_contact_email && <a href={`mailto:${event.primary_contact_email}`} className="block text-xs text-[#3AB0FF] mt-1">{event.primary_contact_email}</a>}
               </div>
               <div>
-                <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 block">Current Times</span>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Current Times</span>
+                  <button onClick={handleRefreshTimes} disabled={isRefreshing} className="text-[#3AB0FF] hover:text-blue-600 active:scale-95 transition-all disabled:opacity-50" title="Refresh aircraft times">
+                    <RefreshCw size={14} className={isRefreshing ? 'animate-spin' : ''} />
+                  </button>
+                </div>
                 <span className="font-roboto font-bold text-navy">
                   {aircraft.engine_type === 'Turbine' ? `AFTT: ${aircraft.total_airframe_time?.toFixed(1)} | FTT: ${aircraft.total_engine_time?.toFixed(1)}` : `Hobbs: ${aircraft.total_airframe_time?.toFixed(1)} | Tach: ${aircraft.total_engine_time?.toFixed(1)}`}
                 </span>
+                {lastRefreshed && (
+                  <span className="block text-[9px] font-bold uppercase tracking-widest text-gray-400 mt-1">
+                    as of {lastRefreshed.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                  </span>
+                )}
               </div>
               {event.confirmed_date && (
                 <div>
