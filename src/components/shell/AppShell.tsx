@@ -393,7 +393,7 @@ export default function AppShell({ session }: AppShellProps) {
                 {showTailDropdown && (
                   <>
                     <div className="fixed inset-0 z-[9998]" onClick={() => setShowTailDropdown(false)} />
-                    <div className="absolute top-full left-0 mt-2 bg-white rounded-lg shadow-2xl border border-gray-200 min-w-[180px] z-[9999] overflow-hidden animate-slide-up">
+                    <div className="absolute top-full left-0 mt-2 bg-white rounded-lg shadow-2xl border border-gray-200 min-w-full w-max z-[9999] overflow-hidden animate-slide-up">
                       {dropdownOptions.map(a => (
                         <button key={a.id} onClick={() => handleTailChange(a.tail_number)} className={`w-full text-left px-4 py-3 flex items-center justify-between hover:bg-gray-50 active:bg-gray-100 transition-colors ${a.tail_number === activeTail ? 'bg-blue-50' : ''}`}>
                           <div>
