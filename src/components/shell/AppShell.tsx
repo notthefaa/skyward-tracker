@@ -9,7 +9,7 @@ import dynamic from "next/dynamic";
 import type { AircraftWithMetrics, AppTab } from "@/lib/types";
 import { 
   Wrench, AlertTriangle, FileText, Clock, LogOut, 
-  ChevronDown, Home, LayoutGrid, Send, ShieldCheck, X, Share, Copy, WifiOff, Loader2, Calendar, Settings, ArrowLeft
+  ChevronDown, Home, LayoutGrid, Send, ShieldCheck, X, Share, Copy, WifiOff, Loader2, Calendar, Settings
 } from "lucide-react";
 
 const PilotOnboarding = dynamic(() => import("@/components/PilotOnboarding"));
@@ -56,6 +56,7 @@ export default function AppShell({ session }: AppShellProps) {
   const [mxSubTab, setMxSubTab] = useState<'maintenance' | 'squawks'>('maintenance');
   const [showAircraftModal, setShowAircraftModal] = useState(false);
   const [editingAircraftId, setEditingAircraftId] = useState<string | null>(null);
+  const [showTailDropdown, setShowTailDropdown] = useState(false);
 
   // ─── Tab History (supports browser back button + UI back arrow) ───
   const tabHistoryRef = useRef<AppTab[]>([]);
@@ -75,14 +76,6 @@ export default function AppShell({ session }: AppShellProps) {
     });
   }, []);
 
-  const navigateBack = useCallback(() => {
-    const prev = tabHistoryRef.current.pop();
-    if (prev) {
-      isPopStateRef.current = true;
-      setActiveTab(prev);
-    }
-  }, []);
-
   // Listen for browser back button (popstate)
   useEffect(() => {
     const handlePopState = () => {
@@ -95,8 +88,6 @@ export default function AppShell({ session }: AppShellProps) {
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
-
-  const canGoBack = tabHistoryRef.current.length > 0;
 
   // ─── Derived State (extracted hooks) ───
   const { aircraftStatus, groundedReason, checkGroundedStatus } = useGroundedStatus(allAircraftList);
@@ -132,7 +123,7 @@ export default function AppShell({ session }: AppShellProps) {
 
   // ─── Disable pull-to-refresh when any modal is open ───
   useEffect(() => {
-    const anyPageModalOpen = showAdminMenu || showLogItModal || showSettingsModal || showMxPicker || showAircraftModal;
+    const anyPageModalOpen = showAdminMenu || showLogItModal || showSettingsModal || showMxPicker || showAircraftModal || showTailDropdown;
     if (anyPageModalOpen) {
       setPullEnabled(false);
       return;
@@ -150,7 +141,7 @@ export default function AppShell({ session }: AppShellProps) {
     observer.observe(document.body, { childList: true, subtree: true });
 
     return () => observer.disconnect();
-  }, [showAdminMenu, showLogItModal, showSettingsModal, showMxPicker, showAircraftModal, setPullEnabled]);
+  }, [showAdminMenu, showLogItModal, showSettingsModal, showMxPicker, showAircraftModal, showTailDropdown, setPullEnabled]);
 
   // ─── Initial Data Fetch ───
   useEffect(() => {
@@ -244,11 +235,11 @@ export default function AppShell({ session }: AppShellProps) {
   };
 
   const handleTailChange = (v: string) => {
+    setShowTailDropdown(false);
     if (v === '__add_new__') {
       setEditingAircraftId(null);
       setShowAircraftModal(true);
     } else if (v === activeTail) {
-      // Clicking the already-selected tail navigates to its summary
       navigateTab('summary');
     } else {
       setActiveTail(v);
@@ -352,25 +343,38 @@ export default function AppShell({ session }: AppShellProps) {
 
       <header className="fixed top-0 left-0 right-0 bg-navy text-white shadow-md z-[9999]" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
         <div className="max-w-3xl mx-auto px-4 py-2 flex justify-between items-center w-full min-h-[52px]">
-          <div className="flex items-center gap-2">
-            {canGoBack && (
-              <button onClick={navigateBack} className="text-gray-400 hover:text-white transition-colors active:scale-95 shrink-0 p-1 -ml-1" title="Back">
-                <ArrowLeft size={18} />
-              </button>
-            )}
-            <div className="flex flex-col">
+          <div className="flex flex-col">
             <span className="text-[9px] font-bold uppercase tracking-widest text-[#F5B05B] mb-[2px]">Active Aircraft</span>
             <div className="flex items-center gap-3">
               <div className={`w-3.5 h-3.5 rounded-full shrink-0 shadow-inner ${aircraftStatus === 'grounded' ? 'bg-red-500' : aircraftStatus === 'issues' ? 'bg-[#F08B46]' : 'bg-success'}`} />
               <div className="relative flex items-center">
-                <select data-tail-select className="appearance-none bg-transparent text-xl font-oswald font-bold uppercase tracking-wide focus:outline-none cursor-pointer w-[100px] shrink-0 text-white pr-6 truncate" value={activeTail} onChange={e => handleTailChange(e.target.value)}>
-                  {dropdownOptions.length > 0 ? dropdownOptions.map(a => <option key={a.id} value={a.tail_number} className="text-navy bg-white">{a.tail_number}</option>) : <option value="">—</option>}
-                  <option value="__add_new__" className="text-navy bg-white">+ Add Aircraft</option>
-                </select>
-                <ChevronDown size={18} className="absolute right-1 text-white pointer-events-none opacity-80" />
+                <button onClick={() => navigateTab('summary')} className="text-xl font-oswald font-bold uppercase tracking-wide text-white hover:text-[#3AB0FF] transition-colors active:scale-95">
+                  {activeTail || '—'}
+                </button>
+                {dropdownOptions.length > 0 && (
+                  <button onClick={() => setShowTailDropdown(!showTailDropdown)} className="text-white/70 hover:text-white transition-colors active:scale-95 ml-1 p-1">
+                    <ChevronDown size={16} className={`transition-transform ${showTailDropdown ? 'rotate-180' : ''}`} />
+                  </button>
+                )}
+                {showTailDropdown && (
+                  <>
+                    <div className="fixed inset-0 z-[9998]" onClick={() => setShowTailDropdown(false)} />
+                    <div className="absolute top-full left-0 mt-2 bg-white rounded-lg shadow-2xl border border-gray-200 min-w-[180px] z-[9999] overflow-hidden animate-slide-up">
+                      {dropdownOptions.map(a => (
+                        <button key={a.id} onClick={() => handleTailChange(a.tail_number)} className={`w-full text-left px-4 py-3 flex items-center justify-between hover:bg-gray-50 active:bg-gray-100 transition-colors ${a.tail_number === activeTail ? 'bg-blue-50' : ''}`}>
+                          <div>
+                            <span className={`font-oswald font-bold uppercase text-sm ${a.tail_number === activeTail ? 'text-[#3AB0FF]' : 'text-navy'}`}>{a.tail_number}</span>
+                            <span className="block text-[10px] text-gray-400 uppercase tracking-widest">{a.aircraft_type}</span>
+                          </div>
+                          {a.tail_number === activeTail && <div className="w-2 h-2 rounded-full bg-[#3AB0FF] shrink-0" />}
+                        </button>
+                      ))}
+                      <button onClick={() => handleTailChange('__add_new__')} className="w-full text-left px-4 py-3 text-[#3AB0FF] font-oswald font-bold uppercase text-sm hover:bg-blue-50 active:bg-blue-100 transition-colors border-t border-gray-100">+ Add Aircraft</button>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
-          </div>
           </div>
           <div className="flex gap-4">
             {showFleetButton && <button onClick={() => navigateTab('fleet')} className={`hover:text-white transition-colors flex flex-col items-center active:scale-95 shrink-0 ${activeTab === 'fleet' ? 'text-[#3AB0FF]' : 'text-gray-300'}`}><LayoutGrid size={18} /><span className="text-[8px] font-bold uppercase tracking-widest mt-1">Fleet</span></button>}
