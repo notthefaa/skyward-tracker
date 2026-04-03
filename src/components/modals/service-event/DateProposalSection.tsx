@@ -1,6 +1,6 @@
 "use client";
 
-import { Calendar } from "lucide-react";
+import { Calendar, CalendarCheck, CalendarSearch } from "lucide-react";
 import { INPUT_WHITE_BG } from "./shared";
 
 interface DateProposalSectionProps {
@@ -12,32 +12,44 @@ interface DateProposalSectionProps {
 
 export default function DateProposalSection({ wantsToPropose, setWantsToPropose, proposedDate, setProposedDate }: DateProposalSectionProps) {
   return (
-    <div className="border border-gray-200 rounded p-4 bg-gray-50 space-y-3">
+    <div className="space-y-3">
       <p className="text-[10px] font-bold uppercase tracking-widest text-navy flex items-center gap-2"><Calendar size={14} className="text-[#F08B46]" /> Service Date</p>
-      <div className="flex gap-2">
+      <div className="flex gap-3">
         <button
           type="button"
           onClick={() => setWantsToPropose(true)}
-          className={`flex-1 py-3 px-3 rounded border-2 text-xs font-bold uppercase tracking-widest transition-all active:scale-95 ${wantsToPropose === true ? 'border-[#F08B46] bg-orange-50 text-[#F08B46]' : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300'}`}
+          className={`flex-1 py-4 px-3 rounded-lg text-xs font-bold uppercase tracking-widest transition-all active:scale-95 flex flex-col items-center gap-2 ${
+            wantsToPropose === true 
+              ? 'bg-[#F08B46] text-white shadow-lg' 
+              : 'bg-white border-2 border-gray-200 text-gray-500 hover:border-[#F08B46] hover:text-[#F08B46] shadow-sm'
+          }`}
         >
+          <CalendarCheck size={20} />
           Propose a Date
         </button>
         <button
           type="button"
           onClick={() => { setWantsToPropose(false); setProposedDate(""); }}
-          className={`flex-1 py-3 px-3 rounded border-2 text-xs font-bold uppercase tracking-widest transition-all active:scale-95 ${wantsToPropose === false ? 'border-[#3AB0FF] bg-blue-50 text-[#3AB0FF]' : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300'}`}
+          className={`flex-1 py-4 px-3 rounded-lg text-xs font-bold uppercase tracking-widest transition-all active:scale-95 flex flex-col items-center gap-2 ${
+            wantsToPropose === false 
+              ? 'bg-[#3AB0FF] text-white shadow-lg' 
+              : 'bg-white border-2 border-gray-200 text-gray-500 hover:border-[#3AB0FF] hover:text-[#3AB0FF] shadow-sm'
+          }`}
         >
+          <CalendarSearch size={20} />
           Request Availability
         </button>
       </div>
       {wantsToPropose === true && (
-        <div className="animate-fade-in">
+        <div className="animate-fade-in bg-orange-50 border border-orange-200 rounded-lg p-4">
           <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Preferred Service Date *</label>
           <input type="date" value={proposedDate} onChange={e => setProposedDate(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" />
         </div>
       )}
       {wantsToPropose === false && (
-        <p className="text-xs text-gray-500 italic animate-fade-in">The mechanic will be asked to propose dates that work for their schedule.</p>
+        <div className="animate-fade-in bg-blue-50 border border-blue-200 rounded-lg p-3">
+          <p className="text-xs text-[#3AB0FF] font-bold text-center">The mechanic will propose dates that work for their schedule.</p>
+        </div>
       )}
     </div>
   );

@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { authFetch } from "@/lib/authFetch";
-import { Wrench, X } from "lucide-react";
+import { Wrench, X, Trash2 } from "lucide-react";
 import Toast from "@/components/Toast";
 import type { ServiceEventView } from "./service-event/shared";
 
@@ -13,7 +13,7 @@ import ServiceEventDetail from "./service-event/ServiceEventDetail";
 import ServiceEventComplete from "./service-event/ServiceEventComplete";
 import DateProposalSection from "./service-event/DateProposalSection";
 import EmailPreview from "./service-event/EmailPreview";
-import { ADDON_OPTIONS, INPUT_WHITE_BG } from "./service-event/shared";
+import { ADDON_OPTIONS } from "./service-event/shared";
 import { ChevronDown, AlertTriangle, Sparkles, CheckSquare } from "lucide-react";
 import { PrimaryButton } from "@/components/AppButtons";
 
@@ -44,6 +44,7 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
   const [proposedDate, setProposedDate] = useState("");
   const [wantsToPropose, setWantsToPropose] = useState<boolean | null>(null);
   const [showPreview, setShowPreview] = useState(false);
+  const [removedLineItemIds, setRemovedLineItemIds] = useState<string[]>([]);
 
   const [viewingAttachment, setViewingAttachment] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState("");
@@ -89,6 +90,18 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
     setSquawks(sq || []);
   };
 
+  /** Collect IDs of MX items and squawks already in draft/active events */
+  const getDraftedItemIds = () => {
+    const draftedMxIds: string[] = [];
+    const draftedSquawkIds: string[] = [];
+    // We'd need line items from all active events to know this.
+    // For now, fetch them when opening the create flow.
+    return { draftedMxIds, draftedSquawkIds };
+  };
+
+  // Store line items from all active events to filter in create flow
+  const [allActiveLineItems, setAllActiveLineItems] = useState<any[]>([]);
+
   const handleNavigate = async (newView: ServiceEventView, event?: any) => {
     if (newView === 'detail' && event) {
       setSelectedEvent(event);
@@ -102,13 +115,25 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
     }
     if (newView === 'list') {
       await fetchEvents();
-      return; // fetchEvents already sets view to 'list'
+      return;
     }
     setView(newView);
   };
 
   const openCreateFlow = async () => {
     await loadMxAndSquawks();
+    // Fetch line items from all active events to know which items are already drafted
+    const activeEventIds = events
+      .filter(e => ['draft', 'scheduling', 'confirmed', 'in_progress'].includes(e.status))
+      .map(e => e.id);
+    if (activeEventIds.length > 0) {
+      const { data: allLines } = await supabase
+        .from('aft_event_line_items').select('maintenance_item_id, squawk_id')
+        .in('event_id', activeEventIds);
+      setAllActiveLineItems(allLines || []);
+    } else {
+      setAllActiveLineItems([]);
+    }
     setView('create');
   };
 
@@ -119,19 +144,37 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
     setSelectedMxIds([]);
     setSelectedSquawkIds([]);
     setSelectedAddons([]);
-    setProposedDate("");
-    setWantsToPropose(null);
+    setRemovedLineItemIds([]);
     setShowPreview(false);
+    // Restore date preference from the event if it was saved during draft creation
+    if (ev.proposed_date) {
+      setWantsToPropose(true);
+      setProposedDate(ev.proposed_date);
+    } else {
+      // If no proposed date but event exists, check if it was explicitly "request availability"
+      // For now default to null so user must choose
+      setWantsToPropose(null);
+      setProposedDate("");
+    }
     setView('review_draft');
+  };
+
+  const handleRemoveLineItem = async (lineItemId: string) => {
+    setRemovedLineItemIds(prev => [...prev, lineItemId]);
   };
 
   const handleSendDraft = async () => {
     if (!selectedEvent) return;
-    if (isSubmitting) return; // Prevent double-click
+    if (isSubmitting) return;
     if (wantsToPropose === null) return alert("Please choose whether you'd like to propose a date or request availability.");
     if (wantsToPropose && !proposedDate) return alert("Please select a preferred service date or choose 'Request Availability' instead.");
     setIsSubmitting(true);
     try {
+      // Remove any line items the user unchecked from the draft
+      if (removedLineItemIds.length > 0) {
+        await supabase.from('aft_event_line_items').delete().in('id', removedLineItemIds);
+      }
+
       const res = await authFetch('/api/mx-events/send-workpackage', {
         method: 'POST',
         body: JSON.stringify({
@@ -147,7 +190,6 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
         throw new Error(errData.error || 'Failed to send');
       }
       showSuccess("Work package sent to mechanic");
-      // Refresh events list in background, don't block UI
       fetchEvents();
       onRefresh();
     } catch (err: any) {
@@ -172,6 +214,13 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
   };
 
   if (!show) return null;
+
+  // Compute drafted item IDs for the create flow
+  const draftedMxIds = allActiveLineItems.filter(li => li.maintenance_item_id).map(li => li.maintenance_item_id);
+  const draftedSquawkIds = allActiveLineItems.filter(li => li.squawk_id).map(li => li.squawk_id);
+
+  // For the draft review, filter out removed items from the visible list
+  const visibleLineItems = eventLineItems.filter(li => !removedLineItemIds.includes(li.id));
 
   const viewTitle = {
     list: 'Maintenance Events',
@@ -208,7 +257,7 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
           )}
 
           {view === 'create' && (
-            <ServiceEventCreate {...childProps} mxItems={mxItems} squawks={squawks} />
+            <ServiceEventCreate {...childProps} mxItems={mxItems} squawks={squawks} draftedMxIds={draftedMxIds} draftedSquawkIds={draftedSquawkIds} />
           )}
 
           {view === 'detail' && selectedEvent && (
@@ -219,22 +268,41 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
             <ServiceEventComplete {...childProps} selectedEvent={selectedEvent} eventLineItems={eventLineItems} />
           )}
 
-          {/* Draft review — inline since it reuses pieces from Create but with existing line items */}
+          {/* Draft review — allows removing existing items, adding new ones, and setting date preference */}
           {view === 'review_draft' && selectedEvent && (
             <div className="space-y-6">
               <button onClick={() => handleNavigate('list')} className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-[#F08B46] bg-orange-50 border border-orange-200 rounded px-3 py-1.5 hover:bg-orange-100 active:scale-95 transition-all"><ChevronDown size={12} className="rotate-90" /> Back to Events</button>
-              <div className="bg-orange-50 border border-orange-200 rounded p-4"><p className="text-sm text-navy font-bold mb-1">Draft Work Package</p><p className="text-xs text-gray-600">Review the items below, add anything else you need, then send to your mechanic. Nothing is sent until you click the button at the bottom.</p></div>
+              <div className="bg-orange-50 border border-orange-200 rounded p-4"><p className="text-sm text-navy font-bold mb-1">Draft Work Package</p><p className="text-xs text-gray-600">Review the items below, add or remove as needed, then send to your mechanic. Nothing is sent until you click the button at the bottom.</p></div>
 
-              {eventLineItems.length > 0 && (
+              {/* Existing line items — removable */}
+              {visibleLineItems.length > 0 && (
                 <div>
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-navy mb-2">Already Included</p>
-                  <div className="space-y-2">{eventLineItems.map(li => (<div key={li.id} className="p-3 bg-white border border-gray-200 rounded"><span className="font-bold text-sm text-navy">{li.item_name}</span>{li.item_description && <span className="block text-[10px] text-gray-500">{li.item_description}</span>}</div>))}</div>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-navy mb-2">Included Items</p>
+                  <div className="space-y-2">
+                    {visibleLineItems.map(li => (
+                      <div key={li.id} className="p-3 bg-white border border-gray-200 rounded flex justify-between items-start">
+                        <div>
+                          <span className="font-bold text-sm text-navy">{li.item_name}</span>
+                          {li.item_description && <span className="block text-[10px] text-gray-500">{li.item_description}</span>}
+                        </div>
+                        <button onClick={() => handleRemoveLineItem(li.id)} className="text-gray-300 hover:text-[#CE3732] transition-colors active:scale-95 shrink-0 ml-3 p-1" title="Remove from draft">
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {visibleLineItems.length === 0 && eventLineItems.length > 0 && (
+                <div className="bg-red-50 border border-red-200 rounded p-3">
+                  <p className="text-xs text-[#CE3732] font-bold text-center">All items removed. Add at least one item below or go back.</p>
                 </div>
               )}
 
               {/* Additional MX items */}
               {(() => {
-                const availableMx = mxItems.filter(mx => !eventLineItems.some(li => li.maintenance_item_id === mx.id));
+                const availableMx = mxItems.filter(mx => !visibleLineItems.some(li => li.maintenance_item_id === mx.id));
                 if (availableMx.length === 0) return null;
                 const allSelected = availableMx.every(mx => selectedMxIds.includes(mx.id));
                 return (
@@ -250,7 +318,7 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
 
               {/* Additional squawks */}
               {(() => {
-                const availableSquawks = squawks.filter(sq => !eventLineItems.some(li => li.squawk_id === sq.id));
+                const availableSquawks = squawks.filter(sq => !visibleLineItems.some(li => li.squawk_id === sq.id));
                 if (availableSquawks.length === 0) return null;
                 const allSelected = availableSquawks.every(sq => selectedSquawkIds.includes(sq.id));
                 return (
@@ -271,7 +339,7 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
               </div>
 
               <DateProposalSection wantsToPropose={wantsToPropose} setWantsToPropose={setWantsToPropose} proposedDate={proposedDate} setProposedDate={setProposedDate} />
-              {!showPreview ? (<button onClick={() => setShowPreview(true)} className="w-full text-[10px] font-bold uppercase tracking-widest text-[#3AB0FF] hover:underline py-2">Preview Email Before Sending</button>) : (<EmailPreview aircraft={aircraft} mxItems={mxItems.filter(mx => selectedMxIds.includes(mx.id))} squawks={squawks.filter(sq => selectedSquawkIds.includes(sq.id))} selectedAddons={selectedAddons} proposedDate={wantsToPropose ? proposedDate : null} existingLines={eventLineItems} onClose={() => setShowPreview(false)} />)}
+              {!showPreview ? (<button onClick={() => setShowPreview(true)} className="w-full text-[10px] font-bold uppercase tracking-widest text-[#3AB0FF] hover:underline py-2">Preview Email Before Sending</button>) : (<EmailPreview aircraft={aircraft} mxItems={mxItems.filter(mx => selectedMxIds.includes(mx.id))} squawks={squawks.filter(sq => selectedSquawkIds.includes(sq.id))} selectedAddons={selectedAddons} proposedDate={wantsToPropose ? proposedDate : null} existingLines={visibleLineItems} onClose={() => setShowPreview(false)} />)}
               <PrimaryButton onClick={handleSendDraft} disabled={isSubmitting}>{isSubmitting ? "Sending to Mechanic..." : "Send Work Package to Mechanic"}</PrimaryButton>
             </div>
           )}

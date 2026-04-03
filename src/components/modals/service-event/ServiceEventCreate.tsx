@@ -2,9 +2,9 @@
 
 import { useState } from "react";
 import { authFetch } from "@/lib/authFetch";
-import { Wrench, AlertTriangle, Sparkles, Calendar, ChevronDown, X, CheckSquare } from "lucide-react";
+import { Wrench, AlertTriangle, Sparkles, ChevronDown, CheckSquare } from "lucide-react";
 import { PrimaryButton } from "@/components/AppButtons";
-import { ADDON_OPTIONS, INPUT_WHITE_BG } from "./shared";
+import { ADDON_OPTIONS } from "./shared";
 import type { ServiceEventChildProps } from "./shared";
 import DateProposalSection from "./DateProposalSection";
 import EmailPreview from "./EmailPreview";
@@ -12,10 +12,15 @@ import EmailPreview from "./EmailPreview";
 interface ServiceEventCreateProps extends ServiceEventChildProps {
   mxItems: any[];
   squawks: any[];
+  /** IDs of MX items already included in an existing draft/active event */
+  draftedMxIds?: string[];
+  /** IDs of squawks already included in an existing draft/active event */
+  draftedSquawkIds?: string[];
 }
 
 export default function ServiceEventCreate({
   aircraft, mxItems, squawks, isSubmitting, setIsSubmitting, onNavigate, onRefresh, showSuccess, canManageService,
+  draftedMxIds = [], draftedSquawkIds = [],
 }: ServiceEventCreateProps) {
   const [selectedMxIds, setSelectedMxIds] = useState<string[]>([]);
   const [selectedSquawkIds, setSelectedSquawkIds] = useState<string[]>([]);
@@ -23,22 +28,28 @@ export default function ServiceEventCreate({
   const [proposedDate, setProposedDate] = useState("");
   const [wantsToPropose, setWantsToPropose] = useState<boolean | null>(null);
   const [showPreview, setShowPreview] = useState(false);
+  const [isSavingDraft, setIsSavingDraft] = useState(false);
+
+  // Filter out items that are already in a draft/active event
+  const availableMx = mxItems.filter(mx => !draftedMxIds.includes(mx.id));
+  const availableSquawks = squawks.filter(sq => !draftedSquawkIds.includes(sq.id));
 
   const toggleSelectAllMx = () => {
-    const allIds = mxItems.map(mx => mx.id);
+    const allIds = availableMx.map(mx => mx.id);
     const allSelected = allIds.every(id => selectedMxIds.includes(id));
     if (allSelected) setSelectedMxIds(prev => prev.filter(id => !allIds.includes(id)));
     else setSelectedMxIds(prev => Array.from(new Set([...prev, ...allIds])));
   };
 
   const toggleSelectAllSquawks = () => {
-    const allIds = squawks.map(sq => sq.id);
+    const allIds = availableSquawks.map(sq => sq.id);
     const allSelected = allIds.every(id => selectedSquawkIds.includes(id));
     if (allSelected) setSelectedSquawkIds(prev => prev.filter(id => !allIds.includes(id)));
     else setSelectedSquawkIds(prev => Array.from(new Set([...prev, ...allIds])));
   };
 
   const handleCreateAndSend = async () => {
+    if (isSubmitting || isSavingDraft) return;
     if (selectedMxIds.length === 0 && selectedSquawkIds.length === 0 && selectedAddons.length === 0) return alert("Please select at least one item for the work package.");
     if (wantsToPropose === null) return alert("Please choose whether you'd like to propose a date or request availability.");
     if (wantsToPropose && !proposedDate) return alert("Please select a preferred service date or choose 'Request Availability' instead.");
@@ -59,8 +70,9 @@ export default function ServiceEventCreate({
   };
 
   const handleSaveAsDraft = async () => {
+    if (isSubmitting || isSavingDraft) return;
     if (selectedMxIds.length === 0 && selectedSquawkIds.length === 0 && selectedAddons.length === 0) return alert("Please select at least one item for the work package.");
-    setIsSubmitting(true);
+    setIsSavingDraft(true);
     try {
       const res = await authFetch('/api/mx-events/create', { method: 'POST', body: JSON.stringify({ aircraftId: aircraft.id, mxItemIds: selectedMxIds, squawkIds: selectedSquawkIds, addonServices: selectedAddons, proposedDate: (wantsToPropose && proposedDate) ? proposedDate : null }) });
       if (!res.ok) throw new Error('Failed to create draft');
@@ -68,8 +80,10 @@ export default function ServiceEventCreate({
       showSuccess("Draft saved");
       onNavigate('list');
     } catch (err: any) { alert("Failed to save draft: " + err.message); }
-    setIsSubmitting(false);
+    setIsSavingDraft(false);
   };
+
+  const anyBusy = isSubmitting || isSavingDraft;
 
   return (
     <div className="space-y-6">
@@ -78,16 +92,16 @@ export default function ServiceEventCreate({
       </button>
 
       {/* MX Items */}
-      {mxItems.length > 0 && (
+      {availableMx.length > 0 && (
         <div>
           <div className="flex justify-between items-center mb-2">
             <p className="text-[10px] font-bold uppercase tracking-widest text-navy flex items-center gap-2"><Wrench size={14} className="text-[#F08B46]" /> Maintenance Items Due</p>
             <button type="button" onClick={toggleSelectAllMx} className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-[#F08B46] hover:opacity-80 active:scale-95 transition-all">
-              <CheckSquare size={12} /> {mxItems.every(mx => selectedMxIds.includes(mx.id)) ? 'Deselect All' : 'Select All'}
+              <CheckSquare size={12} /> {availableMx.every(mx => selectedMxIds.includes(mx.id)) ? 'Deselect All' : 'Select All'}
             </button>
           </div>
           <div className="space-y-3 pb-1">
-            {mxItems.map(mx => (
+            {availableMx.map(mx => (
               <label key={mx.id} className="flex items-start gap-3 p-3 border border-gray-200 rounded cursor-pointer hover:bg-gray-50">
                 <input type="checkbox" checked={selectedMxIds.includes(mx.id)} onChange={() => setSelectedMxIds(prev => prev.includes(mx.id) ? prev.filter(id => id !== mx.id) : [...prev, mx.id])} className="mt-1 w-4 h-4 text-[#F08B46] border-gray-300 rounded" />
                 <div>
@@ -100,17 +114,32 @@ export default function ServiceEventCreate({
         </div>
       )}
 
+      {/* Items already in a draft — shown as non-selectable for awareness */}
+      {draftedMxIds.length > 0 && (
+        <div>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Already in an Existing Draft</p>
+          <div className="space-y-2">
+            {mxItems.filter(mx => draftedMxIds.includes(mx.id)).map(mx => (
+              <div key={mx.id} className="p-3 border border-gray-100 rounded bg-gray-50 opacity-50">
+                <span className="font-bold text-sm text-gray-400">{mx.item_name}</span>
+                <span className="block text-[10px] text-gray-400">{mx.tracking_type === 'time' ? `Due @ ${mx.due_time} hrs` : `Due ${mx.due_date}`}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Squawks */}
-      {squawks.length > 0 && (
+      {availableSquawks.length > 0 && (
         <div>
           <div className="flex justify-between items-center mb-2">
             <p className="text-[10px] font-bold uppercase tracking-widest text-navy flex items-center gap-2"><AlertTriangle size={14} className="text-[#CE3732]" /> Open Squawks</p>
             <button type="button" onClick={toggleSelectAllSquawks} className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-[#CE3732] hover:opacity-80 active:scale-95 transition-all">
-              <CheckSquare size={12} /> {squawks.every(sq => selectedSquawkIds.includes(sq.id)) ? 'Deselect All' : 'Select All'}
+              <CheckSquare size={12} /> {availableSquawks.every(sq => selectedSquawkIds.includes(sq.id)) ? 'Deselect All' : 'Select All'}
             </button>
           </div>
           <div className="space-y-3 pb-1">
-            {squawks.map(sq => (
+            {availableSquawks.map(sq => (
               <label key={sq.id} className="flex items-start gap-3 p-3 border border-gray-200 rounded cursor-pointer hover:bg-gray-50">
                 <input type="checkbox" checked={selectedSquawkIds.includes(sq.id)} onChange={() => setSelectedSquawkIds(prev => prev.includes(sq.id) ? prev.filter(id => id !== sq.id) : [...prev, sq.id])} className="mt-1 w-4 h-4 text-[#CE3732] border-gray-300 rounded" />
                 <div>
@@ -119,6 +148,19 @@ export default function ServiceEventCreate({
                   <span className="block text-[10px] text-gray-500">Reported {new Date(sq.created_at).toLocaleDateString()}</span>
                 </div>
               </label>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {draftedSquawkIds.length > 0 && (
+        <div>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Squawks Already in a Draft</p>
+          <div className="space-y-2">
+            {squawks.filter(sq => draftedSquawkIds.includes(sq.id)).map(sq => (
+              <div key={sq.id} className="p-3 border border-gray-100 rounded bg-gray-50 opacity-50">
+                <span className="font-bold text-sm text-gray-400">{sq.description || 'No description'}</span>
+              </div>
             ))}
           </div>
         </div>
@@ -145,11 +187,11 @@ export default function ServiceEventCreate({
         <EmailPreview aircraft={aircraft} mxItems={mxItems.filter(mx => selectedMxIds.includes(mx.id))} squawks={squawks.filter(sq => selectedSquawkIds.includes(sq.id))} selectedAddons={selectedAddons} proposedDate={wantsToPropose ? proposedDate : null} onClose={() => setShowPreview(false)} />
       )}
 
-      <PrimaryButton onClick={handleCreateAndSend} disabled={isSubmitting}>
+      <PrimaryButton onClick={handleCreateAndSend} disabled={anyBusy}>
         {isSubmitting ? "Sending..." : "Send Work Package to Mechanic"}
       </PrimaryButton>
-      <button onClick={handleSaveAsDraft} disabled={isSubmitting} className="w-full text-[10px] font-bold uppercase tracking-widest text-gray-500 hover:text-navy py-2 active:scale-95 transition-all disabled:opacity-50">
-        Save as Draft (Don&apos;t Send Yet)
+      <button onClick={handleSaveAsDraft} disabled={anyBusy} className="w-full text-[10px] font-bold uppercase tracking-widest text-gray-500 hover:text-navy py-2 active:scale-95 transition-all disabled:opacity-50">
+        {isSavingDraft ? "Saving Draft..." : "Save as Draft (Don\u0027t Send Yet)"}
       </button>
     </div>
   );
