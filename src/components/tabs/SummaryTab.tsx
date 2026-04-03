@@ -13,10 +13,11 @@ import { PrimaryButton } from "@/components/AppButtons";
 import Toast from "@/components/Toast";
 
 export default function SummaryTab({ 
-  aircraft, setActiveTab, role, aircraftRole, onDeleteAircraft, sysSettings, onEditAircraft, refreshData, session
+  aircraft, setActiveTab, onNavigateToSquawks, role, aircraftRole, onDeleteAircraft, sysSettings, onEditAircraft, refreshData, session
 }: { 
   aircraft: AircraftWithMetrics | null, 
   setActiveTab: (tab: AppTab) => void,
+  onNavigateToSquawks: () => void,
   role: AppRole,
   aircraftRole: AircraftRole | null,
   onDeleteAircraft: (id: string) => void,
@@ -336,7 +337,7 @@ export default function SummaryTab({
           <div className="flex-1"><span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Next Mx Due</span>{nextMx ? (<><p className="text-sm font-bold text-navy leading-tight">{nextMx.item_name}</p><p className={`text-xs font-bold mt-0.5 ${mxTextColor}`}>{nextMx.dueText}</p></>) : <p className="text-sm font-bold text-gray-500 leading-tight">No Maintenance Tracked</p>}</div>
         </div>
 
-        <div onClick={() => setActiveTab('mx')} className={`bg-white border shadow-sm rounded-sm p-4 flex gap-4 items-center transition-colors cursor-pointer active:scale-[0.98] ${activeSquawks.length > 0 ? 'border-red-200 hover:bg-red-50' : 'border-gray-200 opacity-70 hover:bg-gray-50'}`}>
+        <div onClick={onNavigateToSquawks} className={`bg-white border shadow-sm rounded-sm p-4 flex gap-4 items-center transition-colors cursor-pointer active:scale-[0.98] ${activeSquawks.length > 0 ? 'border-red-200 hover:bg-red-50' : 'border-gray-200 opacity-70 hover:bg-gray-50'}`}>
           <div className={`p-3 rounded-full shrink-0 ${activeSquawks.length > 0 ? 'bg-red-50 text-[#CE3732]' : 'bg-gray-100 text-gray-400'}`}><AlertTriangle size={20}/></div>
           <div className="flex-1"><span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Active Squawks</span>{activeSquawks.length > 0 ? (<><p className="text-sm font-bold text-navy leading-tight">{activeSquawks.length} Open Issue{activeSquawks.length > 1 ? 's' : ''}</p>{activeSquawks.some(sq => sq.affects_airworthiness) && <p className="text-xs font-bold text-[#CE3732] mt-0.5">Aircraft Grounded</p>}</>) : <p className="text-sm font-bold text-gray-500 leading-tight">No Active Squawks</p>}</div>
         </div>

@@ -25,6 +25,40 @@ const MaintenanceTab = dynamic(() => import("@/components/tabs/MaintenanceTab"))
 const NotesTab = dynamic(() => import("@/components/tabs/NotesTab"));
 const FleetSummary = dynamic(() => import("@/components/tabs/FleetSummary"));
 
+/** Inline MX sub-tab picker with "remember selection" checkbox */
+function MxPicker({ onSelect, onClose }: { onSelect: (sub: 'maintenance' | 'squawks') => void, onClose: () => void }) {
+  const [remember, setRemember] = useState(false);
+  const handleSelect = (sub: 'maintenance' | 'squawks') => {
+    if (remember) localStorage.setItem('aft_mx_default_subtab', sub);
+    onSelect(sub);
+  };
+  return (
+    <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/50 animate-fade-in" onClick={onClose}>
+      <div className="bg-white w-full max-w-sm rounded-lg shadow-2xl p-5 animate-slide-up" onClick={e => e.stopPropagation()}>
+        <div className="flex gap-3">
+          <button onClick={() => handleSelect('maintenance')} className="flex-1 bg-cream border-2 border-[#F08B46] rounded-lg p-5 flex flex-col items-center gap-3 hover:bg-orange-50 active:scale-95 transition-all">
+            <div className="bg-[#F08B46] text-white p-3 rounded-full"><Wrench size={24} /></div>
+            <span className="font-oswald text-sm font-bold uppercase tracking-widest text-navy">Maintenance</span>
+            <span className="text-[10px] text-gray-500 text-center leading-tight">Track items, schedule service, manage work packages</span>
+          </button>
+          <button onClick={() => handleSelect('squawks')} className="flex-1 bg-cream border-2 border-[#CE3732] rounded-lg p-5 flex flex-col items-center gap-3 hover:bg-red-50 active:scale-95 transition-all">
+            <div className="bg-[#CE3732] text-white p-3 rounded-full"><AlertTriangle size={24} /></div>
+            <span className="font-oswald text-sm font-bold uppercase tracking-widest text-navy">Squawks</span>
+            <span className="text-[10px] text-gray-500 text-center leading-tight">Report discrepancies, track open issues, manage deferrals</span>
+          </button>
+        </div>
+        <label className="flex items-center justify-center gap-2 mt-4 pt-3 border-t border-gray-100 cursor-pointer">
+          <input type="checkbox" checked={remember} onChange={e => setRemember(e.target.checked)} className="w-4 h-4 text-navy border-gray-300 rounded" />
+          <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Remember my selection</span>
+        </label>
+        {localStorage.getItem('aft_mx_default_subtab') && (
+          <button onClick={() => { localStorage.removeItem('aft_mx_default_subtab'); onClose(); }} className="w-full mt-2 text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:text-[#CE3732] transition-colors py-1">Clear Saved Preference</button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 interface AppShellProps {
   session: any;
 }
@@ -411,7 +445,7 @@ export default function AppShell({ session }: AppShellProps) {
             <div className="flex flex-col items-center justify-center py-20 animate-pulse"><Loader2 size={32} className="text-[#F08B46] animate-spin mb-4" /><p className="font-oswald text-sm font-bold uppercase tracking-widest text-gray-400">Loading Fleet Data...</p></div>
           ) : (<>
             {activeTab === 'fleet' && <FleetSummary aircraftList={aircraftList} onSelectAircraft={(t: string) => { setActiveTail(t); navigateTab('summary'); }} />}
-            {activeTab === 'summary' && <SummaryTab aircraft={selectedAircraftData} setActiveTab={(t: AppTab) => navigateTab(t)} role={role} aircraftRole={currentAircraftRole} onDeleteAircraft={handleDeleteAircraft} sysSettings={sysSettings} onEditAircraft={() => openAircraftForm(selectedAircraftData)} refreshData={() => fetchAircraftData(session.user.id)} session={session} />}
+            {activeTab === 'summary' && <SummaryTab aircraft={selectedAircraftData} setActiveTab={(t: AppTab) => navigateTab(t)} onNavigateToSquawks={() => { setMxSubTab('squawks'); navigateTab('mx'); }} role={role} aircraftRole={currentAircraftRole} onDeleteAircraft={handleDeleteAircraft} sysSettings={sysSettings} onEditAircraft={() => openAircraftForm(selectedAircraftData)} refreshData={() => fetchAircraftData(session.user.id)} session={session} />}
             {activeTab === 'times' && <TimesTab aircraft={selectedAircraftData} session={session} role={role} userInitials={userInitials} onUpdate={() => fetchAircraftData(session.user.id)} />}
             {activeTab === 'calendar' && <CalendarTab aircraft={selectedAircraftData} session={session} aircraftRole={currentAircraftRole} />}
             {activeTab === 'mx' && <MaintenanceTab aircraft={selectedAircraftData} role={role} aircraftRole={currentAircraftRole} onGroundedStatusChange={() => checkGroundedStatus(activeTail)} sysSettings={sysSettings} session={session} userInitials={userInitials} initialSubTab={mxSubTab} />}
@@ -431,7 +465,18 @@ export default function AppShell({ session }: AppShellProps) {
           ].map(tab => (
             <button key={tab.id} onClick={() => {
               if (tab.id === 'mx') {
-                setShowMxPicker(true);
+                if (activeTab === 'mx') {
+                  // Already on MX — always show picker to allow switching subtab
+                  setShowMxPicker(true);
+                } else {
+                  const remembered = localStorage.getItem('aft_mx_default_subtab');
+                  if (remembered === 'maintenance' || remembered === 'squawks') {
+                    setMxSubTab(remembered);
+                    navigateTab('mx');
+                  } else {
+                    setShowMxPicker(true);
+                  }
+                }
               } else {
                 navigateTab(tab.id as AppTab);
               }
@@ -446,28 +491,10 @@ export default function AppShell({ session }: AppShellProps) {
 
       {/* ─── MX ENTRY PICKER ─── */}
       {showMxPicker && (
-        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/50 animate-fade-in" onClick={() => setShowMxPicker(false)}>
-          <div className="bg-white w-full max-w-sm rounded-lg shadow-2xl p-5 animate-slide-up" onClick={e => e.stopPropagation()}>
-            <div className="flex gap-3">
-              <button 
-                onClick={() => { setMxSubTab('maintenance'); navigateTab('mx'); setShowMxPicker(false); }} 
-                className="flex-1 bg-cream border-2 border-[#F08B46] rounded-lg p-5 flex flex-col items-center gap-3 hover:bg-orange-50 active:scale-95 transition-all"
-              >
-                <div className="bg-[#F08B46] text-white p-3 rounded-full"><Wrench size={24} /></div>
-                <span className="font-oswald text-sm font-bold uppercase tracking-widest text-navy">Maintenance</span>
-                <span className="text-[10px] text-gray-500 text-center leading-tight">Track items, schedule service, manage work packages</span>
-              </button>
-              <button 
-                onClick={() => { setMxSubTab('squawks'); navigateTab('mx'); setShowMxPicker(false); }} 
-                className="flex-1 bg-cream border-2 border-[#CE3732] rounded-lg p-5 flex flex-col items-center gap-3 hover:bg-red-50 active:scale-95 transition-all"
-              >
-                <div className="bg-[#CE3732] text-white p-3 rounded-full"><AlertTriangle size={24} /></div>
-                <span className="font-oswald text-sm font-bold uppercase tracking-widest text-navy">Squawks</span>
-                <span className="text-[10px] text-gray-500 text-center leading-tight">Report discrepancies, track open issues, manage deferrals</span>
-              </button>
-            </div>
-          </div>
-        </div>
+        <MxPicker 
+          onSelect={(sub) => { setMxSubTab(sub); navigateTab('mx'); setShowMxPicker(false); }} 
+          onClose={() => setShowMxPicker(false)} 
+        />
       )}
     </div>
   );
