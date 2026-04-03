@@ -102,6 +102,7 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
     }
     if (newView === 'list') {
       await fetchEvents();
+      return; // fetchEvents already sets view to 'list'
     }
     setView(newView);
   };
@@ -126,16 +127,32 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
 
   const handleSendDraft = async () => {
     if (!selectedEvent) return;
+    if (isSubmitting) return; // Prevent double-click
     if (wantsToPropose === null) return alert("Please choose whether you'd like to propose a date or request availability.");
     if (wantsToPropose && !proposedDate) return alert("Please select a preferred service date or choose 'Request Availability' instead.");
     setIsSubmitting(true);
     try {
-      const res = await authFetch('/api/mx-events/send-workpackage', { method: 'POST', body: JSON.stringify({ eventId: selectedEvent.id, additionalMxItemIds: selectedMxIds, additionalSquawkIds: selectedSquawkIds, addonServices: selectedAddons, proposedDate: wantsToPropose ? proposedDate : null }) });
-      if (!res.ok) throw new Error('Failed to send');
-      await fetchEvents();
+      const res = await authFetch('/api/mx-events/send-workpackage', {
+        method: 'POST',
+        body: JSON.stringify({
+          eventId: selectedEvent.id,
+          additionalMxItemIds: selectedMxIds,
+          additionalSquawkIds: selectedSquawkIds,
+          addonServices: selectedAddons,
+          proposedDate: wantsToPropose ? proposedDate : null,
+        }),
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || 'Failed to send');
+      }
       showSuccess("Work package sent to mechanic");
-      setView('list');
-    } catch (err: any) { alert("Failed to send work package: " + err.message); }
+      // Refresh events list in background, don't block UI
+      fetchEvents();
+      onRefresh();
+    } catch (err: any) {
+      alert("Failed to send work package: " + err.message);
+    }
     setIsSubmitting(false);
   };
 
@@ -161,7 +178,7 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
     create: 'Schedule Service',
     detail: 'Service Event',
     complete: 'Enter Logbook Data',
-    review_draft: 'Review Draft',
+    review_draft: 'Review & Send Draft',
     counter: 'Counter Proposal',
   }[view];
 
@@ -206,7 +223,7 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
           {view === 'review_draft' && selectedEvent && (
             <div className="space-y-6">
               <button onClick={() => handleNavigate('list')} className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-[#F08B46] bg-orange-50 border border-orange-200 rounded px-3 py-1.5 hover:bg-orange-100 active:scale-95 transition-all"><ChevronDown size={12} className="rotate-90" /> Back to Events</button>
-              <div className="bg-orange-50 border border-orange-200 rounded p-4"><p className="text-sm text-navy font-bold mb-1">System-Generated Draft</p><p className="text-xs text-gray-600">Review the items below, add anything else you need, and send it to your mechanic.</p></div>
+              <div className="bg-orange-50 border border-orange-200 rounded p-4"><p className="text-sm text-navy font-bold mb-1">Draft Work Package</p><p className="text-xs text-gray-600">Review the items below, add anything else you need, then send to your mechanic. Nothing is sent until you click the button at the bottom.</p></div>
 
               {eventLineItems.length > 0 && (
                 <div>
@@ -255,7 +272,7 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
 
               <DateProposalSection wantsToPropose={wantsToPropose} setWantsToPropose={setWantsToPropose} proposedDate={proposedDate} setProposedDate={setProposedDate} />
               {!showPreview ? (<button onClick={() => setShowPreview(true)} className="w-full text-[10px] font-bold uppercase tracking-widest text-[#3AB0FF] hover:underline py-2">Preview Email Before Sending</button>) : (<EmailPreview aircraft={aircraft} mxItems={mxItems.filter(mx => selectedMxIds.includes(mx.id))} squawks={squawks.filter(sq => selectedSquawkIds.includes(sq.id))} selectedAddons={selectedAddons} proposedDate={wantsToPropose ? proposedDate : null} existingLines={eventLineItems} onClose={() => setShowPreview(false)} />)}
-              <PrimaryButton onClick={handleSendDraft} disabled={isSubmitting}>{isSubmitting ? "Sending..." : "Send Work Package to Mechanic"}</PrimaryButton>
+              <PrimaryButton onClick={handleSendDraft} disabled={isSubmitting}>{isSubmitting ? "Sending to Mechanic..." : "Send Work Package to Mechanic"}</PrimaryButton>
             </div>
           )}
 
