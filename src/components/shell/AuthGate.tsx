@@ -76,6 +76,9 @@ export default function AuthGate({ children }: AuthGateProps) {
     });
 
     // ─── Background Resume ───
+    let lastVersionCheck = 0;
+    const VERSION_CHECK_COOLDOWN = 5 * 60 * 1000; // 5 minutes between checks
+
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
         supabase.auth.getSession().then(({ data: { session: freshSession }, error }) => {
@@ -86,6 +89,21 @@ export default function AuthGate({ children }: AuthGateProps) {
             setSession(freshSession);
           }
         });
+
+        // Version check with cooldown to prevent rapid reloads
+        const now = Date.now();
+        if (appVersion && now - lastVersionCheck > VERSION_CHECK_COOLDOWN) {
+          lastVersionCheck = now;
+          fetch('/api/version', { cache: 'no-store' })
+            .then(r => r.ok ? r.json() : null)
+            .then(data => {
+              if (data?.version && data.version !== appVersion) {
+                localStorage.setItem('aft_app_version', data.version);
+                window.location.reload();
+              }
+            })
+            .catch(() => {}); // Silent fail — network issues shouldn't trigger reload
+        }
       }
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
