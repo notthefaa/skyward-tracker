@@ -92,6 +92,30 @@ export default function SummaryTab({
     { revalidateOnMount: true }
   );
 
+  const { data: currentStatus } = useSWR(
+    aircraft ? `summary-current-status-${aircraft.id}` : null,
+    async () => {
+      const now = new Date().toISOString();
+      // Active reservation (started but not ended)
+      const { data: activeRes } = await supabase.from('aft_reservations')
+        .select('pilot_name, pilot_initials, user_id, start_time, end_time')
+        .eq('aircraft_id', aircraft!.id).eq('status', 'confirmed')
+        .lte('start_time', now).gte('end_time', now)
+        .order('start_time').limit(1);
+      if (activeRes && activeRes.length > 0) return { type: 'reservation' as const, ...activeRes[0] };
+      // Active maintenance block
+      const today = new Date().toISOString().split('T')[0];
+      const { data: activeMx } = await supabase.from('aft_maintenance_events')
+        .select('confirmed_date, estimated_completion, mx_contact_name')
+        .eq('aircraft_id', aircraft!.id).in('status', ['confirmed', 'in_progress'])
+        .lte('confirmed_date', today)
+        .gte('estimated_completion', today).limit(1);
+      if (activeMx && activeMx.length > 0) return { type: 'maintenance' as const, ...activeMx[0] };
+      return null;
+    },
+    { revalidateOnMount: true, refreshInterval: 60000 }
+  );
+
   const { data: crewMembers = [] } = useSWR(
     aircraft ? `summary-crew-${aircraft.id}` : null,
     async () => {
@@ -298,6 +322,34 @@ export default function SummaryTab({
           </div>
         </div>
       </div>
+
+      {/* Current Status Banner */}
+      {currentStatus && (() => {
+        if (currentStatus.type === 'maintenance') {
+          const endDate = currentStatus.estimated_completion
+            ? new Date(currentStatus.estimated_completion + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+            : null;
+          return (
+            <div className="bg-orange-50 border border-orange-200 rounded-sm p-3 flex items-center gap-3">
+              <div className="bg-[#F08B46] text-white p-2 rounded-full shrink-0"><Wrench size={16} /></div>
+              <p className="text-sm font-roboto text-navy"><span className="font-bold">In Maintenance</span>{currentStatus.mx_contact_name ? ` with ${currentStatus.mx_contact_name}` : ''}{endDate ? ` until ${endDate}` : ''}</p>
+            </div>
+          );
+        }
+        const isYou = currentStatus.user_id === session?.user?.id;
+        const endDt = new Date(currentStatus.end_time);
+        const sameDay = new Date(currentStatus.start_time).toDateString() === endDt.toDateString();
+        const endLabel = sameDay
+          ? endDt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+          : endDt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        const who = isYou ? 'You have' : `${currentStatus.pilot_initials || currentStatus.pilot_name} has`;
+        return (
+          <div className={`${isYou ? 'bg-emerald-50 border-emerald-200' : 'bg-sky-50 border-sky-200'} border rounded-sm p-3 flex items-center gap-3`}>
+            <div className={`${isYou ? 'bg-[#56B94A]' : 'bg-[#3AB0FF]'} text-white p-2 rounded-full shrink-0`}><Calendar size={16} /></div>
+            <p className="text-sm font-roboto text-navy"><span className="font-bold">{who}</span> the airplane booked {sameDay ? 'until' : 'through'} {endLabel}</p>
+          </div>
+        );
+      })()}
 
       {/* Flight Times — CLICKABLE: navigates to Times tab */}
       <div onClick={() => setActiveTab('times')} className={`bg-white shadow-lg rounded-sm p-4 border-t-4 ${statusBorderColor} flex flex-col cursor-pointer hover:shadow-xl transition-all active:scale-[0.98]`}>
