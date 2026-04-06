@@ -3,7 +3,7 @@
 import { useState, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
 import { authFetch } from "@/lib/authFetch";
-import type { AircraftWithMetrics, Reservation, AircraftRole } from "@/lib/types";
+import type { AircraftWithMetrics, Reservation, AircraftRole, AppRole } from "@/lib/types";
 import useSWR from "swr";
 import { Calendar, ChevronLeft, ChevronRight, Plus, X, Clock, MapPin, Plane, Wrench, Loader2, Users } from "lucide-react";
 import { PrimaryButton } from "@/components/AppButtons";
@@ -14,12 +14,13 @@ type CalendarView = 'month' | 'week' | 'day';
 
 const wb: React.CSSProperties = { backgroundColor: '#ffffff' };
 
-export default function CalendarTab({ 
-  aircraft, session, aircraftRole 
-}: { 
-  aircraft: AircraftWithMetrics | null, 
+export default function CalendarTab({
+  aircraft, session, aircraftRole, role
+}: {
+  aircraft: AircraftWithMetrics | null,
   session: any,
-  aircraftRole: AircraftRole | null
+  aircraftRole: AircraftRole | null,
+  role: AppRole
 }) {
   const [view, setView] = useState<CalendarView>('month');
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -32,6 +33,11 @@ export default function CalendarTab({
   const [bookingEndTime, setBookingEndTime] = useState("17:00");
   const [bookingTitle, setBookingTitle] = useState("");
   const [bookingRoute, setBookingRoute] = useState("");
+
+  const [showMxBlockForm, setShowMxBlockForm] = useState(false);
+  const [mxBlockStartDate, setMxBlockStartDate] = useState("");
+  const [mxBlockEndDate, setMxBlockEndDate] = useState("");
+  const [mxBlockNotes, setMxBlockNotes] = useState("");
 
   const [toastMessage, setToastMessage] = useState("");
   const [showToast, setShowToast] = useState(false);
@@ -120,6 +126,24 @@ export default function CalendarTab({
     try { const res = await authFetch('/api/reservations', { method: 'DELETE', body: JSON.stringify({ reservationId: id }) }); if (!res.ok) { const d = await res.json(); throw new Error(d.error); } await mutate(); setCancellingId(null); showSuccess("Reservation cancelled"); } catch (err: any) { alert(err.message); } setIsSubmitting(false);
   };
 
+  const canAdmin = role === 'admin' || aircraftRole === 'admin';
+
+  const openMxBlockForm = (date?: Date) => {
+    const d = date || new Date(); const dateStr = d.toISOString().split('T')[0];
+    setMxBlockStartDate(dateStr); setMxBlockEndDate(dateStr); setMxBlockNotes(""); setShowMxBlockForm(true);
+  };
+
+  const handleCreateMxBlock = async () => {
+    if (!mxBlockStartDate) return alert("Please select a start date.");
+    setIsSubmitting(true);
+    try {
+      const res = await authFetch('/api/mx-events/block', { method: 'POST', body: JSON.stringify({ aircraftId: aircraft!.id, startDate: mxBlockStartDate, endDate: mxBlockEndDate || mxBlockStartDate, notes: mxBlockNotes || null }) });
+      const data = await res.json(); if (!res.ok) throw new Error(data.error || 'Failed');
+      await mutate(); setShowMxBlockForm(false); showSuccess("Maintenance block created");
+    } catch (err: any) { alert(err.message); }
+    setIsSubmitting(false);
+  };
+
   const canManageReservation = (r: Reservation) => r.user_id === session?.user?.id || aircraftRole === 'admin';
   const formatTime = (iso: string) => new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
   const formatDateShort = (iso: string) => new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
@@ -163,9 +187,12 @@ export default function CalendarTab({
     <>
       <Toast message={toastMessage} show={showToast} onDismiss={() => setShowToast(false)} />
       {aircraft && session && <CalendarDashboard aircraft={aircraft} session={session} />}
-      <div className="mb-2"><button onClick={() => openBookingForm()} className="w-full bg-[#56B94A] text-white font-oswald tracking-widest uppercase py-3 px-4 rounded hover:bg-opacity-90 active:scale-95 transition-all duration-150 ease-out flex justify-center items-center gap-2 text-sm"><Plus size={18} /> Reserve Aircraft</button></div>
+      <div className={`mb-2 ${canAdmin ? 'grid grid-cols-2 gap-2' : ''}`}>
+        <button onClick={() => openBookingForm()} className="w-full bg-[#56B94A] text-white font-oswald tracking-widest uppercase py-3 px-4 rounded hover:bg-opacity-90 active:scale-95 transition-all duration-150 ease-out flex justify-center items-center gap-2 text-sm"><Plus size={18} /> Reserve Aircraft</button>
+        {canAdmin && <button onClick={() => openMxBlockForm()} className="w-full bg-[#F08B46] text-white font-oswald tracking-widest uppercase py-3 px-4 rounded hover:bg-opacity-90 active:scale-95 transition-all duration-150 ease-out flex justify-center items-center gap-2 text-sm"><Wrench size={18} /> Block for MX</button>}
+      </div>
 
-      <div className="bg-cream shadow-lg rounded-sm border-t-4 border-[#56B94A] mb-6 overflow-hidden">
+      <div className="bg-cream shadow-lg rounded-sm border-t-4 border-[#56B94A] mb-6">
         <div className="bg-white border-b border-gray-100 px-4 py-3 md:px-6">
           <div className="flex justify-between items-center">
             <div className="flex gap-1">{(['month', 'week', 'day'] as CalendarView[]).map(v => (<button key={v} onClick={() => setView(v)} className={`text-[10px] font-oswald font-bold uppercase tracking-widest px-3.5 py-1.5 rounded transition-colors active:scale-95 ${view === v ? 'bg-[#56B94A] text-white shadow-sm' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>{v}</button>))}</div>
@@ -267,6 +294,7 @@ export default function CalendarTab({
                   <div className="text-center py-12"><div className="bg-gray-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4"><Plane size={28} className="text-gray-300" /></div><p className="text-sm text-gray-400 font-oswald font-bold uppercase tracking-widest">Available</p><p className="text-xs text-gray-400 font-roboto mt-1">No bookings for this day</p><button onClick={() => openBookingForm(currentDate)} className="mt-4 text-[10px] font-oswald font-bold uppercase tracking-widest text-[#56B94A] bg-emerald-50 border border-emerald-200 px-4 py-2 rounded hover:bg-emerald-100 active:scale-95 transition-all">+ Reserve this date</button></div>
                 )}
                 {!hasMx && events.reservations.length > 0 && <button onClick={() => openBookingForm(currentDate)} className="w-full border-2 border-dashed border-gray-200 text-gray-400 font-oswald font-bold py-3 rounded hover:bg-emerald-50 hover:border-[#56B94A] hover:text-[#56B94A] active:scale-95 transition-all text-[10px] uppercase tracking-widest">+ Add Booking</button>}
+                {hasMx && <p className="text-[11px] font-roboto font-bold text-[#CE3732] text-center mt-2">Maintenance event scheduled — reservations blocked during this period.</p>}
               </div>
             );
           })()}
@@ -305,6 +333,33 @@ export default function CalendarTab({
                 <input type="text" value={bookingRoute} onChange={e => setBookingRoute(e.target.value)} style={wb} className="w-full border border-gray-300 rounded p-2.5 text-sm mt-1 focus:border-[#56B94A] outline-none uppercase" placeholder="KDAL → KAUS → KDAL" />
               </div>
               <div className="pt-2"><button onClick={handleCreateReservation} disabled={isSubmitting} className="w-full bg-[#56B94A] text-white font-oswald tracking-widest uppercase py-3 px-4 rounded hover:bg-opacity-90 active:scale-95 transition-all text-sm disabled:opacity-50">{isSubmitting ? <><Loader2 size={16} className="animate-spin" /> Booking...</> : "Confirm Reservation"}</button></div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MX BLOCK FORM */}
+      {showMxBlockForm && (
+        <div className="fixed inset-0 bg-black/60 z-[10000] flex items-center justify-center p-4 animate-fade-in" onClick={() => setShowMxBlockForm(false)}>
+          <div className="bg-white rounded shadow-2xl w-full max-w-sm p-5 border-t-4 border-[#F08B46] max-h-[85vh] overflow-y-auto animate-slide-up" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-5">
+              <h2 className="font-oswald text-xl font-bold uppercase text-navy flex items-center gap-2"><Wrench size={18} className="text-[#F08B46]" /> Block for Maintenance</h2>
+              <button onClick={() => setShowMxBlockForm(false)} className="text-gray-400 hover:text-red-500"><X size={22} /></button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Start Date *</label>
+                <input type="date" value={mxBlockStartDate} onChange={e => setMxBlockStartDate(e.target.value)} style={wb} className="w-full border border-gray-300 rounded p-2.5 text-sm mt-1 focus:border-[#F08B46] outline-none" />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-widest text-navy">End Date *</label>
+                <input type="date" value={mxBlockEndDate} onChange={e => setMxBlockEndDate(e.target.value)} style={wb} className="w-full border border-gray-300 rounded p-2.5 text-sm mt-1 focus:border-[#F08B46] outline-none" />
+              </div>
+              <div className="border-t border-gray-100 pt-4">
+                <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Notes (Optional)</label>
+                <input type="text" value={mxBlockNotes} onChange={e => setMxBlockNotes(e.target.value)} style={wb} className="w-full border border-gray-300 rounded p-2.5 text-sm mt-1 focus:border-[#F08B46] outline-none" placeholder="Annual inspection, oil change..." />
+              </div>
+              <div className="pt-2"><button onClick={handleCreateMxBlock} disabled={isSubmitting} className="w-full bg-[#F08B46] text-white font-oswald tracking-widest uppercase py-3 px-4 rounded hover:bg-opacity-90 active:scale-95 transition-all text-sm disabled:opacity-50">{isSubmitting ? <><Loader2 size={16} className="animate-spin" /> Creating...</> : "Block Aircraft"}</button></div>
             </div>
           </div>
         </div>
