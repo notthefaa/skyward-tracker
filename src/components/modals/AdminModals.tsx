@@ -454,12 +454,12 @@ export default function AdminModals({
                   return (
                     <div key={u.user_id} className={`border rounded transition-all ${isExpanded ? 'border-navy bg-blue-50/30' : 'border-gray-200 bg-gray-50'}`}>
                       <button onClick={() => setExpandedUserId(isExpanded ? null : u.user_id)} className="w-full text-left p-3 flex items-center gap-3 active:scale-[0.99] transition-transform">
-                        <div className={`w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-bold uppercase shrink-0 ${u.role === 'admin' ? 'bg-navy' : 'bg-gray-400'}`}>{u.initials || '?'}</div>
+                        <div className={`w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-bold uppercase shrink-0 ${u.role === 'admin' ? 'bg-navy' : u.aircraft.some((a: any) => a.aircraft_role === 'admin') ? 'bg-[#3AB0FF]' : 'bg-gray-400'}`}>{u.initials || '?'}</div>
                         <div className="flex-1 min-w-0">
                           {u.full_name && <p className="text-sm font-bold text-navy truncate">{u.full_name}</p>}
                           <p className={`${u.full_name ? 'text-[11px] text-gray-500' : 'text-sm font-bold text-navy'} truncate`}>{u.email || 'No email'}</p>
                           <div className="flex items-center gap-2 mt-0.5">
-                            <span className={`text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded ${u.role === 'admin' ? 'bg-navy text-white' : 'bg-gray-200 text-gray-600'}`}>{u.role}</span>
+                            <span className={`text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded ${u.role === 'admin' ? 'bg-navy text-white' : u.aircraft.some((a: any) => a.aircraft_role === 'admin') ? 'bg-[#3AB0FF] text-white' : 'bg-gray-200 text-gray-600'}`}>{u.role === 'admin' ? 'Global Admin' : u.aircraft.some((a: any) => a.aircraft_role === 'admin') ? 'Tail Admin' : 'Pilot'}</span>
                             {u.aircraft.length > 0 && <span className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">{u.aircraft.length} aircraft</span>}
                           </div>
                         </div>
@@ -478,10 +478,13 @@ export default function AdminModals({
                           <div className="border border-gray-200 rounded p-3 bg-white">
                             <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Global Role</p>
                             <div className="flex gap-2">
-                              {(['pilot', 'admin'] as const).map(r => (
-                                <button key={r} onClick={() => { if (r !== u.role) handleChangeGlobalRole(u.user_id, r); }} disabled={isSubmitting} className={`flex-1 text-[10px] font-bold uppercase tracking-widest py-2 rounded transition-colors active:scale-95 disabled:opacity-50 ${u.role === r ? (r === 'admin' ? 'bg-navy text-white' : 'bg-[#56B94A] text-white') : 'border border-gray-300 text-gray-500 hover:bg-gray-100'}`}>{r}</button>
+                              {([{ value: 'pilot', label: 'Pilot' }, { value: 'admin', label: 'Global Admin' }] as const).map(r => (
+                                <button key={r.value} onClick={() => { if (r.value !== u.role) handleChangeGlobalRole(u.user_id, r.value as 'admin' | 'pilot'); }} disabled={isSubmitting} className={`flex-1 text-[10px] font-bold uppercase tracking-widest py-2 rounded transition-colors active:scale-95 disabled:opacity-50 ${u.role === r.value ? (r.value === 'admin' ? 'bg-navy text-white' : 'bg-[#56B94A] text-white') : 'border border-gray-300 text-gray-500 hover:bg-gray-100'}`}>{r.label}</button>
                               ))}
                             </div>
+                            {u.role === 'pilot' && u.aircraft.some((a: any) => a.aircraft_role === 'admin') && (
+                              <p className="text-[10px] text-[#3AB0FF] font-bold mt-2">Tail admin on {u.aircraft.filter((a: any) => a.aircraft_role === 'admin').map((a: any) => a.tail_number).join(', ')}</p>
+                            )}
                           </div>
 
                           {/* Aircraft Assignments */}
