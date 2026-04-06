@@ -330,7 +330,7 @@ export default function SummaryTab({
             ? new Date(currentStatus.estimated_completion + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
             : null;
           return (
-            <div className="bg-orange-50 border border-orange-200 rounded-sm p-3 flex items-center gap-3">
+            <div onClick={() => setActiveTab('calendar')} className="bg-orange-50 border border-orange-200 rounded-sm p-3 flex items-center gap-3 cursor-pointer hover:shadow-md active:scale-[0.98] transition-all">
               <div className="bg-[#F08B46] text-white p-2 rounded-full shrink-0"><Wrench size={16} /></div>
               <p className="text-sm font-roboto text-navy"><span className="font-bold">In Maintenance</span>{currentStatus.mx_contact_name ? ` with ${currentStatus.mx_contact_name}` : ''}{endDate ? ` until ${endDate}` : ''}</p>
             </div>
@@ -344,7 +344,7 @@ export default function SummaryTab({
           : endDt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
         const who = isYou ? 'You have' : `${currentStatus.pilot_initials || currentStatus.pilot_name} has`;
         return (
-          <div className={`${isYou ? 'bg-emerald-50 border-emerald-200' : 'bg-sky-50 border-sky-200'} border rounded-sm p-3 flex items-center gap-3`}>
+          <div onClick={() => setActiveTab('calendar')} className={`${isYou ? 'bg-emerald-50 border-emerald-200' : 'bg-sky-50 border-sky-200'} border rounded-sm p-3 flex items-center gap-3 cursor-pointer hover:shadow-md active:scale-[0.98] transition-all`}>
             <div className={`${isYou ? 'bg-[#56B94A]' : 'bg-[#3AB0FF]'} text-white p-2 rounded-full shrink-0`}><Calendar size={16} /></div>
             <p className="text-sm font-roboto text-navy"><span className="font-bold">{who}</span> the airplane booked {sameDay ? 'until' : 'through'} {endLabel}</p>
           </div>
