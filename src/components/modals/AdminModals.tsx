@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { authFetch } from "@/lib/authFetch";
 import type { AircraftWithMetrics, SystemSettings, AppTab } from "@/lib/types";
 import type { FleetIndexEntry } from "@/hooks/useFleetData";
-import { ShieldCheck, Settings, MailOpen, Database, Sliders, Globe, Users, PlaneTakeoff, X, ChevronRight, Loader2 } from "lucide-react";
+import { ShieldCheck, Settings, MailOpen, Database, Sliders, Globe, Users, PlaneTakeoff, X, ChevronRight, ChevronDown, Loader2, Mail, Trash2, KeyRound, Search } from "lucide-react";
 import { PrimaryButton } from "@/components/AppButtons";
 
 const whiteBg = { backgroundColor: '#ffffff' } as const;
@@ -35,6 +35,7 @@ export default function AdminModals({
   const [showEmailPreview, setShowEmailPreview] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [showAccessModal, setShowAccessModal] = useState(false);
+  const [showUsersModal, setShowUsersModal] = useState(false);
 
   const [globalFleetSearch, setGlobalFleetSearch] = useState("");
   const [globalFleetList, setGlobalFleetList] = useState<FleetIndexEntry[]>([]);
@@ -51,7 +52,12 @@ export default function AdminModals({
   const [userAccessList, setUserAccessList] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  if (!showAdminMenu && !showGlobalFleetModal && !showToolsMenu && !showSettingsModal && !showEmailPreview && !showAccessModal && !showInviteModal) return null;
+  const [globalUsers, setGlobalUsers] = useState<any[]>([]);
+  const [usersSearch, setUsersSearch] = useState("");
+  const [expandedUserId, setExpandedUserId] = useState<string | null>(null);
+  const [isLoadingUsers, setIsLoadingUsers] = useState(false);
+
+  if (!showAdminMenu && !showGlobalFleetModal && !showToolsMenu && !showSettingsModal && !showEmailPreview && !showAccessModal && !showInviteModal && !showUsersModal) return null;
 
   const handleDatabaseCleanup = async () => {
     if (!confirm("Run Health Check?\n\nThis will safely purge old read-receipts (older than 30 days) to keep the database fast and optimized.")) return;
@@ -154,6 +160,82 @@ export default function AdminModals({
     setIsSubmitting(false);
   };
 
+  // ─── Global Users Functions ───
+  const openUsersModal = async () => {
+    setShowAdminMenu(false); setShowUsersModal(true); setIsLoadingUsers(true);
+    try {
+      const res = await authFetch('/api/admin/users'); const data = await res.json();
+      if (res.ok) setGlobalUsers(data.users || []);
+    } catch {} setIsLoadingUsers(false);
+  };
+
+  const refreshUsers = async () => {
+    try {
+      const res = await authFetch('/api/admin/users'); const data = await res.json();
+      if (res.ok) setGlobalUsers(data.users || []);
+    } catch {}
+  };
+
+  const handleChangeGlobalRole = async (userId: string, newRole: 'admin' | 'pilot') => {
+    const u = globalUsers.find(u => u.user_id === userId);
+    if (!u) return;
+    if (!confirm(`Change ${u.email} to ${newRole.toUpperCase()}?`)) return;
+    setIsSubmitting(true);
+    try {
+      const res = await authFetch('/api/admin/users', { method: 'PUT', body: JSON.stringify({ targetUserId: userId, newRole }) });
+      if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Failed'); }
+      await refreshUsers();
+    } catch (e: any) { alert(e.message); }
+    setIsSubmitting(false);
+  };
+
+  const handleDeleteUserFromList = async (userId: string) => {
+    const u = globalUsers.find(u => u.user_id === userId);
+    if (!u) return;
+    if (!confirm(`CRITICAL: Permanently delete ${u.email} and revoke all access?`)) return;
+    setIsSubmitting(true);
+    try {
+      const res = await authFetch('/api/users', { method: 'DELETE', body: JSON.stringify({ userId }) });
+      if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Failed'); }
+      setExpandedUserId(null); await refreshUsers();
+    } catch (e: any) { alert(e.message); }
+    setIsSubmitting(false);
+  };
+
+  const handleResetPasswordFromList = async (userId: string) => {
+    const u = globalUsers.find(u => u.user_id === userId);
+    if (!u?.email) return;
+    if (!confirm(`Send password reset email to ${u.email}?`)) return;
+    setIsSubmitting(true);
+    const { error } = await supabase.auth.resetPasswordForEmail(u.email, { redirectTo: `${window.location.origin}/update-password` });
+    setIsSubmitting(false);
+    if (error) alert("Error: " + error.message); else alert("Password reset link sent to " + u.email);
+  };
+
+  const handleToggleUserAircraft = async (userId: string, aircraftId: string, hasAccess: boolean) => {
+    setIsSubmitting(true);
+    try {
+      if (hasAccess) {
+        const res = await authFetch('/api/aircraft-access', { method: 'DELETE', body: JSON.stringify({ targetUserId: userId, aircraftId }) });
+        if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Failed'); }
+      } else {
+        await supabase.from('aft_user_aircraft_access').insert({ user_id: userId, aircraft_id: aircraftId });
+      }
+      await refreshUsers();
+    } catch (e: any) { alert(e.message); }
+    setIsSubmitting(false);
+  };
+
+  const handleChangeAircraftRole = async (userId: string, aircraftId: string, newRole: 'admin' | 'pilot') => {
+    setIsSubmitting(true);
+    try {
+      const res = await authFetch('/api/aircraft-access', { method: 'PUT', body: JSON.stringify({ targetUserId: userId, aircraftId, newRole }) });
+      if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Failed'); }
+      await refreshUsers();
+    } catch (e: any) { alert(e.message); }
+    setIsSubmitting(false);
+  };
+
   const getEmailPreviewHtml = () => {
     const baseStyle = `font-family: Arial, sans-serif; font-size: 14px; color: #333333; line-height: 1.6; max-width: 600px;`;
     const contactInfo = `<strong>John Doe</strong><br/>(555) 123-4567<br/><a href="#" style="color: #333333;">john@doe.com</a>`;
@@ -172,7 +254,8 @@ export default function AdminModals({
             <div className="flex justify-between items-center mb-6"><h2 className="font-oswald text-xl font-bold uppercase text-navy flex items-center gap-2"><ShieldCheck size={20}/> Admin Center</h2><button onClick={() => setShowAdminMenu(false)} className="text-gray-400 hover:text-red-500"><X size={24}/></button></div>
             <div className="space-y-3">
               <button onClick={openGlobalFleetModal} className="w-full bg-gray-50 border border-gray-200 p-4 rounded text-left flex items-center gap-3 hover:border-navy hover:bg-blue-50 transition-colors active:scale-95"><Globe size={18} className="text-navy" /><div><span className="block font-bold text-navy text-sm uppercase">Global Fleet</span><span className="block text-[10px] text-gray-500 uppercase tracking-widest mt-0.5">View all aircraft in system</span></div></button>
-              <button onClick={() => { setShowAdminMenu(false); setShowInviteModal(true); }} className="w-full bg-gray-50 border border-gray-200 p-4 rounded text-left flex items-center gap-3 hover:border-navy hover:bg-blue-50 transition-colors active:scale-95"><Users size={18} className="text-navy" /><div><span className="block font-bold text-navy text-sm uppercase">Invite User</span><span className="block text-[10px] text-gray-500 uppercase tracking-widest mt-0.5">Invite pilots & reset passwords</span></div></button>
+              <button onClick={openUsersModal} className="w-full bg-gray-50 border border-gray-200 p-4 rounded text-left flex items-center gap-3 hover:border-navy hover:bg-blue-50 transition-colors active:scale-95"><Users size={18} className="text-navy" /><div><span className="block font-bold text-navy text-sm uppercase">Global Users</span><span className="block text-[10px] text-gray-500 uppercase tracking-widest mt-0.5">Manage all users, roles & access</span></div></button>
+              <button onClick={() => { setShowAdminMenu(false); setShowInviteModal(true); }} className="w-full bg-gray-50 border border-gray-200 p-4 rounded text-left flex items-center gap-3 hover:border-navy hover:bg-blue-50 transition-colors active:scale-95"><Mail size={18} className="text-navy" /><div><span className="block font-bold text-navy text-sm uppercase">Invite User</span><span className="block text-[10px] text-gray-500 uppercase tracking-widest mt-0.5">Invite pilots & reset passwords</span></div></button>
               <button onClick={() => { setShowAdminMenu(false); openAccessModal(); }} className="w-full bg-gray-50 border border-gray-200 p-4 rounded text-left flex items-center gap-3 hover:border-navy hover:bg-blue-50 transition-colors active:scale-95"><PlaneTakeoff size={18} className="text-navy" /><div><span className="block font-bold text-navy text-sm uppercase">Aircraft Access</span><span className="block text-[10px] text-gray-500 uppercase tracking-widest mt-0.5">Assign planes to pilots & admins</span></div></button>
               <button onClick={() => { setShowAdminMenu(false); setShowToolsMenu(true); }} className="w-full bg-gray-50 border border-gray-200 p-4 rounded text-left flex items-center gap-3 hover:border-navy hover:bg-blue-50 transition-colors active:scale-95"><Settings size={18} className="text-navy" /><div><span className="block font-bold text-navy text-sm uppercase">System Tools</span><span className="block text-[10px] text-gray-500 uppercase tracking-widest mt-0.5">Database health & triggers</span></div></button>
             </div>
@@ -333,6 +416,104 @@ export default function AdminModals({
               </div>
               <div className="pt-4"><PrimaryButton disabled={isSubmitting}>{isSubmitting ? "Sending..." : "Send Invite Email"}</PrimaryButton></div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ─── GLOBAL USERS MODAL ─── */}
+      {showUsersModal && (
+        <div className="fixed inset-0 bg-black/60 z-[10000] flex items-center justify-center p-4 animate-fade-in" onClick={() => { setShowUsersModal(false); setExpandedUserId(null); setUsersSearch(""); }}>
+          <div className="bg-white rounded shadow-2xl w-full max-w-md p-6 border-t-4 border-navy animate-slide-up flex flex-col max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-4 shrink-0">
+              <h2 className="font-oswald text-2xl font-bold uppercase text-navy flex items-center gap-2"><Users size={20} className="text-navy" /> Global Users</h2>
+              <button onClick={() => { setShowUsersModal(false); setExpandedUserId(null); setUsersSearch(""); }} className="text-gray-400 hover:text-red-500"><X size={24} /></button>
+            </div>
+
+            <div className="mb-4 shrink-0 relative">
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input type="text" placeholder="Search by name, email, or initials..." value={usersSearch} onChange={(e) => setUsersSearch(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 pl-9 text-sm focus:border-navy outline-none" />
+            </div>
+
+            <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2 shrink-0">{globalUsers.length} user{globalUsers.length !== 1 ? 's' : ''}</div>
+
+            <div className="overflow-y-auto flex-1 space-y-2 pr-1">
+              {isLoadingUsers ? (
+                <div className="flex items-center justify-center py-8"><Loader2 size={24} className="text-navy animate-spin" /></div>
+              ) : (() => {
+                const matchUser = (u: any) => {
+                  if (!usersSearch) return true;
+                  const q = usersSearch.toLowerCase();
+                  return (u.email || '').toLowerCase().includes(q) || (u.initials || '').toLowerCase().includes(q) || (u.full_name || '').toLowerCase().includes(q);
+                };
+                const filtered = globalUsers.filter(matchUser);
+                return filtered.length === 0 ? (
+                <p className="text-center text-sm text-gray-400 italic py-4">No users found.</p>
+              ) : (
+                filtered.map(u => {
+                  const isExpanded = expandedUserId === u.user_id;
+                  return (
+                    <div key={u.user_id} className={`border rounded transition-all ${isExpanded ? 'border-navy bg-blue-50/30' : 'border-gray-200 bg-gray-50'}`}>
+                      <button onClick={() => setExpandedUserId(isExpanded ? null : u.user_id)} className="w-full text-left p-3 flex items-center gap-3 active:scale-[0.99] transition-transform">
+                        <div className={`w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-bold uppercase shrink-0 ${u.role === 'admin' ? 'bg-navy' : 'bg-gray-400'}`}>{u.initials || '?'}</div>
+                        <div className="flex-1 min-w-0">
+                          {u.full_name && <p className="text-sm font-bold text-navy truncate">{u.full_name}</p>}
+                          <p className={`${u.full_name ? 'text-[11px] text-gray-500' : 'text-sm font-bold text-navy'} truncate`}>{u.email || 'No email'}</p>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className={`text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded ${u.role === 'admin' ? 'bg-navy text-white' : 'bg-gray-200 text-gray-600'}`}>{u.role}</span>
+                            {u.aircraft.length > 0 && <span className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">{u.aircraft.length} aircraft</span>}
+                          </div>
+                        </div>
+                        {isExpanded ? <ChevronDown size={16} className="text-gray-400 shrink-0" /> : <ChevronRight size={16} className="text-gray-400 shrink-0" />}
+                      </button>
+
+                      {isExpanded && (
+                        <div className="px-3 pb-3 space-y-3 animate-fade-in">
+                          {/* Quick Actions */}
+                          <div className="flex gap-2">
+                            {u.email && <a href={`mailto:${u.email}`} className="flex-1 flex items-center justify-center gap-1.5 border border-navy text-navy text-[10px] font-bold uppercase tracking-widest py-2 rounded hover:bg-blue-50 transition-colors active:scale-95"><Mail size={13} /> Email</a>}
+                            <button onClick={() => handleResetPasswordFromList(u.user_id)} disabled={isSubmitting} className="flex-1 flex items-center justify-center gap-1.5 border border-brandOrange text-brandOrange text-[10px] font-bold uppercase tracking-widest py-2 rounded hover:bg-orange-50 transition-colors active:scale-95 disabled:opacity-50"><KeyRound size={13} /> Reset PW</button>
+                          </div>
+
+                          {/* Global Role */}
+                          <div className="border border-gray-200 rounded p-3 bg-white">
+                            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Global Role</p>
+                            <div className="flex gap-2">
+                              {(['pilot', 'admin'] as const).map(r => (
+                                <button key={r} onClick={() => { if (r !== u.role) handleChangeGlobalRole(u.user_id, r); }} disabled={isSubmitting} className={`flex-1 text-[10px] font-bold uppercase tracking-widest py-2 rounded transition-colors active:scale-95 disabled:opacity-50 ${u.role === r ? (r === 'admin' ? 'bg-navy text-white' : 'bg-[#56B94A] text-white') : 'border border-gray-300 text-gray-500 hover:bg-gray-100'}`}>{r}</button>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* Aircraft Assignments */}
+                          <div className="border border-gray-200 rounded p-3 bg-white">
+                            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Aircraft Access</p>
+                            <div className="space-y-2 max-h-[30vh] overflow-y-auto">
+                              {allAircraftList.map(ac => {
+                                const access = u.aircraft.find((a: any) => a.aircraft_id === ac.id);
+                                const hasAccess = !!access;
+                                return (
+                                  <div key={ac.id} className="flex items-center gap-2">
+                                    <input type="checkbox" checked={hasAccess} onChange={() => handleToggleUserAircraft(u.user_id, ac.id, hasAccess)} disabled={isSubmitting} className="w-4 h-4 text-navy border-gray-300 rounded shrink-0" />
+                                    <span className="font-bold text-sm text-navy uppercase flex-1">{ac.tail_number}</span>
+                                    {hasAccess && (
+                                      <button onClick={() => handleChangeAircraftRole(u.user_id, ac.id, access.aircraft_role === 'admin' ? 'pilot' : 'admin')} disabled={isSubmitting} className={`text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded transition-colors active:scale-95 disabled:opacity-50 ${access.aircraft_role === 'admin' ? 'bg-navy text-white' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'}`}>{access.aircraft_role}</button>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                              {allAircraftList.length === 0 && <p className="text-[10px] text-gray-400 italic">No aircraft in system</p>}
+                            </div>
+                          </div>
+
+                          {/* Delete */}
+                          <button onClick={() => handleDeleteUserFromList(u.user_id)} disabled={isSubmitting} className="w-full flex items-center justify-center gap-1.5 border border-[#CE3732] text-[#CE3732] text-[10px] font-bold uppercase tracking-widest py-2 rounded hover:bg-red-50 transition-colors active:scale-95 disabled:opacity-50"><Trash2 size={13} /> Delete User</button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              ); })()}
+            </div>
           </div>
         </div>
       )}
