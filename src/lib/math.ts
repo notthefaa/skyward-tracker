@@ -411,7 +411,7 @@ export function processMxItem(
 
 export function getMxTextColor(
   item: ProcessedMxItem,
-  settings: { reminder_1?: number; reminder_3?: number; reminder_hours_1?: number; reminder_hours_3?: number; [key: string]: any }
+  settings: { reminder_1?: number; reminder_3?: number; reminder_hours_1?: number; reminder_hours_3?: number }
 ): string {
   if (
     item.isExpired ||

@@ -10,7 +10,7 @@ import type { AircraftWithMetrics, SystemSettings, AppTab, AppRole, AircraftRole
 import useSWR from "swr";
 import { PlaneTakeoff, MapPin, Droplet, Phone, Mail, Wrench, AlertTriangle, FileText, Clock, X, Trash2, Edit2, UserPlus, Loader2, Users, ChevronDown, Calendar } from "lucide-react";
 import { PrimaryButton } from "@/components/AppButtons";
-import Toast from "@/components/Toast";
+import { useToast } from "@/components/ToastProvider";
 
 export default function SummaryTab({ 
   aircraft, setActiveTab, onNavigateToSquawks, role, aircraftRole, onDeleteAircraft, sysSettings, onEditAircraft, refreshData, session
@@ -149,9 +149,7 @@ export default function SummaryTab({
   const [changingRoleUserId, setChangingRoleUserId] = useState<string | null>(null);
   const [removingUserId, setRemovingUserId] = useState<string | null>(null);
   const [isCrewUpdating, setIsCrewUpdating] = useState(false);
-  const [toastMessage, setToastMessage] = useState("");
-  const [showToast, setShowToast] = useState(false);
-  const showSuccess = (msg: string) => { setToastMessage(msg); setShowToast(true); };
+  const { showSuccess, showError } = useToast();
 
   const handleFuelUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -172,7 +170,7 @@ export default function SummaryTab({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to invite');
       showSuccess(data.message || 'Invitation sent'); setShowInviteModal(false); setInviteEmail(""); setInviteRole('pilot'); refreshData();
-    } catch (err: any) { alert(err.message); }
+    } catch (err: any) { showError(err.message); }
     setIsInviting(false);
   };
 
@@ -184,7 +182,7 @@ export default function SummaryTab({
       const resData = await res.json();
       if (!res.ok) throw new Error(resData.error || 'Failed to update role');
       showSuccess("Role updated"); setChangingRoleUserId(null); refreshData();
-    } catch (err: any) { alert(err.message); }
+    } catch (err: any) { showError(err.message); }
     setIsCrewUpdating(false);
   };
 
@@ -196,7 +194,7 @@ export default function SummaryTab({
       const resData = await res.json();
       if (!res.ok) throw new Error(resData.error || 'Failed to remove user');
       showSuccess("Pilot removed"); setRemovingUserId(null); refreshData();
-    } catch (err: any) { alert(err.message); }
+    } catch (err: any) { showError(err.message); }
     setIsCrewUpdating(false);
   };
 
@@ -229,8 +227,6 @@ export default function SummaryTab({
 
   return (
     <div className="flex flex-col gap-4 animate-fade-in relative">
-      <Toast message={toastMessage} show={showToast} onDismiss={() => setShowToast(false)} />
-      
       {/* Delete confirmation modal */}
       {showDeleteModal && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/80 animate-fade-in" onClick={() => setShowDeleteModal(false)}>

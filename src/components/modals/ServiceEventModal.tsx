@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { authFetch } from "@/lib/authFetch";
 import { Wrench, X, Trash2 } from "lucide-react";
-import Toast from "@/components/Toast";
+import { useToast } from "@/components/ToastProvider";
 import type { ServiceEventView } from "./service-event/shared";
 
 import ServiceEventList from "./service-event/ServiceEventList";
@@ -47,9 +47,7 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
   const [removedLineItemIds, setRemovedLineItemIds] = useState<string[]>([]);
 
   const [viewingAttachment, setViewingAttachment] = useState<string | null>(null);
-  const [toastMessage, setToastMessage] = useState("");
-  const [showToast, setShowToast] = useState(false);
-  const showSuccess = useCallback((msg: string) => { setToastMessage(msg); setShowToast(true); }, []);
+  const { showSuccess, showError, showWarning } = useToast();
 
   useEffect(() => {
     if (show) {
@@ -166,8 +164,8 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
   const handleSendDraft = async () => {
     if (!selectedEvent) return;
     if (isSubmitting) return;
-    if (wantsToPropose === null) return alert("Please choose whether you'd like to propose a date or request availability.");
-    if (wantsToPropose && !proposedDate) return alert("Please select a preferred service date or choose 'Request Availability' instead.");
+    if (wantsToPropose === null) return showWarning("Please choose whether you'd like to propose a date or request availability.");
+    if (wantsToPropose && !proposedDate) return showWarning("Please select a preferred service date or choose 'Request Availability' instead.");
     setIsSubmitting(true);
     try {
       // Remove any line items the user unchecked from the draft
@@ -193,7 +191,7 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
       fetchEvents();
       onRefresh();
     } catch (err: any) {
-      alert("Failed to send work package: " + err.message);
+      showError("Failed to send work package: " + err.message);
     }
     setIsSubmitting(false);
   };
@@ -210,6 +208,8 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
     onNavigate: handleNavigate,
     onRefresh: handleRefresh,
     showSuccess,
+    showError,
+    showWarning,
     canManageService,
   };
 
@@ -239,8 +239,6 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
           <img src={viewingAttachment} alt="Attachment" className="max-w-full max-h-[90vh] rounded-lg shadow-2xl" />
         </div>
       )}
-
-      <Toast message={toastMessage} show={showToast} onDismiss={() => setShowToast(false)} />
 
       <div className="fixed inset-0 bg-black/60 z-[10000] flex items-center justify-center animate-fade-in" style={{ overscrollBehavior: 'contain', paddingTop: 'calc(3.5rem + env(safe-area-inset-top, 0px) + 8px)', paddingBottom: 'calc(3.5rem + env(safe-area-inset-bottom, 0px) + 8px)', paddingLeft: '0.75rem', paddingRight: '0.75rem' }} onClick={onClose}>
         <div className="bg-white rounded shadow-2xl w-full max-w-lg p-5 border-t-4 border-[#F08B46] max-h-full overflow-y-auto animate-slide-up" style={{ overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch' }} onClick={e => e.stopPropagation()}>

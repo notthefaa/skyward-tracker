@@ -8,7 +8,7 @@ import useSWR from "swr";
 import { Calendar, ChevronLeft, ChevronRight, Plus, X, Clock, MapPin, Plane, Wrench, Loader2, Users } from "lucide-react";
 import { PrimaryButton } from "@/components/AppButtons";
 import CalendarDashboard from "@/components/tabs/CalendarDashboard";
-import Toast from "@/components/Toast";
+import { useToast } from "@/components/ToastProvider";
 
 type CalendarView = 'month' | 'week' | 'day';
 
@@ -39,9 +39,7 @@ export default function CalendarTab({
   const [mxBlockEndDate, setMxBlockEndDate] = useState("");
   const [mxBlockNotes, setMxBlockNotes] = useState("");
 
-  const [toastMessage, setToastMessage] = useState("");
-  const [showToast, setShowToast] = useState(false);
-  const showSuccess = (msg: string) => { setToastMessage(msg); setShowToast(true); };
+  const { showSuccess, showError, showWarning } = useToast();
   const [cancellingId, setCancellingId] = useState<string | null>(null);
 
   const fetchKey = aircraft ? `calendar-${aircraft.id}-${currentDate.getFullYear()}-${currentDate.getMonth()}` : null;
@@ -114,16 +112,16 @@ export default function CalendarTab({
   };
 
   const handleCreateReservation = async () => {
-    if (!bookingStartDate || !bookingEndDate) return alert("Please select dates."); setIsSubmitting(true);
+    if (!bookingStartDate || !bookingEndDate) return showWarning("Please select dates."); setIsSubmitting(true);
     try {
       const res = await authFetch('/api/reservations', { method: 'POST', body: JSON.stringify({ aircraftId: aircraft!.id, startTime: new Date(`${bookingStartDate}T${bookingStartTime}:00`).toISOString(), endTime: new Date(`${bookingEndDate}T${bookingEndTime}:00`).toISOString(), title: bookingTitle || null, route: bookingRoute || null }) });
       const data = await res.json(); if (!res.ok) throw new Error(data.error || 'Failed'); await mutate(); setShowBookingForm(false); showSuccess("Reservation confirmed");
-    } catch (err: any) { alert(err.message); } setIsSubmitting(false);
+    } catch (err: any) { showError(err.message); } setIsSubmitting(false);
   };
 
   const handleCancelReservation = async (id: string) => {
     setIsSubmitting(true);
-    try { const res = await authFetch('/api/reservations', { method: 'DELETE', body: JSON.stringify({ reservationId: id }) }); if (!res.ok) { const d = await res.json(); throw new Error(d.error); } await mutate(); setCancellingId(null); showSuccess("Reservation cancelled"); } catch (err: any) { alert(err.message); } setIsSubmitting(false);
+    try { const res = await authFetch('/api/reservations', { method: 'DELETE', body: JSON.stringify({ reservationId: id }) }); if (!res.ok) { const d = await res.json(); throw new Error(d.error); } await mutate(); setCancellingId(null); showSuccess("Reservation cancelled"); } catch (err: any) { showError(err.message); } setIsSubmitting(false);
   };
 
   const canAdmin = role === 'admin' || aircraftRole === 'admin';
@@ -134,13 +132,13 @@ export default function CalendarTab({
   };
 
   const handleCreateMxBlock = async () => {
-    if (!mxBlockStartDate) return alert("Please select a start date.");
+    if (!mxBlockStartDate) return showWarning("Please select a start date.");
     setIsSubmitting(true);
     try {
       const res = await authFetch('/api/mx-events/block', { method: 'POST', body: JSON.stringify({ aircraftId: aircraft!.id, startDate: mxBlockStartDate, endDate: mxBlockEndDate || mxBlockStartDate, notes: mxBlockNotes || null }) });
       const data = await res.json(); if (!res.ok) throw new Error(data.error || 'Failed');
       await mutate(); setShowMxBlockForm(false); showSuccess("Maintenance block created");
-    } catch (err: any) { alert(err.message); }
+    } catch (err: any) { showError(err.message); }
     setIsSubmitting(false);
   };
 
@@ -185,7 +183,6 @@ export default function CalendarTab({
 
   return (
     <>
-      <Toast message={toastMessage} show={showToast} onDismiss={() => setShowToast(false)} />
       {aircraft && session && <CalendarDashboard aircraft={aircraft} session={session} />}
       <div className={`mb-2 ${canAdmin ? 'grid grid-cols-2 gap-2' : ''}`}>
         <button onClick={() => openBookingForm()} className="w-full bg-[#56B94A] text-white font-oswald tracking-widest uppercase py-3 px-4 rounded hover:bg-opacity-90 active:scale-95 transition-all duration-150 ease-out flex justify-center items-center gap-2 text-sm"><Plus size={18} /> Reserve Aircraft</button>

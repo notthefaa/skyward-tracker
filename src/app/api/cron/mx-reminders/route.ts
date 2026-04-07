@@ -12,11 +12,9 @@ const FROM_EMAIL = 'notifications@skywardsociety.com';
 export async function GET(req: Request) {
   try {
     // Verify this is a legitimate Vercel CRON call
-    if (env.CRON_SECRET) {
-      const authHeader = req.headers.get('authorization');
-      if (authHeader !== `Bearer ${env.CRON_SECRET}`) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-      }
+    const authHeader = req.headers.get('authorization');
+    if (authHeader !== `Bearer ${env.CRON_SECRET}`) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const supabaseAdmin = createAdminClient();

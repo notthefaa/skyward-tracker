@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useToast } from "@/components/ToastProvider";
 import { supabase } from "@/lib/supabase";
 import { authFetch } from "@/lib/authFetch";
 import { processMxItem, getMxTextColor, isMxExpired } from "@/lib/math";
@@ -24,6 +25,7 @@ export default function MaintenanceTab({
   userInitials: string,
   initialSubTab?: 'maintenance' | 'squawks'
 }) {
+  const { showSuccess, showError, showWarning } = useToast();
   const [subTab, setSubTab] = useState<MxSubTab>(initialSubTab || 'maintenance');
 
   useEffect(() => {
@@ -89,7 +91,7 @@ export default function MaintenanceTab({
         .order('completed_at', { ascending: false });
 
       if (!completedEvents || completedEvents.length === 0) {
-        alert("No completed service events to export.");
+        showWarning("No completed service events to export.");
         setIsExportingMx(false);
         return;
       }
@@ -140,7 +142,7 @@ export default function MaintenanceTab({
       doc.save(`${aircraft.tail_number}_Maintenance_History.pdf`);
     } catch (error) {
       console.error("MX export error:", error);
-      alert("Failed to generate maintenance history PDF.");
+      showError("Failed to generate maintenance history PDF.");
     }
     setIsExportingMx(false);
   };
@@ -182,7 +184,7 @@ export default function MaintenanceTab({
     setResendingEventId(eventId); setConfirmResendId(null);
     try {
       await authFetch('/api/mx-events/send-workpackage', { method: 'POST', body: JSON.stringify({ eventId, resend: true }) });
-    } catch (err) { console.error(err); alert("Failed to resend."); }
+    } catch (err) { console.error(err); showError("Failed to resend."); }
     setResendingEventId(null);
   };
 

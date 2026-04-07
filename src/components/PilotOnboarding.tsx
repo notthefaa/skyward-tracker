@@ -2,6 +2,7 @@
 
 import { useState, useRef } from "react";
 import { authFetch } from "@/lib/authFetch";
+import { useToast } from "@/components/ToastProvider";
 import { validateFileSize, MAX_UPLOAD_SIZE_LABEL } from "@/lib/constants";
 import { PlaneTakeoff, LogOut } from "lucide-react";
 import { PrimaryButton } from "@/components/AppButtons";
@@ -18,6 +19,7 @@ export default function PilotOnboarding({
   handleLogout: () => void, 
   onSuccess: () => void 
 }) {
+  const { showError } = useToast();
   const [newTail, setNewTail] = useState("");
   const [newSerial, setNewSerial] = useState("");
   const [newModel, setNewModel] = useState("");
@@ -42,7 +44,7 @@ export default function PilotOnboarding({
       const file = e.target.files[0];
       const sizeError = validateFileSize(file);
       if (sizeError) {
-        alert(sizeError);
+        showError(sizeError);
         e.target.value = '';
         return;
       }
@@ -116,7 +118,7 @@ export default function PilotOnboarding({
       }
       onSuccess();
     } catch (err: any) {
-      alert(err.message);
+      showError(err.message);
     }
     setIsSubmitting(false);
   };

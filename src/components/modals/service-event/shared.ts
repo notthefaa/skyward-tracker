@@ -27,5 +27,7 @@ export interface ServiceEventChildProps {
   onNavigate: (view: ServiceEventView, event?: any) => void;
   onRefresh: () => void;
   showSuccess: (msg: string) => void;
+  showError: (msg: string) => void;
+  showWarning: (msg: string) => void;
   canManageService: boolean;
 }

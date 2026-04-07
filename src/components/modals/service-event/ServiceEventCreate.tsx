@@ -19,7 +19,7 @@ interface ServiceEventCreateProps extends ServiceEventChildProps {
 }
 
 export default function ServiceEventCreate({
-  aircraft, mxItems, squawks, isSubmitting, setIsSubmitting, onNavigate, onRefresh, showSuccess, canManageService,
+  aircraft, mxItems, squawks, isSubmitting, setIsSubmitting, onNavigate, onRefresh, showSuccess, showError, showWarning, canManageService,
   draftedMxIds = [], draftedSquawkIds = [],
 }: ServiceEventCreateProps) {
   const [selectedMxIds, setSelectedMxIds] = useState<string[]>([]);
@@ -50,9 +50,9 @@ export default function ServiceEventCreate({
 
   const handleCreateAndSend = async () => {
     if (isSubmitting || isSavingDraft) return;
-    if (selectedMxIds.length === 0 && selectedSquawkIds.length === 0 && selectedAddons.length === 0) return alert("Please select at least one item for the work package.");
-    if (wantsToPropose === null) return alert("Please choose whether you'd like to propose a date or request availability.");
-    if (wantsToPropose && !proposedDate) return alert("Please select a preferred service date or choose 'Request Availability' instead.");
+    if (selectedMxIds.length === 0 && selectedSquawkIds.length === 0 && selectedAddons.length === 0) return showWarning("Please select at least one item for the work package.");
+    if (wantsToPropose === null) return showWarning("Please choose whether you'd like to propose a date or request availability.");
+    if (wantsToPropose && !proposedDate) return showWarning("Please select a preferred service date or choose 'Request Availability' instead.");
     setIsSubmitting(true);
     try {
       const createRes = await authFetch('/api/mx-events/create', { method: 'POST', body: JSON.stringify({ aircraftId: aircraft.id, mxItemIds: selectedMxIds, squawkIds: selectedSquawkIds, addonServices: selectedAddons, proposedDate: (wantsToPropose && proposedDate) ? proposedDate : null }) });
@@ -65,13 +65,13 @@ export default function ServiceEventCreate({
       onRefresh();
       showSuccess("Work package sent to mechanic");
       onNavigate('list');
-    } catch (err: any) { alert("Failed to send work package: " + err.message); }
+    } catch (err: any) { showError("Failed to send work package: " + err.message); }
     setIsSubmitting(false);
   };
 
   const handleSaveAsDraft = async () => {
     if (isSubmitting || isSavingDraft) return;
-    if (selectedMxIds.length === 0 && selectedSquawkIds.length === 0 && selectedAddons.length === 0) return alert("Please select at least one item for the work package.");
+    if (selectedMxIds.length === 0 && selectedSquawkIds.length === 0 && selectedAddons.length === 0) return showWarning("Please select at least one item for the work package.");
     setIsSavingDraft(true);
     try {
       const res = await authFetch('/api/mx-events/create', { method: 'POST', body: JSON.stringify({ aircraftId: aircraft.id, mxItemIds: selectedMxIds, squawkIds: selectedSquawkIds, addonServices: selectedAddons, proposedDate: (wantsToPropose && proposedDate) ? proposedDate : null }) });
@@ -79,7 +79,7 @@ export default function ServiceEventCreate({
       onRefresh();
       showSuccess("Draft saved");
       onNavigate('list');
-    } catch (err: any) { alert("Failed to save draft: " + err.message); }
+    } catch (err: any) { showError("Failed to save draft: " + err.message); }
     setIsSavingDraft(false);
   };
 

@@ -21,7 +21,7 @@ interface ServiceEventDetailProps extends ServiceEventChildProps {
 
 export default function ServiceEventDetail({
   aircraft, selectedEvent, eventLineItems, eventMessages,
-  isSubmitting, setIsSubmitting, onNavigate, onRefresh, showSuccess,
+  isSubmitting, setIsSubmitting, onNavigate, onRefresh, showSuccess, showError,
   canManageService, fetchEventDetail, setViewingAttachment,
 }: ServiceEventDetailProps) {
   const [ownerMessage, setOwnerMessage] = useState("");
@@ -40,19 +40,19 @@ export default function ServiceEventDetail({
       setOwnerMessage("");
       await fetchEventDetail(selectedEvent.id);
       showSuccess("Date confirmed");
-    } catch (err) { alert("Failed to confirm date."); }
+    } catch (err) { showError("Failed to confirm date."); }
     setIsSubmitting(false);
   };
 
   const handleOwnerCounter = async () => {
-    if (!proposedDate) return alert("Please select a date.");
+    if (!proposedDate) return showError("Please select a date.");
     setIsSubmitting(true);
     try {
       await authFetch('/api/mx-events/owner-action', { method: 'POST', body: JSON.stringify({ eventId: selectedEvent.id, action: 'counter', proposedDate, message: ownerMessage || `How about ${proposedDate} instead?` }) });
       setOwnerMessage(""); setProposedDate("");
       await fetchEventDetail(selectedEvent.id);
       showSuccess("Counter proposal sent");
-    } catch (err) { alert("Failed to send counter proposal."); }
+    } catch (err) { showError("Failed to send counter proposal."); }
     setIsSubmitting(false);
   };
 
@@ -64,7 +64,7 @@ export default function ServiceEventDetail({
       setOwnerMessage("");
       await fetchEventDetail(selectedEvent.id);
       showSuccess("Message sent");
-    } catch (err) { alert("Failed to send message."); }
+    } catch (err) { showError("Failed to send message."); }
     setIsSubmitting(false);
   };
 
@@ -76,7 +76,7 @@ export default function ServiceEventDetail({
       onRefresh();
       showSuccess("Service event cancelled");
       onNavigate('list');
-    } catch (err) { alert("Failed to cancel event."); }
+    } catch (err) { showError("Failed to cancel event."); }
     setIsSubmitting(false);
   };
 
@@ -88,7 +88,7 @@ export default function ServiceEventDetail({
       onRefresh();
       showSuccess("Service event closed");
       onNavigate('list');
-    } catch (err) { alert("Failed to close event."); }
+    } catch (err) { showError("Failed to close event."); }
     setIsSubmitting(false);
   };
 

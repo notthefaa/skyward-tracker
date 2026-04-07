@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import { authFetch } from "@/lib/authFetch";
+import { useToast } from "@/components/ToastProvider";
 import { validateFileSize, MAX_UPLOAD_SIZE_LABEL } from "@/lib/constants";
 import { INPUT_WHITE_BG } from "@/lib/styles";
 import type { AircraftWithMetrics } from "@/lib/types";
@@ -21,8 +22,9 @@ export default function AircraftModal({
   session: any, 
   existingAircraft: AircraftWithMetrics | null, 
   onClose: () => void, 
-  onSuccess: (newTail: string) => void 
+  onSuccess: (newTail: string) => void
 }) {
+  const { showError, showWarning } = useToast();
   const [newTail, setNewTail] = useState("");
   const [newSerial, setNewSerial] = useState("");
   const [newModel, setNewModel] = useState("");
@@ -86,7 +88,7 @@ export default function AircraftModal({
       const file = e.target.files[0];
       const sizeError = validateFileSize(file);
       if (sizeError) {
-        alert(sizeError);
+        showError(sizeError);
         e.target.value = '';
         return;
       }
@@ -146,7 +148,7 @@ export default function AircraftModal({
           }
         } catch (err) { 
           console.error('Avatar upload failed:', err); 
-          alert('Failed to upload aircraft photo. The aircraft will be saved without the photo.');
+          showWarning('Failed to upload photo. Aircraft saved without photo.');
         }
       }
     }
@@ -206,7 +208,7 @@ export default function AircraftModal({
       const { error: updateError } = await supabase.from('aft_aircraft').update(basePayload).eq('id', existingAircraft.id);
       if (updateError) {
         console.error('[AircraftModal] Update failed:', updateError);
-        alert('Failed to update aircraft: ' + updateError.message);
+        showError('Failed to update aircraft: ' + updateError.message);
         setIsSubmitting(false);
         return;
       }
@@ -231,7 +233,7 @@ export default function AircraftModal({
           throw new Error(errData.error || 'Failed to create aircraft.');
         }
       } catch (err: any) {
-        alert(err.message);
+        showError(err.message);
         setIsSubmitting(false);
         return;
       }

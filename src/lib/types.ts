@@ -25,7 +25,6 @@ export interface Aircraft {
   current_fuel_gallons?: number;
   fuel_last_updated?: string | null;
   created_by?: string | null;
-  [key: string]: any;
 }
 
 export interface AircraftWithMetrics extends Aircraft {
@@ -53,7 +52,6 @@ export interface FlightLog {
   trip_reason?: string | null;
   fuel_gallons?: number | null;
   created_at: string;
-  [key: string]: any;
 }
 
 export interface MaintenanceItem {
@@ -74,7 +72,6 @@ export interface MaintenanceItem {
   reminder_5_sent?: boolean;
   reminder_15_sent?: boolean;
   reminder_30_sent?: boolean;
-  [key: string]: any;
 }
 
 export interface ProcessedMxItem extends MaintenanceItem {
@@ -111,7 +108,6 @@ export interface Squawk {
   edited_by_initials?: string | null;
   resolved_by_event_id?: string | null;
   created_at: string;
-  [key: string]: any;
 }
 
 export interface Note {
@@ -124,7 +120,6 @@ export interface Note {
   pictures?: string[];
   edited_at?: string | null;
   created_at: string;
-  [key: string]: any;
 }
 
 export interface UserRole {
@@ -132,7 +127,6 @@ export interface UserRole {
   role: 'admin' | 'pilot';
   email?: string | null;
   initials?: string | null;
-  [key: string]: any;
 }
 
 export interface Reservation {
@@ -147,7 +141,6 @@ export interface Reservation {
   pilot_initials?: string | null;
   status: 'confirmed' | 'cancelled';
   created_at: string;
-  [key: string]: any;
 }
 
 export interface NotificationPreference {
@@ -156,7 +149,6 @@ export interface NotificationPreference {
   notification_type: NotificationType;
   enabled: boolean;
   created_at: string;
-  [key: string]: any;
 }
 
 export type NotificationType = 
@@ -188,7 +180,6 @@ export interface UserAircraftAccess {
   user_id: string;
   aircraft_id: string;
   aircraft_role: AircraftRole;
-  [key: string]: any;
 }
 
 export interface SystemSettings {
@@ -202,7 +193,6 @@ export interface SystemSettings {
   sched_time: number;
   sched_days: number;
   predictive_sched_days?: number;
-  [key: string]: any;
 }
 
 export type AppRole = 'admin' | 'pilot';

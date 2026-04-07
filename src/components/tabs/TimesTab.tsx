@@ -4,7 +4,7 @@ import type { AircraftWithMetrics } from "@/lib/types";
 import useSWR from "swr";
 import { Download, ChevronLeft, ChevronRight, Plus, X, Edit2, Trash2, Info, MapPin } from "lucide-react";
 import { PrimaryButton } from "@/components/AppButtons";
-import Toast from "@/components/Toast";
+import { useToast } from "@/components/ToastProvider";
 
 const whiteBg = { backgroundColor: '#ffffff' } as const;
 
@@ -49,10 +49,7 @@ export default function TimesTab({
   const [viewRouting, setViewRouting] = useState<{pod: string | null, poa: string | null} | null>(null);
   const [showLegend, setShowLegend] = useState(false);
 
-  // Toast
-  const [toastMessage, setToastMessage] = useState("");
-  const [showToast, setShowToast] = useState(false);
-  const showSuccess = useCallback((msg: string) => { setToastMessage(msg); setShowToast(true); }, []);
+  const { showSuccess, showError, showWarning } = useToast();
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [logPod, setLogPod] = useState("");
@@ -140,7 +137,7 @@ export default function TimesTab({
       .order('created_at', { ascending: false });
 
     if (!exportData || exportData.length === 0) { 
-      alert("No logs to export."); setIsExporting(false); return; 
+      showWarning("No logs to export."); setIsExporting(false); return;
     }
 
     const headers = ['Date', 'POD', 'POA', 'Initials', 'FLT', isTurbine ? 'AFTT' : 'Hobbs', isTurbine ? 'FTT' : 'Tach', 'LDG'];
@@ -182,11 +179,11 @@ export default function TimesTab({
     
     if (!editingId) {
       if (isTurbine) {
-        if (parseFloat(logAftt) < (aircraft!.total_airframe_time || 0)) return alert(`Error: New AFTT (${logAftt}) cannot be less than current AFTT (${aircraft!.total_airframe_time || 0}).`);
-        if (parseFloat(logFtt) < (aircraft!.total_engine_time || 0)) return alert(`Error: New FTT (${logFtt}) cannot be less than current FTT (${aircraft!.total_engine_time || 0}).`);
+        if (parseFloat(logAftt) < (aircraft!.total_airframe_time || 0)) return showError(`New AFTT (${logAftt}) cannot be less than current AFTT (${aircraft!.total_airframe_time || 0}).`);
+        if (parseFloat(logFtt) < (aircraft!.total_engine_time || 0)) return showError(`New FTT (${logFtt}) cannot be less than current FTT (${aircraft!.total_engine_time || 0}).`);
       } else {
-        if (parseFloat(logTach) < (aircraft!.total_engine_time || 0)) return alert(`Error: New Tach (${logTach}) cannot be less than current Tach (${aircraft!.total_engine_time || 0}).`);
-        if (logHobbs && parseFloat(logHobbs) < (aircraft!.total_airframe_time || 0)) return alert(`Error: New Hobbs (${logHobbs}) cannot be less than current Hobbs (${aircraft!.total_airframe_time || 0}).`);
+        if (parseFloat(logTach) < (aircraft!.total_engine_time || 0)) return showError(`New Tach (${logTach}) cannot be less than current Tach (${aircraft!.total_engine_time || 0}).`);
+        if (logHobbs && parseFloat(logHobbs) < (aircraft!.total_airframe_time || 0)) return showError(`New Hobbs (${logHobbs}) cannot be less than current Hobbs (${aircraft!.total_airframe_time || 0}).`);
       }
     }
     
@@ -253,8 +250,6 @@ export default function TimesTab({
 
   return (
     <>
-      <Toast message={toastMessage} show={showToast} onDismiss={() => setShowToast(false)} />
-
       <div className="mb-2">
         <PrimaryButton onClick={() => openLogForm()}><Plus size={18} /> Log New Flight</PrimaryButton>
       </div>

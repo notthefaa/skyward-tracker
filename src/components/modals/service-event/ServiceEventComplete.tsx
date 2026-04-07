@@ -15,7 +15,7 @@ interface ServiceEventCompleteProps extends ServiceEventChildProps {
 
 export default function ServiceEventComplete({
   aircraft, selectedEvent, eventLineItems,
-  isSubmitting, setIsSubmitting, onNavigate, onRefresh, showSuccess,
+  isSubmitting, setIsSubmitting, onNavigate, onRefresh, showSuccess, showError, showWarning,
 }: ServiceEventCompleteProps) {
   const isTurbine = aircraft?.engine_type === 'Turbine';
   const today = new Date().toISOString().split('T')[0];
@@ -46,11 +46,11 @@ export default function ServiceEventComplete({
 
   const handleCompleteItems = async () => {
     const itemsToComplete = completionItems.filter(c => c.markComplete);
-    if (itemsToComplete.length === 0) return alert("Please select at least one item to complete.");
+    if (itemsToComplete.length === 0) return showWarning("Please select at least one item to complete.");
 
     const mxCompletions = itemsToComplete.filter(c => c.item_type === 'maintenance');
     for (const c of mxCompletions) {
-      if (!c.completionDate && !c.completionTime) return alert(`Please enter logbook completion data for: ${c.item_name}`);
+      if (!c.completionDate && !c.completionTime) return showWarning(`Please enter logbook completion data for: ${c.item_name}`);
     }
 
     setIsSubmitting(true);
@@ -86,7 +86,7 @@ export default function ServiceEventComplete({
         showSuccess(`${itemsToComplete.length} item${itemsToComplete.length > 1 ? 's' : ''} completed — remaining items still open`);
         onNavigate('detail', selectedEvent);
       }
-    } catch (err: any) { alert("Failed to complete items: " + err.message); }
+    } catch (err: any) { showError("Failed to complete items: " + err.message); }
     setIsSubmitting(false);
   };
 

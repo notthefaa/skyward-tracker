@@ -2,10 +2,12 @@
 
 import { useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { useToast } from "@/components/ToastProvider";
 import { Eye, EyeOff } from "lucide-react";
 import { PrimaryButton } from "@/components/AppButtons";
 
 export default function AuthScreen() {
+  const { showSuccess, showError } = useToast();
   const [authEmail, setAuthEmail] = useState("");
   const[authPassword, setAuthPassword] = useState("");
   const [showForgotPassword, setShowForgotPassword] = useState(false);
@@ -17,7 +19,7 @@ export default function AuthScreen() {
     setIsSubmitting(true);
     const { error } = await supabase.auth.signInWithPassword({ email: authEmail, password: authPassword });
     setIsSubmitting(false);
-    if (error) alert("Login Failed: " + error.message);
+    if (error) showError("Login failed: " + error.message);
   };
 
   const handleForgotPassword = async (e: React.FormEvent) => {
@@ -27,10 +29,10 @@ export default function AuthScreen() {
       redirectTo: `${window.location.origin}/update-password` 
     });
     setIsSubmitting(false);
-    if (error) alert("Error: " + error.message);
-    else { 
-      alert("Password reset link sent to your email!"); 
-      setShowForgotPassword(false); 
+    if (error) showError(error.message);
+    else {
+      showSuccess("Password reset link sent to your email!");
+      setShowForgotPassword(false);
     }
   };
 

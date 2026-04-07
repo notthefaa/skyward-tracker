@@ -8,7 +8,7 @@ import { AlertTriangle, Plus, X, Upload, Mail, Edit2, ChevronLeft, ChevronRight,
 import { PrimaryButton } from "@/components/AppButtons";
 import SignatureCanvas from "react-signature-canvas";
 import imageCompression from "browser-image-compression";
-import Toast from "@/components/Toast";
+import { useToast } from "@/components/ToastProvider";
 
 const whiteBg = { backgroundColor: '#ffffff' } as const;
 
@@ -57,9 +57,7 @@ export default function SquawksTab({
   const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [visibleArchivedCount, setVisibleArchivedCount] = useState(10);
 
-  const [toastMessage, setToastMessage] = useState("");
-  const [showToast, setShowToast] = useState(false);
-  const showSuccess = (msg: string) => { setToastMessage(msg); setShowToast(true); };
+  const { showSuccess, showError } = useToast();
 
   // Detail modal state
   const [detailSquawk, setDetailSquawk] = useState<any>(null);
@@ -134,7 +132,7 @@ export default function SquawksTab({
     if (!e.target.files) return;
     const files = Array.from(e.target.files);
     const sizeError = validateFileSizes(files);
-    if (sizeError) { alert(sizeError); e.target.value = ''; return; }
+    if (sizeError) { showError(sizeError); e.target.value = ''; return; }
     setSelectedImages(files);
   };
 
@@ -257,7 +255,7 @@ export default function SquawksTab({
         y += 5; doc.setDrawColor(200); doc.line(14, y, 196, y); y += 10;
       }
       doc.save(`${aircraft!.tail_number}_Squawk_Report.pdf`); 
-    } catch (error) { console.error("Error generating PDF:", error); alert("There was an error generating the PDF."); }
+    } catch (error) { console.error("Error generating PDF:", error); showError("There was an error generating the PDF."); }
     setIsExportingPdf(false); setShowExportModal(false);
   };
 
@@ -283,8 +281,6 @@ export default function SquawksTab({
 
   return (
     <>
-      <Toast message={toastMessage} show={showToast} onDismiss={() => setShowToast(false)} />
-
       <div className="mb-2">
         <PrimaryButton onClick={() => openForm()}><Plus size={18} /> Report New Squawk</PrimaryButton>
       </div>

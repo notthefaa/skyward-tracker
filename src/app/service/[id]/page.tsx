@@ -5,11 +5,12 @@ import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useBodyScrollOverride } from "@/hooks/useBodyScrollOverride";
 import { validateFileSizes, MAX_UPLOAD_SIZE_LABEL, PORTAL_EXPIRY_DAYS } from "@/lib/constants";
-import { 
-  Wrench, AlertTriangle, CheckCircle, Clock, Send, 
+import {
+  Wrench, AlertTriangle, CheckCircle, Clock, Send,
   MessageSquare, Calendar, Sparkles, X, Plus, Image, ArrowLeft, XCircle, Plane,
   Upload, FileText, Paperclip, Loader2, RefreshCw
 } from "lucide-react";
+import { useToast } from "@/components/ToastProvider";
 
 const whiteBg = { backgroundColor: '#ffffff' } as const;
 
@@ -17,6 +18,7 @@ export default function ServicePortal() {
   const params = useParams();
   const router = useRouter();
   const accessToken = params.id as string;
+  const { showError, showWarning } = useToast();
 
   const [event, setEvent] = useState<any>(null);
   const [aircraft, setAircraft] = useState<any>(null);
@@ -149,7 +151,7 @@ export default function ServicePortal() {
       setConfirmDurationDays("");
       setConfirmMessage("");
     } catch (err) {
-      alert("Something went wrong. Please try again.");
+      showError("Something went wrong. Please try again.");
     }
     setIsSubmitting(false);
   };
@@ -183,7 +185,7 @@ export default function ServicePortal() {
       setUploadDescription("");
       setShowUploadForm(false);
     } catch (err: any) {
-      alert(err.message || "Upload failed. Please try again.");
+      showError(err.message || "Upload failed. Please try again.");
     }
     setIsUploading(false);
   };
@@ -498,7 +500,7 @@ export default function ServicePortal() {
                   </div>
                   <div className="flex gap-2">
                     <button onClick={() => { setShowSuggestForm(false); setSuggestName(""); setSuggestDescription(""); }} className="flex-1 border border-gray-300 text-gray-600 font-bold py-2 rounded text-xs uppercase tracking-widest hover:bg-gray-50 active:scale-95">Cancel</button>
-                    <button onClick={async () => { if (!suggestName.trim()) return alert("Item name is required."); await handleAction('suggest_item', { itemName: suggestName, itemDescription: suggestDescription, message: suggestName }); setSuggestName(""); setSuggestDescription(""); setShowSuggestForm(false); }} disabled={isSubmitting || !suggestName.trim()} className="flex-[2] bg-[#F08B46] text-white font-bold py-2 rounded text-xs uppercase tracking-widest active:scale-95 transition-transform disabled:opacity-50">{isSubmitting ? "Adding..." : "Add & Notify Owner"}</button>
+                    <button onClick={async () => { if (!suggestName.trim()) return showWarning("Item name is required."); await handleAction('suggest_item', { itemName: suggestName, itemDescription: suggestDescription, message: suggestName }); setSuggestName(""); setSuggestDescription(""); setShowSuggestForm(false); }} disabled={isSubmitting || !suggestName.trim()} className="flex-[2] bg-[#F08B46] text-white font-bold py-2 rounded text-xs uppercase tracking-widest active:scale-95 transition-transform disabled:opacity-50">{isSubmitting ? "Adding..." : "Add & Notify Owner"}</button>
                   </div>
                 </div>
               )}
@@ -515,7 +517,7 @@ export default function ServicePortal() {
                 <div className="space-y-3 animate-fade-in">
                   <div>
                     <label className="text-[10px] font-bold uppercase tracking-widest text-navy flex items-center gap-2 mb-2"><Paperclip size={14}/> Select Files (Max 5, {MAX_UPLOAD_SIZE_LABEL} each)</label>
-                    <input type="file" multiple accept="image/*,.pdf,.doc,.docx" onChange={(e) => { if (e.target.files) { const newFiles = Array.from(e.target.files); const sizeError = validateFileSizes(newFiles); if (sizeError) { alert(sizeError); e.target.value = ''; return; } const combined = [...uploadFiles, ...newFiles].slice(0, 5); setUploadFiles(combined); } }} className="text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:bg-gray-100 file:text-navy cursor-pointer w-full" />
+                    <input type="file" multiple accept="image/*,.pdf,.doc,.docx" onChange={(e) => { if (e.target.files) { const newFiles = Array.from(e.target.files); const sizeError = validateFileSizes(newFiles); if (sizeError) { showError(sizeError); e.target.value = ''; return; } const combined = [...uploadFiles, ...newFiles].slice(0, 5); setUploadFiles(combined); } }} className="text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:bg-gray-100 file:text-navy cursor-pointer w-full" />
                     <p className="text-[10px] text-gray-400 mt-1">Accepted: Photos (JPG, PNG, WebP, HEIC), PDFs, and Word documents.</p>
                   </div>
                   {uploadFiles.length > 0 && (

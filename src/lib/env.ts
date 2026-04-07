@@ -20,6 +20,5 @@ export const env = {
   SUPABASE_URL: requireEnv('NEXT_PUBLIC_SUPABASE_URL'),
   SUPABASE_SERVICE_ROLE_KEY: requireEnv('SUPABASE_SERVICE_ROLE_KEY'),
   RESEND_API_KEY: requireEnv('RESEND_API_KEY'),
-  // Optional — only needed in cron route for Vercel signature verification
-  CRON_SECRET: process.env.CRON_SECRET || '',
+  CRON_SECRET: requireEnv('CRON_SECRET'),
 } as const;

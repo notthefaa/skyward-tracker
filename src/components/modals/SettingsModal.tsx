@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { authFetch } from "@/lib/authFetch";
+import { useToast } from "@/components/ToastProvider";
 import { NOTIFICATION_TYPES } from "@/lib/types";
 import type { NotificationType } from "@/lib/types";
 import { Settings, Bell, Trash2, Key, X, Loader2, AlertTriangle } from "lucide-react";
@@ -10,8 +11,9 @@ import { Settings, Bell, Trash2, Key, X, Loader2, AlertTriangle } from "lucide-r
 export default function SettingsModal({ 
   show, onClose, session 
 }: { 
-  show: boolean, onClose: () => void, session: any 
+  show: boolean, onClose: () => void, session: any
 }) {
+  const { showError } = useToast();
   const [prefs, setPrefs] = useState<Record<NotificationType, boolean>>({} as any);
   const [isLoadingPrefs, setIsLoadingPrefs] = useState(true);
   const [savingPref, setSavingPref] = useState<string | null>(null);
@@ -104,7 +106,7 @@ export default function SettingsModal({
     const { error } = await supabase.auth.resetPasswordForEmail(session.user.email, {
       redirectTo: `${window.location.origin}/update-password`
     });
-    if (error) alert("Error: " + error.message);
+    if (error) showError(error.message);
     else setPasswordResetSent(true);
     setIsResettingPassword(false);
   };
@@ -136,7 +138,7 @@ export default function SettingsModal({
       }
       await supabase.auth.signOut();
     } catch (err: any) {
-      alert(err.message);
+      showError(err.message);
       setIsDeleting(false);
     }
   };

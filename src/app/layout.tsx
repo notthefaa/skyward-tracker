@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Oswald, Roboto } from "next/font/google";
+import { Providers } from "@/components/Providers";
 import "./globals.css";
 
 const oswald = Oswald({ 
@@ -46,7 +47,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${oswald.variable} ${roboto.variable} font-roboto bg-white antialiased`}>
-        {children}
+        <Providers>
+          {children}
+        </Providers>
       </body>
     </html>
   );

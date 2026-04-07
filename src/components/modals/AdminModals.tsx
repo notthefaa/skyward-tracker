@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { authFetch } from "@/lib/authFetch";
+import { useToast } from "@/components/ToastProvider";
 import type { AircraftWithMetrics, SystemSettings, AppTab } from "@/lib/types";
 import type { FleetIndexEntry } from "@/hooks/useFleetData";
 import { ShieldCheck, Settings, MailOpen, Database, Sliders, Globe, Users, PlaneTakeoff, X, ChevronRight, ChevronDown, Loader2, Mail, Trash2, KeyRound, Search } from "lucide-react";
@@ -52,6 +53,8 @@ export default function AdminModals({
   const [userAccessList, setUserAccessList] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const { showSuccess, showError, showInfo } = useToast();
+
   const [globalUsers, setGlobalUsers] = useState<any[]>([]);
   const [usersSearch, setUsersSearch] = useState("");
   const [expandedUserId, setExpandedUserId] = useState<string | null>(null);
@@ -66,8 +69,8 @@ export default function AdminModals({
       const res = await authFetch('/api/admin/db-health', { method: 'POST' });
       if (!res.ok) { const errData = await res.json(); throw new Error(errData.error || 'Cleanup failed'); }
       const data = await res.json();
-      alert(`Database health check completed!\n\nOrphaned images cleaned:\n- Squawk images: ${data.cleaned?.squawk_images || 0}\n- Note images: ${data.cleaned?.note_images || 0}\n- Avatars: ${data.cleaned?.avatars || 0}`);
-    } catch (e: any) { alert("Cleanup failed: " + e.message); }
+      showSuccess("Database cleanup completed");
+    } catch (e: any) { showError("Cleanup failed: " + e.message); }
     setIsSubmitting(false);
   };
 
@@ -75,7 +78,7 @@ export default function AdminModals({
     e.preventDefault(); setIsSubmitting(true);
     await supabase.from('aft_system_settings').upsert({ id: 1, ...sysSettings });
     setIsSubmitting(false); setShowSettingsModal(false); setSysSettings({ ...sysSettings });
-    alert("Global maintenance triggers updated!");
+    showSuccess("Global maintenance triggers updated!");
   };
 
   const openGlobalFleetModal = async () => {
@@ -131,7 +134,7 @@ export default function AdminModals({
     setIsSubmitting(true);
     const { error } = await supabase.auth.resetPasswordForEmail(selectedUserEmail, { redirectTo: `${window.location.origin}/update-password` });
     setIsSubmitting(false);
-    if (error) alert("Error: " + error.message); else alert("Password reset link sent securely to " + selectedUserEmail);
+    if (error) showError("Error: " + error.message); else showInfo("Password reset link sent securely to " + selectedUserEmail);
   };
 
   const handleDeleteUser = async () => {
@@ -142,10 +145,10 @@ export default function AdminModals({
     try {
       const res = await authFetch('/api/users', { method: 'DELETE', body: JSON.stringify({ userId: selectedAccessUserId }) });
       if (!res.ok) { const errData = await res.json(); throw new Error(errData.error || 'Failed to delete user'); }
-      alert("User successfully deleted.");
+      showSuccess("User successfully deleted.");
       const { data } = await supabase.from('aft_user_roles').select('*').order('role').order('email');
       if (data) setAllUsers(data); setSelectedAccessUserId(""); setUserAccessList([]);
-    } catch (error: any) { alert("Failed to delete user: " + error.message); }
+    } catch (error: any) { showError("Failed to delete user: " + error.message); }
     setIsSubmitting(false);
   };
 
@@ -154,9 +157,9 @@ export default function AdminModals({
     try {
       const res = await authFetch('/api/invite', { method: 'POST', body: JSON.stringify({ email: inviteEmail, role: inviteRole, aircraftIds: inviteAircraftIds }) });
       if (!res.ok) { const errData = await res.json(); throw new Error(errData.error || 'Failed to invite user'); }
-      alert(`Invitation successfully sent to ${inviteEmail}!`);
+      showSuccess(`Invitation successfully sent to ${inviteEmail}!`);
       setShowInviteModal(false); setInviteEmail(""); setInviteAircraftIds([]);
-    } catch (error: any) { alert("Failed to invite user: " + error.message); }
+    } catch (error: any) { showError("Failed to invite user: " + error.message); }
     setIsSubmitting(false);
   };
 
@@ -185,7 +188,7 @@ export default function AdminModals({
       const res = await authFetch('/api/admin/users', { method: 'PUT', body: JSON.stringify({ targetUserId: userId, newRole }) });
       if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Failed'); }
       await refreshUsers();
-    } catch (e: any) { alert(e.message); }
+    } catch (e: any) { showError(e.message); }
     setIsSubmitting(false);
   };
 
@@ -198,7 +201,7 @@ export default function AdminModals({
       const res = await authFetch('/api/users', { method: 'DELETE', body: JSON.stringify({ userId }) });
       if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Failed'); }
       setExpandedUserId(null); await refreshUsers();
-    } catch (e: any) { alert(e.message); }
+    } catch (e: any) { showError(e.message); }
     setIsSubmitting(false);
   };
 
@@ -209,7 +212,7 @@ export default function AdminModals({
     setIsSubmitting(true);
     const { error } = await supabase.auth.resetPasswordForEmail(u.email, { redirectTo: `${window.location.origin}/update-password` });
     setIsSubmitting(false);
-    if (error) alert("Error: " + error.message); else alert("Password reset link sent to " + u.email);
+    if (error) showError("Error: " + error.message); else showInfo("Password reset link sent to " + u.email);
   };
 
   const handleToggleUserAircraft = async (userId: string, aircraftId: string, hasAccess: boolean) => {
@@ -222,7 +225,7 @@ export default function AdminModals({
         await supabase.from('aft_user_aircraft_access').insert({ user_id: userId, aircraft_id: aircraftId });
       }
       await refreshUsers();
-    } catch (e: any) { alert(e.message); }
+    } catch (e: any) { showError(e.message); }
     setIsSubmitting(false);
   };
 
@@ -232,7 +235,7 @@ export default function AdminModals({
       const res = await authFetch('/api/aircraft-access', { method: 'PUT', body: JSON.stringify({ targetUserId: userId, aircraftId, newRole }) });
       if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Failed'); }
       await refreshUsers();
-    } catch (e: any) { alert(e.message); }
+    } catch (e: any) { showError(e.message); }
     setIsSubmitting(false);
   };
 

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
+import { useToast } from "@/components/ToastProvider";
 import { MX_TEMPLATES, CATEGORY_META } from "@/lib/mxTemplates";
 import type { MxTemplate, MxTemplateItem } from "@/lib/mxTemplates";
 import { 
@@ -52,6 +53,7 @@ function getCategoryIcon(category: string) {
 }
 
 export default function MxTemplatePickerModal({ aircraft, show, onClose, onRefresh }: MxTemplatePickerModalProps) {
+  const { showError, showWarning } = useToast();
   const [step, setStep] = useState<Step>('pick');
   const [selectedTemplate, setSelectedTemplate] = useState<MxTemplate | null>(null);
   const [selectedItemIndices, setSelectedItemIndices] = useState<Set<number>>(new Set());
@@ -209,7 +211,7 @@ export default function MxTemplatePickerModal({ aircraft, show, onClose, onRefre
     }
 
     if (itemsToInsert.length === 0) {
-      alert("All selected items already exist on this aircraft. No items were added.");
+      showWarning("All selected items already exist on this aircraft.");
       setIsInserting(false);
       setStep('select');
       return;
@@ -241,7 +243,7 @@ export default function MxTemplatePickerModal({ aircraft, show, onClose, onRefre
 
     if (error) {
       console.error('Template insert error:', error);
-      alert('Failed to insert maintenance items: ' + error.message);
+      showError('Failed to insert maintenance items: ' + error.message);
       setIsInserting(false);
       setStep('select');
       return;

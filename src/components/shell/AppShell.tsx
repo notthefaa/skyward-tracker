@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { authFetch } from "@/lib/authFetch";
 import { useFleetData, useRealtimeSync, useGroundedStatus, useAircraftRole, usePullToRefresh } from "@/hooks";
 import { NETWORK_TIMEOUT_MS } from "@/lib/constants";
+import { useToast } from "@/components/ToastProvider";
 import dynamic from "next/dynamic";
 import type { AircraftWithMetrics, AppTab } from "@/lib/types";
 import { 
@@ -34,7 +35,7 @@ function MxPicker({ onSelect, onClose }: { onSelect: (sub: 'maintenance' | 'squa
   };
   return (
     <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/50 animate-fade-in" onClick={onClose}>
-      <div className="bg-white w-full max-w-sm rounded-lg shadow-2xl p-5 animate-slide-up" onClick={e => e.stopPropagation()}>
+      <div role="dialog" aria-label="Select maintenance or squawks view" className="bg-white w-full max-w-sm rounded-lg shadow-2xl p-5 animate-slide-up" onClick={e => e.stopPropagation()}>
         <div className="flex gap-3">
           <button onClick={() => handleSelect('maintenance')} className="flex-1 bg-cream border-2 border-[#F08B46] rounded-lg p-5 flex flex-col items-center gap-3 hover:bg-orange-50 active:scale-95 transition-all">
             <div className="bg-[#F08B46] text-white p-3 rounded-full"><Wrench size={24} /></div>
@@ -64,6 +65,8 @@ interface AppShellProps {
 }
 
 export default function AppShell({ session }: AppShellProps) {
+  const { showSuccess, showError, showInfo } = useToast();
+
   // ─── Fleet Data (extracted hook) ───
   const {
     role, userInitials, allAircraftList, aircraftList, allAccessRecords,
@@ -261,7 +264,7 @@ export default function AppShell({ session }: AppShellProps) {
         throw new Error(errData.error || 'Failed to delete aircraft');
       }
     } catch (err: any) {
-      alert(err.message);
+      showError(err.message);
       return;
     }
     await fetchAircraftData(session.user.id);
@@ -300,10 +303,10 @@ export default function AppShell({ session }: AppShellProps) {
   const handleCopyQuickLink = () => {
     if (navigator.clipboard?.writeText) {
       navigator.clipboard.writeText(companionUrl)
-        .then(() => alert("Link copied! Now open your phone's browser, paste the link, and Add to Home Screen."))
-        .catch(() => alert(`Please manually copy this link: ${companionUrl}`));
+        .then(() => showSuccess("Link copied! Open your phone's browser, paste the link, and Add to Home Screen."))
+        .catch(() => showInfo("Please manually copy this link: " + companionUrl));
     } else {
-      alert(`Please manually copy this link: ${companionUrl}`);
+      showInfo("Please manually copy this link: " + companionUrl);
     }
   };
 
@@ -365,8 +368,8 @@ export default function AppShell({ session }: AppShellProps) {
 
       {showLogItModal && (
         <div className="fixed inset-0 bg-black/80 z-[10000] flex items-center justify-center p-4 animate-fade-in" onClick={() => setShowLogItModal(false)}>
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 border-t-8 border-[#3AB0FF] animate-slide-up relative" onClick={e => e.stopPropagation()}>
-            <button onClick={() => setShowLogItModal(false)} className="absolute top-4 right-4 text-gray-400 hover:text-red-500"><X size={24}/></button>
+          <div role="dialog" aria-label="Install Log It companion app" className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 border-t-8 border-[#3AB0FF] animate-slide-up relative" onClick={e => e.stopPropagation()}>
+            <button onClick={() => setShowLogItModal(false)} aria-label="Close" className="absolute top-4 right-4 text-gray-400 hover:text-red-500"><X size={24}/></button>
             <h3 className="font-oswald text-2xl font-bold uppercase tracking-widest text-navy mb-4">Install Log It</h3>
             <p className="text-sm text-gray-600 font-roboto mb-4 leading-relaxed">Log It is a companion app that is designed to make logging times and squawks easy on the go.</p>
             <ol className="text-left text-sm text-gray-600 font-roboto mb-8 space-y-2 max-w-xs mx-auto list-decimal pl-4"><li>Tap below to copy the app link.</li><li>Open your phone&apos;s browser and paste the link.</li><li>Use the Share menu <Share size={14} className="inline text-blue-500 mb-1"/> to Add to Home Screen.</li></ol>
@@ -375,27 +378,27 @@ export default function AppShell({ session }: AppShellProps) {
         </div>
       )}
 
-      <header className="fixed top-0 left-0 right-0 bg-navy text-white shadow-md z-[9999]" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
+      <header role="banner" className="fixed top-0 left-0 right-0 bg-navy text-white shadow-md z-[9999]" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
         <div className="max-w-3xl mx-auto px-4 py-2 flex justify-between items-center w-full min-h-[52px]">
           <div className="flex flex-col">
             <span className="text-[9px] font-bold uppercase tracking-widest text-[#F5B05B] mb-[2px]">Active Aircraft</span>
             <div className="flex items-center gap-3">
-              <div className={`w-3.5 h-3.5 rounded-full shrink-0 shadow-inner ${aircraftStatus === 'grounded' ? 'bg-red-500' : aircraftStatus === 'issues' ? 'bg-[#F08B46]' : 'bg-success'}`} />
+              <div className={`w-3.5 h-3.5 rounded-full shrink-0 shadow-inner ${aircraftStatus === 'grounded' ? 'bg-red-500' : aircraftStatus === 'issues' ? 'bg-[#F08B46]' : 'bg-success'}`} role="status" aria-label={`Aircraft status: ${aircraftStatus}`} />
               <div className="relative flex items-center">
-                <button onClick={() => navigateTab('summary')} className="text-xl font-oswald font-bold uppercase tracking-wide text-white hover:text-[#3AB0FF] transition-colors active:scale-95">
+                <button onClick={() => navigateTab('summary')} aria-label={`View ${activeTail || 'aircraft'} summary`} className="text-xl font-oswald font-bold uppercase tracking-wide text-white hover:text-[#3AB0FF] transition-colors active:scale-95">
                   {activeTail || '—'}
                 </button>
                 {dropdownOptions.length > 0 && (
-                  <button onClick={() => setShowTailDropdown(!showTailDropdown)} className="text-white/70 hover:text-white transition-colors active:scale-95 ml-1 p-1">
+                  <button onClick={() => setShowTailDropdown(!showTailDropdown)} aria-label="Switch aircraft" aria-expanded={showTailDropdown} className="text-white/70 hover:text-white transition-colors active:scale-95 ml-1 p-1">
                     <ChevronDown size={16} className={`transition-transform ${showTailDropdown ? 'rotate-180' : ''}`} />
                   </button>
                 )}
                 {showTailDropdown && (
                   <>
                     <div className="fixed inset-0 z-[9998]" onClick={() => setShowTailDropdown(false)} />
-                    <div className="absolute top-full left-0 mt-2 bg-white rounded-lg shadow-2xl border border-gray-200 min-w-full w-max z-[9999] overflow-hidden animate-slide-up">
+                    <div role="listbox" aria-label="Aircraft selection" className="absolute top-full left-0 mt-2 bg-white rounded-lg shadow-2xl border border-gray-200 min-w-full w-max z-[9999] overflow-hidden animate-slide-up">
                       {dropdownOptions.map(a => (
-                        <button key={a.id} onClick={() => handleTailChange(a.tail_number)} className={`w-full text-left px-4 py-3 flex items-center justify-between hover:bg-gray-50 active:bg-gray-100 transition-colors ${a.tail_number === activeTail ? 'bg-blue-50' : ''}`}>
+                        <button key={a.id} role="option" aria-selected={a.tail_number === activeTail} onClick={() => handleTailChange(a.tail_number)} className={`w-full text-left px-4 py-3 flex items-center justify-between hover:bg-gray-50 active:bg-gray-100 transition-colors ${a.tail_number === activeTail ? 'bg-blue-50' : ''}`}>
                           <div>
                             <span className={`font-oswald font-bold uppercase text-sm ${a.tail_number === activeTail ? 'text-[#3AB0FF]' : 'text-navy'}`}>{a.tail_number}</span>
                             <span className="block text-[10px] text-gray-400 uppercase tracking-widest">{a.aircraft_type}</span>
@@ -411,17 +414,17 @@ export default function AppShell({ session }: AppShellProps) {
             </div>
           </div>
           <div className="flex gap-4">
-            {showFleetButton && <button onClick={() => navigateTab('fleet')} className={`hover:text-white transition-colors flex flex-col items-center active:scale-95 shrink-0 ${activeTab === 'fleet' ? 'text-[#3AB0FF]' : 'text-gray-300'}`}><LayoutGrid size={18} /><span className="text-[8px] font-bold uppercase tracking-widest mt-1">Fleet</span></button>}
-            <button onClick={() => setShowLogItModal(true)} className="text-gray-300 hover:text-[#3AB0FF] transition-colors flex flex-col items-center active:scale-95 shrink-0"><Send size={18} /><span className="text-[8px] font-bold uppercase tracking-widest mt-1">Log It</span></button>
-            {role === 'admin' && <button onClick={() => setShowAdminMenu(true)} className="text-gray-300 hover:text-white transition-colors flex flex-col items-center active:scale-95 shrink-0"><ShieldCheck size={18} /><span className="text-[8px] font-bold uppercase tracking-widest mt-1">Admin</span></button>}
-            <button onClick={() => setShowSettingsModal(true)} className="text-gray-300 hover:text-white transition-colors flex flex-col items-center active:scale-95 shrink-0"><Settings size={18} /><span className="text-[8px] font-bold uppercase tracking-widest mt-1">Settings</span></button>
-            <button onClick={handleLogout} className="text-gray-300 hover:text-white transition-colors flex flex-col items-center active:scale-95 shrink-0"><LogOut size={18} /><span className="text-[8px] font-bold uppercase tracking-widest mt-1">Logout</span></button>
+            {showFleetButton && <button onClick={() => navigateTab('fleet')} aria-label="Fleet overview" className={`hover:text-white transition-colors flex flex-col items-center active:scale-95 shrink-0 ${activeTab === 'fleet' ? 'text-[#3AB0FF]' : 'text-gray-300'}`}><LayoutGrid size={18} /><span className="text-[8px] font-bold uppercase tracking-widest mt-1">Fleet</span></button>}
+            <button onClick={() => setShowLogItModal(true)} aria-label="Install Log It companion app" className="text-gray-300 hover:text-[#3AB0FF] transition-colors flex flex-col items-center active:scale-95 shrink-0"><Send size={18} /><span className="text-[8px] font-bold uppercase tracking-widest mt-1">Log It</span></button>
+            {role === 'admin' && <button onClick={() => setShowAdminMenu(true)} aria-label="Admin tools" className="text-gray-300 hover:text-white transition-colors flex flex-col items-center active:scale-95 shrink-0"><ShieldCheck size={18} /><span className="text-[8px] font-bold uppercase tracking-widest mt-1">Admin</span></button>}
+            <button onClick={() => setShowSettingsModal(true)} aria-label="Settings" className="text-gray-300 hover:text-white transition-colors flex flex-col items-center active:scale-95 shrink-0"><Settings size={18} /><span className="text-[8px] font-bold uppercase tracking-widest mt-1">Settings</span></button>
+            <button onClick={handleLogout} aria-label="Log out" className="text-gray-300 hover:text-white transition-colors flex flex-col items-center active:scale-95 shrink-0"><LogOut size={18} /><span className="text-[8px] font-bold uppercase tracking-widest mt-1">Logout</span></button>
           </div>
         </div>
       </header>
 
       {aircraftStatus === 'grounded' && (
-        <div className="bg-[#CE3732] text-white text-center py-2 px-4 shadow-md z-10 flex flex-col justify-center items-center shrink-0 w-full">
+        <div role="alert" className="bg-[#CE3732] text-white text-center py-2 px-4 shadow-md z-10 flex flex-col justify-center items-center shrink-0 w-full">
           <div className="flex items-center gap-2"><AlertTriangle size={16} /><span className="font-oswald tracking-widest font-bold uppercase text-sm">Not Flight Ready</span><AlertTriangle size={16} /></div>
           {groundedReason && <span className="text-[10px] font-bold uppercase tracking-widest text-white/80 mt-0.5">{groundedReason}</span>}
         </div>
@@ -454,7 +457,7 @@ export default function AppShell({ session }: AppShellProps) {
         </div>
       </main>
 
-      <nav className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-gray-200 z-[9999] pt-1 pb-[env(safe-area-inset-bottom)] shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+      <nav role="navigation" aria-label="Main navigation" className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-gray-200 z-[9999] pt-1 pb-[env(safe-area-inset-bottom)] shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
         <div className="flex justify-around items-center h-12 max-w-3xl mx-auto">
           {[
             { id: 'summary', icon: Home, label: 'Home', badge: 0 },
@@ -480,7 +483,7 @@ export default function AppShell({ session }: AppShellProps) {
               } else {
                 navigateTab(tab.id as AppTab);
               }
-            }} className={`flex-1 pb-1 flex flex-col items-center justify-center transition-all relative active:scale-95 ${getTabColor(tab.id)}`}>
+            }} aria-label={tab.label} aria-current={activeTab === tab.id ? 'page' : undefined} className={`flex-1 pb-1 flex flex-col items-center justify-center transition-all relative active:scale-95 ${getTabColor(tab.id)}`}>
               <div className="relative mb-1"><tab.icon size={20} />{tab.badge > 0 && <span className="absolute -top-1 -right-2 flex h-3 w-3"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#CE3732] opacity-75"></span><span className="relative inline-flex rounded-full h-3 w-3 bg-[#CE3732] text-[8px] text-white font-bold items-center justify-center border border-white"></span></span>}</div>
               <span className="text-[10px] font-bold uppercase tracking-widest">{tab.label}</span>
               {activeTab === tab.id && <div className={`absolute bottom-0 w-12 h-1 rounded-t-full ${getIndicatorColor(tab.id)}`}></div>}

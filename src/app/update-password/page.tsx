@@ -3,9 +3,11 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { PrimaryButton } from "@/components/AppButtons";
+import { useToast } from "@/components/ToastProvider";
 import { Eye, EyeOff, AlertTriangle } from "lucide-react";
 
 export default function UpdatePassword() {
+  const { showError } = useToast();
   const [password, setPassword] = useState("");
   const [initials, setInitials] = useState("");
   const[isSubmitting, setIsSubmitting] = useState(false);
@@ -67,7 +69,7 @@ export default function UpdatePassword() {
     setIsSubmitting(true);
     
     if (!session) {
-      alert("Security session lost. Please close this window and click your invite link again.");
+      showError("Security session lost. Please close this window and click your invite link again.");
       setIsSubmitting(false);
       return;
     }
@@ -76,7 +78,7 @@ export default function UpdatePassword() {
     const { error: pwdError } = await supabase.auth.updateUser({ password });
     
     if (pwdError) {
-      alert("Error updating password: " + pwdError.message);
+      showError("Error updating password: " + pwdError.message);
       setIsSubmitting(false);
       return;
     }
@@ -109,7 +111,7 @@ export default function UpdatePassword() {
       
       setRequestSent(true);
     } catch (error: any) {
-      alert(error.message);
+      showError(error.message);
     }
     
     setIsRequesting(false);
