@@ -8,7 +8,7 @@ import { getFuelWeightPerGallon } from "@/lib/constants";
 import { INPUT_WHITE_BG } from "@/lib/styles";
 import type { AircraftWithMetrics, SystemSettings, AppTab, AppRole, AircraftRole } from "@/lib/types";
 import useSWR from "swr";
-import { PlaneTakeoff, MapPin, Droplet, Phone, Mail, Wrench, AlertTriangle, FileText, Clock, X, Trash2, Edit2, UserPlus, Loader2, Users, ChevronDown, Calendar } from "lucide-react";
+import { PlaneTakeoff, MapPin, Droplet, Phone, Mail, Wrench, AlertTriangle, FileText, Clock, X, Trash2, Edit2, UserPlus, Loader2, Users, ChevronDown, Calendar, CheckCircle } from "lucide-react";
 import { PrimaryButton } from "@/components/AppButtons";
 import { useToast } from "@/components/ToastProvider";
 
@@ -103,6 +103,12 @@ export default function SummaryTab({
         .lte('start_time', now).gte('end_time', now)
         .order('start_time').limit(1);
       if (activeRes && activeRes.length > 0) return { type: 'reservation' as const, ...activeRes[0] };
+      // Ready for pickup (no date constraint — always show if active)
+      const { data: readyMx } = await supabase.from('aft_maintenance_events')
+        .select('confirmed_date, estimated_completion, mx_contact_name')
+        .eq('aircraft_id', aircraft!.id).eq('status', 'ready_for_pickup')
+        .limit(1);
+      if (readyMx && readyMx.length > 0) return { type: 'ready_for_pickup' as const, ...readyMx[0] };
       // Active maintenance block
       const today = new Date().toISOString().split('T')[0];
       const { data: activeMx } = await supabase.from('aft_maintenance_events')
@@ -321,6 +327,14 @@ export default function SummaryTab({
 
       {/* Current Status Banner */}
       {currentStatus && (() => {
+        if (currentStatus.type === 'ready_for_pickup') {
+          return (
+            <div onClick={() => setActiveTab('mx')} className="bg-green-50 shadow-lg border-2 border-green-300 rounded-sm p-3 flex items-center gap-3 cursor-pointer hover:shadow-xl active:scale-[0.98] transition-all">
+              <div className="bg-[#56B94A] text-white p-2 rounded-full shrink-0"><CheckCircle size={16} /></div>
+              <p className="text-sm font-roboto text-navy"><span className="font-bold">Ready for Pickup</span>{currentStatus.mx_contact_name ? ` — ${currentStatus.mx_contact_name} has completed all work` : ' — All maintenance work is complete'}</p>
+            </div>
+          );
+        }
         if (currentStatus.type === 'maintenance') {
           const endDate = currentStatus.estimated_completion
             ? new Date(currentStatus.estimated_completion + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })

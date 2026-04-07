@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { Resend } from 'resend';
-import { requireAuth, requireAircraftAccess, handleApiError } from '@/lib/auth';
+import { requireAuth, requireAircraftAdmin, handleApiError } from '@/lib/auth';
 import { env } from '@/lib/env';
 import { escapeHtml } from '@/lib/sanitize';
 
@@ -27,7 +27,7 @@ export async function POST(req: Request) {
     }
 
     // Verify the user has access to this aircraft
-    await requireAircraftAccess(supabaseAdmin, user.id, event.aircraft_id);
+    await requireAircraftAdmin(supabaseAdmin, user.id, event.aircraft_id);
 
     // For initial sends, only drafts are allowed. For resends, any active status is fine.
     if (!isResend && event.status !== 'draft') {

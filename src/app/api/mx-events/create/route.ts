@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { requireAuth, requireAircraftAccess, handleApiError } from '@/lib/auth';
+import { requireAuth, requireAircraftAccess, requireAircraftAdmin, handleApiError } from '@/lib/auth';
 
 export async function POST(req: Request) {
   try {
@@ -10,8 +10,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Aircraft ID is required.' }, { status: 400 });
     }
 
-    // Verify the user has access to this aircraft
-    await requireAircraftAccess(supabaseAdmin, user.id, aircraftId);
+    // Verify the user is an admin for this aircraft
+    await requireAircraftAdmin(supabaseAdmin, user.id, aircraftId);
 
     const { data: aircraft, error: acErr } = await supabaseAdmin
       .from('aft_aircraft').select('*').eq('id', aircraftId).single();

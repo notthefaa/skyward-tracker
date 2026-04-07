@@ -202,13 +202,22 @@ export default function MaintenanceTab({
       payload.due_date = mxDueDate || (mxLastDate && mxIntervalDays ? new Date(new Date(mxLastDate).getTime() + parseInt(mxIntervalDays) * 86400000).toISOString().split('T')[0] : null);
       payload.last_completed_time = null; payload.time_interval = null; payload.due_time = null;
     }
-    if (editingId) { await supabase.from('aft_maintenance_items').update(payload).eq('id', editingId); }
-    else { await supabase.from('aft_maintenance_items').insert(payload); }
+    if (editingId) {
+      const res = await authFetch('/api/maintenance-items', { method: 'PUT', body: JSON.stringify({ itemId: editingId, aircraftId: aircraft!.id, itemData: payload }) });
+      if (!res.ok) throw new Error('Failed to update maintenance item');
+    } else {
+      const res = await authFetch('/api/maintenance-items', { method: 'POST', body: JSON.stringify({ aircraftId: aircraft!.id, itemData: payload }) });
+      if (!res.ok) throw new Error('Failed to create maintenance item');
+    }
     await mutate(); onGroundedStatusChange(); setShowMxModal(false); setIsSubmitting(false);
   };
 
   const deleteMxItem = async (id: string) => {
-    if (confirm("Delete this maintenance item?")) { await supabase.from('aft_maintenance_items').delete().eq('id', id); await mutate(); onGroundedStatusChange(); }
+    if (confirm("Delete this maintenance item?")) {
+      const res = await authFetch('/api/maintenance-items', { method: 'DELETE', body: JSON.stringify({ itemId: id, aircraftId: aircraft!.id }) });
+      if (!res.ok) throw new Error('Failed to delete maintenance item');
+      await mutate(); onGroundedStatusChange();
+    }
   };
 
   if (!aircraft) return null;

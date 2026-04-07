@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { requireAuth, requireAircraftAccess, handleApiError } from '@/lib/auth';
+import { requireAuth, requireAircraftAccess, requireAircraftAdmin, handleApiError } from '@/lib/auth';
 
 export async function POST(req: Request) {
   try {
@@ -18,8 +18,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Maintenance event not found.' }, { status: 404 });
     }
 
-    // Verify the user has access to this aircraft
-    await requireAircraftAccess(supabaseAdmin, user.id, event.aircraft_id);
+    // Verify the user is an admin for this aircraft
+    await requireAircraftAdmin(supabaseAdmin, user.id, event.aircraft_id);
 
     // Process each line item completion
     const completedNames: string[] = [];

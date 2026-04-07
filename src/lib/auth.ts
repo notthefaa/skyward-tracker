@@ -119,6 +119,38 @@ export async function requireAircraftAccess(
 }
 
 /**
+ * Verifies that a user is an admin for a specific aircraft.
+ * Returns true if the user is a global admin OR has aircraft_role='admin'.
+ * Throws { status: 403 } if not an admin.
+ */
+export async function requireAircraftAdmin(
+  supabaseAdmin: AdminClient,
+  userId: string,
+  aircraftId: string
+): Promise<void> {
+  // Global admins bypass aircraft-level checks
+  const { data: roleData } = await supabaseAdmin
+    .from('aft_user_roles')
+    .select('role')
+    .eq('user_id', userId)
+    .single();
+
+  if (roleData?.role === 'admin') return;
+
+  // Check aircraft-level admin role
+  const { data: access } = await supabaseAdmin
+    .from('aft_user_aircraft_access')
+    .select('aircraft_role')
+    .eq('user_id', userId)
+    .eq('aircraft_id', aircraftId)
+    .single();
+
+  if (!access || access.aircraft_role !== 'admin') {
+    throw { status: 403, message: 'This action requires aircraft admin privileges.' };
+  }
+}
+
+/**
  * Standard error response builder for API routes.
  * Handles both auth errors (thrown by requireAuth) and generic errors.
  */

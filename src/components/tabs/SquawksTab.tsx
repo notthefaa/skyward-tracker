@@ -172,9 +172,18 @@ export default function SquawksTab({
     if (editingId) {
       squawkData.edited_at = new Date().toISOString();
       squawkData.edited_by_initials = userInitials;
-      await supabase.from('aft_squawks').update(squawkData).eq('id', editingId);
+      const res = await authFetch('/api/squawks', {
+        method: 'PUT',
+        body: JSON.stringify({ squawkId: editingId, aircraftId: aircraft!.id, squawkData })
+      });
+      if (!res.ok) throw new Error('Failed to update squawk');
     } else {
-      const { data: newSquawk } = await supabase.from('aft_squawks').insert(squawkData).select().single();
+      const res = await authFetch('/api/squawks', {
+        method: 'POST',
+        body: JSON.stringify({ aircraftId: aircraft!.id, squawkData })
+      });
+      if (!res.ok) throw new Error('Failed to create squawk');
+      const { squawk: newSquawk } = await res.json();
       if (newSquawk) {
         try { await authFetch('/api/emails/squawk-notify', { method: 'POST', body: JSON.stringify({ squawk: newSquawk, aircraft, notifyMx }) }); } catch (err) { console.error("Failed to send squawk email", err); }
       }
@@ -186,7 +195,11 @@ export default function SquawksTab({
 
   const deleteSquawk = async (id: string) => {
     if (!confirm("Are you sure you want to permanently delete this squawk?")) return;
-    await supabase.from('aft_squawks').delete().eq('id', id);
+    const res = await authFetch('/api/squawks', {
+      method: 'DELETE',
+      body: JSON.stringify({ squawkId: id, aircraftId: aircraft!.id })
+    });
+    if (!res.ok) throw new Error('Failed to delete squawk');
     await mutate(); onGroundedStatusChange();
     closeDetailModal();
     showSuccess("Squawk deleted");
@@ -194,13 +207,21 @@ export default function SquawksTab({
 
   const resolveSquawk = async (sq: any) => {
     setIsSubmitting(true);
-    await supabase.from('aft_squawks').update({ 
-      status: 'resolved', 
-      affects_airworthiness: false,
-      resolved_note: resolveNote.trim() || null,
-      edited_at: new Date().toISOString(),
-      edited_by_initials: userInitials,
-    }).eq('id', sq.id);
+    const res = await authFetch('/api/squawks', {
+      method: 'PUT',
+      body: JSON.stringify({
+        squawkId: sq.id,
+        aircraftId: aircraft!.id,
+        squawkData: {
+          status: 'resolved',
+          affects_airworthiness: false,
+          resolved_note: resolveNote.trim() || null,
+          edited_at: new Date().toISOString(),
+          edited_by_initials: userInitials,
+        }
+      })
+    });
+    if (!res.ok) throw new Error('Failed to resolve squawk');
     await mutate(); onGroundedStatusChange();
     closeDetailModal();
     showSuccess("Squawk resolved");

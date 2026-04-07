@@ -1,5 +1,6 @@
 import { useState, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
+import { authFetch } from "@/lib/authFetch";
 import type { AircraftWithMetrics } from "@/lib/types";
 import useSWR from "swr";
 import { Download, ChevronLeft, ChevronRight, Plus, X, Edit2, Trash2, Info, MapPin } from "lucide-react";
@@ -119,8 +120,11 @@ export default function TimesTab({
     updateData.current_fuel_gallons = previousLog && previousLog.fuel_gallons !== null ? previousLog.fuel_gallons : 0;
     updateData.fuel_last_updated = previousLog ? previousLog.created_at : null;
 
-    await supabase.from('aft_flight_logs').delete().eq('id', log.id);
-    await supabase.from('aft_aircraft').update(updateData).eq('id', aircraft!.id);
+    const res = await authFetch('/api/flight-logs', {
+      method: 'DELETE',
+      body: JSON.stringify({ logId: log.id, aircraftId: aircraft!.id, aircraftUpdate: updateData })
+    });
+    if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Failed to delete flight log'); }
 
     setLogPage(1);
     await mutate(); 
@@ -219,12 +223,18 @@ export default function TimesTab({
     }
 
     if (editingId) {
-      await supabase.from('aft_flight_logs').update(payload).eq('id', editingId);
+      const res = await authFetch('/api/flight-logs', {
+        method: 'PUT',
+        body: JSON.stringify({ logId: editingId, aircraftId: aircraft!.id, logData: payload, aircraftUpdate })
+      });
+      if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Failed to update flight log'); }
     } else {
-      await supabase.from('aft_flight_logs').insert(payload);
+      const res = await authFetch('/api/flight-logs', {
+        method: 'POST',
+        body: JSON.stringify({ aircraftId: aircraft!.id, logData: payload, aircraftUpdate })
+      });
+      if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Failed to save flight log'); }
     }
-
-    await supabase.from('aft_aircraft').update(aircraftUpdate).eq('id', aircraft!.id);
     await mutate(); onUpdate(); setShowLogModal(false); setIsSubmitting(false);
     showSuccess(editingId ? "Flight log updated" : "Flight logged");
   };

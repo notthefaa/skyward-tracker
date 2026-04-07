@@ -129,12 +129,19 @@ export default function NotesTab({ aircraft, session, role, aircraftRole, userIn
 
     if (editingId) {
       noteData.edited_at = new Date().toISOString();
-      await supabase.from('aft_notes').update(noteData).eq('id', editingId);
+      const res = await authFetch('/api/notes', {
+        method: 'PUT',
+        body: JSON.stringify({ noteId: editingId, aircraftId: aircraft.id, noteData })
+      });
+      if (!res.ok) throw new Error('Failed to update note');
     } else {
-      noteData.author_id = session.user.id;
       noteData.author_email = session.user.email;
-      noteData.author_initials = userInitials; 
-      await supabase.from('aft_notes').insert(noteData);
+      noteData.author_initials = userInitials;
+      const res = await authFetch('/api/notes', {
+        method: 'POST',
+        body: JSON.stringify({ aircraftId: aircraft.id, noteData })
+      });
+      if (!res.ok) throw new Error('Failed to create note');
 
       try {
         await authFetch('/api/emails/note-notify', {
@@ -154,7 +161,11 @@ export default function NotesTab({ aircraft, session, role, aircraftRole, userIn
 
   const deleteNote = async (id: string) => {
     if (!confirm("Are you sure you want to permanently delete this note?")) return;
-    await supabase.from('aft_notes').delete().eq('id', id);
+    const res = await authFetch('/api/notes', {
+      method: 'DELETE',
+      body: JSON.stringify({ noteId: id, aircraftId: aircraft.id })
+    });
+    if (!res.ok) throw new Error('Failed to delete note');
     await mutate();
   };
 
