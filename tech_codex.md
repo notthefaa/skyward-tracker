@@ -7,7 +7,7 @@ Complete technical reference for developers working on the Skyward Aircraft Mana
 ## Database Schema
 
 ### aft_aircraft
-Aircraft master records. The `created_by` field references `auth.users(id)` with `ON DELETE CASCADE` — deleting a user deletes all aircraft they created.
+Aircraft master records. The `created_by` field references `auth.users(id)` with `ON DELETE SET NULL` — deleting a user preserves the aircraft but clears the creator reference. The account delete route handles cascade cleanup via application logic.
 
 | Column | Type | Notes |
 |--------|------|-------|
@@ -32,7 +32,7 @@ Aircraft master records. The `created_by` field references `auth.users(id)` with
 | avatar_url | text | Supabase Storage public URL |
 | current_fuel_gallons | numeric | Last reported fuel state |
 | fuel_last_updated | timestamptz | |
-| created_by | uuid FK → auth.users | ON DELETE CASCADE |
+| created_by | uuid FK → auth.users | ON DELETE SET NULL |
 | created_at | timestamptz | |
 
 **Setup vs Total times:** The `setup_*` fields record the baseline times when the aircraft was added to the system. The `total_*` fields are the current cumulative times, incremented by each flight log. When editing an aircraft, the system checks for flight logs: if none exist, totals are set equal to the new setup values. If flights exist, totals are left at the latest log's cumulative values since they represent the true current state.
@@ -45,8 +45,8 @@ One row per flight. Times are cumulative (new Hobbs, not delta).
 | id | uuid PK | |
 | aircraft_id | uuid FK → aft_aircraft | ON DELETE CASCADE |
 | user_id | uuid FK → auth.users | ON DELETE SET NULL |
-| pod | text | Point of departure (ICAO) |
-| poa | text | Point of arrival (ICAO) |
+| pod | text | Point of departure (ICAO). Normalized from varchar(10) to text in migration 004. |
+| poa | text | Point of arrival (ICAO). Normalized from varchar(10) to text in migration 004. |
 | hobbs | numeric | Cumulative Hobbs (piston) |
 | tach | numeric | Cumulative Tach (piston) |
 | aftt | numeric | Cumulative AFTT (turbine) |
@@ -150,7 +150,7 @@ Discrepancy reports with optional MEL/CDL deferral support and service event cro
 |--------|------|-------|
 | id | uuid PK | |
 | aircraft_id | uuid FK | ON DELETE CASCADE |
-| reported_by | uuid FK → auth.users | |
+| reported_by | uuid FK → auth.users | ON DELETE SET NULL |
 | reporter_initials | text | |
 | location | text | Airport ICAO |
 | description | text | |
@@ -179,7 +179,7 @@ Pilot-to-pilot notes with photos and read receipts.
 |--------|------|-------|
 | id | uuid PK | |
 | aircraft_id | uuid FK | ON DELETE CASCADE |
-| author_id | uuid FK → auth.users | |
+| author_id | uuid FK → auth.users | ON DELETE SET NULL |
 | author_email | text | |
 | author_initials | text | |
 | content | text | |
@@ -188,7 +188,17 @@ Pilot-to-pilot notes with photos and read receipts.
 | created_at | timestamptz | |
 
 ### aft_note_reads
-Read receipts for notes. Unique constraint on (note_id, user_id).
+Read receipts for notes. Composite PK on (note_id, user_id). Both columns have FKs: `note_id → aft_notes(id)`, `user_id → auth.users(id) ON DELETE CASCADE`.
+
+### aft_user_profiles
+User display names and email, used by admin/users listing and mechanic portal block creation.
+
+| Column | Type | Notes |
+|--------|------|-------|
+| user_id | uuid PK FK → auth.users | ON DELETE CASCADE |
+| full_name | text | Display name |
+| email | text | |
+| updated_at | timestamptz | Default now() |
 
 ### aft_user_roles
 Global role assignment. One row per user.
@@ -201,13 +211,12 @@ Global role assignment. One row per user.
 | initials | text | |
 
 ### aft_user_aircraft_access
-Per-aircraft access with role. Links users to aircraft they can see.
+Per-aircraft access with role. Links users to aircraft they can see. Composite PK on `(user_id, aircraft_id)`.
 
 | Column | Type | Notes |
 |--------|------|-------|
-| id | uuid PK | |
-| user_id | uuid FK → auth.users | ON DELETE CASCADE |
-| aircraft_id | uuid FK → aft_aircraft | ON DELETE CASCADE |
+| user_id | uuid FK → auth.users | ON DELETE CASCADE. Part of composite PK. |
+| aircraft_id | uuid FK → aft_aircraft | ON DELETE CASCADE. Part of composite PK. |
 | aircraft_role | text | "admin" or "pilot", default "pilot" |
 
 ### aft_reservations
@@ -228,13 +237,12 @@ Calendar bookings. Exclusion constraint prevents overlapping confirmed reservati
 | created_at | timestamptz | |
 
 ### aft_notification_preferences
-Per-user notification toggles.
+Per-user notification toggles. PK is the natural composite key `(user_id, notification_type)` — the surrogate UUID `id` column was removed in migration 004.
 
 | Column | Type | Notes |
 |--------|------|-------|
-| id | uuid PK | |
-| user_id | uuid FK → auth.users | ON DELETE CASCADE |
-| notification_type | text | See types below |
+| user_id | uuid FK → auth.users | ON DELETE CASCADE. Part of composite PK. |
+| notification_type | text | See types below. Part of composite PK. |
 | enabled | boolean | |
 | created_at | timestamptz | |
 
@@ -441,5 +449,6 @@ The UI (ServiceEventModal) shows checkboxes next to each pending item in the com
 | `001_mechanic_attachments.sql` | `attachments` jsonb column on `aft_event_messages`, partial index |
 | `002_roles_calendar_notifications.sql` | `aircraft_role` column, `aft_reservations` with exclusion constraint, `aft_notification_preferences`, CASCADE on `created_by`, `btree_gist` extension |
 | `003_squawk_cross_reference.sql` | `resolved_by_event_id` on `aft_squawks`, completion tracking columns on `aft_event_line_items` |
+| `004_schema_optimization.sql` | Drop redundant index, add MX due-date index, normalize pod/poa to text, create `aft_user_profiles`, add all missing FKs to `auth.users`, swap notification_preferences PK to natural key |
 
 Migrations are run manually in the Supabase SQL Editor. Storage buckets are created via the Supabase Storage UI.

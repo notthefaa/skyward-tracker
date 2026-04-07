@@ -220,8 +220,9 @@ NEXT_PUBLIC_COMPANION_URL=
 | `aft_note_reads` | Note read receipts |
 | `aft_user_roles` | Global user roles (admin/pilot) |
 | `aft_user_aircraft_access` | Per-aircraft access with aircraft_role |
+| `aft_user_profiles` | User display names and email (for admin/portal display) |
 | `aft_reservations` | Calendar bookings (exclusion constraint prevents overlaps) |
-| `aft_notification_preferences` | Per-user notification toggles |
+| `aft_notification_preferences` | Per-user notification toggles (PK: user_id + notification_type) |
 | `aft_system_settings` | Global MX reminder thresholds |
 
 **Storage Buckets:** `aft_squawk_images`, `aft_note_images`, `aft_aircraft_avatars`, `aft_event_attachments`
