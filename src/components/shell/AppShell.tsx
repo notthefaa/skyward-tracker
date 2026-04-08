@@ -76,7 +76,7 @@ export default function AppShell({ session }: AppShellProps) {
   } = useFleetData();
 
   // ─── Navigation State ───
-  const companionUrl = process.env.NEXT_PUBLIC_COMPANION_URL || "https://your-logit-app.vercel.app";
+  const companionUrl = process.env.NEXT_PUBLIC_COMPANION_URL || "https://skyward-logit.vercel.app/";
   const [activeTail, setActiveTail] = useState<string>("");
   const [activeTab, setActiveTab] = useState<AppTab>(() => {
     if (typeof window !== 'undefined') {
