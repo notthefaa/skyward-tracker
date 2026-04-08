@@ -134,16 +134,28 @@ export default function FleetSummary({
                   {ac.status === 'grounded' ? 'Grounded' : ac.status === 'issues' ? 'Issues' : 'Airworthy'}
                 </div>
               </div>
-              <div className="p-4 grid grid-cols-2 gap-4">
-                <div>
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 flex items-center gap-1 mb-1"><Clock size={12}/> Flight Time</span>
-                  <p className="text-xl font-roboto font-bold text-navy">{ac.total_airframe_time?.toFixed(1) || 0} <span className="text-xs text-gray-400">hrs</span></p>
-                </div>
-                <div>
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 flex items-center gap-1 mb-1"><Droplet size={12} className="text-blue-500"/> Fuel State</span>
-                  <p className="text-xl font-roboto font-bold text-navy">{fuelGals.toFixed(0)} <span className="text-xs text-gray-400">gal</span></p>
-                </div>
-              </div>
+              {(() => {
+                const isTurb = ac.engine_type === 'Turbine';
+                const hasAirframe = isTurb ? (ac.setup_aftt != null) : (ac.setup_hobbs != null);
+                return (
+                  <div className={`p-4 grid ${hasAirframe ? 'grid-cols-3' : 'grid-cols-2'} gap-4`}>
+                    {hasAirframe && (
+                      <div>
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 flex items-center gap-1 mb-1"><Clock size={12}/> {isTurb ? 'AFTT' : 'Hobbs'}</span>
+                        <p className="text-xl font-roboto font-bold text-navy">{ac.total_airframe_time?.toFixed(1) || 0} <span className="text-xs text-gray-400">hrs</span></p>
+                      </div>
+                    )}
+                    <div>
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 flex items-center gap-1 mb-1"><Clock size={12}/> {isTurb ? 'FTT' : 'Tach'}</span>
+                      <p className="text-xl font-roboto font-bold text-navy">{ac.total_engine_time?.toFixed(1) || 0} <span className="text-xs text-gray-400">hrs</span></p>
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 flex items-center gap-1 mb-1"><Droplet size={12} className="text-blue-500"/> Fuel State</span>
+                      <p className="text-xl font-roboto font-bold text-navy">{fuelGals.toFixed(0)} <span className="text-xs text-gray-400">gal</span></p>
+                    </div>
+                  </div>
+                );
+              })()}
               <div className="px-4 py-3 bg-gray-50 border-t border-gray-100 flex justify-between items-center text-xs">
                 <span className="font-bold text-navy truncate flex-1 flex items-center gap-2"><Wrench size={14} className="text-[#F08B46] shrink-0"/> {ac.nextMxName}</span>
                 {ac.squawkCount > 0 && <span className="font-bold text-[#CE3732] shrink-0 flex items-center gap-1 ml-2"><AlertTriangle size={14}/> {ac.squawkCount} Sqk</span>}

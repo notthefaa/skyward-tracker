@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { authFetch } from "@/lib/authFetch";
 import type { AircraftWithMetrics, Reservation, AircraftRole, AppRole } from "@/lib/types";
 import useSWR from "swr";
-import { Calendar, ChevronLeft, ChevronRight, Plus, X, Clock, MapPin, Plane, Wrench, Loader2, Users } from "lucide-react";
+import { Calendar, ChevronLeft, ChevronRight, Plus, X, Clock, MapPin, Plane, Wrench, Loader2, Users, Edit2 } from "lucide-react";
 import { PrimaryButton } from "@/components/AppButtons";
 import CalendarDashboard from "@/components/tabs/CalendarDashboard";
 import { useToast } from "@/components/ToastProvider";
@@ -33,6 +33,10 @@ export default function CalendarTab({
   const [bookingEndTime, setBookingEndTime] = useState("17:00");
   const [bookingTitle, setBookingTitle] = useState("");
   const [bookingRoute, setBookingRoute] = useState("");
+  const [bookingRepeat, setBookingRepeat] = useState<'none' | 'weekly' | 'biweekly'>('none');
+  const [bookingRepeatCount, setBookingRepeatCount] = useState(4);
+
+  const [editingReservationId, setEditingReservationId] = useState<string | null>(null);
 
   const [showMxBlockForm, setShowMxBlockForm] = useState(false);
   const [mxBlockStartDate, setMxBlockStartDate] = useState("");
@@ -108,15 +112,49 @@ export default function CalendarTab({
 
   const openBookingForm = (date?: Date) => {
     const d = date || new Date(); const dateStr = d.toISOString().split('T')[0];
-    setBookingStartDate(dateStr); setBookingEndDate(dateStr); setBookingStartTime("08:00"); setBookingEndTime("17:00"); setBookingTitle(""); setBookingRoute(""); setShowBookingForm(true);
+    setEditingReservationId(null);
+    setBookingStartDate(dateStr); setBookingEndDate(dateStr); setBookingStartTime("08:00"); setBookingEndTime("17:00"); setBookingTitle(""); setBookingRoute(""); setBookingRepeat('none'); setBookingRepeatCount(4); setShowBookingForm(true);
   };
 
-  const handleCreateReservation = async () => {
-    if (!bookingStartDate || !bookingEndDate) return showWarning("Please select dates."); setIsSubmitting(true);
+  const openEditForm = (r: Reservation) => {
+    const start = new Date(r.start_time);
+    const end = new Date(r.end_time);
+    setEditingReservationId(r.id);
+    setBookingStartDate(start.toISOString().split('T')[0]);
+    setBookingStartTime(start.toTimeString().slice(0, 5));
+    setBookingEndDate(end.toISOString().split('T')[0]);
+    setBookingEndTime(end.toTimeString().slice(0, 5));
+    setBookingTitle(r.title || "");
+    setBookingRoute(r.route || "");
+    setShowBookingForm(true);
+  };
+
+  const handleSubmitReservation = async () => {
+    if (!bookingStartDate || !bookingEndDate) return showWarning("Please select dates.");
+    setIsSubmitting(true);
     try {
-      const res = await authFetch('/api/reservations', { method: 'POST', body: JSON.stringify({ aircraftId: aircraft!.id, startTime: new Date(`${bookingStartDate}T${bookingStartTime}:00`).toISOString(), endTime: new Date(`${bookingEndDate}T${bookingEndTime}:00`).toISOString(), title: bookingTitle || null, route: bookingRoute || null }) });
-      const data = await res.json(); if (!res.ok) throw new Error(data.error || 'Failed'); await mutate(); setShowBookingForm(false); showSuccess("Reservation confirmed");
-    } catch (err: any) { showError(err.message); } setIsSubmitting(false);
+      const startTime = new Date(`${bookingStartDate}T${bookingStartTime}:00`).toISOString();
+      const endTime = new Date(`${bookingEndDate}T${bookingEndTime}:00`).toISOString();
+
+      if (editingReservationId) {
+        const res = await authFetch('/api/reservations', { method: 'PUT', body: JSON.stringify({ reservationId: editingReservationId, startTime, endTime, title: bookingTitle || null, route: bookingRoute || null }) });
+        const data = await res.json(); if (!res.ok) throw new Error(data.error || 'Failed');
+        await mutate(); setShowBookingForm(false); showSuccess("Reservation updated");
+      } else {
+        const recurrence = bookingRepeat !== 'none' ? { type: bookingRepeat, count: bookingRepeatCount } : undefined;
+        const res = await authFetch('/api/reservations', { method: 'POST', body: JSON.stringify({ aircraftId: aircraft!.id, startTime, endTime, title: bookingTitle || null, route: bookingRoute || null, recurrence }) });
+        const data = await res.json(); if (!res.ok) throw new Error(data.error || 'Failed');
+        await mutate(); setShowBookingForm(false);
+        if (data.skipped > 0) {
+          showWarning(`${data.created} of ${data.created + data.skipped} bookings created. ${data.skipped} skipped due to conflicts.`);
+        } else if (data.created > 1) {
+          showSuccess(`${data.created} recurring reservations confirmed`);
+        } else {
+          showSuccess("Reservation confirmed");
+        }
+      }
+    } catch (err: any) { showError(err.message); }
+    setIsSubmitting(false);
   };
 
   const handleCancelReservation = async (id: string) => {
@@ -169,7 +207,12 @@ export default function CalendarTab({
             {r.title && <p className="text-xs text-gray-600 mt-1.5 font-roboto">{r.title}</p>}
             {r.route && <p className="text-xs text-gray-500 mt-1 flex items-center gap-1 font-roboto"><MapPin size={11} className="text-[#56B94A] shrink-0" /> {r.route}</p>}
           </div>
-          {canManageReservation(r) && cancellingId !== r.id && <button onClick={() => setCancellingId(r.id)} className="text-gray-300 hover:text-[#CE3732] active:scale-95 shrink-0 ml-3 p-1"><X size={16} /></button>}
+          {canManageReservation(r) && cancellingId !== r.id && (
+            <div className="flex items-center gap-1 shrink-0 ml-3">
+              <button onClick={() => openEditForm(r)} className="text-gray-300 hover:text-[#3AB0FF] active:scale-95 p-1" title="Edit"><Edit2 size={14} /></button>
+              <button onClick={() => setCancellingId(r.id)} className="text-gray-300 hover:text-[#CE3732] active:scale-95 p-1" title="Cancel"><X size={16} /></button>
+            </div>
+          )}
         </div>
         {cancellingId === r.id && (
           <div className="mt-3 pt-3 border-t border-gray-200 flex gap-2 animate-fade-in">
@@ -280,7 +323,12 @@ export default function CalendarTab({
                         {r.title && <p className="text-xs text-gray-600 mt-2 font-roboto">{r.title}</p>}
                         {r.route && <p className="text-xs text-gray-500 mt-1 flex items-center gap-1 font-roboto"><MapPin size={11} className="text-[#3AB0FF] shrink-0" /> {r.route}</p>}
                       </div>
-                      {canManageReservation(r) && cancellingId !== r.id && <button onClick={() => setCancellingId(r.id)} className="text-gray-300 hover:text-[#CE3732] active:scale-95 shrink-0 ml-3 p-1"><X size={16} /></button>}
+                      {canManageReservation(r) && cancellingId !== r.id && (
+                        <div className="flex items-center gap-1 shrink-0 ml-3">
+                          <button onClick={() => openEditForm(r)} className="text-gray-300 hover:text-[#3AB0FF] active:scale-95 p-1" title="Edit"><Edit2 size={14} /></button>
+                          <button onClick={() => setCancellingId(r.id)} className="text-gray-300 hover:text-[#CE3732] active:scale-95 p-1" title="Cancel"><X size={16} /></button>
+                        </div>
+                      )}
                     </div>
                     {cancellingId === r.id && (<div className="mt-3 pt-3 border-t border-sky-200 flex gap-2 animate-fade-in"><button onClick={() => setCancellingId(null)} className="flex-1 border border-gray-300 text-gray-600 font-oswald font-bold py-2 rounded text-[10px] uppercase tracking-widest active:scale-95">Keep</button><button onClick={() => handleCancelReservation(r.id)} disabled={isSubmitting} className="flex-1 bg-[#CE3732] text-white font-oswald font-bold py-2 rounded text-[10px] uppercase tracking-widest active:scale-95 disabled:opacity-50">{isSubmitting ? "..." : "Cancel Booking"}</button></div>)}
                   </div>
@@ -303,7 +351,7 @@ export default function CalendarTab({
         <div className="fixed inset-0 bg-black/60 z-[10000] flex items-center justify-center p-4 animate-fade-in" onClick={() => setShowBookingForm(false)}>
           <div className="bg-white rounded shadow-2xl w-full max-w-sm p-5 border-t-4 border-[#56B94A] max-h-[85vh] overflow-y-auto animate-slide-up" onClick={e => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-5">
-              <h2 className="font-oswald text-xl font-bold uppercase text-navy flex items-center gap-2"><Calendar size={18} className="text-[#56B94A]" /> Reserve Aircraft</h2>
+              <h2 className="font-oswald text-xl font-bold uppercase text-navy flex items-center gap-2"><Calendar size={18} className="text-[#56B94A]" /> {editingReservationId ? 'Edit Reservation' : 'Reserve Aircraft'}</h2>
               <button onClick={() => setShowBookingForm(false)} className="text-gray-400 hover:text-red-500"><X size={22} /></button>
             </div>
             <div className="space-y-4">
@@ -329,7 +377,28 @@ export default function CalendarTab({
                 <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Route of Flight (Optional)</label>
                 <input type="text" value={bookingRoute} onChange={e => setBookingRoute(e.target.value)} style={wb} className="w-full border border-gray-300 rounded p-2.5 text-sm mt-1 focus:border-[#56B94A] outline-none uppercase" placeholder="KDAL → KAUS → KDAL" />
               </div>
-              <div className="pt-2"><button onClick={handleCreateReservation} disabled={isSubmitting} className="w-full bg-[#56B94A] text-white font-oswald tracking-widest uppercase py-3 px-4 rounded hover:bg-opacity-90 active:scale-95 transition-all text-sm disabled:opacity-50">{isSubmitting ? <><Loader2 size={16} className="animate-spin" /> Booking...</> : "Confirm Reservation"}</button></div>
+              {!editingReservationId && (
+                <div className="border-t border-gray-100 pt-4">
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Repeat</label>
+                  <div className="flex gap-1.5 mt-1.5">
+                    {([['none', 'None'], ['weekly', 'Weekly'], ['biweekly', 'Biweekly']] as const).map(([val, label]) => (
+                      <button key={val} type="button" onClick={() => setBookingRepeat(val)}
+                        className={`text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded transition-colors active:scale-95 ${bookingRepeat === val ? 'bg-[#56B94A] text-white shadow-sm' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
+                      >{label}</button>
+                    ))}
+                  </div>
+                  {bookingRepeat !== 'none' && (
+                    <div className="mt-3 flex items-center gap-2 animate-fade-in">
+                      <label className="text-[10px] font-bold uppercase tracking-widest text-gray-500 shrink-0">For</label>
+                      <select value={bookingRepeatCount} onChange={e => setBookingRepeatCount(parseInt(e.target.value))} className="border border-gray-300 rounded px-2.5 py-1.5 text-sm bg-white focus:border-[#56B94A] outline-none">
+                        {[2, 3, 4, 5, 6, 7, 8, 10, 12].map(n => <option key={n} value={n}>{n}</option>)}
+                      </select>
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500">{bookingRepeat === 'biweekly' ? 'occurrences (every 2 weeks)' : 'weeks'}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+              <div className="pt-2"><button onClick={handleSubmitReservation} disabled={isSubmitting} className="w-full bg-[#56B94A] text-white font-oswald tracking-widest uppercase py-3 px-4 rounded hover:bg-opacity-90 active:scale-95 transition-all text-sm disabled:opacity-50">{isSubmitting ? <><Loader2 size={16} className="animate-spin" /> {editingReservationId ? 'Updating...' : 'Booking...'}</> : editingReservationId ? "Update Reservation" : "Confirm Reservation"}</button></div>
             </div>
           </div>
         </div>
