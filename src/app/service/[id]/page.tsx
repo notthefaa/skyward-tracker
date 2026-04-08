@@ -272,7 +272,9 @@ export default function ServicePortal() {
                   </button>
                 </div>
                 <span className="font-roboto font-bold text-navy">
-                  {aircraft.engine_type === 'Turbine' ? `AFTT: ${aircraft.total_airframe_time?.toFixed(1)} | FTT: ${aircraft.total_engine_time?.toFixed(1)}` : `Hobbs: ${aircraft.total_airframe_time?.toFixed(1)} | Tach: ${aircraft.total_engine_time?.toFixed(1)}`}
+                  {aircraft.engine_type === 'Turbine'
+                    ? (aircraft.setup_aftt != null ? `AFTT: ${aircraft.total_airframe_time?.toFixed(1)} | ` : '') + `FTT: ${aircraft.total_engine_time?.toFixed(1)}`
+                    : (aircraft.setup_hobbs != null ? `Hobbs: ${aircraft.total_airframe_time?.toFixed(1)} | ` : '') + `Tach: ${aircraft.total_engine_time?.toFixed(1)}`}
                 </span>
                 {lastRefreshed && (
                   <span className="block text-[9px] font-bold uppercase tracking-widest text-gray-400 mt-1">

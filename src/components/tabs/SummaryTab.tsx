@@ -207,6 +207,7 @@ export default function SummaryTab({
   if (!aircraft) return null;
 
   const isTurbine = aircraft.engine_type === 'Turbine';
+  const hasAirframeMeter = isTurbine ? (aircraft.setup_aftt != null) : (aircraft.setup_hobbs != null);
   const weightPerGal = getFuelWeightPerGallon(aircraft.engine_type);
   const fuelGals = aircraft.current_fuel_gallons || 0;
   const fuelLbs = Math.round(fuelGals * weightPerGal);
@@ -367,8 +368,10 @@ export default function SummaryTab({
           <div className="flex flex-col gap-1"><div className="flex items-center gap-2"><Clock size={20} className={statusIconColor} /><h3 className="font-oswald text-xl font-bold uppercase text-navy m-0 leading-none">Flight Times</h3></div>{lastFlownLabel && <span className="text-[9px] font-bold uppercase tracking-widest text-gray-400 mt-1">Last Flown: {lastFlownLabel}</span>}</div>
           <span className="text-[10px] font-bold uppercase tracking-widest bg-gray-100 px-2 py-1 rounded text-gray-600">{isTurbine ? 'TURBINE' : 'PISTON'}</span>
         </div>
-        <div className="grid grid-cols-2 gap-4">
-          <div><span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 block mb-1">{isTurbine ? "Total Airframe" : "Current Hobbs"}</span><p className="text-3xl font-roboto font-bold text-navy">{aircraft.total_airframe_time?.toFixed(1) || 0} <span className="text-sm text-gray-400">hrs</span></p></div>
+        <div className={`grid ${hasAirframeMeter ? 'grid-cols-2' : 'grid-cols-1'} gap-4`}>
+          {hasAirframeMeter && (
+            <div><span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 block mb-1">{isTurbine ? "Total Airframe" : "Current Hobbs"}</span><p className="text-3xl font-roboto font-bold text-navy">{aircraft.total_airframe_time?.toFixed(1) || 0} <span className="text-sm text-gray-400">hrs</span></p></div>
+          )}
           <div><span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 block mb-1">{isTurbine ? "Total Flight" : "Current Tach"}</span><p className="text-3xl font-roboto font-bold text-navy">{aircraft.total_engine_time?.toFixed(1) || 0} <span className="text-sm text-gray-400">hrs</span></p></div>
         </div>
       </div>

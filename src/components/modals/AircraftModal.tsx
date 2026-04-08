@@ -55,11 +55,11 @@ export default function AircraftModal({
       setNewType(existingAircraft.engine_type); 
 
       if (existingAircraft.engine_type === 'Turbine') {
-        setNewAirframeTime(existingAircraft.setup_aftt !== null && existingAircraft.setup_aftt !== undefined ? String(existingAircraft.setup_aftt) : String(existingAircraft.total_airframe_time || ""));
-        setNewEngineTime(existingAircraft.setup_ftt !== null && existingAircraft.setup_ftt !== undefined ? String(existingAircraft.setup_ftt) : String(existingAircraft.total_engine_time || ""));
+        setNewAirframeTime(existingAircraft.setup_aftt != null ? String(existingAircraft.setup_aftt) : "");
+        setNewEngineTime(existingAircraft.setup_ftt != null ? String(existingAircraft.setup_ftt) : String(existingAircraft.total_engine_time || ""));
       } else {
-        setNewAirframeTime(existingAircraft.setup_hobbs !== null && existingAircraft.setup_hobbs !== undefined ? String(existingAircraft.setup_hobbs) : String(existingAircraft.total_airframe_time || ""));
-        setNewEngineTime(existingAircraft.setup_tach !== null && existingAircraft.setup_tach !== undefined ? String(existingAircraft.setup_tach) : String(existingAircraft.total_engine_time || ""));
+        setNewAirframeTime(existingAircraft.setup_hobbs != null ? String(existingAircraft.setup_hobbs) : "");
+        setNewEngineTime(existingAircraft.setup_tach != null ? String(existingAircraft.setup_tach) : String(existingAircraft.total_engine_time || ""));
       }
 
       setNewHomeAirport(existingAircraft.home_airport || ""); 
@@ -169,14 +169,14 @@ export default function AircraftModal({
     };
     
     if (existingAircraft) {
-      const newSetupAirframe = parseFloat(newAirframeTime) || 0;
+      const newSetupAirframe = newAirframeTime !== '' ? parseFloat(newAirframeTime) : null;
       const newSetupEngine = parseFloat(newEngineTime) || 0;
 
       Object.assign(basePayload, {
-        setup_aftt: newType === 'Turbine' ? newSetupAirframe : 0,
-        setup_ftt: newType === 'Turbine' ? newSetupEngine : 0,
-        setup_hobbs: newType === 'Piston' ? newSetupAirframe : 0,
-        setup_tach: newType === 'Piston' ? newSetupEngine : 0,
+        setup_aftt: newType === 'Turbine' ? newSetupAirframe : null,
+        setup_ftt: newType === 'Turbine' ? newSetupEngine : null,
+        setup_hobbs: newType === 'Piston' ? newSetupAirframe : null,
+        setup_tach: newType === 'Piston' ? newSetupEngine : null,
       });
 
       if (hasFlightLogs) {
@@ -192,16 +192,21 @@ export default function AircraftModal({
         if (latestLog && latestLog.length > 0) {
           const log = latestLog[0] as any;
           if (newType === 'Turbine') {
-            basePayload.total_airframe_time = log.aftt || existingAircraft.total_airframe_time || 0;
-            basePayload.total_engine_time = log.ftt || existingAircraft.total_engine_time || 0;
+            basePayload.total_airframe_time = newSetupAirframe != null
+              ? (log.aftt != null ? log.aftt : newSetupAirframe)
+              : (log.ftt ?? existingAircraft.total_engine_time ?? 0);
+            basePayload.total_engine_time = log.ftt ?? existingAircraft.total_engine_time ?? 0;
           } else {
-            basePayload.total_airframe_time = log.hobbs || existingAircraft.total_airframe_time || 0;
-            basePayload.total_engine_time = log.tach || existingAircraft.total_engine_time || 0;
+            basePayload.total_airframe_time = newSetupAirframe != null
+              ? (log.hobbs != null ? log.hobbs : newSetupAirframe)
+              : (log.tach ?? existingAircraft.total_engine_time ?? 0);
+            basePayload.total_engine_time = log.tach ?? existingAircraft.total_engine_time ?? 0;
           }
         }
       } else {
         // No flight logs — setup values are the starting point, so totals = setup.
-        basePayload.total_airframe_time = newSetupAirframe;
+        // If no airframe meter, airframe time tracks the engine time.
+        basePayload.total_airframe_time = newSetupAirframe != null ? newSetupAirframe : newSetupEngine;
         basePayload.total_engine_time = newSetupEngine;
       }
 
@@ -213,13 +218,16 @@ export default function AircraftModal({
         return;
       }
     } else {
+      const setupAirframe = newAirframeTime !== '' ? parseFloat(newAirframeTime) : null;
+      const setupEngine = parseFloat(newEngineTime) || 0;
+
       Object.assign(basePayload, {
-        total_airframe_time: parseFloat(newAirframeTime) || 0,
-        total_engine_time: parseFloat(newEngineTime) || 0,
-        setup_aftt: newType === 'Turbine' ? (parseFloat(newAirframeTime) || 0) : 0,
-        setup_ftt: newType === 'Turbine' ? (parseFloat(newEngineTime) || 0) : 0,
-        setup_hobbs: newType === 'Piston' ? (parseFloat(newAirframeTime) || 0) : 0,
-        setup_tach: newType === 'Piston' ? (parseFloat(newEngineTime) || 0) : 0,
+        total_airframe_time: setupAirframe != null ? setupAirframe : setupEngine,
+        total_engine_time: setupEngine,
+        setup_aftt: newType === 'Turbine' ? setupAirframe : null,
+        setup_ftt: newType === 'Turbine' ? setupEngine : null,
+        setup_hobbs: newType === 'Piston' ? setupAirframe : null,
+        setup_tach: newType === 'Piston' ? setupEngine : null,
         created_by: session.user.id
       });
 
@@ -245,6 +253,11 @@ export default function AircraftModal({
 
   const isEditing = !!existingAircraft;
   const timeFieldsLocked = isEditing && hasFlightLogs;
+  const airframeMeterMissing = isEditing && existingAircraft != null && (
+    newType === 'Turbine'
+      ? (existingAircraft.setup_aftt == null)
+      : (existingAircraft.setup_hobbs == null)
+  );
 
   return (
     <div className="fixed inset-0 bg-black/60 z-[10000] flex items-center justify-center p-4 animate-fade-in">
@@ -348,31 +361,31 @@ export default function AircraftModal({
           <div className="grid grid-cols-2 gap-4 border-t border-gray-200 pt-4 mt-2">
             <div>
               <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">
-                {timeFieldsLocked ? 'Setup' : 'Current'} {newType === 'Turbine' ? 'AFTT' : 'Hobbs'} *
+                {timeFieldsLocked && !airframeMeterMissing ? 'Setup' : 'Current'} {newType === 'Turbine' ? 'AFTT' : 'Hobbs'} (Opt)
               </label>
-              <input 
-                type="number" 
-                step="0.1" 
-                required={!timeFieldsLocked} 
-                value={newAirframeTime} 
-                onChange={e => setNewAirframeTime(e.target.value)} 
-                disabled={timeFieldsLocked}
-                style={INPUT_WHITE_BG} 
-                className={`w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none ${timeFieldsLocked ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''}`}
+              <input
+                type="number"
+                step="0.1"
+                value={newAirframeTime}
+                onChange={e => setNewAirframeTime(e.target.value)}
+                disabled={timeFieldsLocked && !airframeMeterMissing}
+                style={INPUT_WHITE_BG}
+                className={`w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none ${timeFieldsLocked && !airframeMeterMissing ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''}`}
+                placeholder={airframeMeterMissing ? `No ${newType === 'Turbine' ? 'AFTT' : 'Hobbs'} meter — leave blank or add one` : ''}
               />
             </div>
             <div>
               <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">
                 {timeFieldsLocked ? 'Setup' : 'Current'} {newType === 'Turbine' ? 'FTT' : 'Tach'} *
               </label>
-              <input 
-                type="number" 
-                step="0.1" 
-                required={!timeFieldsLocked} 
-                value={newEngineTime} 
-                onChange={e => setNewEngineTime(e.target.value)} 
+              <input
+                type="number"
+                step="0.1"
+                required={!timeFieldsLocked}
+                value={newEngineTime}
+                onChange={e => setNewEngineTime(e.target.value)}
                 disabled={timeFieldsLocked}
-                style={INPUT_WHITE_BG} 
+                style={INPUT_WHITE_BG}
                 className={`w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none ${timeFieldsLocked ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''}`}
               />
             </div>
@@ -380,9 +393,9 @@ export default function AircraftModal({
               <div className="col-span-2 flex items-start gap-2 bg-blue-50 border border-blue-200 rounded p-3">
                 <Info size={16} className="text-[#3AB0FF] shrink-0 mt-0.5" />
                 <p className="text-[10px] text-gray-600 leading-tight">
-                  Current times are driven by flight logs and cannot be edited here. 
-                  The setup values above are preserved as your initial baseline. 
-                  To correct current times, edit or delete the latest flight log from the Times tab.
+                  {airframeMeterMissing
+                    ? `This aircraft has no ${newType === 'Turbine' ? 'AFTT' : 'Hobbs'} meter. You can add one by entering the current reading above — flight logs will use it going forward.`
+                    : 'Current times are driven by flight logs and cannot be edited here. The setup values above are preserved as your initial baseline. To correct current times, edit or delete the latest flight log from the Times tab.'}
                 </p>
               </div>
             )}

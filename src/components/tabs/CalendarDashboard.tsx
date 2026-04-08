@@ -103,17 +103,28 @@ export default function CalendarDashboard({ aircraft, session }: CalendarDashboa
   const { data: flightHours } = useSWR(
     aircraft ? `cal-hours-${aircraft.id}-${hoursRange.from.getTime()}-${hoursRange.to.getTime()}` : null,
     async () => {
-      const { data: baseline } = await supabase.from('aft_flight_logs').select('aftt, hobbs, tach').eq('aircraft_id', aircraft.id).lt('created_at', hoursRange.from.toISOString()).order('created_at', { ascending: false }).limit(1);
-      const { data: current } = await supabase.from('aft_flight_logs').select('aftt, hobbs, tach').eq('aircraft_id', aircraft.id).lte('created_at', hoursRange.to.toISOString()).order('created_at', { ascending: false }).limit(1);
+      const { data: baseline } = await supabase.from('aft_flight_logs').select('aftt, ftt, hobbs, tach').eq('aircraft_id', aircraft.id).lt('created_at', hoursRange.from.toISOString()).order('created_at', { ascending: false }).limit(1);
+      const { data: current } = await supabase.from('aft_flight_logs').select('aftt, ftt, hobbs, tach').eq('aircraft_id', aircraft.id).lte('created_at', hoursRange.to.toISOString()).order('created_at', { ascending: false }).limit(1);
       if (!current || current.length === 0) return 0;
       const endLog = current[0] as any;
-      const endVal = isTurbine ? (endLog.aftt || 0) : (endLog.hobbs || endLog.tach || 0);
+      // Pick a consistent metric for both endpoints — only use hobbs/aftt
+      // if BOTH the start and end logs have it, otherwise fall back to tach/ftt.
+      let startLog = (baseline && baseline.length > 0) ? baseline[0] as any : null;
+      const canUseAftt = endLog.aftt && (startLog ? startLog.aftt : (aircraft.setup_aftt != null));
+      const canUseHobbs = endLog.hobbs && (startLog ? startLog.hobbs : (aircraft.setup_hobbs != null));
+
+      const endVal = isTurbine
+        ? (canUseAftt ? endLog.aftt : (endLog.ftt || 0))
+        : (canUseHobbs ? endLog.hobbs : (endLog.tach || 0));
       let startVal = 0;
-      if (baseline && baseline.length > 0) {
-        const startLog = baseline[0] as any;
-        startVal = isTurbine ? (startLog.aftt || 0) : (startLog.hobbs || startLog.tach || 0);
+      if (startLog) {
+        startVal = isTurbine
+          ? (canUseAftt ? (startLog.aftt || 0) : (startLog.ftt || 0))
+          : (canUseHobbs ? (startLog.hobbs || 0) : (startLog.tach || 0));
       } else {
-        startVal = isTurbine ? (aircraft.setup_aftt || 0) : (aircraft.setup_hobbs || aircraft.setup_tach || 0);
+        startVal = isTurbine
+          ? (canUseAftt ? (aircraft.setup_aftt || 0) : (aircraft.setup_ftt ?? 0))
+          : (canUseHobbs ? (aircraft.setup_hobbs || 0) : (aircraft.setup_tach ?? 0));
       }
       return Math.max(0, endVal - startVal);
     }

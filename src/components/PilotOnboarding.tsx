@@ -94,16 +94,20 @@ export default function PilotOnboarding({
       }
     }
 
-    const payload = { 
-      tail_number: newTail.toUpperCase(), serial_number: newSerial, aircraft_type: newModel, engine_type: newType, 
-      total_airframe_time: parseFloat(newAirframeTime) || 0, total_engine_time: parseFloat(newEngineTime) || 0, 
-      setup_aftt: newType === 'Turbine' ? (parseFloat(newAirframeTime) || 0) : 0,
-      setup_ftt: newType === 'Turbine' ? (parseFloat(newEngineTime) || 0) : 0,
-      setup_hobbs: newType === 'Piston' ? (parseFloat(newAirframeTime) || 0) : 0,
-      setup_tach: newType === 'Piston' ? (parseFloat(newEngineTime) || 0) : 0,
-      home_airport: newHomeAirport, main_contact: newMainContact, 
-      main_contact_phone: newMainContactPhone, main_contact_email: newMainContactEmail, 
-      mx_contact: newMxContact, mx_contact_phone: newMxContactPhone, mx_contact_email: newMxContactEmail, 
+    const setupAirframe = newAirframeTime !== '' ? parseFloat(newAirframeTime) : null;
+    const setupEngine = parseFloat(newEngineTime) || 0;
+
+    const payload = {
+      tail_number: newTail.toUpperCase(), serial_number: newSerial, aircraft_type: newModel, engine_type: newType,
+      total_airframe_time: setupAirframe != null ? setupAirframe : setupEngine,
+      total_engine_time: setupEngine,
+      setup_aftt: newType === 'Turbine' ? setupAirframe : null,
+      setup_ftt: newType === 'Turbine' ? setupEngine : null,
+      setup_hobbs: newType === 'Piston' ? setupAirframe : null,
+      setup_tach: newType === 'Piston' ? setupEngine : null,
+      home_airport: newHomeAirport, main_contact: newMainContact,
+      main_contact_phone: newMainContactPhone, main_contact_email: newMainContactEmail,
+      mx_contact: newMxContact, mx_contact_phone: newMxContactPhone, mx_contact_email: newMxContactEmail,
       avatar_url: avatarUrl, created_by: session.user.id
     };
 
@@ -173,7 +177,7 @@ export default function PilotOnboarding({
               <div><label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">MX Email</label><input type="email" value={newMxContactEmail} onChange={e => setNewMxContactEmail(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none bg-white" /></div>
             </div>
             <div className="grid grid-cols-2 gap-4 border-t border-gray-200 pt-4 mt-2">
-              <div><label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">Current {newType === 'Turbine' ? 'AFTT' : 'Hobbs'} *</label><input type="number" step="0.1" required value={newAirframeTime} onChange={e => setNewAirframeTime(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none bg-white" /></div>
+              <div><label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">Current {newType === 'Turbine' ? 'AFTT' : 'Hobbs'} (Opt)</label><input type="number" step="0.1" value={newAirframeTime} onChange={e => setNewAirframeTime(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none bg-white" placeholder={`Leave blank if no ${newType === 'Turbine' ? 'AFTT' : 'Hobbs'} meter`} /></div>
               <div><label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">Current {newType === 'Turbine' ? 'FTT' : 'Tach'} *</label><input type="number" step="0.1" required value={newEngineTime} onChange={e => setNewEngineTime(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none bg-white" /></div>
             </div>
             <div className="pt-4"><PrimaryButton disabled={isSubmitting}>{isSubmitting ? "Creating..." : "Create Aircraft & Enter Portal"}</PrimaryButton></div>

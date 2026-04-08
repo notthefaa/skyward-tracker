@@ -68,6 +68,9 @@ export default function TimesTab({
   const [logFuelUnit, setLogFuelUnit] = useState<'gallons' | 'lbs'>('gallons');
 
   const isTurbine = aircraft?.engine_type === 'Turbine';
+  const hasAirframeMeter = isTurbine
+    ? (aircraft?.setup_aftt != null)
+    : (aircraft?.setup_hobbs != null);
 
   const openLogForm = (log: any = null) => {
     if (log) {
@@ -110,11 +113,23 @@ export default function TimesTab({
 
     const updateData: Record<string, any> = {};
     if (isTurbine) {
-      updateData.total_airframe_time = previousLog ? previousLog.aftt : (aircraft!.setup_aftt || 0);
       updateData.total_engine_time = previousLog ? previousLog.ftt : (aircraft!.setup_ftt || 0);
+      if (hasAirframeMeter) {
+        updateData.total_airframe_time = previousLog
+          ? (previousLog.aftt != null ? previousLog.aftt : previousLog.ftt)
+          : (aircraft!.setup_aftt ?? 0);
+      } else {
+        updateData.total_airframe_time = updateData.total_engine_time;
+      }
     } else {
       updateData.total_engine_time = previousLog ? previousLog.tach : (aircraft!.setup_tach || 0);
-      updateData.total_airframe_time = previousLog && previousLog.hobbs ? previousLog.hobbs : (aircraft!.setup_hobbs || aircraft!.total_airframe_time || 0);
+      if (hasAirframeMeter) {
+        updateData.total_airframe_time = previousLog && previousLog.hobbs != null
+          ? previousLog.hobbs
+          : (aircraft!.setup_hobbs ?? updateData.total_engine_time);
+      } else {
+        updateData.total_airframe_time = updateData.total_engine_time;
+      }
     }
     
     updateData.current_fuel_gallons = previousLog && previousLog.fuel_gallons !== null ? previousLog.fuel_gallons : 0;
@@ -144,7 +159,9 @@ export default function TimesTab({
       showWarning("No logs to export."); setIsExporting(false); return;
     }
 
-    const headers = ['Date', 'POD', 'POA', 'Initials', 'FLT', isTurbine ? 'AFTT' : 'Hobbs', isTurbine ? 'FTT' : 'Tach', 'LDG'];
+    const headers = ['Date', 'POD', 'POA', 'Initials', 'FLT'];
+    if (hasAirframeMeter) headers.push(isTurbine ? 'AFTT' : 'Hobbs');
+    headers.push(isTurbine ? 'FTT' : 'Tach', 'LDG');
     if (isTurbine) headers.push('Engine Cycles');
     headers.push('Fuel (Gal)', 'Reason', 'Passengers');
 
@@ -152,20 +169,23 @@ export default function TimesTab({
     const rowsWithMath = exportData.map((log: any, index: number) => {
       const prevLog = exportData[index + 1];
       let fltTime = "-";
-      const prevAftt = prevLog ? (prevLog.aftt || 0) : (aircraft!.setup_aftt || 0);
-      const prevHobbs = prevLog ? (prevLog.hobbs || 0) : (aircraft!.setup_hobbs || 0);
+      const prevFtt = prevLog ? (prevLog.ftt || 0) : (aircraft!.setup_ftt || 0);
       const prevTach = prevLog ? (prevLog.tach || 0) : (aircraft!.setup_tach || 0);
-      const diff = isTurbine 
-        ? ((log.aftt || 0) - prevAftt) 
-        : (log.hobbs ? ((log.hobbs || 0) - prevHobbs) : ((log.tach || 0) - prevTach));
+      const canUseAftt = log.aftt && (prevLog ? prevLog.aftt : (aircraft!.setup_aftt != null));
+      const canUseHobbs = log.hobbs && (prevLog ? prevLog.hobbs : (aircraft!.setup_hobbs != null));
+      const prevAftt = canUseAftt ? (prevLog ? prevLog.aftt : (aircraft!.setup_aftt || 0)) : 0;
+      const prevHobbs = canUseHobbs ? (prevLog ? prevLog.hobbs : (aircraft!.setup_hobbs || 0)) : 0;
+      const diff = isTurbine
+        ? (canUseAftt ? ((log.aftt || 0) - prevAftt) : ((log.ftt || 0) - prevFtt))
+        : (canUseHobbs ? ((log.hobbs || 0) - prevHobbs) : ((log.tach || 0) - prevTach));
       fltTime = Math.max(0, diff).toFixed(1);
 
       const row = [
         new Date(log.created_at).toLocaleDateString('en-US', { year: '2-digit', month: 'numeric', day: 'numeric' }),
-        log.pod || '-', log.poa || '-', log.initials, fltTime, 
-        isTurbine ? (log.aftt || '') : (log.hobbs || ''), 
-        isTurbine ? (log.ftt || '') : (log.tach || ''), log.landings
+        log.pod || '-', log.poa || '-', log.initials, fltTime
       ];
+      if (hasAirframeMeter) row.push(isTurbine ? (log.aftt || '') : (log.hobbs || ''));
+      row.push(isTurbine ? (log.ftt || '') : (log.tach || ''), log.landings);
       if (isTurbine) row.push(log.engine_cycles);
       row.push(log.fuel_gallons || '-', log.trip_reason || 'N/A', `"${(log.pax_info || '').replace(/"/g, '""')}"`);
       return row.join(',');
@@ -183,7 +203,7 @@ export default function TimesTab({
     
     if (!editingId) {
       if (isTurbine) {
-        if (parseFloat(logAftt) < (aircraft!.total_airframe_time || 0)) return showError(`New AFTT (${logAftt}) cannot be less than current AFTT (${aircraft!.total_airframe_time || 0}).`);
+        if (logAftt && parseFloat(logAftt) < (aircraft!.total_airframe_time || 0)) return showError(`New AFTT (${logAftt}) cannot be less than current AFTT (${aircraft!.total_airframe_time || 0}).`);
         if (parseFloat(logFtt) < (aircraft!.total_engine_time || 0)) return showError(`New FTT (${logFtt}) cannot be less than current FTT (${aircraft!.total_engine_time || 0}).`);
       } else {
         if (parseFloat(logTach) < (aircraft!.total_engine_time || 0)) return showError(`New Tach (${logTach}) cannot be less than current Tach (${aircraft!.total_engine_time || 0}).`);
@@ -210,11 +230,23 @@ export default function TimesTab({
     const aircraftUpdate: Record<string, any> = {};
 
     if (isTurbine) {
-      payload.aftt = parseFloat(logAftt); payload.ftt = parseFloat(logFtt);
-      aircraftUpdate.total_airframe_time = parseFloat(logAftt); aircraftUpdate.total_engine_time = parseFloat(logFtt);
+      payload.ftt = parseFloat(logFtt);
+      aircraftUpdate.total_engine_time = parseFloat(logFtt);
+      if (logAftt) {
+        payload.aftt = parseFloat(logAftt);
+        aircraftUpdate.total_airframe_time = parseFloat(logAftt);
+      } else {
+        aircraftUpdate.total_airframe_time = parseFloat(logFtt);
+      }
     } else {
-      payload.tach = parseFloat(logTach); aircraftUpdate.total_engine_time = parseFloat(logTach);
-      if (logHobbs) { payload.hobbs = parseFloat(logHobbs); aircraftUpdate.total_airframe_time = parseFloat(logHobbs); }
+      payload.tach = parseFloat(logTach);
+      aircraftUpdate.total_engine_time = parseFloat(logTach);
+      if (logHobbs) {
+        payload.hobbs = parseFloat(logHobbs);
+        aircraftUpdate.total_airframe_time = parseFloat(logHobbs);
+      } else {
+        aircraftUpdate.total_airframe_time = parseFloat(logTach);
+      }
     }
 
     if (fuelGallons !== null) {
@@ -245,15 +277,20 @@ export default function TimesTab({
     const prevLog = flightLogs[index + 1];
     let fltTime = "-";
     if (prevLog || !hasMoreLogs) {
-      const prevAftt = prevLog ? (prevLog.aftt || 0) : (aircraft.setup_aftt || 0);
-      const prevHobbs = prevLog ? (prevLog.hobbs || 0) : (aircraft.setup_hobbs || 0);
+      const prevFtt = prevLog ? (prevLog.ftt || 0) : (aircraft.setup_ftt || 0);
       const prevTach = prevLog ? (prevLog.tach || 0) : (aircraft.setup_tach || 0);
-      const diff = isTurbine 
-        ? ((log.aftt || 0) - prevAftt) 
-        : (log.hobbs ? ((log.hobbs || 0) - prevHobbs) : ((log.tach || 0) - prevTach));
+      // Only use hobbs/aftt when BOTH current and previous have the value,
+      // otherwise the delta would be against 0 (producing the full reading, not a flight delta).
+      const canUseAftt = log.aftt && (prevLog ? prevLog.aftt : (aircraft.setup_aftt != null));
+      const canUseHobbs = log.hobbs && (prevLog ? prevLog.hobbs : (aircraft.setup_hobbs != null));
+      const prevAftt = canUseAftt ? (prevLog ? prevLog.aftt : (aircraft.setup_aftt || 0)) : 0;
+      const prevHobbs = canUseHobbs ? (prevLog ? prevLog.hobbs : (aircraft.setup_hobbs || 0)) : 0;
+      const diff = isTurbine
+        ? (canUseAftt ? ((log.aftt || 0) - prevAftt) : ((log.ftt || 0) - prevFtt))
+        : (canUseHobbs ? ((log.hobbs || 0) - prevHobbs) : ((log.tach || 0) - prevTach));
       fltTime = Math.max(0, diff).toFixed(1);
     }
-    return { ...log, fltTime }; 
+    return { ...log, fltTime };
   });
 
   const displayLogsReversed = [...logsWithMath].reverse();
@@ -282,7 +319,7 @@ export default function TimesTab({
                 <th className="pb-2 pr-4">DATE</th>
                 <th className="pb-2 pr-4">PIC</th>
                 <th className="pb-2 pr-4">FLT</th>
-                <th className="pb-2 pr-4">{isTurbine ? 'AFTT' : 'Hobbs'}</th>
+                {hasAirframeMeter && <th className="pb-2 pr-4">{isTurbine ? 'AFTT' : 'Hobbs'}</th>}
                 <th className="pb-2 pr-4">{isTurbine ? 'FTT' : 'Tach'}</th>
                 <th className="pb-2 pr-4">LDG</th>
                 {isTurbine && <th className="pb-2 pr-4">Cyc</th>}
@@ -301,7 +338,7 @@ export default function TimesTab({
                       <button onClick={() => setViewRouting({ pod: log.pod, poa: log.poa })} className="underline active:scale-95 transition-transform" title="View Routing">{log.fltTime}</button>
                     ) : <span>{log.fltTime}</span>}
                   </td>
-                  <td className="py-3 pr-4">{isTurbine ? log.aftt?.toFixed(1) : log.hobbs?.toFixed(1) || '-'}</td>
+                  {hasAirframeMeter && <td className="py-3 pr-4">{isTurbine ? (log.aftt?.toFixed(1) || '-') : (log.hobbs?.toFixed(1) || '-')}</td>}
                   <td className="py-3 pr-4">{isTurbine ? log.ftt?.toFixed(1) : log.tach?.toFixed(1)}</td>
                   <td className="py-3 pr-4">{log.landings}</td>
                   {isTurbine && <td className="py-3 pr-4">{log.engine_cycles}</td>}
@@ -388,13 +425,15 @@ export default function TimesTab({
                 <div><label className="block text-[10px] font-bold uppercase tracking-widest text-navy mb-1">POA (Arrive)</label><input type="text" style={whiteBg} maxLength={4} value={logPoa} onChange={e=>setLogPoa(e.target.value.toUpperCase())} className="w-full border border-gray-300 rounded p-3 text-sm uppercase focus:border-[#3AB0FF] outline-none bg-white text-center font-bold" placeholder="ICAO" /></div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className={`grid ${hasAirframeMeter ? 'grid-cols-2' : 'grid-cols-1'} gap-4`}>
                 {isTurbine ? (
                   <>
-                    <div>
-                      <div className="flex justify-between items-center mb-1"><label className="text-[10px] font-bold uppercase tracking-widest text-navy">AFTT *</label><span className="text-[9px] font-bold uppercase text-gray-400">Last: {aircraft?.total_airframe_time?.toFixed(1) || 0}</span></div>
-                      <input type="number" style={whiteBg} step="0.1" required value={logAftt} onChange={e=>setLogAftt(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-[#3AB0FF] outline-none bg-white" />
-                    </div>
+                    {hasAirframeMeter && (
+                      <div>
+                        <div className="flex justify-between items-center mb-1"><label className="text-[10px] font-bold uppercase tracking-widest text-navy">AFTT (Opt)</label><span className="text-[9px] font-bold uppercase text-gray-400">Last: {aircraft?.total_airframe_time?.toFixed(1) || 0}</span></div>
+                        <input type="number" style={whiteBg} step="0.1" value={logAftt} onChange={e=>setLogAftt(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-[#3AB0FF] outline-none bg-white" />
+                      </div>
+                    )}
                     <div>
                       <div className="flex justify-between items-center mb-1"><label className="text-[10px] font-bold uppercase tracking-widest text-navy">FTT *</label><span className="text-[9px] font-bold uppercase text-gray-400">Last: {aircraft?.total_engine_time?.toFixed(1) || 0}</span></div>
                       <input type="number" style={whiteBg} step="0.1" required value={logFtt} onChange={e=>setLogFtt(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-[#3AB0FF] outline-none bg-white" />
@@ -402,10 +441,12 @@ export default function TimesTab({
                   </>
                 ) : (
                   <>
-                    <div>
-                      <div className="flex justify-between items-center mb-1"><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Hobbs (Opt)</label><span className="text-[9px] font-bold uppercase text-gray-400">Last: {aircraft?.total_airframe_time?.toFixed(1) || 0}</span></div>
-                      <input type="number" style={whiteBg} step="0.1" value={logHobbs} onChange={e=>setLogHobbs(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-[#3AB0FF] outline-none bg-white" />
-                    </div>
+                    {hasAirframeMeter && (
+                      <div>
+                        <div className="flex justify-between items-center mb-1"><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Hobbs (Opt)</label><span className="text-[9px] font-bold uppercase text-gray-400">Last: {aircraft?.total_airframe_time?.toFixed(1) || 0}</span></div>
+                        <input type="number" style={whiteBg} step="0.1" value={logHobbs} onChange={e=>setLogHobbs(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-[#3AB0FF] outline-none bg-white" />
+                      </div>
+                    )}
                     <div>
                       <div className="flex justify-between items-center mb-1"><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Tach *</label><span className="text-[9px] font-bold uppercase text-gray-400">Last: {aircraft?.total_engine_time?.toFixed(1) || 0}</span></div>
                       <input type="number" style={whiteBg} step="0.1" required value={logTach} onChange={e=>setLogTach(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-[#3AB0FF] outline-none bg-white" />
