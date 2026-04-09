@@ -117,7 +117,7 @@ export default function SummaryTab({
     { refreshInterval: 60000 }
   );
 
-  const { data: crewMembers = [] } = useSWR(
+  const { data: crewMembers = [], mutate: mutateCrew } = useSWR(
     aircraft ? `summary-crew-${aircraft.id}` : null,
     async () => {
       const { data: accessData } = await supabase.from('aft_user_aircraft_access')
@@ -169,7 +169,7 @@ export default function SummaryTab({
       const res = await authFetch('/api/pilot-invite', { method: 'POST', body: JSON.stringify({ email: inviteEmail, aircraftId: aircraft.id, aircraftRole: inviteRole }) });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to invite');
-      showSuccess(data.message || 'Invitation sent'); setShowInviteModal(false); setInviteEmail(""); setInviteRole('pilot'); refreshData();
+      showSuccess(data.message || 'Invitation sent'); setShowInviteModal(false); setInviteEmail(""); setInviteRole('pilot'); mutateCrew(); refreshData();
     } catch (err: any) { showError(err.message); }
     setIsInviting(false);
   };
@@ -181,7 +181,7 @@ export default function SummaryTab({
       const res = await authFetch('/api/aircraft-access', { method: 'PUT', body: JSON.stringify({ targetUserId, aircraftId: aircraft.id, newRole }) });
       const resData = await res.json();
       if (!res.ok) throw new Error(resData.error || 'Failed to update role');
-      showSuccess("Role updated"); setChangingRoleUserId(null); refreshData();
+      showSuccess("Role updated"); setChangingRoleUserId(null); mutateCrew(); refreshData();
     } catch (err: any) { showError(err.message); }
     setIsCrewUpdating(false);
   };
@@ -193,7 +193,7 @@ export default function SummaryTab({
       const res = await authFetch('/api/aircraft-access', { method: 'DELETE', body: JSON.stringify({ targetUserId, aircraftId: aircraft.id }) });
       const resData = await res.json();
       if (!res.ok) throw new Error(resData.error || 'Failed to remove user');
-      showSuccess("Pilot removed"); setRemovingUserId(null); refreshData();
+      showSuccess("Pilot removed"); setRemovingUserId(null); mutateCrew(); refreshData();
     } catch (err: any) { showError(err.message); }
     setIsCrewUpdating(false);
   };

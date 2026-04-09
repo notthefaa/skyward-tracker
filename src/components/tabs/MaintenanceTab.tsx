@@ -184,6 +184,7 @@ export default function MaintenanceTab({
     setResendingEventId(eventId); setConfirmResendId(null);
     try {
       await authFetch('/api/mx-events/send-workpackage', { method: 'POST', body: JSON.stringify({ eventId, resend: true }) });
+      mutateEvents();
     } catch (err) { console.error(err); showError("Failed to resend."); }
     setResendingEventId(null);
   };
