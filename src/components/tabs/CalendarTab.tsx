@@ -65,7 +65,7 @@ export default function CalendarTab({
         label: `Maintenance${e.mx_contact_name ? ' — ' + e.mx_contact_name : ''}`,
       })),
     };
-  }, { revalidateOnMount: true });
+  });
 
   const reservations = calendarData?.reservations || [];
   const mxBlocks = calendarData?.mxBlocks || [];

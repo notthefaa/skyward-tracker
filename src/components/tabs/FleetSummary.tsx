@@ -3,6 +3,7 @@ import { processMxItem } from "@/lib/math";
 import type { AircraftWithMetrics } from "@/lib/types";
 import useSWR from "swr";
 import { PlaneTakeoff, Wrench, AlertTriangle, Droplet, Clock } from "lucide-react";
+import { FleetSkeleton } from "@/components/Skeletons";
 
 /** Check if an MX item has been set up (has a due value) */
 function isItemSetUp(item: any): boolean {
@@ -102,11 +103,10 @@ export default function FleetSummary({
         };
       });
     },
-    { revalidateOnMount: true }
   );
 
   if (isLoading && fleetData.length === 0) {
-    return <div className="p-8 text-center text-sm font-bold uppercase tracking-widest text-gray-400 animate-pulse">Loading Fleet Dashboard...</div>;
+    return <FleetSkeleton count={aircraftList.length || 2} />;
   }
 
   return (

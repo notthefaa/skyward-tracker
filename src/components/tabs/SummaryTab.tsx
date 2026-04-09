@@ -48,7 +48,6 @@ export default function SummaryTab({
       processed.sort((a, b) => a.remaining - b.remaining);
       return processed[0];
     },
-    { revalidateOnMount: true }
   );
 
   const { data: squawkData } = useSWR(
@@ -58,7 +57,6 @@ export default function SummaryTab({
         .select('id, affects_airworthiness').eq('aircraft_id', aircraft!.id).eq('status', 'open');
       return data || [];
     },
-    { revalidateOnMount: true }
   );
 
   const { data: latestNote } = useSWR(
@@ -68,7 +66,6 @@ export default function SummaryTab({
         .select('*').eq('aircraft_id', aircraft!.id).order('created_at', { ascending: false }).limit(1);
       return data?.[0] || null;
     },
-    { revalidateOnMount: true }
   );
 
   const { data: flightData } = useSWR(
@@ -78,7 +75,6 @@ export default function SummaryTab({
         .select('created_at, initials').eq('aircraft_id', aircraft!.id).order('created_at', { ascending: false }).limit(1);
       return data?.[0] || null;
     },
-    { revalidateOnMount: true }
   );
 
   const { data: reservationData } = useSWR(
@@ -88,8 +84,7 @@ export default function SummaryTab({
         .select('*').eq('aircraft_id', aircraft!.id).eq('status', 'confirmed')
         .gt('start_time', new Date().toISOString()).order('start_time').limit(2);
       return data || [];
-    },
-    { revalidateOnMount: true }
+    }
   );
 
   const { data: currentStatus } = useSWR(
@@ -119,7 +114,7 @@ export default function SummaryTab({
       if (activeMx && activeMx.length > 0) return { type: 'maintenance' as const, ...activeMx[0] };
       return null;
     },
-    { revalidateOnMount: true, refreshInterval: 60000 }
+    { refreshInterval: 60000 }
   );
 
   const { data: crewMembers = [] } = useSWR(
@@ -137,7 +132,6 @@ export default function SummaryTab({
         return { user_id: access.user_id, aircraft_role: access.aircraft_role, email: user?.email || '', initials: user?.initials || '' };
       });
     },
-    { revalidateOnMount: true }
   );
 
   const [showNoteModal, setShowNoteModal] = useState(false);

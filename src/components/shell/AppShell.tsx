@@ -19,12 +19,13 @@ const AdminModals = dynamic(() => import("@/components/modals/AdminModals"));
 const TutorialModal = dynamic(() => import("@/components/modals/TutorialModal"));
 const SettingsModal = dynamic(() => import("@/components/modals/SettingsModal"));
 const PullIndicator = dynamic(() => import("@/components/PullIndicator"));
-const SummaryTab = dynamic(() => import("@/components/tabs/SummaryTab"));
-const TimesTab = dynamic(() => import("@/components/tabs/TimesTab"));
-const CalendarTab = dynamic(() => import("@/components/tabs/CalendarTab"));
-const MaintenanceTab = dynamic(() => import("@/components/tabs/MaintenanceTab"));
-const NotesTab = dynamic(() => import("@/components/tabs/NotesTab"));
-const FleetSummary = dynamic(() => import("@/components/tabs/FleetSummary"));
+import { SummarySkeleton, FleetSkeleton, TabSkeleton } from "@/components/Skeletons";
+const SummaryTab = dynamic(() => import("@/components/tabs/SummaryTab"), { loading: () => <SummarySkeleton /> });
+const TimesTab = dynamic(() => import("@/components/tabs/TimesTab"), { loading: () => <TabSkeleton /> });
+const CalendarTab = dynamic(() => import("@/components/tabs/CalendarTab"), { loading: () => <TabSkeleton /> });
+const MaintenanceTab = dynamic(() => import("@/components/tabs/MaintenanceTab"), { loading: () => <TabSkeleton /> });
+const NotesTab = dynamic(() => import("@/components/tabs/NotesTab"), { loading: () => <TabSkeleton /> });
+const FleetSummary = dynamic(() => import("@/components/tabs/FleetSummary"), { loading: () => <FleetSkeleton /> });
 
 /** Inline MX sub-tab picker with "remember selection" checkbox */
 function MxPicker({ onSelect, onClose }: { onSelect: (sub: 'maintenance' | 'squawks') => void, onClose: () => void }) {
@@ -445,7 +446,7 @@ export default function AppShell({ session }: AppShellProps) {
       >
         <div className="w-full max-w-3xl flex flex-col gap-6">
           {!isDataLoaded ? (
-            <div className="flex flex-col items-center justify-center py-20 animate-pulse"><Loader2 size={32} className="text-[#F08B46] animate-spin mb-4" /><p className="font-oswald text-sm font-bold uppercase tracking-widest text-gray-400">Loading Fleet Data...</p></div>
+            activeTab === 'fleet' ? <FleetSkeleton /> : <SummarySkeleton />
           ) : (<>
             {activeTab === 'fleet' && <FleetSummary aircraftList={aircraftList} onSelectAircraft={(t: string) => { setActiveTail(t); navigateTab('summary'); }} />}
             {activeTab === 'summary' && <SummaryTab aircraft={selectedAircraftData} setActiveTab={(t: AppTab) => navigateTab(t)} onNavigateToSquawks={() => { setMxSubTab('squawks'); navigateTab('mx'); }} role={role} aircraftRole={currentAircraftRole} onDeleteAircraft={handleDeleteAircraft} sysSettings={sysSettings} onEditAircraft={() => openAircraftForm(selectedAircraftData)} refreshData={() => fetchAircraftData(session.user.id)} session={session} />}

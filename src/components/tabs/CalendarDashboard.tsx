@@ -91,7 +91,6 @@ export default function CalendarDashboard({ aircraft, session }: CalendarDashboa
         })),
       };
     },
-    { revalidateOnMount: true }
   );
 
   const hoursRange = useMemo(() => {
