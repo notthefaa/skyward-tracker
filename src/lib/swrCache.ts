@@ -20,19 +20,21 @@ interface CacheEntry {
 export function localStorageCacheProvider(parentCache: Readonly<Cache<any>>): Cache<any> {
   let seed: [string, State<any, any>][] = [];
 
-  try {
-    const raw = localStorage.getItem(CACHE_KEY);
-    if (raw) {
-      const parsed: CacheEntry = JSON.parse(raw);
-      if (parsed.v === CACHE_VERSION && Date.now() - parsed.ts < MAX_AGE_MS) {
-        seed = parsed.data;
-      } else {
-        localStorage.removeItem(CACHE_KEY);
+  if (typeof window !== "undefined") {
+    try {
+      const raw = localStorage.getItem(CACHE_KEY);
+      if (raw) {
+        const parsed: CacheEntry = JSON.parse(raw);
+        if (parsed.v === CACHE_VERSION && Date.now() - parsed.ts < MAX_AGE_MS) {
+          seed = parsed.data;
+        } else {
+          localStorage.removeItem(CACHE_KEY);
+        }
       }
+    } catch {
+      // Corrupted cache — start fresh
+      localStorage.removeItem(CACHE_KEY);
     }
-  } catch {
-    // Corrupted cache — start fresh
-    localStorage.removeItem(CACHE_KEY);
   }
 
   const map = new Map<string, State<any, any>>(seed);
