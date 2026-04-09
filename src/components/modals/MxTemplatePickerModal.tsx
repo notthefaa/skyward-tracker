@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
+import { authFetch } from "@/lib/authFetch";
 import { useToast } from "@/components/ToastProvider";
 import { MX_TEMPLATES, CATEGORY_META } from "@/lib/mxTemplates";
 import type { MxTemplate, MxTemplateItem } from "@/lib/mxTemplates";
@@ -219,7 +220,6 @@ export default function MxTemplatePickerModal({ aircraft, show, onClose, onRefre
 
     // Build the insert payload
     const rows = itemsToInsert.map(item => ({
-      aircraft_id: aircraft.id,
       item_name: item.item_name,
       tracking_type: item.tracking_type,
       is_required: item.is_required,
@@ -238,12 +238,16 @@ export default function MxTemplatePickerModal({ aircraft, show, onClose, onRefre
       reminder_30_sent: false,
     }));
 
-    // Batch insert
-    const { error } = await supabase.from('aft_maintenance_items').insert(rows);
+    // Batch insert via authenticated API (bypasses RLS)
+    const res = await authFetch('/api/maintenance-items', {
+      method: 'POST',
+      body: JSON.stringify({ aircraftId: aircraft.id, items: rows }),
+    });
 
-    if (error) {
-      console.error('Template insert error:', error);
-      showError('Failed to insert maintenance items: ' + error.message);
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({ error: 'Unknown error' }));
+      console.error('Template insert error:', errData);
+      showError('Failed to insert maintenance items: ' + (errData.error || 'Unknown error'));
       setIsInserting(false);
       setStep('select');
       return;

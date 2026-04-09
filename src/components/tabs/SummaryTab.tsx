@@ -266,7 +266,7 @@ export default function SummaryTab({
             <p className="text-xs text-gray-500 mb-4">Invite a user to <strong>{aircraft.tail_number}</strong>.</p>
             <form onSubmit={handleInvitePilot} className="space-y-4">
               <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Email Address *</label><input type="email" required value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#3AB0FF] outline-none" placeholder="pilot@example.com" /></div>
-              <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Role for {aircraft.tail_number}</label><select value={inviteRole} onChange={e => setInviteRole(e.target.value as 'admin' | 'pilot')} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#3AB0FF] outline-none"><option value="pilot">Tail Pilot</option><option value="admin">Tail Admin</option></select></div>
+              <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Role for {aircraft.tail_number}</label><select value={inviteRole} onChange={e => setInviteRole(e.target.value as 'admin' | 'pilot')} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#3AB0FF] outline-none"><option value="pilot">Aircraft Pilot</option><option value="admin">Aircraft Admin</option></select></div>
               <div className="pt-2"><PrimaryButton disabled={isInviting}>{isInviting ? <><Loader2 size={16} className="animate-spin" /> Sending...</> : "Send Invitation"}</PrimaryButton></div>
             </form>
           </div>
@@ -275,7 +275,7 @@ export default function SummaryTab({
 
       {/* Hero section */}
       <div className="bg-white shadow-lg rounded-sm overflow-hidden">
-        <div className="relative h-40 md:h-56 bg-slateGray flex items-center justify-center">
+        <div className="relative bg-slateGray flex items-center justify-center" style={{ aspectRatio: '16/9' }}>
           {aircraft.avatar_url ? <img src={aircraft.avatar_url} alt="Aircraft Avatar" className="w-full h-full object-cover" /> : <PlaneTakeoff size={64} className="text-white/20" />}
           {canEdit && (
             <div className="absolute top-4 right-4 flex flex-col gap-2 z-10">

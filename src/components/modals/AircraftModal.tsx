@@ -7,7 +7,7 @@ import { useToast } from "@/components/ToastProvider";
 import { validateFileSize, MAX_UPLOAD_SIZE_LABEL } from "@/lib/constants";
 import { INPUT_WHITE_BG } from "@/lib/styles";
 import type { AircraftWithMetrics } from "@/lib/types";
-import { X, Info } from "lucide-react";
+import { X, Info, Camera, Upload } from "lucide-react";
 import { PrimaryButton } from "@/components/AppButtons";
 import imageCompression from "browser-image-compression";
 import ReactCrop, { Crop } from "react-image-crop";
@@ -43,6 +43,8 @@ export default function AircraftModal({
   const [avatarSrc, setAvatarSrc] = useState<string>("");
   const [crop, setCrop] = useState<Crop>({ unit: '%', width: 100, height: 56.25, x: 0, y: 0 });
   const imageRef = useRef<HTMLImageElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isDragging, setIsDragging] = useState(false);
 
   // Track whether the aircraft has flight logs (affects time field editability)
   const [hasFlightLogs, setHasFlightLogs] = useState(false);
@@ -83,18 +85,33 @@ export default function AircraftModal({
     setHasFlightLogs((count || 0) > 0);
   };
 
+  const handleFile = (file: File) => {
+    if (!file.type.startsWith('image/')) {
+      showError('Please select an image file.');
+      return;
+    }
+    const sizeError = validateFileSize(file);
+    if (sizeError) {
+      showError(sizeError);
+      return;
+    }
+    const reader = new FileReader();
+    reader.addEventListener('load', () => setAvatarSrc(reader.result?.toString() || ''));
+    reader.readAsDataURL(file);
+  };
+
   const onSelectFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      const file = e.target.files[0];
-      const sizeError = validateFileSize(file);
-      if (sizeError) {
-        showError(sizeError);
-        e.target.value = '';
-        return;
-      }
-      const reader = new FileReader();
-      reader.addEventListener('load', () => setAvatarSrc(reader.result?.toString() || ''));
-      reader.readAsDataURL(file);
+      handleFile(e.target.files[0]);
+      e.target.value = '';
+    }
+  };
+
+  const onDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      handleFile(e.dataTransfer.files[0]);
     }
   };
 
@@ -273,23 +290,41 @@ export default function AircraftModal({
         </div>
         
         <form onSubmit={handleSaveAircraft} className="space-y-4">
-          <div className="border border-dashed border-gray-300 bg-gray-50 rounded p-4 text-center">
-            <label className="text-[10px] font-bold uppercase tracking-widest text-navy block mb-2 cursor-pointer">
-              {avatarSrc ? 'Adjust Photo Alignment' : `Upload Aircraft Photo (Max ${MAX_UPLOAD_SIZE_LABEL})`}
-            </label>
+          <div
+            className={`border-2 border-dashed rounded p-4 text-center transition-colors ${isDragging ? 'border-[#F08B46] bg-orange-50' : 'border-gray-300 bg-gray-50'} ${!avatarSrc ? 'cursor-pointer' : ''}`}
+            onDragOver={e => { e.preventDefault(); if (!avatarSrc) setIsDragging(true); }}
+            onDragLeave={() => setIsDragging(false)}
+            onDrop={!avatarSrc ? onDrop : undefined}
+            onClick={() => { if (!avatarSrc) fileInputRef.current?.click(); }}
+          >
             {!avatarSrc ? (
-              <input 
-                type="file" 
-                accept="image/*" 
-                onChange={onSelectFile} 
-                className="text-xs text-gray-500 w-full cursor-pointer bg-white" 
-              />
+              <>
+                <Camera size={32} className="mx-auto text-gray-400 mb-2" />
+                <p className="text-[10px] font-bold uppercase tracking-widest text-navy mb-1">
+                  Add Aircraft Photo
+                </p>
+                <p className="text-[10px] text-gray-400 flex items-center justify-center gap-1">
+                  <Upload size={10} /> Click or drag & drop (Max {MAX_UPLOAD_SIZE_LABEL})
+                </p>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={onSelectFile}
+                  className="hidden"
+                />
+              </>
             ) : (
-              <div className="w-full h-auto flex justify-center bg-black rounded overflow-hidden">
-                <ReactCrop crop={crop} onChange={c => setCrop(c)} aspect={16 / 9}>
-                  <img ref={imageRef} src={avatarSrc} alt="Crop preview" className="max-h-[200px] object-contain" />
-                </ReactCrop>
-              </div>
+              <>
+                <label className="text-[10px] font-bold uppercase tracking-widest text-navy block mb-2">
+                  Adjust Photo Alignment
+                </label>
+                <div className="w-full flex justify-center bg-black rounded overflow-hidden" style={{ aspectRatio: '16/9' }}>
+                  <ReactCrop crop={crop} onChange={c => setCrop(c)} aspect={16 / 9}>
+                    <img ref={imageRef} src={avatarSrc} alt="Crop preview" className="max-h-[200px] object-contain" />
+                  </ReactCrop>
+                </div>
+              </>
             )}
             {avatarSrc && (
               <button type="button" onClick={() => setAvatarSrc("")} className="text-[10px] uppercase text-red-500 font-bold mt-2 hover:underline">

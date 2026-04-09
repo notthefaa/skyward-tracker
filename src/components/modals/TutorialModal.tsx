@@ -189,8 +189,8 @@ export default function TutorialModal({ session, role }: { session: any, role: s
           </p>
           <ul className="text-sm text-gray-600 font-roboto space-y-2.5 pl-1">
             <Bullet>Tap the blue invite button on any aircraft's Home screen to add a pilot in seconds.</Bullet>
-            <Bullet><strong>Tail Admins</strong> can edit the aircraft, schedule service, manage work packages, and invite others.</Bullet>
-            <Bullet><strong>Tail Pilots</strong> can fly, log, report squawks, post notes, and manage their own reservations.</Bullet>
+            <Bullet><strong>Aircraft Admins</strong> can edit the aircraft, schedule service, manage work packages, and invite others.</Bullet>
+            <Bullet><strong>Aircraft Pilots</strong> can fly, log, report squawks, post notes, and manage their own reservations.</Bullet>
             <Bullet>New users get an email invitation and are ready to go the moment they set their password.</Bullet>
           </ul>
         </div>
@@ -207,7 +207,7 @@ export default function TutorialModal({ session, role }: { session: any, role: s
             <Bullet>Log flights, report squawks, post notes, and reserve the plane.</Bullet>
             <Bullet>See maintenance status and upcoming service at a glance.</Bullet>
             <Bullet>Create and cancel your own reservations from the Calendar tab.</Bullet>
-            <Bullet>If you're made a <strong>Tail Admin</strong>, you'll also be able to edit the aircraft, schedule service, and invite other pilots.</Bullet>
+            <Bullet>If you're made an <strong>Aircraft Admin</strong>, you'll also be able to edit the aircraft, schedule service, and invite other pilots.</Bullet>
           </ul>
         </div>
       )

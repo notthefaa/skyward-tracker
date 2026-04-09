@@ -21,7 +21,7 @@ export async function DELETE(req: Request) {
       return NextResponse.json({ error: 'Aircraft not found.' }, { status: 404 });
     }
 
-    // Permission check: global admin OR tail admin for this aircraft
+    // Permission check: global admin OR aircraft admin for this aircraft
     const { data: callerRole } = await supabaseAdmin
       .from('aft_user_roles')
       .select('role')

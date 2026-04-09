@@ -261,14 +261,14 @@ export default function AdminModals({
     setIsSubmitting(false);
   };
 
-  const handleSetTailAdmin = async (userId: string) => {
+  const handleSetAircraftAdmin = async (userId: string) => {
     const u = globalUsers.find(u => u.user_id === userId);
     if (!u) return;
     setIsSubmitting(true);
     try {
       // If currently a global admin, demote to pilot first
       if (u.role === 'admin') {
-        if (!confirm(`This will remove ${u.email}'s Global Admin privileges. They will become a Tail Admin instead. Continue?`)) {
+        if (!confirm(`This will remove ${u.email}'s Global Admin privileges. They will become an Aircraft Admin instead. Continue?`)) {
           setIsSubmitting(false);
           return;
         }
@@ -503,7 +503,7 @@ export default function AdminModals({
                           {u.full_name && <p className="text-sm font-bold text-navy truncate">{u.full_name}</p>}
                           <p className={`${u.full_name ? 'text-[11px] text-gray-500' : 'text-sm font-bold text-navy'} truncate`}>{u.email || 'No email'}</p>
                           <div className="flex items-center gap-2 mt-0.5">
-                            <span className={`text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded ${u.role === 'admin' ? 'bg-navy text-white' : u.aircraft.some((a: any) => a.aircraft_role === 'admin') ? 'bg-[#3AB0FF] text-white' : 'bg-gray-200 text-gray-600'}`}>{u.role === 'admin' ? 'Global Admin' : u.aircraft.some((a: any) => a.aircraft_role === 'admin') ? 'Tail Admin' : 'Pilot'}</span>
+                            <span className={`text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded ${u.role === 'admin' ? 'bg-navy text-white' : u.aircraft.some((a: any) => a.aircraft_role === 'admin') ? 'bg-[#3AB0FF] text-white' : 'bg-gray-200 text-gray-600'}`}>{u.role === 'admin' ? 'Global Admin' : u.aircraft.some((a: any) => a.aircraft_role === 'admin') ? 'Aircraft Admin' : 'Pilot'}</span>
                             {u.aircraft.length > 0 && <span className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">{u.aircraft.length} aircraft</span>}
                           </div>
                         </div>
@@ -522,13 +522,13 @@ export default function AdminModals({
                           <div className="border border-gray-200 rounded p-3 bg-white">
                             <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Role</p>
                             {(() => {
-                              const isTailAdmin = u.role === 'pilot' && u.aircraft.some((a: any) => a.aircraft_role === 'admin');
-                              const activeTier = u.role === 'admin' ? 'global' : isTailAdmin ? 'tail' : 'pilot';
+                              const isAircraftAdmin = u.role === 'pilot' && u.aircraft.some((a: any) => a.aircraft_role === 'admin');
+                              const activeTier = u.role === 'admin' ? 'global' : isAircraftAdmin ? 'tail' : 'pilot';
                               const assignedAircraft = u.aircraft.filter((a: any) => a.aircraft_role !== undefined);
                               return (<>
                                 <div className="flex gap-2">
                                   <button onClick={() => { if (activeTier !== 'pilot') handleSetPilotAndDemoteAll(u.user_id); }} disabled={isSubmitting} className={`flex-1 text-[10px] font-bold uppercase tracking-widest py-2 rounded transition-colors active:scale-95 disabled:opacity-50 ${activeTier === 'pilot' ? 'bg-[#56B94A] text-white' : 'border border-gray-300 text-gray-500 hover:bg-gray-100'}`}>Pilot</button>
-                                  <button onClick={() => { if (activeTier !== 'tail') handleSetTailAdmin(u.user_id); }} disabled={isSubmitting} className={`flex-1 text-[10px] font-bold uppercase tracking-widest py-2 rounded transition-colors active:scale-95 disabled:opacity-50 ${activeTier === 'tail' ? 'bg-[#3AB0FF] text-white' : 'border border-gray-300 text-gray-500 hover:bg-gray-100'}`}>Tail Admin</button>
+                                  <button onClick={() => { if (activeTier !== 'tail') handleSetAircraftAdmin(u.user_id); }} disabled={isSubmitting} className={`flex-1 text-[10px] font-bold uppercase tracking-widest py-2 rounded transition-colors active:scale-95 disabled:opacity-50 ${activeTier === 'tail' ? 'bg-[#3AB0FF] text-white' : 'border border-gray-300 text-gray-500 hover:bg-gray-100'}`}>Aircraft Admin</button>
                                   <button onClick={() => { if (u.role !== 'admin') handleChangeGlobalRole(u.user_id, 'admin'); }} disabled={isSubmitting} className={`flex-1 text-[10px] font-bold uppercase tracking-widest py-2 rounded transition-colors active:scale-95 disabled:opacity-50 ${activeTier === 'global' ? 'bg-navy text-white' : 'border border-gray-300 text-gray-500 hover:bg-gray-100'}`}>Global Admin</button>
                                 </div>
                                 {activeTier === 'tail' && (
