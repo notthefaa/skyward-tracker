@@ -341,9 +341,6 @@ export default function FleetSchedule({
                 ));
               })()}
             </div>
-            <div className="flex items-center justify-end mt-4 pt-3 border-t border-gray-100">
-              <span className="text-[9px] font-roboto text-gray-400 italic">Pill color = aircraft</span>
-            </div>
           </div>
         )}
 

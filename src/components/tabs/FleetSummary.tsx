@@ -203,21 +203,32 @@ export default function FleetSummary({
                   </div>
                 );
               })()}
-              <div className="px-4 py-3 bg-gray-50 border-t border-gray-100 flex flex-col gap-1.5">
-                {ac.nextMxDueLabel && (
-                  <span className={`text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded self-start ${ac.nextMxIsExpired ? 'bg-[#CE3732] text-white' : 'bg-[#F08B46]/15 text-[#F08B46]'}`}>
-                    {ac.nextMxIsExpired ? 'Overdue' : 'Next Up'}
-                  </span>
+              <div className="px-4 py-3 bg-gray-50 border-t border-gray-100">
+                {(ac.nextMxDueLabel || ac.squawkCount > 0) && (
+                  <div className="flex items-center justify-between mb-2">
+                    {ac.nextMxDueLabel ? (
+                      <span className={`text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded ${ac.nextMxIsExpired ? 'bg-[#CE3732] text-white' : 'bg-[#F08B46]/15 text-[#F08B46]'}`}>
+                        {ac.nextMxIsExpired ? 'Overdue' : 'Next Up'}
+                      </span>
+                    ) : <span />}
+                    {ac.squawkCount > 0 && (
+                      <span className="text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded bg-[#CE3732]/15 text-[#CE3732] flex items-center gap-1">
+                        <AlertTriangle size={10} /> {ac.squawkCount} Open
+                      </span>
+                    )}
+                  </div>
                 )}
-                <div className="flex justify-between items-center text-xs">
-                  <span className="font-bold text-navy truncate flex-1 flex items-center gap-2"><Wrench size={14} className="text-[#F08B46] shrink-0"/> {ac.nextMxName}</span>
-                  {ac.squawkCount > 0 && <span className="font-bold text-[#CE3732] shrink-0 flex items-center gap-1 ml-2"><AlertTriangle size={14}/> {ac.squawkCount} Sqk</span>}
+                <div className="flex items-start gap-2.5">
+                  <Wrench size={14} className="text-[#F08B46] shrink-0 mt-0.5" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-bold text-navy truncate leading-tight">{ac.nextMxName}</p>
+                    {ac.nextMxDueLabel && (
+                      <p className={`text-[10px] font-bold uppercase tracking-widest mt-0.5 ${ac.nextMxIsExpired ? 'text-[#CE3732]' : 'text-gray-500'}`}>
+                        {ac.nextMxDueLabel}
+                      </p>
+                    )}
+                  </div>
                 </div>
-                {ac.nextMxDueLabel && (
-                  <span className={`text-[10px] font-bold uppercase tracking-widest ${ac.nextMxIsExpired ? 'text-[#CE3732]' : 'text-gray-500'}`}>
-                    {ac.nextMxDueLabel}
-                  </span>
-                )}
               </div>
               {ac.lastFlownLabel && (
                 <div className="px-4 py-2 border-t border-gray-100 text-[10px] font-bold uppercase tracking-widest text-gray-400">
