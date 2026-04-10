@@ -1,9 +1,15 @@
+import { useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { processMxItem } from "@/lib/math";
 import type { AircraftWithMetrics } from "@/lib/types";
 import useSWR from "swr";
-import { PlaneTakeoff, Wrench, AlertTriangle, Droplet, Clock } from "lucide-react";
+import dynamic from "next/dynamic";
+import { PlaneTakeoff, Wrench, AlertTriangle, Droplet, Clock, LayoutGrid, Calendar } from "lucide-react";
 import { FleetSkeleton } from "@/components/Skeletons";
+
+const FleetSchedule = dynamic(() => import("@/components/tabs/FleetSchedule"));
+
+type FleetView = 'fleet' | 'schedule';
 
 /** Check if an MX item has been set up (has a due value) */
 function isItemSetUp(item: any): boolean {
@@ -35,12 +41,14 @@ function formatNextMxDue(item: { tracking_type: string; remaining: number; isExp
   return `Due in ${days} days`;
 }
 
-export default function FleetSummary({ 
-  aircraftList, onSelectAircraft 
-}: { 
-  aircraftList: AircraftWithMetrics[], 
-  onSelectAircraft: (tail: string) => void 
+export default function FleetSummary({
+  aircraftList, onSelectAircraft, onSelectAircraftDate
+}: {
+  aircraftList: AircraftWithMetrics[],
+  onSelectAircraft: (tail: string) => void,
+  onSelectAircraftDate?: (tail: string, date: Date, view: 'month' | 'week' | 'day') => void,
 }) {
+  const [fleetView, setFleetView] = useState<FleetView>('fleet');
   const { data: fleetData = [], isLoading } = useSWR(
     aircraftList.length > 0 ? `fleet-${aircraftList.length}-${aircraftList.map(a => a.id).join(',')}` : null,
     async () => {
@@ -128,9 +136,37 @@ export default function FleetSummary({
   return (
     <div className="flex flex-col gap-6 animate-fade-in">
       <div className="bg-navy p-6 rounded-sm shadow-lg text-white border-t-4 border-[#F5B05B]">
-        <h2 className="font-oswald text-3xl md:text-4xl font-bold uppercase tracking-widest leading-none mb-2">Fleet Summary</h2>
-        <p className="text-xs text-gray-300 font-bold tracking-widest uppercase">Overview of {aircraftList.length} Aircraft</p>
+        <div className="flex justify-between items-start gap-4">
+          <div className="min-w-0">
+            <h2 className="font-oswald text-3xl md:text-4xl font-bold uppercase tracking-widest leading-none mb-2">Fleet Summary</h2>
+            <p className="text-xs text-gray-300 font-bold tracking-widest uppercase">
+              {fleetView === 'fleet' ? `Overview of ${aircraftList.length} Aircraft` : 'Fleet-wide Schedule'}
+            </p>
+          </div>
+          {onSelectAircraftDate && (
+            <div className="flex gap-1 shrink-0">
+              <button
+                onClick={() => setFleetView('fleet')}
+                className={`text-[10px] font-oswald font-bold uppercase tracking-widest px-3 py-1.5 rounded flex items-center gap-1.5 transition-colors active:scale-95 ${fleetView === 'fleet' ? 'bg-[#F5B05B] text-navy shadow-sm' : 'bg-white/10 text-gray-300 hover:bg-white/20'}`}
+              >
+                <LayoutGrid size={12} /> Fleet
+              </button>
+              <button
+                onClick={() => setFleetView('schedule')}
+                className={`text-[10px] font-oswald font-bold uppercase tracking-widest px-3 py-1.5 rounded flex items-center gap-1.5 transition-colors active:scale-95 ${fleetView === 'schedule' ? 'bg-[#F5B05B] text-navy shadow-sm' : 'bg-white/10 text-gray-300 hover:bg-white/20'}`}
+              >
+                <Calendar size={12} /> Schedule
+              </button>
+            </div>
+          )}
+        </div>
       </div>
+      {fleetView === 'schedule' && onSelectAircraftDate ? (
+        <FleetSchedule
+          aircraftList={aircraftList}
+          onSelectAircraftDate={onSelectAircraftDate}
+        />
+      ) : (
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pb-4">
         {fleetData.map(ac => {
           const fuelGals = ac.current_fuel_gallons || 0;
@@ -173,15 +209,19 @@ export default function FleetSummary({
                 );
               })()}
               <div className="px-4 py-3 bg-gray-50 border-t border-gray-100">
+                {ac.nextMxDueLabel && (
+                  <div className="mb-1.5 ml-6">
+                    <span className={`text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded ${ac.nextMxIsExpired ? 'bg-[#CE3732] text-white' : 'bg-[#F08B46]/15 text-[#F08B46]'}`}>
+                      {ac.nextMxIsExpired ? 'Overdue' : 'Next Up'}
+                    </span>
+                  </div>
+                )}
                 <div className="flex justify-between items-center text-xs">
                   <span className="font-bold text-navy truncate flex-1 flex items-center gap-2"><Wrench size={14} className="text-[#F08B46] shrink-0"/> {ac.nextMxName}</span>
                   {ac.squawkCount > 0 && <span className="font-bold text-[#CE3732] shrink-0 flex items-center gap-1 ml-2"><AlertTriangle size={14}/> {ac.squawkCount} Sqk</span>}
                 </div>
                 {ac.nextMxDueLabel && (
-                  <div className="flex items-center gap-2 mt-1.5 ml-6">
-                    <span className={`text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded ${ac.nextMxIsExpired ? 'bg-[#CE3732] text-white' : 'bg-[#F08B46]/15 text-[#F08B46]'}`}>
-                      {ac.nextMxIsExpired ? 'Overdue' : 'Next Up'}
-                    </span>
+                  <div className="mt-1.5 ml-6">
                     <span className={`text-[10px] font-bold uppercase tracking-widest ${ac.nextMxIsExpired ? 'text-[#CE3732]' : 'text-gray-500'}`}>
                       {ac.nextMxDueLabel}
                     </span>
@@ -197,6 +237,7 @@ export default function FleetSummary({
           );
         })}
       </div>
+      )}
     </div>
   );
 }

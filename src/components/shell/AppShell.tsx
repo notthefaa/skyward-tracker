@@ -79,6 +79,10 @@ export default function AppShell({ session }: AppShellProps) {
   // ─── Navigation State ───
   const companionUrl = process.env.NEXT_PUBLIC_COMPANION_URL || "https://skyward-logit.vercel.app/";
   const [activeTail, setActiveTail] = useState<string>("");
+  // Optional target for the Calendar tab — set by Fleet Schedule when a user
+  // taps a reservation there so CalendarTab opens on the right date/view.
+  const [calendarInitialDate, setCalendarInitialDate] = useState<Date | null>(null);
+  const [calendarInitialView, setCalendarInitialView] = useState<'month' | 'week' | 'day' | null>(null);
   const [activeTab, setActiveTab] = useState<AppTab>(() => {
     if (typeof window !== 'undefined') {
       const saved = sessionStorage.getItem('aft_active_tab');
@@ -448,10 +452,27 @@ export default function AppShell({ session }: AppShellProps) {
           {!isDataLoaded ? (
             activeTab === 'fleet' ? <FleetSkeleton /> : <SummarySkeleton />
           ) : (<>
-            {activeTab === 'fleet' && <FleetSummary aircraftList={aircraftList} onSelectAircraft={(t: string) => { setActiveTail(t); navigateTab('summary'); }} />}
+            {activeTab === 'fleet' && <FleetSummary
+              aircraftList={aircraftList}
+              onSelectAircraft={(t: string) => { setActiveTail(t); navigateTab('summary'); }}
+              onSelectAircraftDate={(t: string, d: Date, v: 'month' | 'week' | 'day') => {
+                setActiveTail(t);
+                setCalendarInitialDate(d);
+                setCalendarInitialView(v);
+                navigateTab('calendar');
+              }}
+            />}
             {activeTab === 'summary' && <SummaryTab aircraft={selectedAircraftData} setActiveTab={(t: AppTab) => navigateTab(t)} onNavigateToSquawks={() => { setMxSubTab('squawks'); navigateTab('mx'); }} role={role} aircraftRole={currentAircraftRole} onDeleteAircraft={handleDeleteAircraft} sysSettings={sysSettings} onEditAircraft={() => openAircraftForm(selectedAircraftData)} refreshData={() => fetchAircraftData(session.user.id)} session={session} />}
             {activeTab === 'times' && <TimesTab aircraft={selectedAircraftData} session={session} role={role} userInitials={userInitials} onUpdate={() => fetchAircraftData(session.user.id)} />}
-            {activeTab === 'calendar' && <CalendarTab aircraft={selectedAircraftData} session={session} aircraftRole={currentAircraftRole} role={role} />}
+            {activeTab === 'calendar' && <CalendarTab
+              aircraft={selectedAircraftData}
+              session={session}
+              aircraftRole={currentAircraftRole}
+              role={role}
+              initialDate={calendarInitialDate}
+              initialView={calendarInitialView}
+              onInitialConsumed={() => { setCalendarInitialDate(null); setCalendarInitialView(null); }}
+            />}
             {activeTab === 'mx' && <MaintenanceTab aircraft={selectedAircraftData} role={role} aircraftRole={currentAircraftRole} onGroundedStatusChange={() => checkGroundedStatus(activeTail)} sysSettings={sysSettings} session={session} userInitials={userInitials} initialSubTab={mxSubTab} />}
             {activeTab === 'notes' && <NotesTab aircraft={selectedAircraftData} session={session} role={role} aircraftRole={currentAircraftRole} userInitials={userInitials} onNotesRead={() => setUnreadNotes(0)} />}
           </>)}

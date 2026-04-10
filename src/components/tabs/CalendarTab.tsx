@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { authFetch } from "@/lib/authFetch";
 import type { AircraftWithMetrics, Reservation, AircraftRole, AppRole } from "@/lib/types";
@@ -112,15 +112,28 @@ function generateOccurrences(baseStart: Date, baseEnd: Date, spec: RecurrenceSpe
 }
 
 export default function CalendarTab({
-  aircraft, session, aircraftRole, role
+  aircraft, session, aircraftRole, role, initialDate, initialView, onInitialConsumed
 }: {
   aircraft: AircraftWithMetrics | null,
   session: any,
   aircraftRole: AircraftRole | null,
-  role: AppRole
+  role: AppRole,
+  initialDate?: Date | null,
+  initialView?: CalendarView | null,
+  onInitialConsumed?: () => void,
 }) {
-  const [view, setView] = useState<CalendarView>('month');
-  const [currentDate, setCurrentDate] = useState(new Date());
+  const [view, setView] = useState<CalendarView>(initialView || 'month');
+  const [currentDate, setCurrentDate] = useState(() => initialDate || new Date());
+
+  // When the Fleet Schedule navigates here with a target date/view, adopt it once.
+  useEffect(() => {
+    if (initialDate) {
+      setCurrentDate(initialDate);
+      if (initialView) setView(initialView);
+      onInitialConsumed?.();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialDate, initialView]);
   const [showBookingForm, setShowBookingForm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
