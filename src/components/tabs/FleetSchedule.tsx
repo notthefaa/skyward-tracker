@@ -8,8 +8,7 @@ import { ChevronLeft, ChevronRight, Wrench, Plane, MapPin, Clock, Filter } from 
 
 type CalendarView = 'month' | 'week' | 'day';
 
-/** Stable tail-number palette (indexed off position in aircraft list).
- *  Deliberately excludes the `#F08B46` orange reserved for maintenance. */
+/** Stable tail-number palette (indexed off position in aircraft list). */
 const TAIL_PALETTE = [
   '#3AB0FF', // sky
   '#56B94A', // emerald
@@ -23,10 +22,8 @@ const TAIL_PALETTE = [
   '#EC4899', // pink
 ];
 
-const MX_ORANGE = '#F08B46';
-
-/** Hex → rgba with alpha — used so tail color backgrounds tint softly without
- *  adding a Tailwind class for every palette entry. */
+/** Hex → rgba with alpha — used for the soft tail-color header backgrounds
+ *  in the day view. */
 function hexAlpha(hex: string, a: number): string {
   const m = hex.replace('#', '');
   const n = parseInt(m.length === 3 ? m.split('').map(c => c + c).join('') : m, 16);
@@ -184,29 +181,28 @@ export default function FleetSchedule({
   const dayLabel = currentDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
 
   // ──────────────────────────────────────────────────────────────
-  // Shared pill component — reservation in the month grid.
-  // `targetDate` is the cell's date so a multi-day reservation opens on the
-  // day the user actually tapped, not the reservation's start.
+  // Unified event pill — every cell item is styled the same way:
+  // filled tail color with white text. Reservations and MX blocks only
+  // differ in the label text; no visual differentiation between single-day,
+  // multi-day, or maintenance.
   // ──────────────────────────────────────────────────────────────
-  const ReservationPill = ({ r, targetDate, compact = false }: { r: Reservation; targetDate: Date; compact?: boolean }) => {
-    const meta = tailMeta[r.aircraft_id];
-    if (!meta) return null;
-    const multi = isFullDayOrMultiDay(r);
-    return (
-      <div
-        onClick={(e) => { e.stopPropagation(); onSelectAircraftDate(meta.tail_number, targetDate, 'day'); }}
-        className={`font-bold px-1 py-px rounded truncate cursor-pointer ${compact ? 'text-[7px]' : 'text-[10px] px-1.5 py-0.5'}`}
-        style={{
-          backgroundColor: multi ? meta.color : hexAlpha(meta.color, 0.18),
-          color: multi ? '#fff' : meta.color,
-          border: multi ? 'none' : `1px solid ${hexAlpha(meta.color, 0.35)}`,
-        }}
-        title={`${meta.tail_number} · ${r.pilot_initials || '—'}${r.route ? ' · ' + r.route : ''}`}
-      >
-        {meta.tail_number} {r.pilot_initials || '—'}{!multi && !compact ? ` ${formatTime(r.start_time, r)}` : ''}
-      </div>
-    );
-  };
+  const EventPill = ({
+    meta, label, title, targetDate,
+  }: {
+    meta: TailMeta;
+    label: string;
+    title: string;
+    targetDate: Date;
+  }) => (
+    <div
+      onClick={(e) => { e.stopPropagation(); onSelectAircraftDate(meta.tail_number, targetDate, 'day'); }}
+      className="text-[7px] font-bold px-1 py-px rounded truncate cursor-pointer text-white"
+      style={{ backgroundColor: meta.color }}
+      title={title}
+    >
+      {meta.tail_number} {label}
+    </div>
+  );
 
   return (
     <div className="bg-cream shadow-lg rounded-sm border-t-4 border-[#56B94A]">
@@ -288,20 +284,50 @@ export default function FleetSchedule({
                 const events = getEventsForDate(date);
                 const isToday = date.toDateString() === today.toDateString();
                 const isPast = date < today;
-                const hasMx = events.mxBlocks.length > 0;
-                const shown = events.reservations.slice(0, 3);
-                const overflow = events.reservations.length - shown.length;
+
+                // Flatten reservations + MX blocks into a single event list so
+                // the cell honors a uniform 3-item cap + overflow counter.
+                type DayItem =
+                  | { kind: 'res'; id: string; meta: TailMeta; label: string; title: string }
+                  | { kind: 'mx'; id: string; meta: TailMeta; label: string; title: string };
+                const items: DayItem[] = [];
+                for (const r of events.reservations) {
+                  const meta = tailMeta[r.aircraft_id];
+                  if (!meta) continue;
+                  items.push({
+                    kind: 'res',
+                    id: `r-${r.id}`,
+                    meta,
+                    label: r.pilot_initials || '—',
+                    title: `${meta.tail_number} · ${r.pilot_initials || '—'}${r.route ? ' · ' + r.route : ''}`,
+                  });
+                }
+                for (let mi = 0; mi < events.mxBlocks.length; mi++) {
+                  const m = events.mxBlocks[mi];
+                  const meta = tailMeta[m.aircraft_id];
+                  if (!meta) continue;
+                  items.push({
+                    kind: 'mx',
+                    id: `mx-${m.aircraft_id}-${mi}`,
+                    meta,
+                    label: 'MX',
+                    title: `${meta.tail_number} · ${m.label}`,
+                  });
+                }
+                const shown = items.slice(0, 3);
+                const overflow = items.length - shown.length;
                 return (
                   <button
                     key={day}
                     onClick={() => { setCurrentDate(date); setView('day'); }}
-                    className={`min-h-[72px] md:min-h-[88px] p-1 md:p-1.5 text-left transition-colors relative flex flex-col ${hasMx ? 'bg-orange-50' : isPast ? 'bg-gray-50/60' : 'bg-white'} ${isToday ? 'ring-2 ring-[#56B94A] ring-inset z-[1]' : ''} hover:bg-emerald-50/50`}
+                    className={`min-h-[72px] md:min-h-[88px] p-1 md:p-1.5 text-left transition-colors relative flex flex-col ${isPast ? 'bg-gray-50/60' : 'bg-white'} ${isToday ? 'ring-2 ring-[#56B94A] ring-inset z-[1]' : ''} hover:bg-emerald-50/50`}
                   >
                     <span className={`text-xs font-bold leading-none ${isToday ? 'bg-[#56B94A] text-white w-5 h-5 rounded-full flex items-center justify-center' : isPast ? 'text-gray-400' : 'text-navy'}`}>{day}</span>
                     <div className="mt-auto pt-0.5 space-y-0.5 w-full overflow-hidden">
-                      {shown.map(r => <ReservationPill key={r.id} r={r} targetDate={date} compact />)}
+                      {shown.map(it => (
+                        <EventPill key={it.id} meta={it.meta} label={it.label} title={it.title} targetDate={date} />
+                      ))}
                       {overflow > 0 && <div className="text-[7px] font-bold text-gray-400 px-1">+{overflow} more</div>}
-                      {hasMx && <div className="text-[7px] font-bold text-white px-1 py-px rounded truncate" style={{ backgroundColor: MX_ORANGE }}>MX</div>}
                     </div>
                   </button>
                 );
@@ -315,21 +341,8 @@ export default function FleetSchedule({
                 ));
               })()}
             </div>
-            <div className="flex items-center gap-3 mt-4 pt-3 border-t border-gray-100 flex-wrap">
-              <span className="text-[9px] font-bold uppercase tracking-widest text-gray-400">Legend:</span>
-              <div className="flex items-center gap-1.5">
-                <div className="w-3 h-2 rounded" style={{ backgroundColor: hexAlpha('#3AB0FF', 0.18), border: `1px solid ${hexAlpha('#3AB0FF', 0.35)}` }} />
-                <span className="text-[9px] font-bold uppercase tracking-widest text-gray-400">Day Trip</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <div className="w-3 h-2 rounded" style={{ backgroundColor: '#3AB0FF' }} />
-                <span className="text-[9px] font-bold uppercase tracking-widest text-gray-400">Multi-Day</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <div className="w-3 h-2 rounded" style={{ backgroundColor: MX_ORANGE }} />
-                <span className="text-[9px] font-bold uppercase tracking-widest text-gray-400">Maintenance</span>
-              </div>
-              <span className="text-[9px] font-roboto text-gray-400 italic ml-auto">Color = aircraft</span>
+            <div className="flex items-center justify-end mt-4 pt-3 border-t border-gray-100">
+              <span className="text-[9px] font-roboto text-gray-400 italic">Pill color = aircraft</span>
             </div>
           </div>
         )}
@@ -386,8 +399,7 @@ export default function FleetSchedule({
                               <div
                                 key={`mx-${idx}`}
                                 onClick={(e) => { e.stopPropagation(); onSelectAircraftDate(meta.tail_number, date, 'day'); }}
-                                className="text-xs font-bold font-roboto flex items-center gap-2 cursor-pointer hover:bg-orange-50 rounded px-1 -mx-1 py-0.5"
-                                style={{ color: MX_ORANGE }}
+                                className="text-xs text-gray-600 font-roboto flex items-center gap-2 cursor-pointer hover:bg-gray-50 rounded px-1 -mx-1 py-0.5"
                               >
                                 <span
                                   className="text-[9px] font-oswald font-bold uppercase tracking-widest px-1.5 py-0.5 rounded shrink-0"
@@ -395,7 +407,7 @@ export default function FleetSchedule({
                                 >
                                   {meta.tail_number}
                                 </span>
-                                <Wrench size={10} /> {m.label}
+                                <Wrench size={10} className="text-gray-400" /> <span className="truncate">{m.label}</span>
                               </div>
                             );
                           })}
@@ -493,10 +505,10 @@ export default function FleetSchedule({
                           <div
                             key={`mx-${idx}`}
                             onClick={() => onSelectAircraftDate(meta.tail_number, currentDate, 'day')}
-                            className="p-3 flex items-center gap-2 bg-orange-50/40 cursor-pointer hover:bg-orange-50"
+                            className="p-3 flex items-center gap-2 cursor-pointer hover:bg-gray-50"
                           >
-                            <Wrench size={14} style={{ color: MX_ORANGE }} className="shrink-0" />
-                            <span className="text-xs font-bold font-roboto" style={{ color: MX_ORANGE }}>{m.label}</span>
+                            <Wrench size={14} className="text-gray-400 shrink-0" />
+                            <span className="text-xs font-bold text-navy font-roboto truncate">{m.label}</span>
                           </div>
                         ))}
                       </div>
