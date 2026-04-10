@@ -21,6 +21,20 @@ function formatLastFlown(createdAt: string, initials: string | null): string {
   return `${timeAgo}${initials ? ` by ${initials}` : ''}`;
 }
 
+/** Build a short "Due in ..." label for the fleet card. */
+function formatNextMxDue(item: { tracking_type: string; remaining: number; isExpired: boolean }): string {
+  if (item.tracking_type === 'time') {
+    const hrs = Math.abs(item.remaining).toFixed(1);
+    return item.isExpired ? `Overdue by ${hrs} hrs` : `Due in ${hrs} hrs`;
+  }
+  // date
+  const days = Math.abs(item.remaining);
+  if (item.isExpired) return days === 1 ? 'Overdue by 1 day' : `Overdue by ${days} days`;
+  if (item.remaining === 0) return 'Due today';
+  if (item.remaining === 1) return 'Due tomorrow';
+  return `Due in ${days} days`;
+}
+
 export default function FleetSummary({ 
   aircraftList, onSelectAircraft 
 }: { 
@@ -99,6 +113,8 @@ export default function FleetSummary({
           status: isGrounded ? 'grounded' as const : (hasIssues ? 'issues' as const : 'airworthy' as const),
           squawkCount: acSq.length,
           nextMxName: nextMx ? nextMx.item_name : (needsSetupCount > 0 ? `${needsSetupCount} Need Setup` : 'No MX Tracked'),
+          nextMxDueLabel: nextMx ? formatNextMxDue(nextMx) : null,
+          nextMxIsExpired: nextMx ? nextMx.isExpired : false,
           lastFlownLabel: lastFlight ? formatLastFlown(lastFlight.created_at, lastFlight.initials) : null,
         };
       });
@@ -131,7 +147,7 @@ export default function FleetSummary({
                   </div>
                 </div>
                 <div className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-widest text-white shadow-inner ${statusColor}`}>
-                  {ac.status === 'grounded' ? 'Grounded' : ac.status === 'issues' ? 'Issues' : 'Airworthy'}
+                  {ac.status === 'grounded' ? 'Grounded' : 'Airworthy'}
                 </div>
               </div>
               {(() => {
@@ -156,9 +172,21 @@ export default function FleetSummary({
                   </div>
                 );
               })()}
-              <div className="px-4 py-3 bg-gray-50 border-t border-gray-100 flex justify-between items-center text-xs">
-                <span className="font-bold text-navy truncate flex-1 flex items-center gap-2"><Wrench size={14} className="text-[#F08B46] shrink-0"/> {ac.nextMxName}</span>
-                {ac.squawkCount > 0 && <span className="font-bold text-[#CE3732] shrink-0 flex items-center gap-1 ml-2"><AlertTriangle size={14}/> {ac.squawkCount} Sqk</span>}
+              <div className="px-4 py-3 bg-gray-50 border-t border-gray-100">
+                <div className="flex justify-between items-center text-xs">
+                  <span className="font-bold text-navy truncate flex-1 flex items-center gap-2"><Wrench size={14} className="text-[#F08B46] shrink-0"/> {ac.nextMxName}</span>
+                  {ac.squawkCount > 0 && <span className="font-bold text-[#CE3732] shrink-0 flex items-center gap-1 ml-2"><AlertTriangle size={14}/> {ac.squawkCount} Sqk</span>}
+                </div>
+                {ac.nextMxDueLabel && (
+                  <div className="flex items-center gap-2 mt-1.5 ml-6">
+                    <span className={`text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded ${ac.nextMxIsExpired ? 'bg-[#CE3732] text-white' : 'bg-[#F08B46]/15 text-[#F08B46]'}`}>
+                      {ac.nextMxIsExpired ? 'Overdue' : 'Next Up'}
+                    </span>
+                    <span className={`text-[10px] font-bold uppercase tracking-widest ${ac.nextMxIsExpired ? 'text-[#CE3732]' : 'text-gray-500'}`}>
+                      {ac.nextMxDueLabel}
+                    </span>
+                  </div>
+                )}
               </div>
               {ac.lastFlownLabel && (
                 <div className="px-4 py-2 border-t border-gray-100 text-[10px] font-bold uppercase tracking-widest text-gray-400">

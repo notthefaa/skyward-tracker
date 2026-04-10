@@ -29,7 +29,7 @@ export async function POST(req: Request) {
   try {
     // Parse body ONCE — all fields extracted here
     const body = await req.json();
-    const { accessToken, action, proposedDate, message, lineItemUpdates, itemName, itemDescription, serviceDurationDays } = body;
+    const { accessToken, action, proposedDate, message, lineItemUpdates, itemName, itemDescription, serviceDurationDays, timeZone } = body;
 
     if (!accessToken) {
       return NextResponse.json({ error: 'Access token is required.' }, { status: 400 });
@@ -160,6 +160,7 @@ export async function POST(req: Request) {
           tailNumber: aircraft.tail_number,
           mechanicName: event.mx_contact_name,
           appUrl: baseUrl,
+          timeZone,
         });
       }
 

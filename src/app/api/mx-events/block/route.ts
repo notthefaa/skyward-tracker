@@ -5,7 +5,7 @@ import { cancelConflictingReservations } from '@/lib/mxConflicts';
 export async function POST(req: Request) {
   try {
     const { user, supabaseAdmin } = await requireAuth(req);
-    const { aircraftId, startDate, endDate, notes } = await req.json();
+    const { aircraftId, startDate, endDate, notes, timeZone } = await req.json();
 
     if (!aircraftId || !startDate) {
       return NextResponse.json({ error: 'Aircraft ID and start date are required.' }, { status: 400 });
@@ -76,6 +76,7 @@ export async function POST(req: Request) {
       tailNumber: aircraft?.tail_number || 'N/A',
       mechanicName: profile?.full_name || null,
       appUrl,
+      timeZone,
     });
 
     return NextResponse.json({ success: true, eventId: event.id, cancelledReservations: cancelledCount });

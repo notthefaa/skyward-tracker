@@ -11,7 +11,7 @@ const FROM_EMAIL = 'notifications@skywardsociety.com';
 export async function POST(req: Request) {
   try {
     const { user, supabaseAdmin } = await requireAuth(req);
-    const { eventId, action, proposedDate, message } = await req.json();
+    const { eventId, action, proposedDate, message, timeZone } = await req.json();
 
     if (!eventId || !action) {
       return NextResponse.json({ error: 'Event ID and action are required.' }, { status: 400 });
@@ -89,6 +89,7 @@ export async function POST(req: Request) {
           tailNumber: aircraft.tail_number,
           mechanicName: event.mx_contact_name,
           appUrl: new URL(req.url).origin,
+          timeZone,
         });
       }
 

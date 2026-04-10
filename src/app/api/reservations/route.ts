@@ -3,6 +3,13 @@ import { Resend } from 'resend';
 import { requireAuth, handleApiError } from '@/lib/auth';
 import { env } from '@/lib/env';
 import { escapeHtml } from '@/lib/sanitize';
+import {
+  safeTimeZone,
+  formatInTimeZone,
+  formatTimeInTimeZone,
+  formatDateInTimeZone,
+  formatShortDateInTimeZone,
+} from '@/lib/dateFormat';
 
 const resend = new Resend(env.RESEND_API_KEY);
 const FROM_EMAIL = 'notifications@skywardsociety.com';
@@ -10,17 +17,38 @@ const FROM_EMAIL = 'notifications@skywardsociety.com';
 export async function POST(req: Request) {
   try {
     const { user, supabaseAdmin } = await requireAuth(req);
-    const { aircraftId, startTime, endTime, title, route, recurrence } = await req.json();
+    const { aircraftId, occurrences: rawOccurrences, title, route, timeZone, bookForUserId } = await req.json();
+    const tz = safeTimeZone(timeZone);
 
-    if (!aircraftId || !startTime || !endTime) {
-      return NextResponse.json({ error: 'Aircraft, start time, and end time are required.' }, { status: 400 });
+    if (!aircraftId || !Array.isArray(rawOccurrences) || rawOccurrences.length === 0) {
+      return NextResponse.json({ error: 'Aircraft and at least one occurrence are required.' }, { status: 400 });
     }
 
-    if (new Date(endTime) <= new Date(startTime)) {
-      return NextResponse.json({ error: 'End time must be after start time.' }, { status: 400 });
+    // Hard cap to prevent abuse / runaway recurrences. Frontend caps at 100 too.
+    if (rawOccurrences.length > 100) {
+      return NextResponse.json({ error: 'A single recurring series may not exceed 100 occurrences.' }, { status: 400 });
     }
 
-    // Verify user has access to this aircraft
+    // Validate each occurrence and normalize
+    const occurrences: { start: string; end: string }[] = [];
+    for (const occ of rawOccurrences) {
+      if (!occ || typeof occ.start !== 'string' || typeof occ.end !== 'string') {
+        return NextResponse.json({ error: 'Each occurrence must include start and end timestamps.' }, { status: 400 });
+      }
+      const s = new Date(occ.start);
+      const e = new Date(occ.end);
+      if (isNaN(s.getTime()) || isNaN(e.getTime())) {
+        return NextResponse.json({ error: 'Invalid occurrence timestamp.' }, { status: 400 });
+      }
+      if (e <= s) {
+        return NextResponse.json({ error: 'End time must be after start time.' }, { status: 400 });
+      }
+      occurrences.push({ start: s.toISOString(), end: e.toISOString() });
+    }
+    // Sort chronologically so the conflict-check window and skip messages are stable.
+    occurrences.sort((a, b) => a.start.localeCompare(b.start));
+
+    // Verify caller has access to this aircraft
     const { data: access } = await supabaseAdmin
       .from('aft_user_aircraft_access')
       .select('aircraft_role')
@@ -32,29 +60,50 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'You do not have access to this aircraft.' }, { status: 403 });
     }
 
-    // Get user info for the reservation
+    // Get caller's user info
     const { data: userRole } = await supabaseAdmin
       .from('aft_user_roles')
-      .select('initials, email')
+      .select('role, initials, email')
       .eq('user_id', user.id)
       .single();
 
-    // Build list of occurrences (single or recurring)
-    const occurrences: { start: string; end: string }[] = [];
-    const baseStart = new Date(startTime);
-    const baseEnd = new Date(endTime);
-    const durationMs = baseEnd.getTime() - baseStart.getTime();
+    // Determine the booking target. Admins (global or aircraft) may book for
+    // another pilot on the same aircraft; everyone else can only book for self.
+    const bookingForOther = !!bookForUserId && bookForUserId !== user.id;
+    let targetUserId = user.id;
+    let targetEmail = userRole?.email || user.email || 'Pilot';
+    let targetInitials = userRole?.initials || '';
 
-    if (recurrence && recurrence.type !== 'none' && recurrence.count > 1) {
-      const intervalDays = recurrence.type === 'biweekly' ? 14 : 7;
-      const count = Math.min(recurrence.count, 52); // Cap at 52 weeks
-      for (let i = 0; i < count; i++) {
-        const s = new Date(baseStart.getTime() + i * intervalDays * 86400000);
-        const e = new Date(s.getTime() + durationMs);
-        occurrences.push({ start: s.toISOString(), end: e.toISOString() });
+    if (bookingForOther) {
+      const isGlobalAdmin = userRole?.role === 'admin';
+      const isAircraftAdmin = access.aircraft_role === 'admin';
+      if (!isGlobalAdmin && !isAircraftAdmin) {
+        return NextResponse.json({ error: 'Only admins can book reservations for other pilots.' }, { status: 403 });
       }
-    } else {
-      occurrences.push({ start: startTime, end: endTime });
+
+      // Validate target has access to this aircraft
+      const { data: targetAccess } = await supabaseAdmin
+        .from('aft_user_aircraft_access')
+        .select('user_id')
+        .eq('user_id', bookForUserId)
+        .eq('aircraft_id', aircraftId)
+        .single();
+      if (!targetAccess) {
+        return NextResponse.json({ error: 'Selected pilot is not assigned to this aircraft.' }, { status: 400 });
+      }
+
+      const { data: targetRole } = await supabaseAdmin
+        .from('aft_user_roles')
+        .select('initials, email')
+        .eq('user_id', bookForUserId)
+        .single();
+      if (!targetRole) {
+        return NextResponse.json({ error: 'Selected pilot not found.' }, { status: 400 });
+      }
+
+      targetUserId = bookForUserId;
+      targetEmail = targetRole.email || 'Pilot';
+      targetInitials = targetRole.initials || '';
     }
 
     // Prefetch all existing reservations and MX events in the full date range for conflict checking
@@ -84,12 +133,27 @@ export async function POST(req: Request) {
     const skipped: { start: string; reason: string }[] = [];
 
     for (const occ of occurrences) {
-      // Check reservation conflicts
+      const occStartMs = new Date(occ.start).getTime();
+      const occEndMs = new Date(occ.end).getTime();
+
+      // Check existing reservation conflicts
       const resConflict = allReservations.find(r =>
-        new Date(r.start_time) < new Date(occ.end) && new Date(r.end_time) > new Date(occ.start)
+        new Date(r.start_time).getTime() < occEndMs && new Date(r.end_time).getTime() > occStartMs
       );
       if (resConflict) {
         skipped.push({ start: occ.start, reason: `Conflicts with ${resConflict.pilot_name || 'another pilot'}` });
+        continue;
+      }
+
+      // Check intra-batch conflicts (e.g. multi-day weekly recurrence whose
+      // occurrences overlap each other). Without this, both rows pass the
+      // existing-reservation check and the DB exclusion constraint rejects
+      // the entire insert with a misleading 23P01 error.
+      const batchConflict = created.find(c =>
+        new Date(c.start).getTime() < occEndMs && new Date(c.end).getTime() > occStartMs
+      );
+      if (batchConflict) {
+        skipped.push({ start: occ.start, reason: 'Overlaps another occurrence in this series' });
         continue;
       }
 
@@ -122,14 +186,15 @@ export async function POST(req: Request) {
     if (created.length > 0) {
       const rows = created.map(occ => ({
         aircraft_id: aircraftId,
-        user_id: user.id,
+        user_id: targetUserId,
         start_time: occ.start,
         end_time: occ.end,
         title: title || null,
         route: route || null,
-        pilot_name: userRole?.email || user.email || 'Pilot',
-        pilot_initials: userRole?.initials || '',
+        pilot_name: targetEmail,
+        pilot_initials: targetInitials,
         status: 'confirmed',
+        time_zone: tz,
       }));
 
       const { error: insertErr } = await supabaseAdmin.from('aft_reservations').insert(rows);
@@ -138,11 +203,6 @@ export async function POST(req: Request) {
           return NextResponse.json({ error: 'One or more time slots conflict with existing reservations.' }, { status: 409 });
         }
         throw insertErr;
-      }
-
-      // Add created reservations to the conflict list so later occurrences in the same batch can't overlap
-      for (const occ of created) {
-        allReservations.push({ start_time: occ.start, end_time: occ.end, pilot_name: userRole?.email } as any);
       }
     }
 
@@ -182,23 +242,27 @@ export async function POST(req: Request) {
 
         if (emails.length > 0) {
           const safeTail = escapeHtml(aircraft.tail_number);
-          const safeInitials = escapeHtml(userRole?.initials || 'A pilot');
+          const safeCallerInitials = escapeHtml(userRole?.initials || 'An admin');
+          const safeTargetInitials = escapeHtml(targetInitials || 'A pilot');
+          const reservedByLine = bookingForOther
+            ? `<strong>${safeCallerInitials}</strong> has booked <strong>${safeTail}</strong> for <strong>${safeTargetInitials}</strong>:`
+            : `<strong>${safeTargetInitials}</strong> has reserved <strong>${safeTail}</strong>:`;
           const safeTitle = title ? escapeHtml(title) : '';
           const safeRoute = route ? escapeHtml(route) : '';
 
           if (created.length === 1) {
             // Single reservation email (original format)
-            const startStr = new Date(created[0].start).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
-            const endStr = new Date(created[0].end).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
+            const startStr = formatInTimeZone(created[0].start, tz);
+            const endStr = formatInTimeZone(created[0].end, tz);
 
             await resend.emails.send({
               from: `Skyward Aircraft Manager <${FROM_EMAIL}>`,
               to: emails,
-              subject: `${safeTail} Reserved: ${new Date(created[0].start).toLocaleDateString()}`,
+              subject: `${safeTail} Reserved: ${formatShortDateInTimeZone(created[0].start, tz)}`,
               html: `
                 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
                   <h2 style="color: #091F3C;">New Reservation</h2>
-                  <p><strong>${safeInitials}</strong> has reserved <strong>${safeTail}</strong>:</p>
+                  <p>${reservedByLine}</p>
                   <div style="margin: 20px 0; padding: 15px; background: #f9f9f9; border-left: 4px solid #3AB0FF; border-radius: 4px;">
                     <p style="margin: 0 0 8px 0;"><strong>From:</strong> ${startStr}</p>
                     <p style="margin: 0 0 8px 0;"><strong>To:</strong> ${endStr}</p>
@@ -214,8 +278,10 @@ export async function POST(req: Request) {
           } else {
             // Recurring reservation email (consolidated)
             const dateList = created.map(occ => {
-              const d = new Date(occ.start);
-              return `<li>${d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })} — ${new Date(occ.start).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })} to ${new Date(occ.end).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}</li>`;
+              const dayLabel = formatDateInTimeZone(occ.start, tz);
+              const startLabel = formatTimeInTimeZone(occ.start, tz);
+              const endLabel = formatTimeInTimeZone(occ.end, tz);
+              return `<li>${dayLabel} — ${startLabel} to ${endLabel}</li>`;
             }).join('');
 
             await resend.emails.send({
@@ -225,7 +291,9 @@ export async function POST(req: Request) {
               html: `
                 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
                   <h2 style="color: #091F3C;">Recurring Reservation</h2>
-                  <p><strong>${safeInitials}</strong> has reserved <strong>${safeTail}</strong> for ${created.length} dates:</p>
+                  <p>${bookingForOther
+                    ? `<strong>${safeCallerInitials}</strong> has booked <strong>${safeTail}</strong> for <strong>${safeTargetInitials}</strong> on ${created.length} dates:`
+                    : `<strong>${safeTargetInitials}</strong> has reserved <strong>${safeTail}</strong> for ${created.length} dates:`}</p>
                   ${safeTitle ? `<p style="color: #666;"><strong>Purpose:</strong> ${safeTitle}</p>` : ''}
                   ${safeRoute ? `<p style="color: #666;"><strong>Route:</strong> ${safeRoute}</p>` : ''}
                   <div style="margin: 20px 0; padding: 15px; background: #f9f9f9; border-left: 4px solid #3AB0FF; border-radius: 4px;">
@@ -257,7 +325,8 @@ export async function POST(req: Request) {
 export async function PUT(req: Request) {
   try {
     const { user, supabaseAdmin } = await requireAuth(req);
-    const { reservationId, startTime, endTime, title, route } = await req.json();
+    const { reservationId, startTime, endTime, title, route, timeZone } = await req.json();
+    const tz = safeTimeZone(timeZone);
 
     if (!reservationId) {
       return NextResponse.json({ error: 'Reservation ID is required.' }, { status: 400 });
@@ -316,8 +385,8 @@ export async function PUT(req: Request) {
 
     if (conflicts && conflicts.length > 0) {
       const conflict = conflicts[0];
-      const conflictStart = new Date(conflict.start_time).toLocaleString();
-      const conflictEnd = new Date(conflict.end_time).toLocaleString();
+      const conflictStart = formatInTimeZone(conflict.start_time, tz);
+      const conflictEnd = formatInTimeZone(conflict.end_time, tz);
       return NextResponse.json({
         error: `This time conflicts with a booking by ${conflict.pilot_name || 'another pilot'} from ${conflictStart} to ${conflictEnd}.`
       }, { status: 409 });
@@ -351,6 +420,7 @@ export async function PUT(req: Request) {
     const updateData: Record<string, any> = {
       start_time: newStart,
       end_time: newEnd,
+      time_zone: tz,
     };
     if (title !== undefined) updateData.title = title || null;
     if (route !== undefined) updateData.route = route || null;
@@ -407,13 +477,13 @@ export async function PUT(req: Request) {
           if (emails.length > 0) {
             const safeTail = escapeHtml(aircraft.tail_number);
             const safePilot = escapeHtml(existing.pilot_initials || 'A pilot');
-            const newStartStr = new Date(newStart).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
-            const newEndStr = new Date(newEnd).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
+            const newStartStr = formatInTimeZone(newStart, tz);
+            const newEndStr = formatInTimeZone(newEnd, tz);
 
             await resend.emails.send({
               from: `Skyward Aircraft Manager <${FROM_EMAIL}>`,
               to: emails,
-              subject: `${safeTail} Reservation Updated: ${new Date(newStart).toLocaleDateString()}`,
+              subject: `${safeTail} Reservation Updated: ${formatShortDateInTimeZone(newStart, tz)}`,
               html: `
                 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
                   <h2 style="color: #091F3C;">Reservation Updated</h2>
@@ -442,7 +512,8 @@ export async function PUT(req: Request) {
 export async function DELETE(req: Request) {
   try {
     const { user, supabaseAdmin } = await requireAuth(req);
-    const { reservationId } = await req.json();
+    const { reservationId, timeZone } = await req.json();
+    const tz = safeTimeZone(timeZone);
 
     if (!reservationId) {
       return NextResponse.json({ error: 'Reservation ID is required.' }, { status: 400 });
@@ -523,7 +594,10 @@ export async function DELETE(req: Request) {
         const emails = (notifyUsers || []).map(u => u.email).filter(Boolean) as string[];
 
         if (emails.length > 0) {
-          const startStr = new Date(reservation.start_time).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
+          // Prefer the booker's stored zone so an admin in a different zone
+          // cancelling on someone's behalf still shows the original local time.
+          const displayTz = safeTimeZone(reservation.time_zone || tz);
+          const startStr = formatInTimeZone(reservation.start_time, displayTz);
 
           // Sanitize user-provided values
           const safeTail = escapeHtml(aircraft.tail_number);
@@ -532,7 +606,7 @@ export async function DELETE(req: Request) {
           await resend.emails.send({
             from: `Skyward Aircraft Manager <${FROM_EMAIL}>`,
             to: emails,
-            subject: `${safeTail} Reservation Cancelled: ${new Date(reservation.start_time).toLocaleDateString()}`,
+            subject: `${safeTail} Reservation Cancelled: ${formatShortDateInTimeZone(reservation.start_time, displayTz)}`,
             html: `
               <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
                 <h2 style="color: #CE3732;">Reservation Cancelled</h2>

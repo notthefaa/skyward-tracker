@@ -137,10 +137,11 @@ export default function ServicePortal() {
   const handleAction = async (action: string, payload: any = {}) => {
     setIsSubmitting(true);
     try {
+      const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
       const res = await fetch('/api/mx-events/respond', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ accessToken, action, ...payload })
+        body: JSON.stringify({ accessToken, action, timeZone, ...payload })
       });
       if (!res.ok) throw new Error('Request failed');
       await fetchEventData();

@@ -141,6 +141,9 @@ export interface Reservation {
   pilot_initials?: string | null;
   status: 'confirmed' | 'cancelled';
   created_at: string;
+  // IANA timezone the booker was in when the reservation was created/last edited.
+  // Used to render times in the booker's zone for viewers in other zones.
+  time_zone?: string | null;
 }
 
 export interface NotificationPreference {

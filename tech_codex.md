@@ -235,6 +235,7 @@ Calendar bookings. Exclusion constraint prevents overlapping confirmed reservati
 | pilot_initials | text | |
 | status | text | "confirmed" or "cancelled" |
 | created_at | timestamptz | |
+| time_zone | text | IANA zone the booker was in when creating/editing. Used so emails and viewers in other zones see the booker's local time with the zone abbreviation. Nullable for legacy rows. |
 
 ### aft_notification_preferences
 Per-user notification toggles. PK is the natural composite key `(user_id, notification_type)` — the surrogate UUID `id` column was removed in migration 004.

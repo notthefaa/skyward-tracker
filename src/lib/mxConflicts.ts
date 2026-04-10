@@ -14,6 +14,7 @@
 import { Resend } from 'resend';
 import { env } from '@/lib/env';
 import { escapeHtml } from '@/lib/sanitize';
+import { safeTimeZone, formatInTimeZone } from '@/lib/dateFormat';
 
 const resend = new Resend(env.RESEND_API_KEY);
 const FROM_EMAIL = 'notifications@skywardsociety.com';
@@ -26,6 +27,7 @@ interface MxConflictParams {
   tailNumber: string;
   mechanicName?: string | null;
   appUrl: string;
+  timeZone?: string | null;       // IANA zone of the user triggering the cancellation
 }
 
 /**
@@ -42,7 +44,9 @@ export async function cancelConflictingReservations({
   tailNumber,
   mechanicName,
   appUrl,
+  timeZone,
 }: MxConflictParams): Promise<number> {
+  const tz = safeTimeZone(timeZone);
   // Build the MX block range (whole days, midnight to midnight)
   const mxStart = new Date(confirmedDate + 'T00:00:00');
   const mxEnd = estimatedCompletion
@@ -113,8 +117,12 @@ export async function cancelConflictingReservations({
     if (!pilot.email) continue;
 
     const reservationLines = pilot.reservations.map((r: any) => {
-      const start = new Date(r.start_time).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
-      const end = new Date(r.end_time).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
+      // Prefer the booker's stored zone so the cancellation email reflects
+      // the time as the pilot originally booked it, regardless of who triggered
+      // the MX block. Falls back to the caller's tz for legacy rows.
+      const rowTz = safeTimeZone(r.time_zone || tz);
+      const start = formatInTimeZone(r.start_time, rowTz);
+      const end = formatInTimeZone(r.end_time, rowTz);
       const safeTitle = r.title ? ` (${escapeHtml(r.title)})` : '';
       const safeRoute = r.route ? ` • ${escapeHtml(r.route)}` : '';
       return `<li style="margin-bottom: 8px;">${start} — ${end}${safeTitle}${safeRoute}</li>`;

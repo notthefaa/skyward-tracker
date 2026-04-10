@@ -36,7 +36,8 @@ export default function ServiceEventDetail({
   const handleOwnerConfirm = async () => {
     setIsSubmitting(true);
     try {
-      await authFetch('/api/mx-events/owner-action', { method: 'POST', body: JSON.stringify({ eventId: selectedEvent.id, action: 'confirm', message: ownerMessage || `Confirmed for ${selectedEvent.proposed_date}.` }) });
+      const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      await authFetch('/api/mx-events/owner-action', { method: 'POST', body: JSON.stringify({ eventId: selectedEvent.id, action: 'confirm', message: ownerMessage || `Confirmed for ${selectedEvent.proposed_date}.`, timeZone }) });
       setOwnerMessage("");
       await fetchEventDetail(selectedEvent.id);
       showSuccess("Date confirmed");
@@ -48,7 +49,8 @@ export default function ServiceEventDetail({
     if (!proposedDate) return showError("Please select a date.");
     setIsSubmitting(true);
     try {
-      await authFetch('/api/mx-events/owner-action', { method: 'POST', body: JSON.stringify({ eventId: selectedEvent.id, action: 'counter', proposedDate, message: ownerMessage || `How about ${proposedDate} instead?` }) });
+      const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      await authFetch('/api/mx-events/owner-action', { method: 'POST', body: JSON.stringify({ eventId: selectedEvent.id, action: 'counter', proposedDate, message: ownerMessage || `How about ${proposedDate} instead?`, timeZone }) });
       setOwnerMessage(""); setProposedDate("");
       await fetchEventDetail(selectedEvent.id);
       showSuccess("Counter proposal sent");
@@ -60,7 +62,8 @@ export default function ServiceEventDetail({
     if (!ownerMessage.trim()) return;
     setIsSubmitting(true);
     try {
-      await authFetch('/api/mx-events/owner-action', { method: 'POST', body: JSON.stringify({ eventId: selectedEvent.id, action: 'comment', message: ownerMessage }) });
+      const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      await authFetch('/api/mx-events/owner-action', { method: 'POST', body: JSON.stringify({ eventId: selectedEvent.id, action: 'comment', message: ownerMessage, timeZone }) });
       setOwnerMessage("");
       await fetchEventDetail(selectedEvent.id);
       showSuccess("Message sent");
@@ -71,7 +74,8 @@ export default function ServiceEventDetail({
   const handleCancelEvent = async () => {
     setIsSubmitting(true);
     try {
-      await authFetch('/api/mx-events/owner-action', { method: 'POST', body: JSON.stringify({ eventId: selectedEvent.id, action: 'cancel', message: cancelReason || 'Service event cancelled.' }) });
+      const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      await authFetch('/api/mx-events/owner-action', { method: 'POST', body: JSON.stringify({ eventId: selectedEvent.id, action: 'cancel', message: cancelReason || 'Service event cancelled.', timeZone }) });
       setShowCancelConfirm(false); setCancelReason("");
       onRefresh();
       showSuccess("Service event cancelled");
