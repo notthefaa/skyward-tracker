@@ -482,12 +482,21 @@ export default function AppShell({ session }: AppShellProps) {
       <nav role="navigation" aria-label="Main navigation" className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-gray-200 z-[9999] pt-1 pb-[env(safe-area-inset-bottom)] shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
         <div className="flex justify-around items-center h-12 max-w-3xl mx-auto">
           {[
-            { id: 'summary', icon: Home, label: 'Home', badge: 0 },
+            {
+              id: 'summary',
+              icon: activeTab === 'fleet' ? LayoutGrid : Home,
+              label: activeTab === 'fleet' ? 'Fleet' : 'Home',
+              badge: 0,
+            },
             { id: 'times', icon: Clock, label: 'Times', badge: 0 },
             { id: 'calendar', icon: Calendar, label: 'Calendar', badge: 0 },
             { id: 'mx', icon: Wrench, label: 'MX', badge: 0 },
             { id: 'notes', icon: FileText, label: 'Notes', badge: unreadNotes }
-          ].map(tab => (
+          ].map(tab => {
+            const isActive = tab.id === 'summary'
+              ? (activeTab === 'summary' || activeTab === 'fleet')
+              : activeTab === tab.id;
+            return (
             <button key={tab.id} onClick={() => {
               if (tab.id === 'mx') {
                 if (activeTab === 'mx') {
@@ -504,15 +513,26 @@ export default function AppShell({ session }: AppShellProps) {
                     setShowMxPicker(true);
                   }
                 }
+              } else if (tab.id === 'summary') {
+                // Home/Fleet toggle: from any non-home tab, first tap lands on
+                // the active tail's home. A second tap (already on summary)
+                // jumps out to the fleet grid. Tapping again while on fleet
+                // is a no-op — pick an aircraft from the grid to return.
+                if (activeTab === 'summary' && showFleetButton) {
+                  navigateTab('fleet');
+                } else if (activeTab !== 'fleet') {
+                  navigateTab('summary');
+                }
               } else {
                 navigateTab(tab.id as AppTab);
               }
-            }} aria-label={tab.label} aria-current={activeTab === tab.id ? 'page' : undefined} className={`flex-1 pb-1 flex flex-col items-center justify-center transition-all relative active:scale-95 ${getTabColor(tab.id)}`}>
+            }} aria-label={tab.label} aria-current={isActive ? 'page' : undefined} className={`flex-1 pb-1 flex flex-col items-center justify-center transition-all relative active:scale-95 ${isActive ? (tab.id === 'summary' ? 'text-navy' : getTabColor(tab.id)) : 'text-gray-400 hover:bg-gray-50'}`}>
               <div className="relative mb-1"><tab.icon size={20} />{tab.badge > 0 && <span className="absolute -top-1 -right-2 flex h-3 w-3"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#CE3732] opacity-75"></span><span className="relative inline-flex rounded-full h-3 w-3 bg-[#CE3732] text-[8px] text-white font-bold items-center justify-center border border-white"></span></span>}</div>
               <span className="text-[10px] font-bold uppercase tracking-widest">{tab.label}</span>
-              {activeTab === tab.id && <div className={`absolute bottom-0 w-12 h-1 rounded-t-full ${getIndicatorColor(tab.id)}`}></div>}
+              {isActive && <div className={`absolute bottom-0 w-12 h-1 rounded-t-full ${getIndicatorColor(tab.id)}`}></div>}
             </button>
-          ))}
+            );
+          })}
         </div>
       </nav>
 

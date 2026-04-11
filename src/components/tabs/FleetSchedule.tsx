@@ -197,8 +197,16 @@ export default function FleetSchedule({
     targetDate: Date;
   }) => (
     <div
-      onClick={(e) => { e.stopPropagation(); onSelectAircraftDate(meta.tail_number, targetDate, 'day'); }}
-      className="text-[7px] font-bold px-1 py-px rounded truncate cursor-pointer text-white"
+      onClick={(e) => {
+        // On mobile (<md), let the tap fall through to the day cell so users
+        // always get the day overview — individual pills are too small to
+        // target reliably on touch. On desktop, the pill still jumps straight
+        // to that tail's day view.
+        if (typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches) return;
+        e.stopPropagation();
+        onSelectAircraftDate(meta.tail_number, targetDate, 'day');
+      }}
+      className="text-[7px] font-bold px-1 py-px rounded truncate text-white md:cursor-pointer"
       style={{ backgroundColor: meta.color }}
       title={title}
     >
