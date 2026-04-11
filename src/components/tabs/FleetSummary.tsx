@@ -204,20 +204,6 @@ export default function FleetSummary({
                 );
               })()}
               <div className="px-4 py-3 bg-gray-50 border-t border-gray-100">
-                {(ac.nextMxDueLabel || ac.squawkCount > 0) && (
-                  <div className="flex items-center justify-between mb-2">
-                    {ac.nextMxDueLabel ? (
-                      <span className={`text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded ${ac.nextMxIsExpired ? 'bg-[#CE3732] text-white' : 'bg-[#F08B46]/15 text-[#F08B46]'}`}>
-                        {ac.nextMxIsExpired ? 'Overdue' : 'Next Up'}
-                      </span>
-                    ) : <span />}
-                    {ac.squawkCount > 0 && (
-                      <span className="text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded bg-[#CE3732]/15 text-[#CE3732] flex items-center gap-1">
-                        <AlertTriangle size={10} /> {ac.squawkCount} Open
-                      </span>
-                    )}
-                  </div>
-                )}
                 <div className="flex items-start gap-2.5">
                   <Wrench size={14} className="text-[#F08B46] shrink-0 mt-0.5" />
                   <div className="flex-1 min-w-0">
@@ -228,6 +214,11 @@ export default function FleetSummary({
                       </p>
                     )}
                   </div>
+                  {ac.squawkCount > 0 && (
+                    <span className="text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded bg-[#CE3732]/15 text-[#CE3732] flex items-center gap-1 shrink-0 mt-0.5">
+                      <AlertTriangle size={10} /> {ac.squawkCount} {ac.squawkCount === 1 ? 'Squawk' : 'Squawks'}
+                    </span>
+                  )}
                 </div>
               </div>
               {ac.lastFlownLabel && (
