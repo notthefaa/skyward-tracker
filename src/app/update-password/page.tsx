@@ -10,6 +10,7 @@ export default function UpdatePassword() {
   const { showError } = useToast();
   const [password, setPassword] = useState("");
   const [initials, setInitials] = useState("");
+  const [fullName, setFullName] = useState("");
   const[isSubmitting, setIsSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   
@@ -83,10 +84,11 @@ export default function UpdatePassword() {
       return;
     }
 
-    // 2. Save their initials and email to their database profile
-    await supabase.from('aft_user_roles').update({ 
+    // 2. Save their profile fields to aft_user_roles (the canonical user table).
+    await supabase.from('aft_user_roles').update({
       initials: initials.toUpperCase(),
-      email: session.user.email
+      email: session.user.email,
+      full_name: fullName.trim(),
     }).eq('user_id', session.user.id);
 
     // 3. Send them to the main dashboard!
@@ -196,18 +198,33 @@ export default function UpdatePassword() {
         </div>
         
         <form onSubmit={handleUpdate} className="space-y-4">
-          
+
+          <div>
+            <label className="text-[10px] font-bold uppercase tracking-widest text-navy">
+              Full Name
+            </label>
+            <input
+              type="text"
+              required
+              maxLength={80}
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              className="w-full border border-gray-300 rounded p-3 text-sm bg-white outline-none focus:border-navy mt-1"
+              placeholder="e.g. Jane Smith"
+            />
+          </div>
+
           <div>
             <label className="text-[10px] font-bold uppercase tracking-widest text-navy">
               Your Initials
             </label>
-            <input 
-              type="text" 
-              required 
+            <input
+              type="text"
+              required
               maxLength={3}
-              value={initials} 
-              onChange={(e) => setInitials(e.target.value.toUpperCase())} 
-              className="w-full border border-gray-300 rounded p-3 text-sm bg-white outline-none focus:border-navy mt-1 uppercase" 
+              value={initials}
+              onChange={(e) => setInitials(e.target.value.toUpperCase())}
+              className="w-full border border-gray-300 rounded p-3 text-sm bg-white outline-none focus:border-navy mt-1 uppercase"
               placeholder="e.g. ABC"
             />
           </div>

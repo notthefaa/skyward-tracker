@@ -6,18 +6,26 @@ import { authFetch } from "@/lib/authFetch";
 import { useToast } from "@/components/ToastProvider";
 import { NOTIFICATION_TYPES } from "@/lib/types";
 import type { NotificationType } from "@/lib/types";
-import { Settings, Bell, Trash2, Key, X, Loader2, AlertTriangle } from "lucide-react";
+import { Settings, Bell, Trash2, Key, X, Loader2, AlertTriangle, User, Check } from "lucide-react";
 
 export default function SettingsModal({ 
   show, onClose, session 
 }: { 
   show: boolean, onClose: () => void, session: any
 }) {
-  const { showError } = useToast();
+  const { showError, showSuccess } = useToast();
   const [prefs, setPrefs] = useState<Record<NotificationType, boolean>>({} as any);
   const [isLoadingPrefs, setIsLoadingPrefs] = useState(true);
   const [savingPref, setSavingPref] = useState<string | null>(null);
   const [isPrimaryContact, setIsPrimaryContact] = useState(false);
+
+  // Profile (full name / initials)
+  const [fullName, setFullName] = useState("");
+  const [initials, setInitials] = useState("");
+  const [originalFullName, setOriginalFullName] = useState("");
+  const [originalInitials, setOriginalInitials] = useState("");
+  const [isLoadingProfile, setIsLoadingProfile] = useState(true);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
 
   // Delete account
   const [showDeleteSection, setShowDeleteSection] = useState(false);
@@ -34,8 +42,47 @@ export default function SettingsModal({
     if (show && session) {
       loadPreferences();
       checkPrimaryContactStatus();
+      loadProfile();
     }
   }, [show, session]);
+
+  const loadProfile = async () => {
+    setIsLoadingProfile(true);
+    const { data } = await supabase
+      .from('aft_user_roles')
+      .select('full_name, initials')
+      .eq('user_id', session.user.id)
+      .maybeSingle();
+    const name = data?.full_name || "";
+    const inits = data?.initials || "";
+    setFullName(name);
+    setInitials(inits);
+    setOriginalFullName(name);
+    setOriginalInitials(inits);
+    setIsLoadingProfile(false);
+  };
+
+  const handleSaveProfile = async () => {
+    const trimmedName = fullName.trim();
+    const trimmedInitials = initials.trim().toUpperCase();
+    if (!trimmedName) return showError("Full name is required.");
+    if (!trimmedInitials) return showError("Initials are required.");
+    setIsSavingProfile(true);
+    const { error } = await supabase
+      .from('aft_user_roles')
+      .update({ full_name: trimmedName, initials: trimmedInitials })
+      .eq('user_id', session.user.id);
+    if (error) {
+      showError("Couldn't save profile: " + error.message);
+    } else {
+      setFullName(trimmedName);
+      setInitials(trimmedInitials);
+      setOriginalFullName(trimmedName);
+      setOriginalInitials(trimmedInitials);
+      showSuccess("Profile updated");
+    }
+    setIsSavingProfile(false);
+  };
 
   const loadPreferences = async () => {
     setIsLoadingPrefs(true);
@@ -164,8 +211,60 @@ export default function SettingsModal({
 
         <div className="p-6 space-y-8">
 
-          {/* ─── NOTIFICATION PREFERENCES ─── */}
+          {/* ─── PROFILE ─── */}
           <div>
+            <h3 className="font-oswald text-lg font-bold uppercase text-navy mb-1 flex items-center gap-2">
+              <User size={18} className="text-navy" /> Profile
+            </h3>
+            <p className="text-[10px] text-gray-500 uppercase tracking-widest mb-4">Your name and initials as shown to your crew</p>
+
+            {isLoadingProfile ? (
+              <div className="flex items-center justify-center py-6">
+                <Loader2 size={20} className="text-gray-400 animate-spin" />
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Full Name</label>
+                  <input
+                    type="text"
+                    maxLength={80}
+                    value={fullName}
+                    onChange={e => setFullName(e.target.value)}
+                    placeholder="e.g. Jane Smith"
+                    className="w-full border border-gray-300 rounded p-3 text-sm mt-1 bg-white focus:border-navy outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Initials</label>
+                  <input
+                    type="text"
+                    maxLength={3}
+                    value={initials}
+                    onChange={e => setInitials(e.target.value.toUpperCase())}
+                    placeholder="e.g. JS"
+                    className="w-full border border-gray-300 rounded p-3 text-sm mt-1 bg-white focus:border-navy outline-none uppercase"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={handleSaveProfile}
+                  disabled={
+                    isSavingProfile ||
+                    (fullName.trim() === originalFullName && initials.trim().toUpperCase() === originalInitials)
+                  }
+                  className="text-sm font-bold text-navy hover:underline disabled:opacity-40 disabled:no-underline flex items-center gap-2"
+                >
+                  {isSavingProfile
+                    ? <><Loader2 size={14} className="animate-spin" /> Saving...</>
+                    : <><Check size={14} /> Save Profile</>}
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* ─── NOTIFICATION PREFERENCES ─── */}
+          <div className="border-t border-gray-200 pt-6">
             <h3 className="font-oswald text-lg font-bold uppercase text-navy mb-1 flex items-center gap-2">
               <Bell size={18} className="text-[#3AB0FF]" /> Notifications
             </h3>

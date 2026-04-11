@@ -28,10 +28,10 @@ export async function POST(req: Request) {
       }
     }
 
-    // Get user profile for contact info
+    // Get the caller's name/email from aft_user_roles (the canonical table).
     const { data: profile } = await supabaseAdmin
-      .from('aft_user_profiles').select('full_name, email')
-      .eq('user_id', user.id).single();
+      .from('aft_user_roles').select('full_name, email')
+      .eq('user_id', user.id).maybeSingle();
 
     const { data: event, error: evErr } = await supabaseAdmin
       .from('aft_maintenance_events')
