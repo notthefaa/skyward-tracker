@@ -357,7 +357,7 @@ export default function SummaryTab({
         return (
           <div onClick={() => setActiveTab('calendar')} className={`${isYou ? 'bg-emerald-50 border-emerald-200' : 'bg-sky-50 border-sky-200'} shadow-lg border rounded-sm p-3 flex items-center gap-3 cursor-pointer hover:shadow-xl active:scale-[0.98] transition-all`}>
             <div className={`${isYou ? 'bg-[#56B94A]' : 'bg-[#3AB0FF]'} text-white p-2 rounded-full shrink-0`}><Calendar size={16} /></div>
-            <p className="text-sm font-roboto text-navy"><span className="font-bold">{who}</span> the airplane booked {sameDay ? 'until' : 'through'} {endLabel}</p>
+            <p className="text-sm font-roboto text-navy flex-1 min-w-0 break-words"><span className="font-bold">{who}</span> the airplane booked {sameDay ? 'until' : 'through'} {endLabel}</p>
           </div>
         );
       })()}

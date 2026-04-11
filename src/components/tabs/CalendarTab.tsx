@@ -421,9 +421,9 @@ export default function CalendarTab({
       <div className={`rounded border transition-all p-4 ${multiDay ? 'bg-sky-50 border-sky-200' : isOwn ? 'bg-emerald-50 border-emerald-200' : 'bg-white border-gray-200'}`}>
         <div className="flex justify-between items-start">
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1.5">
-              <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded ${multiDay ? 'bg-[#3AB0FF]/15 text-[#3AB0FF]' : isOwn ? 'bg-[#56B94A]/15 text-[#56B94A]' : 'bg-gray-100 text-gray-600'}`}>{r.pilot_initials || '—'}</span>
-              <span className="text-xs text-gray-500 font-roboto">{r.pilot_name}</span>
+            <div className="flex items-center gap-2 mb-1.5 min-w-0">
+              <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded shrink-0 ${multiDay ? 'bg-[#3AB0FF]/15 text-[#3AB0FF]' : isOwn ? 'bg-[#56B94A]/15 text-[#56B94A]' : 'bg-gray-100 text-gray-600'}`}>{r.pilot_initials || '—'}</span>
+              <span className="text-xs text-gray-500 font-roboto truncate min-w-0" title={r.pilot_name || ''}>{r.pilot_name}</span>
             </div>
             <div className="flex items-center gap-2 text-sm text-navy font-bold font-roboto">
               <Clock size={13} className="text-gray-400 shrink-0" />
@@ -543,7 +543,7 @@ export default function CalendarTab({
                   <div key={r.id} className="bg-[#3AB0FF]/10 border-2 border-[#3AB0FF]/30 rounded-sm p-4">
                     <div className="flex justify-between items-start">
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-2"><span className="bg-[#3AB0FF] text-white text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded">{r.pilot_initials || '—'} — All Day</span><span className="text-xs text-gray-500 font-roboto">{r.pilot_name}</span></div>
+                        <div className="flex items-center gap-2 mb-2 min-w-0"><span className="bg-[#3AB0FF] text-white text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded shrink-0">{r.pilot_initials || '—'} — All Day</span><span className="text-xs text-gray-500 font-roboto truncate min-w-0" title={r.pilot_name || ''}>{r.pilot_name}</span></div>
                         <div className="flex items-center gap-2 text-sm text-navy font-bold font-roboto"><Calendar size={13} className="text-[#3AB0FF] shrink-0" />{formatDateShort(r.start_time, r)} {formatTime(r.start_time, r)} — {formatDateShort(r.end_time, r)} {formatTime(r.end_time, r)}</div>
                         {r.title && <p className="text-xs text-gray-600 mt-2 font-roboto">{r.title}</p>}
                         {r.route && <p className="text-xs text-gray-500 mt-1 flex items-center gap-1 font-roboto"><MapPin size={11} className="text-[#3AB0FF] shrink-0" /> {r.route}</p>}
