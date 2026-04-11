@@ -20,8 +20,9 @@ const ctaButton = (url: string, label: string) => `
  * If duration is e.g. 3, the completion date is startDate + 2 days (3 days inclusive).
  */
 function computeEstimatedCompletion(startDate: string, durationDays: number): string {
-  const start = new Date(startDate + 'T00:00:00');
-  start.setDate(start.getDate() + Math.max(0, durationDays - 1));
+  // Parse in UTC and use getUTC*/setUTC* so the result is host-TZ-independent.
+  const start = new Date(startDate + 'T00:00:00Z');
+  start.setUTCDate(start.getUTCDate() + Math.max(0, durationDays - 1));
   return start.toISOString().split('T')[0];
 }
 

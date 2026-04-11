@@ -67,8 +67,11 @@ export async function POST(req: Request) {
             } else if (mxItem.tracking_type === 'date' && completionDate) {
               mxUpdate.last_completed_date = completionDate;
               if (mxItem.date_interval_days) {
-                const nextDue = new Date(completionDate);
-                nextDue.setDate(nextDue.getDate() + mxItem.date_interval_days);
+                // Parse the completion date as UTC midnight so getUTC*/setUTC* stays
+                // in-sync. Using bare `new Date('YYYY-MM-DD')` + local getDate/setDate
+                // shifts the result by one day in negative-UTC zones.
+                const nextDue = new Date(completionDate + 'T00:00:00Z');
+                nextDue.setUTCDate(nextDue.getUTCDate() + mxItem.date_interval_days);
                 mxUpdate.due_date = nextDue.toISOString().split('T')[0];
               }
             }

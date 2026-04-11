@@ -199,18 +199,69 @@ export default function TimesTab({
   };
 
   const submitFlightLog = async (e: React.FormEvent) => {
-    e.preventDefault(); 
-    
-    if (!editingId) {
-      if (isTurbine) {
-        if (logAftt && parseFloat(logAftt) < (aircraft!.total_airframe_time || 0)) return showError(`New AFTT (${logAftt}) cannot be less than current AFTT (${aircraft!.total_airframe_time || 0}).`);
-        if (parseFloat(logFtt) < (aircraft!.total_engine_time || 0)) return showError(`New FTT (${logFtt}) cannot be less than current FTT (${aircraft!.total_engine_time || 0}).`);
-      } else {
-        if (parseFloat(logTach) < (aircraft!.total_engine_time || 0)) return showError(`New Tach (${logTach}) cannot be less than current Tach (${aircraft!.total_engine_time || 0}).`);
-        if (logHobbs && parseFloat(logHobbs) < (aircraft!.total_airframe_time || 0)) return showError(`New Hobbs (${logHobbs}) cannot be less than current Hobbs (${aircraft!.total_airframe_time || 0}).`);
+    e.preventDefault();
+
+    const landingsNum = parseInt(logLandings);
+    const cyclesNum = isTurbine ? parseInt(logCycles) : 0;
+    if (Number.isNaN(landingsNum) || landingsNum < 0) return showError("Landings cannot be negative.");
+    if (isTurbine && (Number.isNaN(cyclesNum) || cyclesNum < 0)) return showError("Engine cycles cannot be negative.");
+    if (logFtt && parseFloat(logFtt) < 0) return showError("FTT cannot be negative.");
+    if (logTach && parseFloat(logTach) < 0) return showError("Tach cannot be negative.");
+    if (logAftt && parseFloat(logAftt) < 0) return showError("AFTT cannot be negative.");
+    if (logHobbs && parseFloat(logHobbs) < 0) return showError("Hobbs cannot be negative.");
+    if (logFuel && parseFloat(logFuel) < 0) return showError("Fuel cannot be negative.");
+
+    // Resolve the "previous" reference (what the new values must meet or exceed)
+    // and, for edits, the "next" log (upper bound so we don't overtake a newer entry).
+    let prevFtt = aircraft!.total_engine_time || 0;
+    let prevTach = aircraft!.total_engine_time || 0;
+    let prevAftt: number | null | undefined = aircraft!.total_airframe_time;
+    let prevHobbs: number | null | undefined = aircraft!.total_airframe_time;
+    let nextLog: any = null;
+    let isLatestLog = true;
+
+    if (editingId) {
+      const { data: editingLog } = await supabase
+        .from('aft_flight_logs').select('created_at')
+        .eq('id', editingId).maybeSingle();
+      if (!editingLog) return showError("Flight log not found.");
+
+      const [{ data: prevLogs }, { data: nextLogs }] = await Promise.all([
+        supabase.from('aft_flight_logs').select('*')
+          .eq('aircraft_id', aircraft!.id)
+          .lt('created_at', editingLog.created_at)
+          .order('created_at', { ascending: false }).limit(1),
+        supabase.from('aft_flight_logs').select('*')
+          .eq('aircraft_id', aircraft!.id)
+          .gt('created_at', editingLog.created_at)
+          .order('created_at', { ascending: true }).limit(1),
+      ]);
+      const prevLog = prevLogs?.[0] || null;
+      nextLog = nextLogs?.[0] || null;
+      isLatestLog = !nextLog;
+
+      prevFtt = prevLog?.ftt ?? aircraft!.setup_ftt ?? 0;
+      prevTach = prevLog?.tach ?? aircraft!.setup_tach ?? 0;
+      prevAftt = prevLog?.aftt ?? aircraft!.setup_aftt;
+      prevHobbs = prevLog?.hobbs ?? aircraft!.setup_hobbs;
+    }
+
+    if (isTurbine) {
+      if (logAftt && prevAftt != null && parseFloat(logAftt) < prevAftt) return showError(`New AFTT (${logAftt}) cannot be less than previous AFTT (${prevAftt}).`);
+      if (parseFloat(logFtt) < prevFtt) return showError(`New FTT (${logFtt}) cannot be less than previous FTT (${prevFtt}).`);
+      if (nextLog) {
+        if (logAftt && nextLog.aftt != null && parseFloat(logAftt) > nextLog.aftt) return showError(`New AFTT (${logAftt}) cannot exceed the next log's AFTT (${nextLog.aftt}).`);
+        if (nextLog.ftt != null && parseFloat(logFtt) > nextLog.ftt) return showError(`New FTT (${logFtt}) cannot exceed the next log's FTT (${nextLog.ftt}).`);
+      }
+    } else {
+      if (parseFloat(logTach) < prevTach) return showError(`New Tach (${logTach}) cannot be less than previous Tach (${prevTach}).`);
+      if (logHobbs && prevHobbs != null && parseFloat(logHobbs) < prevHobbs) return showError(`New Hobbs (${logHobbs}) cannot be less than previous Hobbs (${prevHobbs}).`);
+      if (nextLog) {
+        if (nextLog.tach != null && parseFloat(logTach) > nextLog.tach) return showError(`New Tach (${logTach}) cannot exceed the next log's Tach (${nextLog.tach}).`);
+        if (logHobbs && nextLog.hobbs != null && parseFloat(logHobbs) > nextLog.hobbs) return showError(`New Hobbs (${logHobbs}) cannot exceed the next log's Hobbs (${nextLog.hobbs}).`);
       }
     }
-    
+
     setIsSubmitting(true);
 
     let fuelGallons = logFuel ? parseFloat(logFuel) : null;
@@ -255,9 +306,13 @@ export default function TimesTab({
     }
 
     if (editingId) {
+      // Only overwrite aircraft totals if we're editing the most recent log.
+      // Editing an older entry must not reach forward and clobber the current totals,
+      // which reflect the latest log.
+      const editAircraftUpdate = isLatestLog ? aircraftUpdate : {};
       const res = await authFetch('/api/flight-logs', {
         method: 'PUT',
-        body: JSON.stringify({ logId: editingId, aircraftId: aircraft!.id, logData: payload, aircraftUpdate })
+        body: JSON.stringify({ logId: editingId, aircraftId: aircraft!.id, logData: payload, aircraftUpdate: editAircraftUpdate })
       });
       if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Failed to update flight log'); }
     } else {
@@ -458,12 +513,12 @@ export default function TimesTab({
               <div className={`grid ${isTurbine ? 'grid-cols-2' : 'grid-cols-1'} gap-4`}>
                 <div>
                   <div className="flex items-center justify-between mb-1 h-4"><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Landings</label></div>
-                  <input type="number" style={whiteBg} required value={logLandings} onChange={e=>setLogLandings(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-[#3AB0FF] outline-none bg-white" placeholder="0" />
+                  <input type="number" min="0" style={whiteBg} required value={logLandings} onChange={e=>setLogLandings(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-[#3AB0FF] outline-none bg-white" placeholder="0" />
                 </div>
                 {isTurbine && (
                   <div>
                     <div className="flex items-center justify-between mb-1 h-4"><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Engine Cycles</label></div>
-                    <input type="number" style={whiteBg} required value={logCycles} onChange={e=>setLogCycles(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-[#3AB0FF] outline-none bg-white" placeholder="0" />
+                    <input type="number" min="0" style={whiteBg} required value={logCycles} onChange={e=>setLogCycles(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-[#3AB0FF] outline-none bg-white" placeholder="0" />
                   </div>
                 )}
               </div>

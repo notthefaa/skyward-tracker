@@ -65,12 +65,13 @@ export default function TutorialModal({ session, role }: { session: any, role: s
       content: (
         <div className="space-y-4 w-full">
           <p className="text-sm text-gray-600 font-roboto leading-relaxed text-center">
-            The Fleet dashboard shows every aircraft and its current status at a glance. Tap any aircraft to dive into its details.
+            Every aircraft and its current status, right where you need it. Tap any card to dive into the details.
           </p>
           <ul className="text-sm text-gray-600 font-roboto space-y-2.5 pl-1">
             <Bullet><strong className="text-success">Green</strong> means airworthy and ready to fly.</Bullet>
             <Bullet><strong className="text-[#F08B46]">Orange</strong> means open squawks worth monitoring.</Bullet>
             <Bullet><strong className="text-[#CE3732]">Red</strong> means grounded — expired MX or an AOG squawk.</Bullet>
+            <Bullet>Flip to <strong>Fleet Schedule</strong> from the header to see every aircraft's bookings on one shared calendar.</Bullet>
           </ul>
         </div>
       )
@@ -101,8 +102,10 @@ export default function TutorialModal({ session, role }: { session: any, role: s
           </p>
           <ul className="text-sm text-gray-600 font-roboto space-y-2.5 pl-1">
             <Bullet>Reserve with a tap — add your times, purpose, and route of flight.</Bullet>
+            <Bullet>Set it to repeat weekly, biweekly, or on a custom schedule that fits your training or travel rhythm.</Bullet>
             <Bullet>Overlapping bookings are blocked automatically. No conflicts, no surprises.</Bullet>
             <Bullet>Maintenance events block the calendar so nobody books during service.</Bullet>
+            {role === 'admin' && <Bullet>Book on behalf of any pilot assigned to the aircraft when you need to hold time for them.</Bullet>}
             <Bullet>Your team gets notified whenever a reservation is created or cancelled.</Bullet>
           </ul>
         </div>

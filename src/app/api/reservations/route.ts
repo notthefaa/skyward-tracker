@@ -157,13 +157,14 @@ export async function POST(req: Request) {
         continue;
       }
 
-      // Check MX conflicts
+      // Check MX conflicts — build the block in UTC so it compares correctly
+      // against ISO reservation timestamps regardless of server TZ.
       let mxConflict = false;
       for (const ev of allMxEvents) {
         if (ev.confirmed_date) {
-          const mxStart = new Date(ev.confirmed_date + 'T00:00:00');
+          const mxStart = new Date(ev.confirmed_date + 'T00:00:00Z');
           const mxEnd = ev.estimated_completion
-            ? new Date(ev.estimated_completion + 'T23:59:59')
+            ? new Date(ev.estimated_completion + 'T23:59:59.999Z')
             : new Date(mxStart.getTime() + 86400000);
           if (new Date(occ.start) < mxEnd && new Date(occ.end) > mxStart) {
             skipped.push({ start: occ.start, reason: 'Maintenance scheduled' });
@@ -402,9 +403,9 @@ export async function PUT(req: Request) {
     if (mxEvents) {
       for (const ev of mxEvents) {
         if (ev.confirmed_date) {
-          const mxStart = new Date(ev.confirmed_date + 'T00:00:00');
+          const mxStart = new Date(ev.confirmed_date + 'T00:00:00Z');
           const mxEnd = ev.estimated_completion
-            ? new Date(ev.estimated_completion + 'T23:59:59')
+            ? new Date(ev.estimated_completion + 'T23:59:59.999Z')
             : new Date(mxStart.getTime() + 24 * 60 * 60 * 1000);
 
           if (new Date(newStart) < mxEnd && new Date(newEnd) > mxStart) {

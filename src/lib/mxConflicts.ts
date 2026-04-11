@@ -47,10 +47,12 @@ export async function cancelConflictingReservations({
   timeZone,
 }: MxConflictParams): Promise<number> {
   const tz = safeTimeZone(timeZone);
-  // Build the MX block range (whole days, midnight to midnight)
-  const mxStart = new Date(confirmedDate + 'T00:00:00');
+  // Build the MX block range as a UTC whole-day window. Always use 'Z' so this
+  // is independent of the host server's local TZ — reservations are stored as
+  // ISO UTC and both sides of the overlap check must agree.
+  const mxStart = new Date(confirmedDate + 'T00:00:00Z');
   const mxEnd = estimatedCompletion
-    ? new Date(estimatedCompletion + 'T23:59:59.999')
+    ? new Date(estimatedCompletion + 'T23:59:59.999Z')
     : new Date(mxStart.getTime() + 24 * 60 * 60 * 1000 - 1); // end of confirmed_date
 
   // Find confirmed reservations that overlap with the MX block.
@@ -102,10 +104,12 @@ export async function cancelConflictingReservations({
   const safeTailNumber = escapeHtml(tailNumber);
   const mechanicLabel = escapeHtml(mechanicName || 'the maintenance provider');
 
-  // Format dates for display
-  const mxStartLabel = mxStart.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+  // Format dates for display — force UTC so the label matches the YYYY-MM-DD
+  // string the user entered instead of shifting with the server's local TZ.
+  const labelOpts: Intl.DateTimeFormatOptions = { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' };
+  const mxStartLabel = mxStart.toLocaleDateString('en-US', labelOpts);
   const mxEndLabel = estimatedCompletion
-    ? new Date(estimatedCompletion + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+    ? new Date(estimatedCompletion + 'T00:00:00Z').toLocaleDateString('en-US', labelOpts)
     : mxStartLabel;
   const mxDateRange = mxStartLabel === mxEndLabel
     ? mxStartLabel
