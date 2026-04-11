@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
-import { 
-  PlaneTakeoff, LayoutGrid, Clock, Wrench, AlertTriangle, Send, ShieldCheck, 
-  ChevronRight, X, Calendar, Check, FileText, Bell, UserPlus, Settings
+import {
+  PlaneTakeoff, LayoutGrid, Clock, Wrench, AlertTriangle, Send, ShieldCheck,
+  ChevronRight, X, Calendar, Check, FileText, Bell, UserPlus, Settings, Smartphone
 } from "lucide-react";
 
 export default function TutorialModal({ session, role }: { session: any, role: string }) {
@@ -10,7 +10,7 @@ export default function TutorialModal({ session, role }: { session: any, role: s
 
   useEffect(() => {
     if (session?.user?.id) {
-      const hasSeen = localStorage.getItem(`aft_tutorial_v5_${session.user.id}`);
+      const hasSeen = localStorage.getItem(`aft_tutorial_v6_${session.user.id}`);
       if (!hasSeen) {
         setIsVisible(true);
       }
@@ -19,7 +19,7 @@ export default function TutorialModal({ session, role }: { session: any, role: s
 
   const dismissTutorial = () => {
     if (session?.user?.id) {
-      localStorage.setItem(`aft_tutorial_v5_${session.user.id}`, 'true');
+      localStorage.setItem(`aft_tutorial_v6_${session.user.id}`, 'true');
     }
     setIsVisible(false);
   };
@@ -56,6 +56,34 @@ export default function TutorialModal({ session, role }: { session: any, role: s
           <p className="text-sm text-gray-600 font-roboto leading-relaxed text-center">
             Let's take a quick look around.
           </p>
+        </div>
+      )
+    },
+    {
+      title: "Install It on Your Phone",
+      icon: <Smartphone size={48} className="text-[#3AB0FF]" />,
+      content: (
+        <div className="space-y-4 w-full">
+          <p className="text-sm text-gray-600 font-roboto leading-relaxed text-center">
+            Skyward runs best pinned to your home screen — it launches full-screen like a native app, loads instantly, and keeps you logged in.
+          </p>
+          <div className="text-sm text-gray-600 font-roboto space-y-3 text-left">
+            <div>
+              <p className="font-oswald font-bold uppercase tracking-wider text-navy text-xs mb-1.5">iPhone &amp; iPad</p>
+              <ul className="space-y-1.5 pl-1">
+                <Bullet><strong>Safari:</strong> Tap the <strong>Share</strong> icon (square with an up arrow) at the bottom, scroll down, then tap <strong>Add to Home Screen</strong>.</Bullet>
+                <Bullet><strong>Chrome / Edge / Firefox:</strong> Tap the <strong>Share</strong> icon in the address bar, then choose <strong>Add to Home Screen</strong>.</Bullet>
+              </ul>
+            </div>
+            <div>
+              <p className="font-oswald font-bold uppercase tracking-wider text-navy text-xs mb-1.5">Android</p>
+              <ul className="space-y-1.5 pl-1">
+                <Bullet><strong>Chrome / Edge:</strong> Tap the <strong>⋮</strong> menu, then <strong>Install app</strong> (or <strong>Add to Home screen</strong>).</Bullet>
+                <Bullet><strong>Samsung Internet:</strong> Tap the <strong>☰</strong> menu, tap <strong>Add page to</strong>, then choose <strong>Home screen</strong>.</Bullet>
+                <Bullet><strong>Firefox:</strong> Tap the <strong>⋮</strong> menu, then tap <strong>Install</strong>.</Bullet>
+              </ul>
+            </div>
+          </div>
         </div>
       )
     },
