@@ -43,6 +43,8 @@ export default function FleetSchedule({
 }) {
   const [view, setView] = useState<CalendarView>('month');
   const [currentDate, setCurrentDate] = useState(new Date());
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [pickerYear, setPickerYear] = useState(() => new Date().getFullYear());
   const [selectedTails, setSelectedTails] = useState<Set<string>>(
     () => new Set(aircraftList.map(a => a.id))
   );
@@ -220,15 +222,20 @@ export default function FleetSchedule({
               </button>
             ))}
           </div>
-          <div className="flex items-center gap-1">
-            <button onClick={() => navigate(-1)} className="text-gray-400 hover:text-navy active:scale-95 p-1.5 rounded hover:bg-gray-100 transition-colors"><ChevronLeft size={18} /></button>
-            <button onClick={() => setCurrentDate(new Date())} className="text-[10px] font-oswald font-bold uppercase tracking-widest text-[#56B94A] hover:bg-emerald-50 px-3 py-1.5 rounded transition-colors">Today</button>
-            <button onClick={() => navigate(1)} className="text-gray-400 hover:text-navy active:scale-95 p-1.5 rounded hover:bg-gray-100 transition-colors"><ChevronRight size={18} /></button>
-          </div>
+          <button onClick={() => setCurrentDate(new Date())} className="text-[10px] font-oswald font-bold uppercase tracking-widest text-[#56B94A] hover:bg-emerald-50 px-3 py-1.5 rounded transition-colors">Today</button>
         </div>
-        <h2 className="font-oswald text-xl font-bold uppercase text-navy mt-3 leading-none">
-          {view === 'month' ? monthLabel : view === 'week' ? weekLabel : dayLabel}
-        </h2>
+        <div className="flex items-center justify-center gap-2 mt-3">
+          <button onClick={() => navigate(-1)} aria-label="Previous" className="text-gray-400 hover:text-navy active:scale-95 p-1.5 rounded hover:bg-gray-100 transition-colors shrink-0"><ChevronLeft size={20} /></button>
+          <button
+            type="button"
+            onClick={() => { setPickerYear(currentDate.getFullYear()); setShowDatePicker(true); }}
+            className="font-oswald text-xl font-bold uppercase text-navy leading-none px-3 py-1 rounded hover:bg-gray-100 active:scale-95 transition-colors"
+            aria-label="Jump to a different month"
+          >
+            {view === 'month' ? monthLabel : view === 'week' ? weekLabel : dayLabel}
+          </button>
+          <button onClick={() => navigate(1)} aria-label="Next" className="text-gray-400 hover:text-navy active:scale-95 p-1.5 rounded hover:bg-gray-100 transition-colors shrink-0"><ChevronRight size={20} /></button>
+        </div>
       </div>
 
       {/* Tail filter chips */}
@@ -517,6 +524,86 @@ export default function FleetSchedule({
           );
         })()}
       </div>
+
+      {/* MONTH / YEAR JUMP PICKER */}
+      {showDatePicker && (() => {
+        const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        const monthsLong = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+        const todayRef = new Date();
+        const currentYear = currentDate.getFullYear();
+        const currentMonth = currentDate.getMonth();
+        const pickMonth = (monthIdx: number) => {
+          const next = new Date(currentDate);
+          next.setFullYear(pickerYear);
+          next.setMonth(monthIdx);
+          if (view === 'month') next.setDate(1);
+          setCurrentDate(next);
+          setShowDatePicker(false);
+        };
+        return (
+          <div
+            className="fixed inset-0 bg-black/60 z-[10000] flex items-center justify-center p-4 animate-fade-in"
+            onClick={() => setShowDatePicker(false)}
+          >
+            <div
+              role="dialog"
+              aria-label="Jump to month"
+              className="bg-white rounded shadow-2xl w-full max-w-xs p-5 border-t-4 border-[#56B94A] animate-slide-up"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <button
+                  type="button"
+                  onClick={() => setPickerYear(y => y - 1)}
+                  aria-label="Previous year"
+                  className="text-gray-400 hover:text-navy active:scale-95 p-1.5 rounded hover:bg-gray-100 transition-colors"
+                >
+                  <ChevronLeft size={20} />
+                </button>
+                <span className="font-oswald text-2xl font-bold uppercase tracking-widest text-navy">{pickerYear}</span>
+                <button
+                  type="button"
+                  onClick={() => setPickerYear(y => y + 1)}
+                  aria-label="Next year"
+                  className="text-gray-400 hover:text-navy active:scale-95 p-1.5 rounded hover:bg-gray-100 transition-colors"
+                >
+                  <ChevronRight size={20} />
+                </button>
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                {months.map((m, idx) => {
+                  const isCurrent = pickerYear === currentYear && idx === currentMonth;
+                  const isThisMonth = pickerYear === todayRef.getFullYear() && idx === todayRef.getMonth();
+                  return (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => pickMonth(idx)}
+                      title={`${monthsLong[idx]} ${pickerYear}`}
+                      className={`text-xs font-oswald font-bold uppercase tracking-widest py-3 rounded transition-colors active:scale-95 ${
+                        isCurrent
+                          ? 'bg-[#56B94A] text-white shadow-sm'
+                          : isThisMonth
+                            ? 'bg-emerald-50 text-[#56B94A] border border-[#56B94A]/40'
+                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      }`}
+                    >
+                      {m}
+                    </button>
+                  );
+                })}
+              </div>
+              <button
+                type="button"
+                onClick={() => { setCurrentDate(new Date()); setShowDatePicker(false); }}
+                className="w-full mt-4 text-[10px] font-oswald font-bold uppercase tracking-widest text-[#56B94A] hover:bg-emerald-50 py-2 rounded transition-colors"
+              >
+                Jump to Today
+              </button>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
