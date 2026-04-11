@@ -137,6 +137,7 @@ export default function CalendarTab({
   const [showBookingForm, setShowBookingForm] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [pickerYear, setPickerYear] = useState<number>(() => (initialDate || new Date()).getFullYear());
+  const [pickerMonth, setPickerMonth] = useState<number>(() => (initialDate || new Date()).getMonth());
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [bookingStartDate, setBookingStartDate] = useState("");
@@ -469,7 +470,7 @@ export default function CalendarTab({
             <button onClick={() => navigate(-1)} aria-label="Previous" className="text-gray-400 hover:text-navy active:scale-95 p-1.5 rounded hover:bg-gray-100 transition-colors shrink-0"><ChevronLeft size={20} /></button>
             <button
               type="button"
-              onClick={() => { setPickerYear(currentDate.getFullYear()); setShowDatePicker(true); }}
+              onClick={() => { setPickerYear(currentDate.getFullYear()); setPickerMonth(currentDate.getMonth()); setShowDatePicker(true); }}
               className="font-oswald text-xl font-bold uppercase text-navy leading-none px-3 py-1 rounded hover:bg-gray-100 active:scale-95 transition-colors"
               aria-label="Jump to a different month"
             >
@@ -717,23 +718,72 @@ export default function CalendarTab({
         </div>
       )}
 
-      {/* MONTH / YEAR JUMP PICKER */}
+      {/* VIEW-AWARE JUMP PICKER — month/week/day */}
       {showDatePicker && (() => {
         const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
         const monthsLong = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+        const dowLabels = ['S','M','T','W','T','F','S'];
         const todayRef = new Date();
         const currentYear = currentDate.getFullYear();
         const currentMonth = currentDate.getMonth();
+        const currentDay = currentDate.getDate();
+
+        const stepMonth = (delta: number) => {
+          let m = pickerMonth + delta;
+          let y = pickerYear;
+          while (m < 0) { m += 12; y -= 1; }
+          while (m > 11) { m -= 12; y += 1; }
+          setPickerYear(y);
+          setPickerMonth(m);
+        };
+
         const pickMonth = (monthIdx: number) => {
           const next = new Date(currentDate);
           next.setFullYear(pickerYear);
+          next.setDate(1);
           next.setMonth(monthIdx);
-          // Snap to the 1st when jumping by month; week/day views will
-          // reorient themselves around that day.
-          if (view === 'month') next.setDate(1);
           setCurrentDate(next);
           setShowDatePicker(false);
         };
+        const pickDay = (day: number) => {
+          const next = new Date(pickerYear, pickerMonth, day);
+          setCurrentDate(next);
+          setShowDatePicker(false);
+        };
+        const pickWeek = (sunday: Date) => {
+          setCurrentDate(new Date(sunday));
+          setShowDatePicker(false);
+        };
+
+        const headerLabel = view === 'month'
+          ? String(pickerYear)
+          : `${monthsLong[pickerMonth]} ${pickerYear}`;
+        const headerOnPrev = view === 'month' ? () => setPickerYear(y => y - 1) : () => stepMonth(-1);
+        const headerOnNext = view === 'month' ? () => setPickerYear(y => y + 1) : () => stepMonth(1);
+        const dialogLabel = view === 'month' ? 'Jump to month' : view === 'week' ? 'Jump to week' : 'Jump to day';
+
+        const startDow = new Date(pickerYear, pickerMonth, 1).getDay();
+        const daysInPickerMonth = new Date(pickerYear, pickerMonth + 1, 0).getDate();
+
+        type WeekRow = { sunday: Date; days: (number | null)[] };
+        const weekRows: WeekRow[] = [];
+        if (view === 'week') {
+          const firstSunday = new Date(pickerYear, pickerMonth, 1 - startDow);
+          const cursor = new Date(firstSunday);
+          while (cursor.getFullYear() < pickerYear ||
+                 (cursor.getFullYear() === pickerYear && cursor.getMonth() <= pickerMonth)) {
+            const row: WeekRow = { sunday: new Date(cursor), days: [] };
+            for (let i = 0; i < 7; i++) {
+              const d = new Date(cursor);
+              d.setDate(cursor.getDate() + i);
+              row.days.push(d.getMonth() === pickerMonth ? d.getDate() : null);
+            }
+            weekRows.push(row);
+            cursor.setDate(cursor.getDate() + 7);
+            if (row.days.every(d => d === null)) { weekRows.pop(); break; }
+          }
+        }
+
         return (
           <div
             className="fixed inset-0 bg-black/60 z-[10000] flex items-center justify-center p-4 animate-fade-in"
@@ -741,52 +791,122 @@ export default function CalendarTab({
           >
             <div
               role="dialog"
-              aria-label="Jump to month"
+              aria-label={dialogLabel}
               className="bg-white rounded shadow-2xl w-full max-w-xs p-5 border-t-4 border-[#56B94A] animate-slide-up"
               onClick={e => e.stopPropagation()}
             >
               <div className="flex items-center justify-between mb-4">
                 <button
                   type="button"
-                  onClick={() => setPickerYear(y => y - 1)}
-                  aria-label="Previous year"
+                  onClick={headerOnPrev}
+                  aria-label={view === 'month' ? 'Previous year' : 'Previous month'}
                   className="text-gray-400 hover:text-navy active:scale-95 p-1.5 rounded hover:bg-gray-100 transition-colors"
                 >
                   <ChevronLeft size={20} />
                 </button>
-                <span className="font-oswald text-2xl font-bold uppercase tracking-widest text-navy">{pickerYear}</span>
+                <span className="font-oswald text-xl font-bold uppercase tracking-widest text-navy">{headerLabel}</span>
                 <button
                   type="button"
-                  onClick={() => setPickerYear(y => y + 1)}
-                  aria-label="Next year"
+                  onClick={headerOnNext}
+                  aria-label={view === 'month' ? 'Next year' : 'Next month'}
                   className="text-gray-400 hover:text-navy active:scale-95 p-1.5 rounded hover:bg-gray-100 transition-colors"
                 >
                   <ChevronRight size={20} />
                 </button>
               </div>
-              <div className="grid grid-cols-3 gap-2">
-                {months.map((m, idx) => {
-                  const isCurrent = pickerYear === currentYear && idx === currentMonth;
-                  const isThisMonth = pickerYear === todayRef.getFullYear() && idx === todayRef.getMonth();
-                  return (
-                    <button
-                      key={m}
-                      type="button"
-                      onClick={() => pickMonth(idx)}
-                      title={`${monthsLong[idx]} ${pickerYear}`}
-                      className={`text-xs font-oswald font-bold uppercase tracking-widest py-3 rounded transition-colors active:scale-95 ${
-                        isCurrent
-                          ? 'bg-[#56B94A] text-white shadow-sm'
-                          : isThisMonth
-                            ? 'bg-emerald-50 text-[#56B94A] border border-[#56B94A]/40'
-                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                      }`}
-                    >
-                      {m}
-                    </button>
-                  );
-                })}
-              </div>
+
+              {view === 'month' && (
+                <div className="grid grid-cols-3 gap-2">
+                  {months.map((m, idx) => {
+                    const isCurrent = pickerYear === currentYear && idx === currentMonth;
+                    const isThisMonth = pickerYear === todayRef.getFullYear() && idx === todayRef.getMonth();
+                    return (
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() => pickMonth(idx)}
+                        title={`${monthsLong[idx]} ${pickerYear}`}
+                        className={`text-xs font-oswald font-bold uppercase tracking-widest py-3 rounded transition-colors active:scale-95 ${
+                          isCurrent
+                            ? 'bg-[#56B94A] text-white shadow-sm'
+                            : isThisMonth
+                              ? 'bg-emerald-50 text-[#56B94A] border border-[#56B94A]/40'
+                              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        }`}
+                      >
+                        {m}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              {view === 'day' && (
+                <div>
+                  <div className="grid grid-cols-7 mb-1">
+                    {dowLabels.map((d, i) => (
+                      <div key={i} className="text-[10px] font-oswald font-bold uppercase tracking-widest text-gray-400 text-center py-1">{d}</div>
+                    ))}
+                  </div>
+                  <div className="grid grid-cols-7 gap-1">
+                    {Array.from({ length: startDow }).map((_, i) => <div key={`e-${i}`} />)}
+                    {Array.from({ length: daysInPickerMonth }).map((_, i) => {
+                      const day = i + 1;
+                      const isCurrent = pickerYear === currentYear && pickerMonth === currentMonth && day === currentDay;
+                      const isToday = pickerYear === todayRef.getFullYear() && pickerMonth === todayRef.getMonth() && day === todayRef.getDate();
+                      return (
+                        <button
+                          key={day}
+                          type="button"
+                          onClick={() => pickDay(day)}
+                          className={`text-xs font-oswald font-bold aspect-square rounded transition-colors active:scale-95 ${
+                            isCurrent
+                              ? 'bg-[#56B94A] text-white shadow-sm'
+                              : isToday
+                                ? 'bg-emerald-50 text-[#56B94A] border border-[#56B94A]/40'
+                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                          }`}
+                        >
+                          {day}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {view === 'week' && (
+                <div className="space-y-1">
+                  <div className="grid grid-cols-7 gap-1 mb-1">
+                    {dowLabels.map((d, i) => (
+                      <div key={i} className="text-[10px] font-oswald font-bold uppercase tracking-widest text-gray-400 text-center py-1">{d}</div>
+                    ))}
+                  </div>
+                  {weekRows.map((row, ri) => {
+                    const currentSunday = new Date(currentDate);
+                    currentSunday.setHours(0, 0, 0, 0);
+                    currentSunday.setDate(currentSunday.getDate() - currentSunday.getDay());
+                    const isCurrent = row.sunday.toDateString() === currentSunday.toDateString();
+                    return (
+                      <button
+                        key={ri}
+                        type="button"
+                        onClick={() => pickWeek(row.sunday)}
+                        className={`w-full grid grid-cols-7 gap-1 p-1 rounded transition-colors active:scale-95 ${
+                          isCurrent ? 'bg-[#56B94A] text-white shadow-sm' : 'hover:bg-gray-100 text-gray-600'
+                        }`}
+                      >
+                        {row.days.map((d, di) => (
+                          <span key={di} className={`text-xs font-oswald font-bold text-center py-1 ${d === null ? 'opacity-30' : ''}`}>
+                            {d ?? ''}
+                          </span>
+                        ))}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
               <button
                 type="button"
                 onClick={() => { setCurrentDate(new Date()); setShowDatePicker(false); }}
