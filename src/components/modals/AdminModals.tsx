@@ -4,6 +4,7 @@ import { useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { authFetch } from "@/lib/authFetch";
 import { useToast } from "@/components/ToastProvider";
+import { useConfirm } from "@/components/ConfirmProvider";
 import type { AircraftWithMetrics, SystemSettings, AppTab } from "@/lib/types";
 import type { FleetIndexEntry } from "@/hooks/useFleetData";
 import { ShieldCheck, Settings, MailOpen, Database, Sliders, Globe, Users, PlaneTakeoff, X, ChevronRight, ChevronDown, Loader2, Mail, Trash2, KeyRound, Search } from "lucide-react";
@@ -54,6 +55,7 @@ export default function AdminModals({
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const { showSuccess, showError, showInfo } = useToast();
+  const confirm = useConfirm();
 
   const [globalUsers, setGlobalUsers] = useState<any[]>([]);
   const [usersSearch, setUsersSearch] = useState("");
@@ -63,7 +65,12 @@ export default function AdminModals({
   if (!showAdminMenu && !showGlobalFleetModal && !showToolsMenu && !showSettingsModal && !showEmailPreview && !showAccessModal && !showInviteModal && !showUsersModal) return null;
 
   const handleDatabaseCleanup = async () => {
-    if (!confirm("Run Health Check?\n\nThis will safely purge old read-receipts (older than 30 days) to keep the database fast and optimized.")) return;
+    const ok = await confirm({
+      title: "Run Health Check?",
+      message: "This will safely purge old read-receipts (older than 30 days) to keep the database fast and optimized.",
+      confirmText: "Run Check",
+    });
+    if (!ok) return;
     setIsSubmitting(true);
     try {
       const res = await authFetch('/api/admin/db-health', { method: 'POST' });
@@ -130,7 +137,12 @@ export default function AdminModals({
   const handleAdminResetPassword = async () => {
     const selectedUserEmail = allUsers.find(u => u.user_id === selectedAccessUserId)?.email;
     if (!selectedUserEmail) return;
-    if (!confirm(`Are you sure you want to send a password reset email to ${selectedUserEmail}?`)) return;
+    const ok = await confirm({
+      title: "Send Password Reset?",
+      message: `A secure password reset link will be emailed to ${selectedUserEmail}.`,
+      confirmText: "Send Reset Link",
+    });
+    if (!ok) return;
     setIsSubmitting(true);
     const { error } = await supabase.auth.resetPasswordForEmail(selectedUserEmail, { redirectTo: `${window.location.origin}/update-password` });
     setIsSubmitting(false);
@@ -140,7 +152,13 @@ export default function AdminModals({
   const handleDeleteUser = async () => {
     const selectedUserEmail = allUsers.find(u => u.user_id === selectedAccessUserId)?.email;
     if (!selectedUserEmail) return;
-    if (!confirm(`CRITICAL WARNING: Are you absolutely sure you want to permanently delete ${selectedUserEmail} and revoke all their access?`)) return;
+    const ok = await confirm({
+      title: "Permanently Delete User?",
+      message: `${selectedUserEmail} will be deleted and all of their aircraft access revoked. This cannot be undone.`,
+      confirmText: "Delete User",
+      variant: "danger",
+    });
+    if (!ok) return;
     setIsSubmitting(true);
     try {
       const res = await authFetch('/api/users', { method: 'DELETE', body: JSON.stringify({ userId: selectedAccessUserId }) });
@@ -182,7 +200,12 @@ export default function AdminModals({
   const handleChangeGlobalRole = async (userId: string, newRole: 'admin' | 'pilot') => {
     const u = globalUsers.find(u => u.user_id === userId);
     if (!u) return;
-    if (!confirm(`Change ${u.email} to ${newRole.toUpperCase()}?`)) return;
+    const ok = await confirm({
+      title: "Change Global Role?",
+      message: `${u.email} will become a ${newRole === 'admin' ? 'Global Admin' : 'Pilot'}.`,
+      confirmText: "Change Role",
+    });
+    if (!ok) return;
     setIsSubmitting(true);
     try {
       const res = await authFetch('/api/admin/users', { method: 'PUT', body: JSON.stringify({ targetUserId: userId, newRole }) });
@@ -195,7 +218,13 @@ export default function AdminModals({
   const handleDeleteUserFromList = async (userId: string) => {
     const u = globalUsers.find(u => u.user_id === userId);
     if (!u) return;
-    if (!confirm(`CRITICAL: Permanently delete ${u.email} and revoke all access?`)) return;
+    const ok = await confirm({
+      title: "Permanently Delete User?",
+      message: `${u.email} will be deleted and all access revoked. This cannot be undone.`,
+      confirmText: "Delete User",
+      variant: "danger",
+    });
+    if (!ok) return;
     setIsSubmitting(true);
     try {
       const res = await authFetch('/api/users', { method: 'DELETE', body: JSON.stringify({ userId }) });
@@ -208,7 +237,12 @@ export default function AdminModals({
   const handleResetPasswordFromList = async (userId: string) => {
     const u = globalUsers.find(u => u.user_id === userId);
     if (!u?.email) return;
-    if (!confirm(`Send password reset email to ${u.email}?`)) return;
+    const ok = await confirm({
+      title: "Send Password Reset?",
+      message: `A secure password reset link will be emailed to ${u.email}.`,
+      confirmText: "Send Reset Link",
+    });
+    if (!ok) return;
     setIsSubmitting(true);
     const { error } = await supabase.auth.resetPasswordForEmail(u.email, { redirectTo: `${window.location.origin}/update-password` });
     setIsSubmitting(false);
@@ -242,7 +276,12 @@ export default function AdminModals({
   const handleSetPilotAndDemoteAll = async (userId: string) => {
     const u = globalUsers.find(u => u.user_id === userId);
     if (!u) return;
-    if (!confirm(`Demote ${u.email} to Pilot on all aircraft?`)) return;
+    const ok = await confirm({
+      title: "Demote to Pilot?",
+      message: `${u.email} will be demoted to Pilot on every aircraft they currently administer.`,
+      confirmText: "Demote",
+    });
+    if (!ok) return;
     setIsSubmitting(true);
     try {
       // Set global role to pilot if needed
@@ -268,7 +307,12 @@ export default function AdminModals({
     try {
       // If currently a global admin, demote to pilot first
       if (u.role === 'admin') {
-        if (!confirm(`This will remove ${u.email}'s Global Admin privileges. They will become an Aircraft Admin instead. Continue?`)) {
+        const ok = await confirm({
+          title: "Remove Global Admin?",
+          message: `${u.email}'s Global Admin privileges will be removed. They will become an Aircraft Admin instead.`,
+          confirmText: "Continue",
+        });
+        if (!ok) {
           setIsSubmitting(false);
           return;
         }

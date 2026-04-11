@@ -49,38 +49,36 @@ export async function POST(req: Request) {
     let targetUserId: string;
 
     if (existingUsers && existingUsers.length > 0) {
-      // User already exists — just add aircraft access
+      // User already exists — add or update aircraft access
       targetUserId = existingUsers[0].user_id;
 
-      // Check if they already have access to this aircraft
+      // Check the current access row so we can return a friendly "already
+      // assigned" message when the role hasn't actually changed.
       const { data: existingAccess } = await supabaseAdmin
         .from('aft_user_aircraft_access')
         .select('aircraft_role')
         .eq('user_id', targetUserId)
         .eq('aircraft_id', aircraftId)
-        .single();
+        .maybeSingle();
 
-      if (existingAccess) {
-        // Already assigned — update role if different
-        if (existingAccess.aircraft_role !== aircraftRole) {
-          await supabaseAdmin
-            .from('aft_user_aircraft_access')
-            .update({ aircraft_role: aircraftRole })
-            .eq('user_id', targetUserId)
-            .eq('aircraft_id', aircraftId);
-          return NextResponse.json({ success: true, message: 'User role updated.' });
-        }
+      if (existingAccess && existingAccess.aircraft_role === aircraftRole) {
         return NextResponse.json({ error: 'This user already has access to this aircraft.' }, { status: 400 });
       }
 
-      // Add access
-      await supabaseAdmin.from('aft_user_aircraft_access').insert({
-        user_id: targetUserId,
-        aircraft_id: aircraftId,
-        aircraft_role: aircraftRole,
-      });
+      // Upsert rather than insert so a concurrent invite can't collide on
+      // the (user_id, aircraft_id) unique constraint and throw 23505.
+      const { error: upsertError } = await supabaseAdmin
+        .from('aft_user_aircraft_access')
+        .upsert(
+          { user_id: targetUserId, aircraft_id: aircraftId, aircraft_role: aircraftRole },
+          { onConflict: 'user_id,aircraft_id' }
+        );
+      if (upsertError) throw upsertError;
 
-      return NextResponse.json({ success: true, message: 'User added to aircraft.' });
+      return NextResponse.json({
+        success: true,
+        message: existingAccess ? 'User role updated.' : 'User added to aircraft.',
+      });
 
     } else {
       // User doesn't exist — invite via Supabase Auth
@@ -100,12 +98,14 @@ export async function POST(req: Request) {
           email: email.toLowerCase(),
         });
 
-        // Assign to the aircraft with the specified role
-        await supabaseAdmin.from('aft_user_aircraft_access').insert({
-          user_id: targetUserId,
-          aircraft_id: aircraftId,
-          aircraft_role: aircraftRole,
-        });
+        // Upsert aircraft access — same reasoning as above.
+        const { error: accessError } = await supabaseAdmin
+          .from('aft_user_aircraft_access')
+          .upsert(
+            { user_id: targetUserId, aircraft_id: aircraftId, aircraft_role: aircraftRole },
+            { onConflict: 'user_id,aircraft_id' }
+          );
+        if (accessError) throw accessError;
       }
 
       return NextResponse.json({ success: true, message: 'Invitation sent.' });

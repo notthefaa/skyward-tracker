@@ -2,6 +2,7 @@
 
 import { SWRConfig } from "swr";
 import { ToastProvider } from "@/components/ToastProvider";
+import { ConfirmProvider } from "@/components/ConfirmProvider";
 import { localStorageCacheProvider } from "@/lib/swrCache";
 
 export function Providers({ children }: { children: React.ReactNode }) {
@@ -14,7 +15,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
         dedupingInterval: 10000,
       }}
     >
-      <ToastProvider>{children}</ToastProvider>
+      <ToastProvider>
+        <ConfirmProvider>{children}</ConfirmProvider>
+      </ToastProvider>
     </SWRConfig>
   );
 }

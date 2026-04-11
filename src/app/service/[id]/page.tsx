@@ -197,6 +197,16 @@ export default function ServicePortal() {
 
   const isImageType = (type: string) => type.startsWith('image/');
 
+  // Local YYYY-MM-DD — used as `min` on native date pickers so the
+  // mechanic can't accidentally pick a past day for a proposed/ready date.
+  const todayDateString = (() => {
+    const d = new Date();
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  })();
+
   const formatFileSize = (bytes: number) => {
     if (bytes < 1024) return bytes + ' B';
     if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(0) + ' KB';
@@ -211,7 +221,28 @@ export default function ServicePortal() {
 
   if (!event || !aircraft) {
     return (
-      <div className="min-h-screen bg-neutral-100 flex items-center justify-center text-navy font-oswald tracking-widest uppercase text-xl">{isExpired ? 'This Service Portal Link Has Expired' : 'Service Event Not Found'}</div>
+      <div className="min-h-screen bg-neutral-100 flex items-center justify-center p-6">
+        <div className="bg-white shadow-2xl rounded-sm max-w-md w-full p-8 border-t-4 border-[#091F3C] text-center">
+          <img src="/logo.png" alt="Skyward" className="mx-auto h-20 object-contain mb-4 opacity-80" />
+          {isExpired ? (
+            <>
+              <AlertTriangle size={32} className="mx-auto text-[#F08B46] mb-3" />
+              <h2 className="font-oswald text-2xl font-bold uppercase tracking-widest text-navy mb-3">Portal Expired</h2>
+              <p className="text-sm text-gray-600 font-roboto leading-relaxed">
+                This service event has been completed and the portal link is no longer active. If you need to access the records, please contact the aircraft owner directly.
+              </p>
+            </>
+          ) : (
+            <>
+              <XCircle size={32} className="mx-auto text-[#CE3732] mb-3" />
+              <h2 className="font-oswald text-2xl font-bold uppercase tracking-widest text-navy mb-3">Service Event Not Found</h2>
+              <p className="text-sm text-gray-600 font-roboto leading-relaxed">
+                The link you followed doesn't match an active service event. It may have been revoked or mistyped. Please contact the aircraft owner for a fresh link.
+              </p>
+            </>
+          )}
+        </div>
+      </div>
     );
   }
 
@@ -243,6 +274,11 @@ export default function ServicePortal() {
         <div className="mb-6 mt-4">
           <img src="/logo.png" alt="Skyward" className="mx-auto h-24 object-contain mb-2 opacity-80" />
           <h1 className="font-oswald text-xl font-bold uppercase tracking-widest text-navy text-center">Service Portal</h1>
+          {!isAppUser && (
+            <p className="mt-2 text-center text-[10px] font-bold uppercase tracking-widest text-gray-500">
+              Secure shop portal • No account required
+            </p>
+          )}
         </div>
 
         <div className="w-full max-w-2xl space-y-6 animate-slide-up">
@@ -362,7 +398,7 @@ export default function ServicePortal() {
                 <div className="mt-4 p-4 bg-gray-50 rounded border border-gray-200 space-y-3 animate-fade-in">
                   <div>
                     <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Proposed Date *</label>
-                    <input type="date" value={proposedDate} onChange={e => setProposedDate(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" />
+                    <input type="date" min={todayDateString} value={proposedDate} onChange={e => setProposedDate(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" />
                   </div>
                   <div>
                     <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Estimated Duration (Days) *</label>
@@ -558,7 +594,7 @@ export default function ServicePortal() {
               <div className="space-y-3">
                 <div>
                   <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Expected Ready Date</label>
-                  <input type="date" value={estimatedCompletion} onChange={e => setEstimatedCompletion(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#091F3C] outline-none" />
+                  <input type="date" min={todayDateString} value={estimatedCompletion} onChange={e => setEstimatedCompletion(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#091F3C] outline-none" />
                 </div>
                 <div>
                   <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Notes for Owner</label>

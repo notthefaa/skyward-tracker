@@ -6,6 +6,7 @@ import useSWR from "swr";
 import { Download, ChevronLeft, ChevronRight, Plus, X, Edit2, Trash2, Info, MapPin } from "lucide-react";
 import { PrimaryButton } from "@/components/AppButtons";
 import { useToast } from "@/components/ToastProvider";
+import { useConfirm } from "@/components/ConfirmProvider";
 
 const whiteBg = { backgroundColor: '#ffffff' } as const;
 
@@ -51,6 +52,7 @@ export default function TimesTab({
   const [showLegend, setShowLegend] = useState(false);
 
   const { showSuccess, showError, showWarning } = useToast();
+  const confirm = useConfirm();
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [logPod, setLogPod] = useState("");
@@ -112,7 +114,13 @@ export default function TimesTab({
   };
 
   const deleteLatestLog = async (log: any) => {
-    if (!confirm("Are you sure you want to delete the most recent flight log? This will permanently erase it and roll the aircraft totals back to the previous log.")) return;
+    const ok = await confirm({
+      title: "Delete Latest Flight Log?",
+      message: "This permanently erases the most recent flight log and rolls the aircraft totals back to the previous log.",
+      confirmText: "Delete",
+      variant: "danger",
+    });
+    if (!ok) return;
     setIsSubmitting(true);
 
     const { data: previousLogs } = await supabase

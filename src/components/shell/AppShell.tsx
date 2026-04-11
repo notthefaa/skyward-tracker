@@ -491,8 +491,10 @@ export default function AppShell({ session }: AppShellProps) {
             <button key={tab.id} onClick={() => {
               if (tab.id === 'mx') {
                 if (activeTab === 'mx') {
-                  // Already on MX — always show picker to allow switching subtab
-                  setShowMxPicker(true);
+                  // Already on MX — tap the tab again to toggle between
+                  // Maintenance and Squawks. Faster on the ramp than
+                  // re-opening the picker modal.
+                  setMxSubTab(prev => prev === 'maintenance' ? 'squawks' : 'maintenance');
                 } else {
                   const remembered = localStorage.getItem('aft_mx_default_subtab');
                   if (remembered === 'maintenance' || remembered === 'squawks') {

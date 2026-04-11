@@ -9,6 +9,7 @@ import { PrimaryButton } from "@/components/AppButtons";
 import SignatureCanvas from "react-signature-canvas";
 import imageCompression from "browser-image-compression";
 import { useToast } from "@/components/ToastProvider";
+import { useConfirm } from "@/components/ConfirmProvider";
 
 const whiteBg = { backgroundColor: '#ffffff' } as const;
 
@@ -58,6 +59,7 @@ export default function SquawksTab({
   const [visibleArchivedCount, setVisibleArchivedCount] = useState(10);
 
   const { showSuccess, showError } = useToast();
+  const confirm = useConfirm();
 
   // Detail modal state
   const [detailSquawk, setDetailSquawk] = useState<any>(null);
@@ -194,7 +196,13 @@ export default function SquawksTab({
   };
 
   const deleteSquawk = async (id: string) => {
-    if (!confirm("Are you sure you want to permanently delete this squawk?")) return;
+    const ok = await confirm({
+      title: "Delete Squawk?",
+      message: "This squawk will be permanently removed from the record.",
+      confirmText: "Delete",
+      variant: "danger",
+    });
+    if (!ok) return;
     const res = await authFetch('/api/squawks', {
       method: 'DELETE',
       body: JSON.stringify({ squawkId: id, aircraftId: aircraft!.id })

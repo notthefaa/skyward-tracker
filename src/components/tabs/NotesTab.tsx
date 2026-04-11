@@ -8,6 +8,7 @@ import { FileText, Plus, X, Upload, Edit2, ChevronLeft, ChevronRight, Trash2 } f
 import { PrimaryButton } from "@/components/AppButtons";
 import imageCompression from "browser-image-compression";
 import { useToast } from "@/components/ToastProvider";
+import { useConfirm } from "@/components/ConfirmProvider";
 
 const whiteBg = { backgroundColor: '#ffffff' } as const;
 
@@ -46,6 +47,7 @@ export default function NotesTab({ aircraft, session, role, aircraftRole, userIn
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const { showSuccess, showError } = useToast();
+  const confirm = useConfirm();
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [content, setContent] = useState("");
@@ -160,7 +162,13 @@ export default function NotesTab({ aircraft, session, role, aircraftRole, userIn
   };
 
   const deleteNote = async (id: string) => {
-    if (!confirm("Are you sure you want to permanently delete this note?")) return;
+    const ok = await confirm({
+      title: "Delete Note?",
+      message: "This note will be permanently removed from the crew whiteboard.",
+      confirmText: "Delete",
+      variant: "danger",
+    });
+    if (!ok) return;
     const res = await authFetch('/api/notes', {
       method: 'DELETE',
       body: JSON.stringify({ noteId: id, aircraftId: aircraft.id })

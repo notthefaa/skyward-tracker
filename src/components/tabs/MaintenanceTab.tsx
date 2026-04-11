@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useToast } from "@/components/ToastProvider";
+import { useConfirm } from "@/components/ConfirmProvider";
 import { supabase } from "@/lib/supabase";
 import { authFetch } from "@/lib/authFetch";
 import { processMxItem, getMxTextColor, isMxExpired } from "@/lib/math";
@@ -26,6 +27,7 @@ export default function MaintenanceTab({
   initialSubTab?: 'maintenance' | 'squawks'
 }) {
   const { showSuccess, showError, showWarning } = useToast();
+  const confirm = useConfirm();
   const [subTab, setSubTab] = useState<MxSubTab>(initialSubTab || 'maintenance');
 
   useEffect(() => {
@@ -171,7 +173,12 @@ export default function MaintenanceTab({
   };
 
   const handleManualMxTrigger = async (item: any) => {
-    if (!confirm(`Create a draft work package for "${item.item_name}" and notify the primary contact?`)) return;
+    const ok = await confirm({
+      title: "Create Draft Work Package?",
+      message: `A draft work package will be created for "${item.item_name}" and the primary contact will be notified.`,
+      confirmText: "Create Draft",
+    });
+    if (!ok) return;
     setIsSubmitting(true);
     try {
       await authFetch('/api/mx-events/manual-trigger', { method: 'POST', body: JSON.stringify({ mxItemId: item.id, aircraftId: aircraft!.id }) });
@@ -214,11 +221,16 @@ export default function MaintenanceTab({
   };
 
   const deleteMxItem = async (id: string) => {
-    if (confirm("Delete this maintenance item?")) {
-      const res = await authFetch('/api/maintenance-items', { method: 'DELETE', body: JSON.stringify({ itemId: id, aircraftId: aircraft!.id }) });
-      if (!res.ok) throw new Error('Failed to delete maintenance item');
-      await mutate(); onGroundedStatusChange();
-    }
+    const ok = await confirm({
+      title: "Delete Maintenance Item?",
+      message: "This maintenance item will be permanently removed from tracking.",
+      confirmText: "Delete",
+      variant: "danger",
+    });
+    if (!ok) return;
+    const res = await authFetch('/api/maintenance-items', { method: 'DELETE', body: JSON.stringify({ itemId: id, aircraftId: aircraft!.id }) });
+    if (!res.ok) throw new Error('Failed to delete maintenance item');
+    await mutate(); onGroundedStatusChange();
   };
 
   if (!aircraft) return null;
