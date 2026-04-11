@@ -215,7 +215,7 @@ export default function FleetSummary({
                     )}
                   </div>
                   {ac.squawkCount > 0 && (
-                    <span className="text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded bg-[#CE3732]/15 text-[#CE3732] flex items-center gap-1 shrink-0 mt-0.5">
+                    <span className="text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded bg-[#CE3732]/15 text-[#CE3732] flex items-center gap-1 shrink-0">
                       <AlertTriangle size={10} /> {ac.squawkCount} {ac.squawkCount === 1 ? 'Squawk' : 'Squawks'}
                     </span>
                   )}
