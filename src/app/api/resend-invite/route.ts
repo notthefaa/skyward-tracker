@@ -1,62 +1,39 @@
 import { NextResponse } from 'next/server';
-import { createAdminClient, handleApiError } from '@/lib/auth';
-import { RESEND_INVITE_COOLDOWN_MINUTES } from '@/lib/constants';
+import { createAdminClient } from '@/lib/auth';
 
+// This route is intentionally unauthenticated — it is called from the
+// "Link Expired" page by users who need a fresh invite link. Because the
+// caller is anonymous, the response must NOT reveal whether an account
+// exists for the given email. Every outcome returns the same success
+// payload so the endpoint cannot be used as a user-enumeration oracle.
+//
+// Supabase's own inviteUserByEmail handler enforces a server-side throttle
+// on repeated invites to the same address, so we no longer need to look up
+// invited_at ourselves (which required listUsers — a full directory scan
+// that also leaked performance-based enumeration signals).
 export async function POST(req: Request) {
+  const GENERIC_RESPONSE = NextResponse.json({ success: true });
   try {
     const { email } = await req.json();
-
-    if (!email) {
-      return NextResponse.json({ error: 'Email is required.' }, { status: 400 });
-    }
+    if (!email || typeof email !== 'string') return GENERIC_RESPONSE;
 
     const normalizedEmail = email.toLowerCase().trim();
-
-    // NOTE: This route intentionally does NOT require authentication.
-    // It is called from the "Link Expired" page by unauthenticated users
-    // who need a fresh invite link.
+    if (!normalizedEmail) return GENERIC_RESPONSE;
 
     const supabaseAdmin = createAdminClient();
 
-    // ── Rate Limiting ──
-    // Check if this email was invited recently to prevent abuse.
-    // Uses Supabase Auth's invited_at field as a natural cooldown.
-    const { data: userData } = await supabaseAdmin.auth.admin.listUsers();
-
-    if (userData?.users) {
-      const targetUser = userData.users.find(
-        (u: any) => u.email?.toLowerCase() === normalizedEmail
-      );
-
-      if (targetUser?.invited_at) {
-        const invitedAt = new Date(targetUser.invited_at).getTime();
-        const cooldownMs = RESEND_INVITE_COOLDOWN_MINUTES * 60 * 1000;
-        const now = Date.now();
-
-        if (now - invitedAt < cooldownMs) {
-          const remainingSeconds = Math.ceil((cooldownMs - (now - invitedAt)) / 1000);
-          const remainingMinutes = Math.ceil(remainingSeconds / 60);
-          return NextResponse.json(
-            { error: `Please wait ${remainingMinutes} minute${remainingMinutes > 1 ? 's' : ''} before requesting another invite link.` },
-            { status: 429 }
-          );
-        }
-      }
+    try {
+      await supabaseAdmin.auth.admin.inviteUserByEmail(normalizedEmail, {
+        redirectTo: `${new URL(req.url).origin}/update-password`
+      });
+    } catch {
+      // Swallow: an error here (already-registered user, throttled, invalid
+      // address) must not be surfaced to the caller. The generic success
+      // response below is the only branch this endpoint emits.
     }
 
-    // Resend the official invite email.
-    // This generates a fresh token without overwriting their assigned aircraft.
-    const { error } = await supabaseAdmin.auth.admin.inviteUserByEmail(normalizedEmail, {
-      redirectTo: `${new URL(req.url).origin}/update-password`
-    });
-
-    if (error) {
-      // If they are already fully registered, Supabase throws an error here, preventing abuse.
-      throw error;
-    }
-
-    return NextResponse.json({ success: true });
-  } catch (error) {
-    return handleApiError(error);
+    return GENERIC_RESPONSE;
+  } catch {
+    return GENERIC_RESPONSE;
   }
 }

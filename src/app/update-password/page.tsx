@@ -169,7 +169,7 @@ export default function UpdatePassword() {
           ) : (
             <>
               <p className="text-sm text-gray-600 font-roboto mb-8 leading-relaxed">
-                A new invite link has been sent to <strong>{requestEmail}</strong>. Please check your inbox.
+                If an account exists for <strong>{requestEmail}</strong>, a fresh invite link is on its way. Please check your inbox and spam folder.
               </p>
               <PrimaryButton onClick={() => window.location.href = "/"}>
                 Return to Login

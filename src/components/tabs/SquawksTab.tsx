@@ -319,7 +319,8 @@ export default function SquawksTab({
               <button key={sq.id} onClick={() => openDetailModal(sq)} className={`w-full text-left p-4 border rounded transition-colors active:scale-[0.98] ${sq.affects_airworthiness ? 'border-[#CE3732]/30 bg-[#CE3732]/10 hover:bg-[#CE3732]/15' : 'border-[#F08B46]/30 bg-[#F08B46]/10 hover:bg-[#F08B46]/15'}`}>
                 <div className="flex justify-between items-start mb-2">
                   <div className="flex items-center gap-2">
-                    <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded text-white ${sq.affects_airworthiness ? 'bg-[#CE3732]' : 'bg-[#F08B46]'}`}>
+                    <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded text-white flex items-center gap-1 ${sq.affects_airworthiness ? 'bg-[#CE3732]' : 'bg-[#F08B46]'}`}>
+                      {sq.affects_airworthiness && <AlertTriangle size={10} />}
                       {sq.affects_airworthiness ? 'AOG / GROUNDED' : 'OPEN'}
                     </span>
                     {sq.is_deferred && <span className="text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded bg-blue-600 text-white">DEFERRED ({sq.deferral_category})</span>}

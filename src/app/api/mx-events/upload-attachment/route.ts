@@ -17,6 +17,43 @@ const ALLOWED_TYPES = [
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
 ];
 
+/**
+ * Verify a file's leading bytes match the MIME type the client claims.
+ * The client-provided `file.type` is trivial to spoof, so each allowed
+ * type has a magic-byte signature that must also match before we accept
+ * the upload. Returns true iff the content is consistent with the type.
+ */
+function fileBytesMatchType(bytes: Uint8Array, claimedType: string, fileName: string): boolean {
+  if (bytes.length < 12) return false;
+  const startsWith = (...expected: number[]) => expected.every((b, i) => bytes[i] === b);
+  const at = (offset: number, ...expected: number[]) => expected.every((b, i) => bytes[offset + i] === b);
+
+  switch (claimedType) {
+    case 'image/jpeg':
+      return startsWith(0xFF, 0xD8, 0xFF);
+    case 'image/png':
+      return startsWith(0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A);
+    case 'image/webp':
+      return startsWith(0x52, 0x49, 0x46, 0x46) && at(8, 0x57, 0x45, 0x42, 0x50);
+    case 'image/heic': {
+      if (!at(4, 0x66, 0x74, 0x79, 0x70)) return false;
+      const brand = String.fromCharCode(bytes[8], bytes[9], bytes[10], bytes[11]);
+      return ['heic', 'heix', 'hevc', 'hevx', 'heim', 'heis', 'hevm', 'hevs', 'mif1'].includes(brand);
+    }
+    case 'application/pdf':
+      return startsWith(0x25, 0x50, 0x44, 0x46); // "%PDF"
+    case 'application/msword':
+      // Legacy .doc — OLE compound document signature
+      return startsWith(0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1);
+    case 'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
+      // .docx is a ZIP archive; also require the extension so a random
+      // ZIP blob can't be passed through as a Word document.
+      return startsWith(0x50, 0x4B, 0x03, 0x04) && /\.docx$/i.test(fileName);
+    default:
+      return false;
+  }
+}
+
 export async function POST(req: Request) {
   try {
     const formData = await req.formData();
@@ -87,6 +124,16 @@ export async function POST(req: Request) {
       const fileName = `${event.id}_${Date.now()}_${safeName}`;
 
       const buffer = Buffer.from(await file.arrayBuffer());
+
+      // Verify the bytes actually match the claimed MIME type. Client-reported
+      // types are easy to spoof (e.g. an .exe renamed with a fake PDF header),
+      // so a magic-byte check is the real gate.
+      if (!fileBytesMatchType(buffer.subarray(0, 16), file.type, file.name)) {
+        return NextResponse.json(
+          { error: `File "${file.name}" does not match its declared type. Please re-upload a valid ${file.type} file.` },
+          { status: 400 }
+        );
+      }
 
       const { data: uploadData, error: uploadErr } = await supabaseAdmin.storage
         .from('aft_event_attachments')

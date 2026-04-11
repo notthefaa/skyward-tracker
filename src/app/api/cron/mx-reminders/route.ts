@@ -6,6 +6,14 @@ import { escapeHtml } from '@/lib/sanitize';
 import { computeMetrics } from '@/lib/math';
 import { FLIGHT_DATA_LOOKBACK_DAYS, MX_AGGREGATION_WINDOW_DAYS } from '@/lib/constants';
 
+// How many days to let an event sit in ready_for_pickup before nudging
+// the primary contact. The cron will re-nudge at the same cadence until
+// the owner closes the event.
+const READY_PICKUP_NUDGE_DAYS = 3;
+// Marker string we embed in the nudge message row so we can avoid
+// re-nudging on every cron tick without needing a new DB column.
+const READY_PICKUP_NUDGE_MARKER = '[NUDGE:ready_for_pickup]';
+
 const resend = new Resend(env.RESEND_API_KEY);
 const FROM_EMAIL = 'notifications@skywardsociety.com';
 
@@ -346,6 +354,86 @@ export async function GET(req: Request) {
 
         if (Object.keys(flagToUpdate).length > 0) {
           flagUpdates.push({ id: mx.id, flags: flagToUpdate });
+        }
+      }
+    }
+
+    // =====================================================
+    // PHASE 5: READY_FOR_PICKUP STALE NUDGE
+    // If the mechanic has marked an event ready but the owner
+    // hasn't closed it out, the aircraft stays logically blocked
+    // on the calendar. Ping the primary contact after N days,
+    // and avoid spamming by checking for a marker message.
+    // =====================================================
+    {
+      const appUrl = new URL(req.url).origin;
+      const { data: pickupEvents } = await supabaseAdmin
+        .from('aft_maintenance_events')
+        .select('id, aircraft_id, primary_contact_email')
+        .eq('status', 'ready_for_pickup');
+
+      if (pickupEvents && pickupEvents.length > 0) {
+        const eventIds = pickupEvents.map((e: any) => e.id);
+        const { data: pickupMessages } = await supabaseAdmin
+          .from('aft_event_messages')
+          .select('event_id, sender, message_type, message, created_at')
+          .in('event_id', eventIds)
+          .order('created_at', { ascending: false });
+
+        const now = Date.now();
+        const nudgeWindowMs = READY_PICKUP_NUDGE_DAYS * 24 * 60 * 60 * 1000;
+
+        for (const ev of pickupEvents as any[]) {
+          if (!ev.primary_contact_email) continue;
+
+          const eventMessages = (pickupMessages || []).filter((m: any) => m.event_id === ev.id);
+          // The most recent mechanic status_update is the mark_ready event.
+          const markReady = eventMessages.find(
+            (m: any) => m.sender === 'mechanic' && m.message_type === 'status_update'
+          );
+          if (!markReady) continue;
+
+          const markReadyTime = new Date(markReady.created_at).getTime();
+          if (now - markReadyTime < nudgeWindowMs) continue; // not stale yet
+
+          // Has a nudge already been sent within the current window?
+          const existingNudge = eventMessages.find(
+            (m: any) =>
+              m.sender === 'system' &&
+              typeof m.message === 'string' &&
+              m.message.includes(READY_PICKUP_NUDGE_MARKER)
+          );
+          if (existingNudge) {
+            const lastNudgeTime = new Date(existingNudge.created_at).getTime();
+            if (now - lastNudgeTime < nudgeWindowMs) continue; // recently reminded
+          }
+
+          const aircraft = (aircraftList as any[]).find((a: any) => a.id === ev.aircraft_id);
+          if (!aircraft) continue;
+          const safeTail = escapeHtml(aircraft.tail_number);
+
+          await resend.emails.send({
+            from: `Skyward Aircraft Manager <${FROM_EMAIL}>`,
+            to: [ev.primary_contact_email],
+            subject: `Reminder: ${safeTail} Awaiting Logbook Entry`,
+            html: `
+              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+                <h2 style="color: #F08B46;">Service Event Still Open</h2>
+                <p>Your mechanic marked <strong>${safeTail}</strong> as ready for pickup more than ${READY_PICKUP_NUDGE_DAYS} days ago, but the service event has not yet been closed.</p>
+                <p style="color: #525659;">Until you enter the logbook data, maintenance tracking won't reset and the aircraft may remain blocked on the calendar. Open the app to complete the event when you get a moment.</p>
+                <div style="margin-top: 25px; text-align: center;">
+                  <a href="${appUrl}" style="display: inline-block; background-color: #091F3C; color: white; text-decoration: none; padding: 12px 28px; border-radius: 6px; font-weight: bold; font-size: 14px; letter-spacing: 1px;">OPEN AIRCRAFT MANAGER</a>
+                </div>
+              </div>
+            `,
+          });
+
+          await supabaseAdmin.from('aft_event_messages').insert({
+            event_id: ev.id,
+            sender: 'system',
+            message_type: 'status_update',
+            message: `${READY_PICKUP_NUDGE_MARKER} Reminder sent to primary contact — aircraft awaiting logbook entry.`,
+          } as any);
         }
       }
     }

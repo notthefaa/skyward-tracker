@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { authFetch } from "@/lib/authFetch";
 import type { AircraftWithMetrics } from "@/lib/types";
@@ -67,6 +67,14 @@ export default function TimesTab({
   const [logFuel, setLogFuel] = useState("");
   const [logFuelUnit, setLogFuelUnit] = useState<'gallons' | 'lbs'>('gallons');
 
+  // Lazily load the last fuel unit the pilot chose so they don't have to
+  // re-select it every time they log a flight. Only runs on the client.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const stored = window.localStorage.getItem('aft_fuel_unit');
+    if (stored === 'gallons' || stored === 'lbs') setLogFuelUnit(stored);
+  }, []);
+
   const isTurbine = aircraft?.engine_type === 'Turbine';
   const hasAirframeMeter = isTurbine
     ? (aircraft?.setup_aftt != null)
@@ -89,13 +97,16 @@ export default function TimesTab({
       setLogFuel(log.fuel_gallons?.toString() || "");
       setLogFuelUnit("gallons");
     } else {
-      setEditingId(null); 
+      setEditingId(null);
       setLogPod(""); setLogPoa("");
-      setLogAftt(""); setLogFtt(""); setLogHobbs(""); setLogTach(""); 
-      setLogCycles(""); setLogLandings(""); 
-      setLogInitials(userInitials || ""); 
+      setLogAftt(""); setLogFtt(""); setLogHobbs(""); setLogTach("");
+      setLogCycles(""); setLogLandings("");
+      setLogInitials(userInitials || "");
       setLogPax(""); setLogReason("");
-      setLogFuel(""); setLogFuelUnit("gallons");
+      setLogFuel("");
+      // Reset the unit to whatever the pilot chose last, not always 'gallons'.
+      const storedUnit = typeof window !== 'undefined' ? window.localStorage.getItem('aft_fuel_unit') : null;
+      setLogFuelUnit(storedUnit === 'lbs' ? 'lbs' : 'gallons');
     }
     setShowLogModal(true);
   };
@@ -525,7 +536,7 @@ export default function TimesTab({
 
               <div className="grid grid-cols-2 gap-4 border border-[#3AB0FF]/30 bg-[#3AB0FF]/5 p-3 rounded mt-2">
                 <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Current Fuel State (Opt)</label><input type="number" style={whiteBg} step="0.1" value={logFuel} onChange={e=>setLogFuel(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#3AB0FF] outline-none bg-white" placeholder="Quantity" /></div>
-                <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Fuel Unit</label><select value={logFuelUnit} onChange={e=>setLogFuelUnit(e.target.value as any)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 bg-white focus:border-[#3AB0FF] outline-none"><option value="gallons">Gallons</option><option value="lbs">Lbs</option></select></div>
+                <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Fuel Unit</label><select value={logFuelUnit} onChange={e=>{ const v = e.target.value as 'gallons' | 'lbs'; setLogFuelUnit(v); if (typeof window !== 'undefined') window.localStorage.setItem('aft_fuel_unit', v); }} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 bg-white focus:border-[#3AB0FF] outline-none"><option value="gallons">Gallons</option><option value="lbs">Lbs</option></select></div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
