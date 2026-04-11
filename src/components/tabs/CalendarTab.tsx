@@ -196,14 +196,20 @@ export default function CalendarTab({
     async () => {
       const { data: accessData } = await supabase.from('aft_user_aircraft_access')
         .select('user_id, aircraft_role').eq('aircraft_id', aircraft!.id);
-      if (!accessData || accessData.length === 0) return [] as { user_id: string; email: string; initials: string; aircraft_role: string }[];
+      if (!accessData || accessData.length === 0) return [] as { user_id: string; email: string; initials: string; full_name: string; aircraft_role: string }[];
       const userIds = accessData.map((a: any) => a.user_id);
       const { data: usersData } = await supabase.from('aft_user_roles')
-        .select('user_id, email, initials').in('user_id', userIds);
+        .select('user_id, email, initials, full_name').in('user_id', userIds);
       return accessData.map((a: any) => {
         const u = (usersData || []).find((x: any) => x.user_id === a.user_id);
-        return { user_id: a.user_id, aircraft_role: a.aircraft_role, email: u?.email || '', initials: u?.initials || '' };
-      }).sort((a, b) => (a.initials || a.email).localeCompare(b.initials || b.email));
+        return {
+          user_id: a.user_id,
+          aircraft_role: a.aircraft_role,
+          email: u?.email || '',
+          initials: u?.initials || '',
+          full_name: u?.full_name || '',
+        };
+      }).sort((a, b) => (a.full_name || a.email || a.initials).localeCompare(b.full_name || b.email || b.initials));
     },
   );
   const otherCrew = crew.filter(c => c.user_id !== session?.user?.id);
@@ -345,7 +351,8 @@ export default function CalendarTab({
         const res = await authFetch('/api/reservations', { method: 'POST', body: JSON.stringify({ aircraftId: aircraft!.id, occurrences, title: bookingTitle || null, route: bookingRoute || null, timeZone, bookForUserId }) });
         const data = await res.json(); if (!res.ok) throw new Error(data.error || 'Failed');
         await mutate(); setShowBookingForm(false);
-        const targetLabel = bookForUserId ? (otherCrew.find(c => c.user_id === bookForUserId)?.initials || 'pilot') : null;
+        const targetCrew = bookForUserId ? otherCrew.find(c => c.user_id === bookForUserId) : null;
+        const targetLabel = targetCrew ? (targetCrew.full_name || targetCrew.email || targetCrew.initials || 'pilot') : null;
         if (data.skipped > 0) {
           showWarning(`${data.created} of ${data.created + data.skipped} bookings created. ${data.skipped} skipped due to conflicts.`);
         } else if (data.created > 1) {
@@ -594,7 +601,7 @@ export default function CalendarTab({
                           <option value="">Select pilot…</option>
                           {otherCrew.map(c => (
                             <option key={c.user_id} value={c.user_id}>
-                              {c.initials ? `${c.initials} — ${c.email}` : c.email}{c.aircraft_role === 'admin' ? ' (admin)' : ''}
+                              {c.full_name || c.email}{c.aircraft_role === 'admin' ? ' (admin)' : ''}
                             </option>
                           ))}
                         </select>

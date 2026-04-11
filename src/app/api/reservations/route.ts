@@ -63,7 +63,7 @@ export async function POST(req: Request) {
     // Get caller's user info
     const { data: userRole } = await supabaseAdmin
       .from('aft_user_roles')
-      .select('role, initials, email')
+      .select('role, initials, email, full_name')
       .eq('user_id', user.id)
       .single();
 
@@ -71,7 +71,10 @@ export async function POST(req: Request) {
     // another pilot on the same aircraft; everyone else can only book for self.
     const bookingForOther = !!bookForUserId && bookForUserId !== user.id;
     let targetUserId = user.id;
-    let targetEmail = userRole?.email || user.email || 'Pilot';
+    // pilot_name is denormalized onto the reservation row for display on
+    // the calendar and in emails. Prefer full_name, fall back to email so
+    // legacy users without a name still render something sensible.
+    let targetName = userRole?.full_name || userRole?.email || user.email || 'Pilot';
     let targetInitials = userRole?.initials || '';
 
     if (bookingForOther) {
@@ -94,7 +97,7 @@ export async function POST(req: Request) {
 
       const { data: targetRole } = await supabaseAdmin
         .from('aft_user_roles')
-        .select('initials, email')
+        .select('initials, email, full_name')
         .eq('user_id', bookForUserId)
         .single();
       if (!targetRole) {
@@ -102,7 +105,7 @@ export async function POST(req: Request) {
       }
 
       targetUserId = bookForUserId;
-      targetEmail = targetRole.email || 'Pilot';
+      targetName = targetRole.full_name || targetRole.email || 'Pilot';
       targetInitials = targetRole.initials || '';
     }
 
@@ -192,7 +195,7 @@ export async function POST(req: Request) {
         end_time: occ.end,
         title: title || null,
         route: route || null,
-        pilot_name: targetEmail,
+        pilot_name: targetName,
         pilot_initials: targetInitials,
         status: 'confirmed',
         time_zone: tz,

@@ -150,11 +150,13 @@ export default function AdminModals({
   };
 
   const handleDeleteUser = async () => {
-    const selectedUserEmail = allUsers.find(u => u.user_id === selectedAccessUserId)?.email;
+    const selectedUser = allUsers.find(u => u.user_id === selectedAccessUserId);
+    const selectedUserEmail = selectedUser?.email;
     if (!selectedUserEmail) return;
+    const label = selectedUser?.full_name ? `${selectedUser.full_name} (${selectedUserEmail})` : selectedUserEmail;
     const ok = await confirm({
       title: "Permanently Delete User?",
-      message: `${selectedUserEmail} will be deleted and all of their aircraft access revoked. This cannot be undone.`,
+      message: `${label} will be deleted and all of their aircraft access revoked. This cannot be undone.`,
       confirmText: "Delete User",
       variant: "danger",
     });
@@ -200,9 +202,10 @@ export default function AdminModals({
   const handleChangeGlobalRole = async (userId: string, newRole: 'admin' | 'pilot') => {
     const u = globalUsers.find(u => u.user_id === userId);
     if (!u) return;
+    const label = u.full_name || u.email;
     const ok = await confirm({
       title: "Change Global Role?",
-      message: `${u.email} will become a ${newRole === 'admin' ? 'Global Admin' : 'Pilot'}.`,
+      message: `${label} will become a ${newRole === 'admin' ? 'Global Admin' : 'Pilot'}.`,
       confirmText: "Change Role",
     });
     if (!ok) return;
@@ -218,9 +221,10 @@ export default function AdminModals({
   const handleDeleteUserFromList = async (userId: string) => {
     const u = globalUsers.find(u => u.user_id === userId);
     if (!u) return;
+    const label = u.full_name ? `${u.full_name} (${u.email})` : u.email;
     const ok = await confirm({
       title: "Permanently Delete User?",
-      message: `${u.email} will be deleted and all access revoked. This cannot be undone.`,
+      message: `${label} will be deleted and all access revoked. This cannot be undone.`,
       confirmText: "Delete User",
       variant: "danger",
     });
@@ -276,9 +280,10 @@ export default function AdminModals({
   const handleSetPilotAndDemoteAll = async (userId: string) => {
     const u = globalUsers.find(u => u.user_id === userId);
     if (!u) return;
+    const label = u.full_name || u.email;
     const ok = await confirm({
       title: "Demote to Pilot?",
-      message: `${u.email} will be demoted to Pilot on every aircraft they currently administer.`,
+      message: `${label} will be demoted to Pilot on every aircraft they currently administer.`,
       confirmText: "Demote",
     });
     if (!ok) return;
@@ -307,9 +312,10 @@ export default function AdminModals({
     try {
       // If currently a global admin, demote to pilot first
       if (u.role === 'admin') {
+        const label = u.full_name || u.email;
         const ok = await confirm({
           title: "Remove Global Admin?",
-          message: `${u.email}'s Global Admin privileges will be removed. They will become an Aircraft Admin instead.`,
+          message: `${label}'s Global Admin privileges will be removed. They will become an Aircraft Admin instead.`,
           confirmText: "Continue",
         });
         if (!ok) {
@@ -447,7 +453,7 @@ export default function AdminModals({
                 <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Select Pilot</label>
                 <select className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-navy outline-none" style={whiteBg} value={selectedAccessUserId} onChange={(e) => fetchUserAccess(e.target.value)}>
                   <option value="">-- Choose a Pilot --</option>
-                  {allUsers.map(u => <option key={u.user_id} value={u.user_id}>{u.email || u.user_id} ({u.role})</option>)}
+                  {allUsers.map(u => <option key={u.user_id} value={u.user_id}>{u.full_name || u.email || u.user_id} ({u.role})</option>)}
                 </select>
               </div>
               {selectedAccessUserId && (

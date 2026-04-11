@@ -125,11 +125,17 @@ export default function SummaryTab({
       if (!accessData || accessData.length === 0) return [];
       const userIds = accessData.map((a: any) => a.user_id);
       const { data: usersData } = await supabase.from('aft_user_roles')
-        .select('user_id, email, initials').in('user_id', userIds);
+        .select('user_id, email, initials, full_name').in('user_id', userIds);
       if (!usersData) return [];
       return accessData.map((access: any) => {
         const user = usersData.find((u: any) => u.user_id === access.user_id);
-        return { user_id: access.user_id, aircraft_role: access.aircraft_role, email: user?.email || '', initials: user?.initials || '' };
+        return {
+          user_id: access.user_id,
+          aircraft_role: access.aircraft_role,
+          email: user?.email || '',
+          initials: user?.initials || '',
+          full_name: user?.full_name || '',
+        };
       });
     },
   );
@@ -347,7 +353,7 @@ export default function SummaryTab({
         const endLabel = sameDay
           ? endDt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
           : endDt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-        const who = isYou ? 'You have' : `${currentStatus.pilot_initials || currentStatus.pilot_name} has`;
+        const who = isYou ? 'You have' : `${currentStatus.pilot_name || currentStatus.pilot_initials} has`;
         return (
           <div onClick={() => setActiveTab('calendar')} className={`${isYou ? 'bg-emerald-50 border-emerald-200' : 'bg-sky-50 border-sky-200'} shadow-lg border rounded-sm p-3 flex items-center gap-3 cursor-pointer hover:shadow-xl active:scale-[0.98] transition-all`}>
             <div className={`${isYou ? 'bg-[#56B94A]' : 'bg-[#3AB0FF]'} text-white p-2 rounded-full shrink-0`}><Calendar size={16} /></div>
@@ -436,7 +442,11 @@ export default function SummaryTab({
                 return (
                   <div key={member.user_id} className="px-4 py-3 border-b border-gray-50 last:border-b-0 flex items-center gap-3">
                     <div className="w-9 h-9 rounded-full bg-navy text-white flex items-center justify-center font-oswald font-bold text-sm shrink-0">{member.initials || '?'}</div>
-                    <div className="flex-1 min-w-0"><p className="text-xs font-bold text-navy truncate">{member.email}{isCurrentUser ? ' (you)' : ''}</p><span className={`text-[8px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded ${roleColor}`}>{roleLabel}</span></div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-bold text-navy truncate">{member.full_name || member.email}{isCurrentUser ? ' (you)' : ''}</p>
+                      {member.full_name && <p className="text-[10px] text-gray-500 truncate">{member.email}</p>}
+                      <span className={`text-[8px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded ${roleColor} inline-block mt-1`}>{roleLabel}</span>
+                    </div>
                     {canEdit && !isCurrentUser && (
                       <div className="flex gap-2 shrink-0">
                         {changingRoleUserId === member.user_id ? (
