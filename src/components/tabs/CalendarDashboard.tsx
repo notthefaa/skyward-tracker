@@ -143,8 +143,8 @@ export default function CalendarDashboard({ aircraft, session }: CalendarDashboa
     while (cursor <= limit) { unavailableDays.add(cursor.toISOString().split('T')[0]); cursor.setDate(cursor.getDate() + 1); }
   }
   for (const m of mxBlocks) {
-    const cursor = new Date(Math.max(m.start.getTime(), now.getTime())); cursor.setHours(0,0,0,0);
-    const limit = new Date(Math.min(m.end.getTime(), windowEnd.getTime()));
+    const cursor = new Date(Math.max(new Date(m.start).getTime(), now.getTime())); cursor.setHours(0,0,0,0);
+    const limit = new Date(Math.min(new Date(m.end).getTime(), windowEnd.getTime()));
     while (cursor <= limit) { unavailableDays.add(cursor.toISOString().split('T')[0]); cursor.setDate(cursor.getDate() + 1); }
   }
   const availableDays = WINDOW - unavailableDays.size;

@@ -375,7 +375,7 @@ export default function TimesTab({
         <PrimaryButton onClick={() => openLogForm()}><Plus size={18} /> Log New Flight</PrimaryButton>
       </div>
 
-      <div className="bg-cream shadow-lg rounded-sm p-4 md:p-6 border-t-4 border-[#3AB0FF] overflow-hidden flex flex-col mb-6">
+      <div className="bg-cream shadow-lg rounded-sm p-4 md:p-6 border-t-4 border-[#3AB0FF] flex flex-col mb-6">
         <div className="flex justify-between items-end mb-6">
           <div>
             <span className="text-[10px] font-bold uppercase tracking-widest text-[#3AB0FF] block mb-1">{isTurbine ? 'TURBINE' : 'PISTON'} LOGBOOK</span>
