@@ -481,5 +481,6 @@ The UI (ServiceEventModal) shows checkboxes next to each pending item in the com
 | `005_user_preferences.sql` | Generic `aft_user_preferences` key-value table (user_id + pref_key PK, jsonb value). RLS, auto-updated_at trigger. Used for nav tray order and future cross-device prefs |
 | `006_log_tabs.sql` | `aft_vor_checks` (FAR 91.171), `aft_tire_checks`, `aft_oil_logs` tables with indexes and RLS. SELECT+INSERT policies for aircraft access users |
 | `007_chuck.sql` | `aft_chuck_threads` (per-user per-aircraft, UNIQUE constraint) and `aft_chuck_messages` (with token tracking columns). RLS policies for user-owns-thread |
+| `008_documents.sql` | `aft_documents` (per-aircraft metadata) and `aft_document_chunks` (text + vector(1536) embeddings). pgvector extension, IVFFlat index, `match_document_chunks` RPC function. RLS for aircraft access |
 
 Migrations are run manually in the Supabase SQL Editor. Storage buckets are created via the Supabase Storage UI.

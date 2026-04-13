@@ -23,4 +23,5 @@ export const env = {
   CRON_SECRET: requireEnv('CRON_SECRET'),
   ANTHROPIC_API_KEY: requireEnv('ANTHROPIC_API_KEY'),
   TAVILY_API_KEY: requireEnv('TAVILY_API_KEY'),
+  OPENAI_API_KEY: requireEnv('OPENAI_API_KEY'),
 } as const;

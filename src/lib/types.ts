@@ -201,7 +201,7 @@ export interface SystemSettings {
 export type AppRole = 'admin' | 'pilot';
 export type AircraftRole = 'admin' | 'pilot';
 export type AircraftStatus = 'airworthy' | 'issues' | 'grounded';
-export type AppTab = 'fleet' | 'summary' | 'times' | 'calendar' | 'mx' | 'notes' | 'chuck';
+export type AppTab = 'fleet' | 'summary' | 'times' | 'calendar' | 'mx' | 'notes' | 'chuck' | 'documents';
 export type MxSubTab = 'maintenance' | 'squawks';
 export type LogSubTab = 'flights' | 'vor' | 'tire' | 'oil';
 
@@ -241,5 +241,19 @@ export interface OilLog {
   engine_hours: number;
   initials: string;
   notes?: string | null;
+  created_at: string;
+}
+
+export type DocType = 'POH' | 'AFM' | 'Supplement' | 'MEL' | 'SOP' | 'Other';
+
+export interface AircraftDocument {
+  id: string;
+  aircraft_id: string;
+  user_id?: string | null;
+  filename: string;
+  file_url: string;
+  doc_type: DocType;
+  page_count?: number | null;
+  status: 'processing' | 'ready' | 'error';
   created_at: string;
 }

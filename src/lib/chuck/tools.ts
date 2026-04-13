@@ -117,6 +117,18 @@ export const tools: Anthropic.Tool[] = [
     },
   },
   {
+    name: 'search_documents',
+    description: 'Search uploaded aircraft documents (POH, AFM, supplements, MEL, SOPs) for specific information. Uses semantic search to find relevant sections. Use for questions about aircraft performance, limitations, procedures, checklists, or any aircraft-specific reference material.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        query: { type: 'string', description: 'What to search for in the documents' },
+        doc_type: { type: 'string', enum: ['POH', 'AFM', 'Supplement', 'MEL', 'SOP', 'Other'], description: 'Optionally filter by document type' },
+      },
+      required: ['query'],
+    },
+  },
+  {
     name: 'web_search',
     description: 'Search the web for information not available in the aircraft database. Use for: finding maintenance shops, regulatory questions (FARs, ADs), part numbers, general aviation knowledge, or any question the other tools cannot answer. This is a fallback — try internal tools first.',
     input_schema: {

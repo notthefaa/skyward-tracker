@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { tavily } from '@tavily/core';
+import OpenAI from 'openai';
 
 type ToolHandler = (params: any, sb: SupabaseClient, aircraftId: string) => Promise<any>;
 
@@ -143,6 +144,47 @@ const handlers: Record<string, ToolHandler> = {
       .single();
     if (error) return { error: error.message };
     return { settings: data };
+  },
+
+  search_documents: async (params, sb, aircraftId) => {
+    if (!params.query || typeof params.query !== 'string') return { error: 'Search query is required.' };
+    try {
+      const openai = new OpenAI();
+      const embResponse = await openai.embeddings.create({
+        model: 'text-embedding-3-small',
+        input: params.query,
+      });
+      const queryEmbedding = embResponse.data[0].embedding;
+
+      const { data: chunks, error } = await sb.rpc('match_document_chunks', {
+        query_embedding: JSON.stringify(queryEmbedding),
+        match_aircraft_id: aircraftId,
+        match_count: 5,
+        match_threshold: 0.3,
+      });
+
+      if (error) return { error: error.message };
+      if (!chunks || chunks.length === 0) return { message: 'No relevant document sections found. The aircraft may not have any documents uploaded yet.' };
+
+      // Enrich with document metadata
+      const docIds = Array.from(new Set(chunks.map((c: any) => c.document_id)));
+      const { data: docs } = await sb.from('aft_documents')
+        .select('id, filename, doc_type')
+        .in('id', docIds);
+      const docMap = new Map((docs || []).map((d: any) => [d.id, d]));
+
+      return {
+        results: chunks.map((c: any) => ({
+          document: docMap.get(c.document_id)?.filename || 'Unknown',
+          doc_type: docMap.get(c.document_id)?.doc_type || 'Unknown',
+          chunk_index: c.chunk_index,
+          content: c.content,
+          relevance: (c.similarity * 100).toFixed(0) + '%',
+        })),
+      };
+    } catch (err: any) {
+      return { error: `Document search failed: ${err.message}` };
+    }
   },
 
   web_search: async (params) => {
