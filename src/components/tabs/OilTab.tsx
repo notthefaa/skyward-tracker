@@ -109,13 +109,14 @@ export default function OilTab({
     async () => {
       const from = (page - 1) * PAGE_SIZE;
       const to = from + PAGE_SIZE;
-      const { data: logs } = await supabase
+      const { data: logs, count } = await supabase
         .from('aft_oil_logs')
-        .select('*')
+        .select('*', { count: 'exact' })
         .eq('aircraft_id', aircraft!.id)
         .order('created_at', { ascending: false })
         .range(from, to);
-      return { logs: (logs || []).slice(0, PAGE_SIZE) as OilLog[], hasMore: (logs || []).length > PAGE_SIZE };
+      const total = count ?? 0;
+      return { logs: (logs || []) as OilLog[], hasMore: total > from + PAGE_SIZE, totalPages: Math.max(1, Math.ceil(total / PAGE_SIZE)) };
     }
   );
 
@@ -258,7 +259,7 @@ export default function OilTab({
         {(page > 1 || hasMore) && (
           <div className="flex justify-between items-center mt-4 pt-3 border-t border-gray-200">
             <button onClick={() => setPage(p => p - 1)} disabled={page <= 1} className="text-[10px] font-bold uppercase tracking-widest text-navy disabled:opacity-30">Prev</button>
-            <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Page {page}</span>
+            <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Page {page} / {data?.totalPages ?? 1}</span>
             <button onClick={() => setPage(p => p + 1)} disabled={!hasMore} className="text-[10px] font-bold uppercase tracking-widest text-navy disabled:opacity-30">Next</button>
           </div>
         )}

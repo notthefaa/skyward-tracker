@@ -34,9 +34,11 @@ export default function TimesTab({
         .eq('aircraft_id', aircraft!.id)
         .order('created_at', { ascending: false })
         .range(from, to);
-      return { 
-        logs: fetchLogs || [], 
-        hasMore: count !== null && count > from + pageSize 
+      const total = count ?? 0;
+      return {
+        logs: fetchLogs || [],
+        hasMore: total > from + pageSize,
+        totalPages: Math.max(1, Math.ceil(total / pageSize)),
       };
     }
   );
@@ -439,7 +441,7 @@ export default function TimesTab({
 
         <div className="flex justify-between items-center mt-4 border-t border-gray-200 pt-4">
           <button onClick={() => setLogPage(p => Math.max(1, p - 1))} disabled={logPage === 1} className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-navy disabled:opacity-30 disabled:cursor-not-allowed hover:text-[#3AB0FF] transition-colors"><ChevronLeft size={14} /> Prev</button>
-          <span className="text-[10px] font-bold uppercase text-gray-400">Page {logPage}</span>
+          <span className="text-[10px] font-bold uppercase text-gray-400">Page {logPage} / {data?.totalPages ?? 1}</span>
           <button onClick={() => setLogPage(p => p + 1)} disabled={!hasMoreLogs} className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-navy disabled:opacity-30 disabled:cursor-not-allowed hover:text-[#3AB0FF] transition-colors">Next <ChevronRight size={14} /></button>
         </div>
       </div>

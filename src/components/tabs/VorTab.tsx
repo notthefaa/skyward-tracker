@@ -59,13 +59,14 @@ export default function VorTab({
     async () => {
       const from = (page - 1) * PAGE_SIZE;
       const to = from + PAGE_SIZE;
-      const { data: checks } = await supabase
+      const { data: checks, count } = await supabase
         .from('aft_vor_checks')
-        .select('*')
+        .select('*', { count: 'exact' })
         .eq('aircraft_id', aircraft!.id)
         .order('created_at', { ascending: false })
         .range(from, to);
-      return { checks: (checks || []).slice(0, PAGE_SIZE) as VorCheck[], hasMore: (checks || []).length > PAGE_SIZE };
+      const total = count ?? 0;
+      return { checks: (checks || []) as VorCheck[], hasMore: total > from + PAGE_SIZE, totalPages: Math.max(1, Math.ceil(total / PAGE_SIZE)) };
     }
   );
 
@@ -216,7 +217,7 @@ export default function VorTab({
         {(page > 1 || hasMore) && (
           <div className="flex justify-between items-center mt-4 pt-3 border-t border-gray-200">
             <button onClick={() => setPage(p => p - 1)} disabled={page <= 1} className="text-[10px] font-bold uppercase tracking-widest text-navy disabled:opacity-30">Prev</button>
-            <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Page {page}</span>
+            <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Page {page} / {data?.totalPages ?? 1}</span>
             <button onClick={() => setPage(p => p + 1)} disabled={!hasMore} className="text-[10px] font-bold uppercase tracking-widest text-navy disabled:opacity-30">Next</button>
           </div>
         )}
