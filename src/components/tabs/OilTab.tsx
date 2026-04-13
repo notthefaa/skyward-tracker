@@ -3,8 +3,8 @@ import { supabase } from "@/lib/supabase";
 import { authFetch } from "@/lib/authFetch";
 import type { AircraftWithMetrics, OilLog } from "@/lib/types";
 import useSWR from "swr";
-import { Plus, X, Trash2 } from "lucide-react";
-
+import { Plus, X, Trash2, ChevronLeft, ChevronRight } from "lucide-react";
+import { PrimaryButton } from "@/components/AppButtons";
 import { useToast } from "@/components/ToastProvider";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { useModalScrollLock } from "@/hooks/useModalScrollLock";
@@ -197,36 +197,37 @@ export default function OilTab({
   return (
     <>
       <div className="mb-2">
-        <button onClick={openForm} className="flex items-center gap-2 bg-navy text-white font-oswald text-sm font-bold uppercase tracking-widest px-4 py-2.5 rounded-lg shadow active:scale-95 transition-transform w-full justify-center">
-          <Plus size={16} /> Log Oil Check
-        </button>
+        <PrimaryButton onClick={openForm}><Plus size={18} /> Log Oil</PrimaryButton>
       </div>
 
-      <div className="bg-cream rounded-lg shadow border-t-4 border-[#CE3732] p-4 md:p-6">
+      <div className="bg-cream shadow-lg rounded-sm p-4 md:p-6 border-t-4 border-[#CE3732] flex flex-col mb-6">
         {/* Oil consumption chart */}
-        <div className="mb-4">
-          <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1 block">Oil Consumption Trend</span>
-          <div className="bg-white rounded-lg border border-gray-200 p-2">
+        <div className="mb-6">
+          <span className="text-[10px] font-bold uppercase tracking-widest text-[#CE3732] block mb-1">Oil Consumption Trend</span>
+          <div className="bg-white rounded-sm border border-gray-200 p-2">
             <OilChart entries={chartEntries || []} />
           </div>
           <div className="flex items-center gap-4 mt-1.5 justify-center">
-            <span className="flex items-center gap-1 text-[9px] text-gray-400"><span className="inline-block w-2 h-2 rounded-full bg-[#CE3732]"></span> Oil Level</span>
-            <span className="flex items-center gap-1 text-[9px] text-gray-400"><span className="inline-block w-2 h-2 rounded-full bg-[#56B94A]"></span> Oil Added</span>
+            <span className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-widest text-gray-400"><span className="inline-block w-2 h-2 rounded-full bg-[#CE3732]"></span> Oil Level</span>
+            <span className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-widest text-gray-400"><span className="inline-block w-2 h-2 rounded-full bg-[#56B94A]"></span> Oil Added</span>
           </div>
         </div>
 
         {/* Header */}
-        <div className="mb-3">
-          <h2 className="font-oswald text-lg font-bold uppercase tracking-widest text-navy">Oil Log</h2>
+        <div className="flex justify-between items-end mb-6">
+          <div>
+            <span className="text-[10px] font-bold uppercase tracking-widest text-[#CE3732] block mb-1">Consumption Log</span>
+            <h2 className="font-oswald text-2xl md:text-3xl font-bold uppercase text-navy m-0 leading-none">Oil Log</h2>
+          </div>
         </div>
 
         {/* Table */}
-        <div className="overflow-x-auto -mx-4 md:-mx-6 px-4 md:px-6">
-          <table className="w-full text-left">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="border-b-2 border-gray-300">
+              <tr className="border-b-2 border-navy text-[10px] font-bold uppercase tracking-widest text-gray-500">
                 {['Date', 'PIC', 'Qty', 'Added', 'Eng Hrs', 'Notes', ...(isAdmin ? [''] : [])].map(h => (
-                  <th key={h} className="text-[10px] font-bold uppercase tracking-widest text-gray-400 pb-2 pr-3 whitespace-nowrap">{h}</th>
+                  <th key={h} className="pb-2 pr-4 whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
@@ -236,14 +237,14 @@ export default function OilTab({
               )}
               {oilLogs.map((l, i) => (
                 <tr key={l.id} className="border-b border-gray-200 hover:bg-blue-50/50 transition-colors">
-                  <td className="py-2.5 pr-3 whitespace-nowrap">{new Date(l.created_at).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: '2-digit' })}</td>
-                  <td className="py-2.5 pr-3 whitespace-nowrap font-bold">{l.initials}</td>
-                  <td className="py-2.5 pr-3 whitespace-nowrap">{l.oil_qty} qt</td>
-                  <td className="py-2.5 pr-3 whitespace-nowrap">{l.oil_added ? <span className="text-[#56B94A] font-bold">+{l.oil_added} qt</span> : '—'}</td>
-                  <td className="py-2.5 pr-3 whitespace-nowrap">{l.engine_hours.toFixed(1)}</td>
-                  <td className="py-2.5 pr-3 max-w-[120px] truncate text-gray-500">{l.notes || '—'}</td>
+                  <td className="py-3 pr-4 whitespace-nowrap">{new Date(l.created_at).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: '2-digit' })}</td>
+                  <td className="py-3 pr-4 whitespace-nowrap font-bold">{l.initials}</td>
+                  <td className="py-3 pr-4 whitespace-nowrap">{l.oil_qty} qt</td>
+                  <td className="py-3 pr-4 whitespace-nowrap">{l.oil_added ? <span className="text-[#56B94A] font-bold">+{l.oil_added} qt</span> : '—'}</td>
+                  <td className="py-3 pr-4 whitespace-nowrap">{l.engine_hours.toFixed(1)}</td>
+                  <td className="py-3 pr-4 max-w-[120px] truncate text-gray-500">{l.notes || '—'}</td>
                   {isAdmin && (
-                    <td className="py-2.5 whitespace-nowrap">
+                    <td className="py-3 text-right">
                       {page === 1 && i === 0 && (
                         <button onClick={() => handleDelete(l)} className="text-gray-400 hover:text-[#CE3732] transition-colors"><Trash2 size={14} /></button>
                       )}
@@ -257,10 +258,10 @@ export default function OilTab({
 
         {/* Pagination */}
         {(page > 1 || hasMore) && (
-          <div className="flex justify-between items-center mt-4 pt-3 border-t border-gray-200">
-            <button onClick={() => setPage(p => p - 1)} disabled={page <= 1} className="text-[10px] font-bold uppercase tracking-widest text-navy disabled:opacity-30">Prev</button>
-            <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Page {page} / {data?.totalPages ?? 1}</span>
-            <button onClick={() => setPage(p => p + 1)} disabled={!hasMore} className="text-[10px] font-bold uppercase tracking-widest text-navy disabled:opacity-30">Next</button>
+          <div className="flex justify-between items-center mt-4 border-t border-gray-200 pt-4">
+            <button onClick={() => setPage(p => p - 1)} disabled={page <= 1} className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-navy disabled:opacity-30 disabled:cursor-not-allowed hover:text-[#CE3732] transition-colors"><ChevronLeft size={14} /> Prev</button>
+            <span className="text-[10px] font-bold uppercase text-gray-400">Page {page} / {data?.totalPages ?? 1}</span>
+            <button onClick={() => setPage(p => p + 1)} disabled={!hasMore} className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-navy disabled:opacity-30 disabled:cursor-not-allowed hover:text-[#CE3732] transition-colors">Next <ChevronRight size={14} /></button>
           </div>
         )}
       </div>
@@ -271,7 +272,7 @@ export default function OilTab({
           <div className="flex min-h-full items-center justify-center p-4">
             <div className="bg-white rounded-lg shadow-2xl w-full max-w-sm p-5 border-t-4 border-[#CE3732] animate-slide-up" onClick={e => e.stopPropagation()}>
               <div className="flex justify-between items-center mb-4">
-                <h3 className="font-oswald text-lg font-bold uppercase tracking-widest text-navy">Log Oil Check</h3>
+                <h3 className="font-oswald text-lg font-bold uppercase tracking-widest text-navy">Log Oil</h3>
                 <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-red-500"><X size={20} /></button>
               </div>
               <form onSubmit={handleSubmit} className="flex flex-col gap-4">
