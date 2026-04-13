@@ -112,42 +112,68 @@ src/
 │   ├── squawk/[id]/            # Public squawk viewer (shareable link)
 │   ├── service/[id]/           # Mechanic portal (token-based access)
 │   └── api/
-│       ├── aircraft/create/    # Create aircraft + set tailnumber admin
-│       ├── aircraft-access/    # Change roles, remove users from aircraft
 │       ├── account/delete/     # Account self-deletion with cascade
-│       ├── admin/db-health/    # Automated DB cleanup + monitoring
+│       ├── admin/
+│       │   ├── db-health/      # Automated DB cleanup + monitoring
+│       │   └── users/          # List all users with aircraft assignments (admin only)
+│       ├── aircraft/
+│       │   ├── create/         # Create aircraft + set tailnumber admin
+│       │   └── delete/         # Delete aircraft (admin only)
+│       ├── aircraft-access/    # Change roles, remove users from aircraft
 │       ├── cron/mx-reminders/  # Scheduled MX alerts + aggregate work package creation
 │       ├── emails/
 │       │   ├── mx-schedule/    # MX scheduling email
 │       │   ├── note-notify/    # Note notification email (all pilots)
 │       │   └── squawk-notify/  # Squawk notification email (all pilots)
+│       ├── flight-logs/        # Flight log CRUD with validation
 │       ├── invite/             # Global admin invite
-│       ├── pilot-invite/       # Tailnumber admin invite
+│       ├── maintenance-items/  # Maintenance item CRUD (aircraft admin only)
 │       ├── mx-events/
+│       │   ├── block/          # Create MX calendar block (admin only, cancels conflicts)
 │       │   ├── complete/       # Complete service event (supports partial completion)
 │       │   ├── create/         # Create service event
 │       │   ├── owner-action/   # Owner scheduling actions + MX conflict resolution
 │       │   ├── respond/        # Mechanic portal actions + MX conflict resolution
 │       │   ├── send-workpackage/ # Send/resend work package
 │       │   └── upload-attachment/ # Mechanic file uploads
+│       ├── notes/              # Note CRUD with access control
+│       ├── pilot-invite/       # Tailnumber admin invite
 │       ├── resend-invite/      # Re-send auth invitation
-│       └── reservations/       # Calendar CRUD + conflict detection
+│       ├── reservations/       # Calendar CRUD + conflict detection
+│       ├── squawks/            # Squawk CRUD with access control
+│       ├── users/              # User management (admin delete)
+│       └── version/            # App version endpoint
 ├── components/
 │   ├── AppButtons.tsx          # Shared button components
 │   ├── AuthScreen.tsx          # Login + forgot password
+│   ├── ConfirmProvider.tsx     # Context-based confirmation dialog (replaces native confirms)
 │   ├── PilotOnboarding.tsx     # First aircraft setup
+│   ├── Providers.tsx           # SWR, Toast, and Confirm context providers
 │   ├── PullIndicator.tsx       # Pull-to-refresh visual indicator
+│   ├── Skeletons.tsx           # Pulsing placeholder bars for loading states
+│   ├── TicketField.tsx         # Reusable label/value field for service portal
 │   ├── Toast.tsx               # Auto-dismissing success notifications
+│   ├── ToastProvider.tsx       # Context-based toast notification system
 │   ├── modals/
 │   │   ├── AircraftModal.tsx   # Create/edit aircraft form (syncs setup times with totals)
 │   │   ├── AdminModals.tsx     # Admin center (settings, users, fleet)
 │   │   ├── MxGuideModal.tsx    # Maintenance system guide
+│   │   ├── MxTemplatePickerModal.tsx # MX template library picker for common aircraft types
 │   │   ├── ServiceEventModal.tsx # Full service event lifecycle (partial completion, cross-refs)
 │   │   ├── SettingsModal.tsx   # Notifications (role-scoped), password, account deletion
-│   │   └── TutorialModal.tsx   # First-run tutorial (v5)
+│   │   ├── TutorialModal.tsx   # First-run tutorial (v5)
+│   │   └── service-event/      # Decomposed service event sub-components
+│   │       ├── DateProposalSection.tsx  # Date proposal UI for scheduling
+│   │       ├── EmailPreview.tsx         # Work package email preview
+│   │       ├── ServiceEventComplete.tsx # Completion form with partial support
+│   │       ├── ServiceEventCreate.tsx   # Event creation with template support
+│   │       ├── ServiceEventDetail.tsx   # Event detail view and actions
+│   │       ├── ServiceEventList.tsx     # Active events list
+│   │       └── shared.ts               # Shared types and style constants
 │   └── tabs/
 │       ├── CalendarDashboard.tsx # SVG ring gauges (bookings, availability, flight hours)
 │       ├── CalendarTab.tsx     # Shared scheduling calendar
+│       ├── FleetSchedule.tsx   # Fleet-wide schedule calendar with per-aircraft filtering
 │       ├── FleetSummary.tsx    # Fleet grid overview
 │       ├── MaintenanceTab.tsx  # Combined MX + Squawks with selector + MX history export
 │       ├── NotesTab.tsx        # Pilot notes with photos + email notifications
@@ -160,16 +186,21 @@ src/
 │   ├── useRealtimeSync.ts      # Supabase Realtime with aircraft-scoped refresh
 │   ├── useGroundedStatus.ts    # Aircraft airworthiness computation
 │   ├── useAircraftRole.ts      # Per-aircraft role resolution
-│   └── usePullToRefresh.ts     # iOS PWA pull-to-refresh gesture handler
+│   ├── usePullToRefresh.ts     # iOS PWA pull-to-refresh gesture handler
+│   └── useBodyScrollOverride.ts # Body overflow override for portal/viewer pages
 └── lib/
-    ├── auth.ts                 # Server-side auth (requireAuth, requireAircraftAccess)
+    ├── auth.ts                 # Server-side auth (requireAuth, requireAircraftAccess, requireAircraftAdmin)
     ├── authFetch.ts            # Client-side authenticated fetch wrapper
-    ├── calendarInvite.ts       # .ics calendar file generation (create + cancel)
     ├── constants.ts            # Shared constants (file size limits)
+    ├── dateFormat.ts           # Timezone-aware date formatting for email notifications
     ├── env.ts                  # Environment variable validation
     ├── math.ts                 # Predictive engine, burn rate, MX processing
     ├── mxConflicts.ts          # MX calendar conflict resolution (cancel overlapping reservations)
+    ├── mxTemplates.ts          # Static maintenance templates for common aircraft types
+    ├── sanitize.ts             # HTML sanitization for email templates
+    ├── styles.ts               # Shared style constants (iOS Safari form input fixes)
     ├── supabase.ts             # Supabase client singleton
+    ├── swrCache.ts             # SWR persistent cache provider (localStorage-backed)
     └── types.ts                # All TypeScript interfaces, types, and notification config
 ```
 

@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useRef, useState } from "react";
 import { AlertTriangle } from "lucide-react";
+import { useModalScrollLock } from "@/hooks/useModalScrollLock";
 import { PrimaryButton } from "@/components/AppButtons";
 
 type ConfirmVariant = "default" | "danger";
@@ -26,6 +27,7 @@ interface PendingConfirm extends ConfirmOptions {
 
 export function ConfirmProvider({ children }: { children: React.ReactNode }) {
   const [pending, setPending] = useState<PendingConfirm | null>(null);
+  useModalScrollLock(!!pending);
   const pendingRef = useRef<PendingConfirm | null>(null);
   pendingRef.current = pending;
 
@@ -56,9 +58,11 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
       {children}
       {pending && (
         <div
-          className="fixed inset-0 z-[10050] flex items-center justify-center p-4 bg-black/70 animate-fade-in"
+          className="fixed inset-0 z-[10050] overflow-y-auto bg-black/70 animate-fade-in"
+          style={{ overscrollBehavior: 'contain' }}
           onClick={() => close(false)}
         >
+          <div className="flex min-h-full items-center justify-center p-4">
           <div
             className={`bg-white rounded shadow-2xl w-full max-w-sm p-6 border-t-4 ${accentBorder} animate-slide-up`}
             onClick={(e) => e.stopPropagation()}
@@ -108,6 +112,7 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
                 )}
               </div>
             </div>
+          </div>
           </div>
         </div>
       )}

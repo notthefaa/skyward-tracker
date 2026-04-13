@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import { authFetch } from "@/lib/authFetch";
 import { useFleetData, useRealtimeSync, useGroundedStatus, useAircraftRole, usePullToRefresh } from "@/hooks";
+import { useModalScrollLock } from "@/hooks/useModalScrollLock";
 import { NETWORK_TIMEOUT_MS } from "@/lib/constants";
 import { useToast } from "@/components/ToastProvider";
 import dynamic from "next/dynamic";
@@ -29,13 +30,15 @@ const FleetSummary = dynamic(() => import("@/components/tabs/FleetSummary"), { l
 
 /** Inline MX sub-tab picker with "remember selection" checkbox */
 function MxPicker({ onSelect, onClose }: { onSelect: (sub: 'maintenance' | 'squawks') => void, onClose: () => void }) {
+  useModalScrollLock();
   const [remember, setRemember] = useState(false);
   const handleSelect = (sub: 'maintenance' | 'squawks') => {
     if (remember) localStorage.setItem('aft_mx_default_subtab', sub);
     onSelect(sub);
   };
   return (
-    <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/50 animate-fade-in" onClick={onClose}>
+    <div className="fixed inset-0 z-[10000] overflow-y-auto bg-black/50 animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={onClose}>
+      <div className="flex min-h-full items-center justify-center p-4">
       <div role="dialog" aria-label="Select maintenance or squawks view" className="bg-white w-full max-w-sm rounded-lg shadow-2xl p-5 animate-slide-up" onClick={e => e.stopPropagation()}>
         <div className="flex gap-3">
           <button onClick={() => handleSelect('maintenance')} className="flex-1 bg-cream border-2 border-[#F08B46] rounded-lg p-5 flex flex-col items-center gap-3 hover:bg-orange-50 active:scale-95 transition-all">
@@ -56,6 +59,7 @@ function MxPicker({ onSelect, onClose }: { onSelect: (sub: 'maintenance' | 'squa
         {localStorage.getItem('aft_mx_default_subtab') && (
           <button onClick={() => { localStorage.removeItem('aft_mx_default_subtab'); onClose(); }} className="w-full mt-2 text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:text-[#CE3732] transition-colors py-1">Clear Saved Preference</button>
         )}
+      </div>
       </div>
     </div>
   );
@@ -95,6 +99,7 @@ export default function AppShell({ session }: AppShellProps) {
   const [showLogItModal, setShowLogItModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showMxPicker, setShowMxPicker] = useState(false);
+  useModalScrollLock(showLogItModal);
   const [mxSubTab, setMxSubTab] = useState<'maintenance' | 'squawks'>('maintenance');
   const [showAircraftModal, setShowAircraftModal] = useState(false);
   const [editingAircraftId, setEditingAircraftId] = useState<string | null>(null);
@@ -372,13 +377,15 @@ export default function AppShell({ session }: AppShellProps) {
       {showAircraftModal && <AircraftModal session={session} existingAircraft={editingAircraftId ? allAircraftList.find(a => a.id === editingAircraftId) || null : null} onClose={() => setShowAircraftModal(false)} onSuccess={(t: string) => { setShowAircraftModal(false); fetchAircraftData(session.user.id); setActiveTail(t); }} />}
 
       {showLogItModal && (
-        <div className="fixed inset-0 bg-black/80 z-[10000] flex items-center justify-center p-4 animate-fade-in" onClick={() => setShowLogItModal(false)}>
+        <div className="fixed inset-0 bg-black/80 z-[10000] overflow-y-auto animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => setShowLogItModal(false)}>
+          <div className="flex min-h-full items-center justify-center p-4">
           <div role="dialog" aria-label="Install Log It companion app" className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 border-t-8 border-[#3AB0FF] animate-slide-up relative" onClick={e => e.stopPropagation()}>
             <button onClick={() => setShowLogItModal(false)} aria-label="Close" className="absolute top-4 right-4 text-gray-400 hover:text-red-500"><X size={24}/></button>
             <h3 className="font-oswald text-2xl font-bold uppercase tracking-widest text-navy mb-4">Install Log It</h3>
             <p className="text-sm text-gray-600 font-roboto mb-4 leading-relaxed">Log It is a companion app that is designed to make logging times and squawks easy on the go.</p>
             <ol className="text-left text-sm text-gray-600 font-roboto mb-8 space-y-2 max-w-xs mx-auto list-decimal pl-4"><li>Tap below to copy the app link.</li><li>Open your phone&apos;s browser and paste the link.</li><li>Use the Share menu <Share size={14} className="inline text-blue-500 mb-1"/> to Add to Home Screen.</li></ol>
             <button onClick={handleCopyQuickLink} className="w-full bg-[#3AB0FF] text-white font-oswald text-xl font-bold uppercase tracking-widest py-4 rounded-xl shadow-lg active:scale-95 transition-transform flex items-center justify-center gap-2"><Copy size={20} /> Copy App Link</button>
+          </div>
           </div>
         </div>
       )}

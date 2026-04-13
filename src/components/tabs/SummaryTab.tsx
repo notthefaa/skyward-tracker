@@ -11,6 +11,7 @@ import useSWR from "swr";
 import { PlaneTakeoff, MapPin, Droplet, Phone, Mail, Wrench, AlertTriangle, FileText, Clock, X, Trash2, Edit2, UserPlus, Loader2, Users, ChevronDown, Calendar, CheckCircle } from "lucide-react";
 import { PrimaryButton } from "@/components/AppButtons";
 import { useToast } from "@/components/ToastProvider";
+import { useModalScrollLock } from "@/hooks/useModalScrollLock";
 
 export default function SummaryTab({ 
   aircraft, setActiveTab, onNavigateToSquawks, role, aircraftRole, onDeleteAircraft, sysSettings, onEditAircraft, refreshData, session
@@ -156,6 +157,7 @@ export default function SummaryTab({
   const [removingUserId, setRemovingUserId] = useState<string | null>(null);
   const [isCrewUpdating, setIsCrewUpdating] = useState(false);
   const { showSuccess, showError } = useToast();
+  useModalScrollLock(showDeleteModal || showFuelModal || showInviteModal || showNoteModal);
 
   const handleFuelUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -236,7 +238,8 @@ export default function SummaryTab({
     <div className="flex flex-col gap-4 animate-fade-in relative">
       {/* Delete confirmation modal */}
       {showDeleteModal && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/80 animate-fade-in" onClick={() => setShowDeleteModal(false)}>
+        <div className="fixed inset-0 z-[70] overflow-y-auto bg-black/80 animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => setShowDeleteModal(false)}>
+          <div className="flex min-h-full items-center justify-center p-4">
           <div className="bg-white rounded shadow-2xl w-full max-w-sm p-6 border-t-4 border-[#CE3732] animate-slide-up relative" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-4"><h2 className="font-oswald text-2xl font-bold uppercase text-[#CE3732] flex items-center gap-2"><AlertTriangle size={24} /> Delete Aircraft</h2><button onClick={() => setShowDeleteModal(false)} className="text-gray-400 hover:text-red-500 transition-colors"><X size={24}/></button></div>
             <p className="text-sm text-navy font-roboto mb-6 leading-relaxed"><strong>WARNING:</strong> This action is strictly irreversible.<br/><br/>Deleting <strong className="text-[#CE3732]">{aircraft.tail_number}</strong> will permanently erase all associated flight logs, maintenance items, squawks, and notes from the database.</p>
@@ -245,12 +248,14 @@ export default function SummaryTab({
               <button onClick={() => { setShowDeleteModal(false); onDeleteAircraft(aircraft.id); }} className="flex-1 bg-[#CE3732] text-white font-bold uppercase tracking-widest text-[10px] py-3 rounded hover:bg-red-700 transition-colors shadow-md active:scale-95">Confirm Delete</button>
             </div>
           </div>
+          </div>
         </div>
       )}
 
       {/* Fuel modal */}
       {showFuelModal && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/80 animate-fade-in" onClick={() => setShowFuelModal(false)}>
+        <div className="fixed inset-0 z-[70] overflow-y-auto bg-black/80 animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => setShowFuelModal(false)}>
+          <div className="flex min-h-full items-center justify-center p-4">
           <div className="bg-white rounded shadow-2xl w-full max-w-sm p-6 border-t-4 border-blue-500 animate-slide-up" onClick={e => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-4"><h2 className="font-oswald text-xl font-bold uppercase text-navy flex items-center gap-2"><Droplet size={20} className="text-blue-500" /> Update Fuel State</h2><button onClick={() => setShowFuelModal(false)} className="text-gray-400 hover:text-red-500"><X size={24} /></button></div>
             <form onSubmit={handleFuelUpdate} className="space-y-4">
@@ -261,12 +266,14 @@ export default function SummaryTab({
               <div className="pt-2"><PrimaryButton disabled={isSavingFuel}>{isSavingFuel ? "Saving..." : "Update Fuel State"}</PrimaryButton></div>
             </form>
           </div>
+          </div>
         </div>
       )}
 
       {/* Invite modal */}
       {showInviteModal && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/80 animate-fade-in" onClick={() => setShowInviteModal(false)}>
+        <div className="fixed inset-0 z-[70] overflow-y-auto bg-black/80 animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => setShowInviteModal(false)}>
+          <div className="flex min-h-full items-center justify-center p-4">
           <div className="bg-white rounded shadow-2xl w-full max-w-sm p-6 border-t-4 border-[#3AB0FF] animate-slide-up" onClick={e => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-4"><h2 className="font-oswald text-xl font-bold uppercase text-navy flex items-center gap-2"><UserPlus size={20} className="text-[#3AB0FF]" /> Invite Pilot</h2><button onClick={() => setShowInviteModal(false)} className="text-gray-400 hover:text-red-500"><X size={24} /></button></div>
             <p className="text-xs text-gray-500 mb-4">Invite a user to <strong>{aircraft.tail_number}</strong>.</p>
@@ -275,6 +282,7 @@ export default function SummaryTab({
               <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Role for {aircraft.tail_number}</label><select value={inviteRole} onChange={e => setInviteRole(e.target.value as 'admin' | 'pilot')} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#3AB0FF] outline-none"><option value="pilot">Aircraft Pilot</option><option value="admin">Aircraft Admin</option></select></div>
               <div className="pt-2"><PrimaryButton disabled={isInviting}>{isInviting ? <><Loader2 size={16} className="animate-spin" /> Sending...</> : "Send Invitation"}</PrimaryButton></div>
             </form>
+          </div>
           </div>
         </div>
       )}
@@ -414,11 +422,13 @@ export default function SummaryTab({
               <div className="flex-1"><div className="flex justify-between items-center mb-1"><span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Latest Note</span><span className="text-[10px] text-gray-400 font-bold">{new Date(latestNote.created_at).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: '2-digit' })}</span></div><p className="text-sm font-bold text-navy leading-tight line-clamp-2">{latestNote.content}</p></div>
             </div>
             {showNoteModal && (
-              <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 animate-fade-in" onClick={() => setShowNoteModal(false)}>
+              <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => setShowNoteModal(false)}>
+                <div className="flex min-h-full items-center justify-center p-4">
                 <div className="bg-white rounded shadow-2xl w-full max-w-md p-6 border-t-4 border-navy animate-slide-up relative" onClick={(e) => e.stopPropagation()}>
                   <button onClick={() => setShowNoteModal(false)} className="absolute top-4 right-4 text-gray-400 hover:text-red-500"><X size={20}/></button>
                   <div className="mb-4"><span className="text-[10px] font-bold uppercase tracking-widest text-navy block">{latestNote.author_email || 'Pilot'}</span><span className="text-[10px] uppercase text-gray-400 font-bold">{new Date(latestNote.created_at).toLocaleString()}</span></div>
                   <p className="text-sm text-navy font-roboto whitespace-pre-wrap leading-relaxed">{latestNote.content}</p>
+                </div>
                 </div>
               </div>
             )}

@@ -7,6 +7,7 @@ import { Download, ChevronLeft, ChevronRight, Plus, X, Edit2, Trash2, Info, MapP
 import { PrimaryButton } from "@/components/AppButtons";
 import { useToast } from "@/components/ToastProvider";
 import { useConfirm } from "@/components/ConfirmProvider";
+import { useModalScrollLock } from "@/hooks/useModalScrollLock";
 
 const whiteBg = { backgroundColor: '#ffffff' } as const;
 
@@ -50,6 +51,8 @@ export default function TimesTab({
   const [viewPax, setViewPax] = useState<string | null>(null);
   const [viewRouting, setViewRouting] = useState<{pod: string | null, poa: string | null} | null>(null);
   const [showLegend, setShowLegend] = useState(false);
+
+  useModalScrollLock(showLogModal || !!viewPax || !!viewRouting || showLegend);
 
   const { showSuccess, showError, showWarning } = useToast();
   const confirm = useConfirm();
@@ -442,17 +445,20 @@ export default function TimesTab({
       </div>
 
       {viewPax && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 animate-fade-in" onClick={() => setViewPax(null)}>
+        <div className="fixed inset-0 z-[60] overflow-y-auto bg-black/60 animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => setViewPax(null)}>
+          <div className="flex min-h-full items-center justify-center p-4">
           <div className="bg-white rounded shadow-2xl w-full max-w-sm p-6 border-t-4 border-[#3AB0FF] animate-slide-up relative" onClick={(e) => e.stopPropagation()}>
             <button onClick={() => setViewPax(null)} className="absolute top-4 right-4 text-gray-400 hover:text-red-500 transition-colors"><X size={20}/></button>
             <h3 className="font-oswald text-xl font-bold uppercase tracking-widest text-navy mb-4">Passenger Info</h3>
             <p className="text-sm text-navy font-roboto whitespace-pre-wrap">{viewPax}</p>
           </div>
+          </div>
         </div>
       )}
 
       {viewRouting && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 animate-fade-in" onClick={() => setViewRouting(null)}>
+        <div className="fixed inset-0 z-[60] overflow-y-auto bg-black/60 animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => setViewRouting(null)}>
+          <div className="flex min-h-full items-center justify-center p-4">
           <div className="bg-white rounded shadow-2xl w-full max-w-sm p-6 border-t-4 border-[#3AB0FF] animate-slide-up relative" onClick={(e) => e.stopPropagation()}>
             <button onClick={() => setViewRouting(null)} className="absolute top-4 right-4 text-gray-400 hover:text-red-500 transition-colors"><X size={20}/></button>
             <h3 className="font-oswald text-xl font-bold uppercase tracking-widest text-navy mb-4">Flight Routing</h3>
@@ -468,11 +474,13 @@ export default function TimesTab({
               </div>
             </div>
           </div>
+          </div>
         </div>
       )}
 
       {showLegend && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 animate-fade-in" onClick={() => setShowLegend(false)}>
+        <div className="fixed inset-0 z-[60] overflow-y-auto bg-black/60 animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => setShowLegend(false)}>
+          <div className="flex min-h-full items-center justify-center p-4">
           <div className="bg-white rounded shadow-2xl w-full max-w-sm p-6 border-t-4 border-[#3AB0FF] animate-slide-up relative" onClick={(e) => e.stopPropagation()}>
             <button type="button" onClick={() => setShowLegend(false)} className="absolute top-4 right-4 text-gray-400 hover:text-red-500 transition-colors"><X size={20}/></button>
             <h3 className="font-oswald text-xl font-bold uppercase tracking-widest text-navy mb-4">Reason Codes</h3>
@@ -483,12 +491,14 @@ export default function TimesTab({
               <li><strong className="text-[#3AB0FF] w-8 inline-block">T:</strong> Training</li>
             </ul>
           </div>
+          </div>
         </div>
       )}
 
       {showLogModal && (
-        <div className="fixed inset-0 bg-black/60 z-[10000] flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-white rounded shadow-2xl w-full max-w-md p-6 border-t-4 border-[#3AB0FF] max-h-[90vh] overflow-y-auto animate-slide-up">
+        <div className="fixed inset-0 bg-black/60 z-[10000] overflow-y-auto animate-fade-in" style={{ overscrollBehavior: 'contain' }}>
+          <div className="flex min-h-full items-center justify-center p-4">
+          <div className="bg-white rounded shadow-2xl w-full max-w-md p-6 border-t-4 border-[#3AB0FF] animate-slide-up">
             <div className="flex justify-between items-center mb-6">
               <h2 className="font-oswald text-2xl font-bold uppercase text-navy">{editingId ? 'Edit Flight Log' : 'Log New Flight'}</h2>
               <button onClick={() => setShowLogModal(false)} className="text-gray-400 hover:text-red-500 transition-colors"><X size={24}/></button>
@@ -564,6 +574,7 @@ export default function TimesTab({
               <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Passengers (Opt)</label><input type="text" style={whiteBg} value={logPax} onChange={e=>setLogPax(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#3AB0FF] outline-none bg-white" placeholder="Names or notes..." /></div>
               <div className="pt-4"><PrimaryButton disabled={isSubmitting}>{isSubmitting ? "Saving..." : "Save Flight Log"}</PrimaryButton></div>
             </form>
+          </div>
           </div>
         </div>
       )}

@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useModalScrollLock } from "@/hooks/useModalScrollLock";
 import {
   PlaneTakeoff, LayoutGrid, Clock, Wrench, AlertTriangle, Send, ShieldCheck,
   ChevronRight, X, Calendar, Check, FileText, Bell, UserPlus, Settings, Smartphone
@@ -7,6 +8,7 @@ import {
 export default function TutorialModal({ session, role }: { session: any, role: string }) {
   const [isVisible, setIsVisible] = useState(false);
   const [step, setStep] = useState(0);
+  useModalScrollLock(isVisible);
 
   useEffect(() => {
     if (session?.user?.id) {
@@ -295,7 +297,8 @@ export default function TutorialModal({ session, role }: { session: any, role: s
   const currentStepData = tutorialSteps[step];
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 animate-fade-in">
+    <div className="fixed inset-0 z-[100] overflow-y-auto bg-black/80 animate-fade-in" style={{ overscrollBehavior: 'contain' }}>
+      <div className="flex min-h-full items-center justify-center p-4">
       <div className="bg-white rounded shadow-2xl w-full max-w-md p-6 md:p-8 border-t-8 border-navy animate-slide-up relative flex flex-col items-center text-center">
         
         <button onClick={dismissTutorial} className="absolute top-4 right-4 text-gray-400 hover:text-[#CE3732] transition-colors">
@@ -339,6 +342,7 @@ export default function TutorialModal({ session, role }: { session: any, role: s
           </button>
         </div>
 
+      </div>
       </div>
     </div>
   );

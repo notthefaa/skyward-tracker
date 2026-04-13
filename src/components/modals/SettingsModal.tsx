@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { authFetch } from "@/lib/authFetch";
 import { useToast } from "@/components/ToastProvider";
+import { useModalScrollLock } from "@/hooks/useModalScrollLock";
 import { NOTIFICATION_TYPES } from "@/lib/types";
 import type { NotificationType } from "@/lib/types";
 import { Settings, Bell, Trash2, Key, X, Loader2, AlertTriangle, User, Check } from "lucide-react";
@@ -13,6 +14,7 @@ export default function SettingsModal({
 }: { 
   show: boolean, onClose: () => void, session: any
 }) {
+  useModalScrollLock(show);
   const { showError, showSuccess } = useToast();
   const [prefs, setPrefs] = useState<Record<NotificationType, boolean>>({} as any);
   const [isLoadingPrefs, setIsLoadingPrefs] = useState(true);
@@ -199,8 +201,9 @@ export default function SettingsModal({
   });
 
   return (
-    <div className="fixed inset-0 bg-black/60 z-[10000] flex items-center justify-center p-4 animate-fade-in" onClick={onClose}>
-      <div className="bg-white rounded shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto animate-slide-up" onClick={e => e.stopPropagation()}>
+    <div className="fixed inset-0 bg-black/60 z-[10000] overflow-y-auto animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={onClose}>
+      <div className="flex min-h-full items-center justify-center p-4">
+      <div className="bg-white rounded shadow-2xl w-full max-w-md animate-slide-up" onClick={e => e.stopPropagation()}>
         
         <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center z-10">
           <h2 className="font-oswald text-2xl font-bold uppercase text-navy flex items-center gap-2">
@@ -396,6 +399,7 @@ export default function SettingsModal({
           </div>
 
         </div>
+      </div>
       </div>
     </div>
   );

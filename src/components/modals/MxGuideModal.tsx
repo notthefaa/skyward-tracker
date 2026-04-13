@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useModalScrollLock } from "@/hooks/useModalScrollLock";
 import { 
   X, Wrench, Clock, Calendar, Send, CheckCircle, Bell, TrendingUp, 
   ExternalLink, MessageSquare, Sparkles, Plane, XCircle, ChevronRight, 
@@ -38,6 +39,7 @@ const SECTIONS: { id: GuideSection; title: string; icon: React.ReactNode; color:
 
 export default function MxGuideModal({ show, onClose }: MxGuideModalProps) {
   const [activeSection, setActiveSection] = useState<GuideSection | null>(null);
+  useModalScrollLock(show);
 
   if (!show) return null;
 
@@ -382,8 +384,9 @@ export default function MxGuideModal({ show, onClose }: MxGuideModalProps) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 z-[10001] flex items-center justify-center animate-fade-in" style={{ overscrollBehavior: 'contain', paddingTop: 'calc(3.5rem + env(safe-area-inset-top, 0px) + 8px)', paddingBottom: 'calc(3.5rem + env(safe-area-inset-bottom, 0px) + 8px)', paddingLeft: '1rem', paddingRight: '1rem' }} onClick={onClose}>
-      <div className="bg-white rounded shadow-2xl w-full max-w-lg p-6 border-t-4 border-[#F08B46] max-h-full overflow-y-auto animate-slide-up" style={{ overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch' }} onClick={e => e.stopPropagation()}>
+    <div className="fixed inset-0 bg-black/60 z-[10001] overflow-y-auto animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={onClose}>
+      <div className="flex min-h-full items-center justify-center p-4">
+      <div className="bg-white rounded shadow-2xl w-full max-w-lg p-6 border-t-4 border-[#F08B46] animate-slide-up" onClick={e => e.stopPropagation()}>
         
         <div className="flex justify-between items-center mb-6">
           <h2 className="font-oswald text-2xl font-bold uppercase text-navy flex items-center gap-2">
@@ -418,6 +421,7 @@ export default function MxGuideModal({ show, onClose }: MxGuideModalProps) {
           })}
         </div>
 
+      </div>
       </div>
     </div>
   );

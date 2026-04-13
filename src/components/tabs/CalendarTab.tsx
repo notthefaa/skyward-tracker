@@ -9,6 +9,7 @@ import { Calendar, ChevronLeft, ChevronRight, Plus, X, Clock, MapPin, Plane, Wre
 import { PrimaryButton } from "@/components/AppButtons";
 import CalendarDashboard from "@/components/tabs/CalendarDashboard";
 import { useToast } from "@/components/ToastProvider";
+import { useModalScrollLock } from "@/hooks/useModalScrollLock";
 
 type CalendarView = 'month' | 'week' | 'day';
 
@@ -164,6 +165,7 @@ export default function CalendarTab({
   const [mxBlockEndDate, setMxBlockEndDate] = useState("");
   const [mxBlockNotes, setMxBlockNotes] = useState("");
 
+  useModalScrollLock(showBookingForm || showDatePicker || showMxBlockForm);
   const { showSuccess, showError, showWarning } = useToast();
   const [cancellingId, setCancellingId] = useState<string | null>(null);
 
@@ -583,8 +585,9 @@ export default function CalendarTab({
 
       {/* BOOKING FORM — z-[10000] to sit above nav bars */}
       {showBookingForm && (
-        <div className="fixed inset-0 bg-black/60 z-[10000] flex items-center justify-center p-4 animate-fade-in" onClick={() => setShowBookingForm(false)}>
-          <div className="bg-white rounded shadow-2xl w-full max-w-sm p-5 border-t-4 border-[#56B94A] max-h-[85vh] overflow-y-auto animate-slide-up" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/60 z-[10000] overflow-y-auto animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => setShowBookingForm(false)}>
+          <div className="flex min-h-full items-center justify-center p-4">
+          <div className="bg-white rounded shadow-2xl w-full max-w-sm p-5 border-t-4 border-[#56B94A] animate-slide-up" onClick={e => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-5">
               <h2 className="font-oswald text-xl font-bold uppercase text-navy flex items-center gap-2"><Calendar size={18} className="text-[#56B94A]" /> {editingReservationId ? 'Edit Reservation' : 'Reserve Aircraft'}</h2>
               <button onClick={() => setShowBookingForm(false)} className="text-gray-400 hover:text-red-500"><X size={22} /></button>
@@ -715,6 +718,7 @@ export default function CalendarTab({
               <div className="pt-2"><button onClick={handleSubmitReservation} disabled={isSubmitting} className="w-full bg-[#56B94A] text-white font-oswald tracking-widest uppercase py-3 px-4 rounded hover:bg-opacity-90 active:scale-95 transition-all text-sm disabled:opacity-50">{isSubmitting ? <><Loader2 size={16} className="animate-spin" /> {editingReservationId ? 'Updating...' : 'Booking...'}</> : editingReservationId ? "Update Reservation" : "Confirm Reservation"}</button></div>
             </div>
           </div>
+          </div>
         </div>
       )}
 
@@ -786,9 +790,11 @@ export default function CalendarTab({
 
         return (
           <div
-            className="fixed inset-0 bg-black/60 z-[10000] flex items-center justify-center p-4 animate-fade-in"
+            className="fixed inset-0 bg-black/60 z-[10000] overflow-y-auto animate-fade-in"
+            style={{ overscrollBehavior: 'contain' }}
             onClick={() => setShowDatePicker(false)}
           >
+            <div className="flex min-h-full items-center justify-center p-4">
             <div
               role="dialog"
               aria-label={dialogLabel}
@@ -915,14 +921,16 @@ export default function CalendarTab({
                 Jump to Today
               </button>
             </div>
+            </div>
           </div>
         );
       })()}
 
       {/* MX BLOCK FORM */}
       {showMxBlockForm && (
-        <div className="fixed inset-0 bg-black/60 z-[10000] flex items-center justify-center p-4 animate-fade-in" onClick={() => setShowMxBlockForm(false)}>
-          <div className="bg-white rounded shadow-2xl w-full max-w-sm p-5 border-t-4 border-[#F08B46] max-h-[85vh] overflow-y-auto animate-slide-up" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/60 z-[10000] overflow-y-auto animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => setShowMxBlockForm(false)}>
+          <div className="flex min-h-full items-center justify-center p-4">
+          <div className="bg-white rounded shadow-2xl w-full max-w-sm p-5 border-t-4 border-[#F08B46] animate-slide-up" onClick={e => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-5">
               <h2 className="font-oswald text-xl font-bold uppercase text-navy flex items-center gap-2"><Wrench size={18} className="text-[#F08B46]" /> Block for Maintenance</h2>
               <button onClick={() => setShowMxBlockForm(false)} className="text-gray-400 hover:text-red-500"><X size={22} /></button>
@@ -942,6 +950,7 @@ export default function CalendarTab({
               </div>
               <div className="pt-2"><button onClick={handleCreateMxBlock} disabled={isSubmitting} className="w-full bg-[#F08B46] text-white font-oswald tracking-widest uppercase py-3 px-4 rounded hover:bg-opacity-90 active:scale-95 transition-all text-sm disabled:opacity-50">{isSubmitting ? <><Loader2 size={16} className="animate-spin" /> Creating...</> : "Block Aircraft"}</button></div>
             </div>
+          </div>
           </div>
         </div>
       )}

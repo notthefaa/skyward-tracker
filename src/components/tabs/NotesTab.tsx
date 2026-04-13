@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { authFetch } from "@/lib/authFetch";
 import { validateFileSizes, MAX_UPLOAD_SIZE_LABEL } from "@/lib/constants";
@@ -9,6 +9,7 @@ import { PrimaryButton } from "@/components/AppButtons";
 import imageCompression from "browser-image-compression";
 import { useToast } from "@/components/ToastProvider";
 import { useConfirm } from "@/components/ConfirmProvider";
+import { useModalScrollLock } from "@/hooks/useModalScrollLock";
 
 const whiteBg = { backgroundColor: '#ffffff' } as const;
 
@@ -59,14 +60,7 @@ export default function NotesTab({ aircraft, session, role, aircraftRole, userIn
 
   const isAdmin = role === 'admin' || aircraftRole === 'admin';
 
-  // ─── Lock body scroll when any modal is open ───
-  const anyModalOpen = showModal || !!previewImages;
-  useEffect(() => {
-    if (anyModalOpen) {
-      document.body.style.overflow = 'hidden';
-      return () => { document.body.style.overflow = ''; };
-    }
-  }, [anyModalOpen]);
+  useModalScrollLock(showModal || !!previewImages);
 
   const openForm = (note: any = null) => {
     if (note) {
@@ -238,36 +232,39 @@ export default function NotesTab({ aircraft, session, role, aircraftRole, userIn
       </div>
 
       {previewImages && (
-        <div className="fixed inset-0 z-[10000] bg-black/95 flex items-center justify-center animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => setPreviewImages(null)}>
+        <div className="fixed inset-0 z-[10000] bg-black/95 overflow-y-auto animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => setPreviewImages(null)}>
+          <div className="flex min-h-full items-center justify-center p-4">
           <button className="absolute top-4 right-4 text-gray-400 hover:text-white z-50 p-2">
             <X size={32}/>
           </button>
-          
+
           {previewImages.length > 1 && (
             <button onClick={(e) => { e.stopPropagation(); setPreviewIndex(prev => prev === 0 ? previewImages.length - 1 : prev - 1); }} className="absolute left-4 text-gray-400 hover:text-white z-50 p-2">
               <ChevronLeft size={48}/>
             </button>
           )}
-          
+
           <div className="max-w-full max-h-full p-4 flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
             <img src={previewImages[previewIndex]} className="max-h-[85vh] max-w-full object-contain rounded shadow-2xl" />
           </div>
-          
+
           {previewImages.length > 1 && (
             <button onClick={(e) => { e.stopPropagation(); setPreviewIndex(prev => prev === previewImages.length - 1 ? 0 : prev + 1); }} className="absolute right-4 text-gray-400 hover:text-white z-50 p-2">
               <ChevronRight size={48}/>
             </button>
           )}
-          
+
           <div className="absolute bottom-6 text-gray-400 font-oswald tracking-widest text-sm uppercase">
             Image {previewIndex + 1} of {previewImages.length}
+          </div>
           </div>
         </div>
       )}
 
       {showModal && (
-        <div className="fixed inset-0 bg-black/60 z-[10000] flex items-center justify-center p-4 animate-fade-in" style={{ overscrollBehavior: 'contain' }}>
-          <div className="bg-white rounded shadow-2xl w-full max-w-md p-6 border-t-4 border-navy animate-slide-up max-h-[90vh] overflow-y-auto" style={{ overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch' }}>
+        <div className="fixed inset-0 bg-black/60 z-[10000] overflow-y-auto animate-fade-in" style={{ overscrollBehavior: 'contain' }}>
+          <div className="flex min-h-full items-center justify-center p-4">
+          <div className="bg-white rounded shadow-2xl w-full max-w-md p-6 border-t-4 border-navy animate-slide-up">
             
             <div className="flex justify-between items-center mb-4">
               <h2 className="font-oswald text-2xl font-bold uppercase text-navy flex items-center gap-2">
@@ -308,6 +305,7 @@ export default function NotesTab({ aircraft, session, role, aircraftRole, userIn
               </div>
             </form>
             
+          </div>
           </div>
         </div>
       )}

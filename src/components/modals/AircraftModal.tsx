@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { useModalScrollLock } from "@/hooks/useModalScrollLock";
 import { supabase } from "@/lib/supabase";
 import { authFetch } from "@/lib/authFetch";
 import { useToast } from "@/components/ToastProvider";
@@ -24,6 +25,7 @@ export default function AircraftModal({
   onClose: () => void, 
   onSuccess: (newTail: string) => void
 }) {
+  useModalScrollLock();
   const { showError, showWarning } = useToast();
   const [newTail, setNewTail] = useState("");
   const [newSerial, setNewSerial] = useState("");
@@ -277,8 +279,9 @@ export default function AircraftModal({
   );
 
   return (
-    <div className="fixed inset-0 bg-black/60 z-[10000] flex items-center justify-center p-4 animate-fade-in">
-      <div className="bg-white rounded shadow-2xl w-full max-w-md p-6 border-t-4 border-[#F08B46] max-h-[90vh] overflow-y-auto animate-slide-up">
+    <div className="fixed inset-0 bg-black/60 z-[10000] overflow-y-auto animate-fade-in" style={{ overscrollBehavior: 'contain' }}>
+      <div className="flex min-h-full items-center justify-center p-4">
+      <div className="bg-white rounded shadow-2xl w-full max-w-md p-6 border-t-4 border-[#F08B46] animate-slide-up">
         
         <div className="flex justify-between items-center mb-6">
           <h2 className="font-oswald text-2xl font-bold uppercase text-[#1B4869]">
@@ -442,6 +445,7 @@ export default function AircraftModal({
             </PrimaryButton>
           </div>
         </form>
+      </div>
       </div>
     </div>
   );

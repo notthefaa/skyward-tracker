@@ -209,6 +209,7 @@ Global role assignment. One row per user.
 | role | text | "admin" or "pilot" |
 | email | text | |
 | initials | text | |
+| full_name | text | Display name (consolidated from profiles) |
 
 ### aft_user_aircraft_access
 Per-aircraft access with role. Links users to aircraft they can see. Composite PK on `(user_id, aircraft_id)`.
@@ -286,6 +287,10 @@ All authenticated routes use `requireAuth(req)` from `@/lib/auth.ts`, which extr
 
 **Aircraft access verification:** Routes that operate on a specific aircraft call `requireAircraftAccess(supabaseAdmin, userId, aircraftId)` after `requireAuth()`. Global admins bypass the check. All others must have a row in `aft_user_aircraft_access`. Throws 403 if no access.
 
+**Aircraft admin verification:** Routes restricted to aircraft admins use `requireAircraftAdmin(supabaseAdmin, userId, aircraftId)` which verifies the user is either a global admin or has `aircraft_role = 'admin'` on the specific aircraft. Throws 403 otherwise.
+
+**Error handling:** All routes use `handleApiError(error)` from `@/lib/auth.ts` to produce consistent JSON error responses.
+
 Client-side calls use `authFetch()` from `@/lib/authFetch.ts` which auto-attaches the session token.
 
 ### Route Reference
@@ -293,14 +298,22 @@ Client-side calls use `authFetch()` from `@/lib/authFetch.ts` which auto-attache
 | Route | Method | Auth | Purpose |
 |-------|--------|------|---------|
 | `/api/aircraft/create` | POST | Auth | Create aircraft, set creator as admin |
+| `/api/aircraft/delete` | DELETE | Auth | Delete aircraft (admin or aircraft admin) |
 | `/api/aircraft-access` | PUT | Auth | Change a user's aircraft role |
 | `/api/aircraft-access` | DELETE | Auth | Remove user from aircraft (cancels future reservations) |
 | `/api/account/delete` | GET | Auth | Preview deletion impact (owned aircraft, affected users) |
 | `/api/account/delete` | DELETE | Auth | Delete own account (cascades to owned aircraft) |
+| `/api/admin/db-health` | POST | Admin | Cleanup old records, sweep orphaned files |
+| `/api/admin/users` | GET | Admin | List all users with their aircraft assignments |
 | `/api/invite` | POST | Admin | Invite global admin or standalone pilot |
 | `/api/pilot-invite` | POST | Auth | Invite user to specific aircraft with role |
+| `/api/flight-logs` | POST/PUT/DELETE | Auth + Aircraft | Flight log CRUD with numeric validation |
+| `/api/maintenance-items` | POST/PUT/DELETE | Auth + Aircraft Admin | Maintenance item CRUD |
+| `/api/notes` | POST/PUT/DELETE | Auth + Aircraft | Note CRUD |
+| `/api/squawks` | POST/PUT/DELETE | Auth + Aircraft | Squawk CRUD |
 | `/api/reservations` | POST | Auth | Create reservation (conflict detection + notifications) |
 | `/api/reservations` | DELETE | Auth | Cancel reservation (permission check + notifications) |
+| `/api/mx-events/block` | POST | Auth + Aircraft Admin | Create MX calendar block (cancels conflicting reservations) |
 | `/api/mx-events/create` | POST | Auth + Aircraft | Create service event / work package |
 | `/api/mx-events/complete` | POST | Auth + Aircraft | Complete event items (supports partial completion) |
 | `/api/mx-events/respond` | POST | Token | Mechanic portal actions + MX conflict resolution on confirm |
@@ -311,8 +324,9 @@ Client-side calls use `authFetch()` from `@/lib/authFetch.ts` which auto-attache
 | `/api/emails/note-notify` | POST | Auth + Aircraft | Send note notification emails |
 | `/api/emails/mx-schedule` | POST | Auth + Aircraft | Send MX scheduling email |
 | `/api/cron/mx-reminders` | GET | CRON | Automated MX reminders + aggregate work package creation |
-| `/api/admin/db-health` | POST | Admin | Cleanup old records, sweep orphaned files |
+| `/api/users` | DELETE | Admin | Delete a user account (admin only) |
 | `/api/resend-invite` | POST | None | Re-send Supabase auth invitation |
+| `/api/version` | GET | None | Returns current app version |
 
 ---
 
@@ -325,8 +339,20 @@ Called from two trigger points:
 - `owner-action/route.ts` — owner confirms mechanic's proposed date
 - `respond/route.ts` — mechanic confirms owner's proposed date
 
-### `src/lib/calendarInvite.ts`
-Generates RFC 5545-compliant `.ics` calendar files. `generateCalendarInvite()` creates a REQUEST (add to calendar) and `generateCalendarCancellation()` creates a CANCEL (remove from calendar). UIDs are deterministic from reservation IDs (`{id}@skywardsociety.com`) so cancellations match originals. Event title format: `"{Tail Number} Reservation for {Pilot Initials}"`.
+### `src/lib/dateFormat.ts`
+Timezone-aware date formatting for email notifications. Used for rendering reservation times in server-side email templates where `toLocaleString()` defaults to the host's system timezone.
+
+### `src/lib/mxTemplates.ts`
+Static maintenance template library for common aircraft types. Contains manufacturer-required and recommended maintenance items that can be bulk-imported when setting up a new aircraft.
+
+### `src/lib/sanitize.ts`
+HTML sanitization for user-provided strings before inserting them into HTML email templates or any HTML context.
+
+### `src/lib/styles.ts`
+Shared style constants for iOS Safari form input fixes. Eliminates duplication of `-webkit-appearance` background override values across components.
+
+### `src/lib/swrCache.ts`
+SWR persistent cache provider backed by `localStorage`. Keyed as `aft_swr_cache`, allows cached data to survive page reloads.
 
 ---
 
@@ -426,6 +452,7 @@ The auth initialization in `page.tsx` handles three failure scenarios:
 | `useGroundedStatus` | `src/hooks/useGroundedStatus.ts` | Computes aircraft airworthiness from MX items and squawks |
 | `useAircraftRole` | `src/hooks/useAircraftRole.ts` | Resolves the current user's per-aircraft role from access records |
 | `usePullToRefresh` | `src/hooks/usePullToRefresh.ts` | iOS PWA pull-to-refresh with native touch event handling |
+| `useBodyScrollOverride` | `src/hooks/useBodyScrollOverride.ts` | Overrides body overflow for pages needing native scrolling (service portal, squawk viewer) |
 
 ---
 

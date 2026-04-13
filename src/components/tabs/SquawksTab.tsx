@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import { authFetch } from "@/lib/authFetch";
 import { validateFileSizes, MAX_UPLOAD_SIZE_LABEL } from "@/lib/constants";
@@ -10,6 +10,7 @@ import SignatureCanvas from "react-signature-canvas";
 import imageCompression from "browser-image-compression";
 import { useToast } from "@/components/ToastProvider";
 import { useConfirm } from "@/components/ConfirmProvider";
+import { useModalScrollLock } from "@/hooks/useModalScrollLock";
 
 const whiteBg = { backgroundColor: '#ffffff' } as const;
 
@@ -85,12 +86,7 @@ export default function SquawksTab({
 
   // ─── Lock body scroll when any modal is open ───
   const anyModalOpen = !!detailSquawk || showModal || showExportModal || !!previewImages;
-  useEffect(() => {
-    if (anyModalOpen) {
-      document.body.style.overflow = 'hidden';
-      return () => { document.body.style.overflow = ''; };
-    }
-  }, [anyModalOpen]);
+  useModalScrollLock(anyModalOpen);
 
   /** Check if the current user can modify a given squawk */
   const canModify = (sq: any) => {
@@ -386,8 +382,9 @@ export default function SquawksTab({
 
       {/* ─── SQUAWK DETAIL MODAL ─── */}
       {detailSquawk && (
-        <div className="fixed inset-0 bg-black/60 z-[10000] flex items-center justify-center p-3 animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={closeDetailModal}>
-          <div className="bg-white rounded shadow-2xl w-full max-w-lg p-5 border-t-4 border-[#CE3732] max-h-[90vh] overflow-y-auto animate-slide-up" style={{ overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch' }} onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/60 z-[10000] overflow-y-auto animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={closeDetailModal}>
+          <div className="flex min-h-full items-center justify-center p-3">
+          <div className="bg-white rounded shadow-2xl w-full max-w-lg p-5 border-t-4 border-[#CE3732] animate-slide-up" style={{ overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch' }} onClick={e => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-4">
               <h2 className="font-oswald text-2xl font-bold uppercase text-navy">Squawk Detail</h2>
               <button onClick={closeDetailModal} className="text-gray-400 hover:text-red-500"><X size={24}/></button>
@@ -482,12 +479,14 @@ export default function SquawksTab({
               </div>
             </div>
           </div>
+          </div>
         </div>
       )}
 
       {showExportModal && (
-        <div className="fixed inset-0 bg-black/60 z-[10000] flex items-center justify-center p-3 animate-fade-in" style={{ overscrollBehavior: 'contain' }}>
-          <div className="bg-white rounded shadow-2xl w-full max-w-md p-5 border-t-4 border-[#CE3732] max-h-[90vh] overflow-y-auto animate-slide-up flex flex-col" style={{ overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch' }}>
+        <div className="fixed inset-0 bg-black/60 z-[10000] overflow-y-auto animate-fade-in" style={{ overscrollBehavior: 'contain' }}>
+          <div className="flex min-h-full items-center justify-center p-3">
+          <div className="bg-white rounded shadow-2xl w-full max-w-md p-5 border-t-4 border-[#CE3732] animate-slide-up flex flex-col" style={{ overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch' }}>
             <div className="flex justify-between items-center mb-4">
               <h2 className="font-oswald text-2xl font-bold uppercase text-navy flex items-center gap-2"><CheckSquare size={20} className="text-[#CE3732]" /> Export to PDF</h2>
               <button onClick={() => setShowExportModal(false)} className="text-gray-400 hover:text-red-500 transition-colors"><X size={24}/></button>
@@ -513,22 +512,26 @@ export default function SquawksTab({
               {isExportingPdf ? "Generating Report..." : `Export ${selectedForExport.length} Items to PDF`}
             </PrimaryButton>
           </div>
+          </div>
         </div>
       )}
 
       {previewImages && (
-        <div className="fixed inset-0 z-[10001] bg-black/95 flex items-center justify-center animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => setPreviewImages(null)}>
+        <div className="fixed inset-0 z-[10001] bg-black/95 overflow-y-auto animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => setPreviewImages(null)}>
+          <div className="flex min-h-full items-center justify-center">
           <button className="absolute top-4 right-4 text-gray-400 hover:text-white z-50 p-2"><X size={32}/></button>
           {previewImages.length > 1 && <button onClick={(e) => { e.stopPropagation(); setPreviewIndex(prev => prev === 0 ? previewImages.length - 1 : prev - 1); }} className="absolute left-4 text-gray-400 hover:text-white z-50 p-2"><ChevronLeft size={48}/></button>}
           <div className="max-w-full max-h-full p-4 flex items-center justify-center" onClick={(e) => e.stopPropagation()}><img src={previewImages[previewIndex]} className="max-h-[85vh] max-w-full object-contain rounded shadow-2xl" /></div>
           {previewImages.length > 1 && <button onClick={(e) => { e.stopPropagation(); setPreviewIndex(prev => prev === previewImages.length - 1 ? 0 : prev + 1); }} className="absolute right-4 text-gray-400 hover:text-white z-50 p-2"><ChevronRight size={48}/></button>}
           <div className="absolute bottom-6 text-gray-400 font-oswald tracking-widest text-sm uppercase">Image {previewIndex + 1} of {previewImages.length}</div>
+          </div>
         </div>
       )}
 
       {showModal && (
-        <div className="fixed inset-0 bg-black/60 z-[10000] flex items-center justify-center p-3 animate-fade-in" style={{ overscrollBehavior: 'contain' }}>
-          <div className="bg-white rounded shadow-2xl w-full max-w-lg p-5 border-t-4 border-[#CE3732] max-h-[90vh] overflow-y-auto animate-slide-up" style={{ overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch' }}>
+        <div className="fixed inset-0 bg-black/60 z-[10000] overflow-y-auto animate-fade-in" style={{ overscrollBehavior: 'contain' }}>
+          <div className="flex min-h-full items-center justify-center p-3">
+          <div className="bg-white rounded shadow-2xl w-full max-w-lg p-5 border-t-4 border-[#CE3732] animate-slide-up" style={{ overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch' }}>
             <div className="flex justify-between items-center mb-4">
               <h2 className="font-oswald text-2xl font-bold uppercase text-navy">{editingId ? 'Edit Squawk' : 'Report Squawk'}</h2>
               <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-red-500"><X size={24}/></button>
@@ -595,6 +598,7 @@ export default function SquawksTab({
               )}
               <div className="pt-4"><PrimaryButton disabled={isSubmitting}>{isSubmitting ? "Saving..." : "Save Squawk"}</PrimaryButton></div>
             </form>
+          </div>
           </div>
         </div>
       )}

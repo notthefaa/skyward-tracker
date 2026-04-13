@@ -5,6 +5,7 @@ import useSWR from "swr";
 import { supabase } from "@/lib/supabase";
 import type { AircraftWithMetrics, Reservation } from "@/lib/types";
 import { ChevronLeft, ChevronRight, Wrench, Plane, MapPin, Clock, Filter } from "lucide-react";
+import { useModalScrollLock } from "@/hooks/useModalScrollLock";
 
 type CalendarView = 'month' | 'week' | 'day';
 
@@ -49,6 +50,8 @@ export default function FleetSchedule({
   const [selectedTails, setSelectedTails] = useState<Set<string>>(
     () => new Set(aircraftList.map(a => a.id))
   );
+
+  useModalScrollLock(showDatePicker);
 
   // Tail metadata (stable color assignment by position in the aircraft list).
   const tailMeta = useMemo<Record<string, TailMeta>>(() => {
@@ -605,9 +608,11 @@ export default function FleetSchedule({
 
         return (
           <div
-            className="fixed inset-0 bg-black/60 z-[10000] flex items-center justify-center p-4 animate-fade-in"
+            className="fixed inset-0 bg-black/60 z-[10000] overflow-y-auto animate-fade-in"
+            style={{ overscrollBehavior: 'contain' }}
             onClick={() => setShowDatePicker(false)}
           >
+            <div className="flex min-h-full items-center justify-center p-4">
             <div
               role="dialog"
               aria-label={dialogLabel}
@@ -733,6 +738,7 @@ export default function FleetSchedule({
               >
                 Jump to Today
               </button>
+            </div>
             </div>
           </div>
         );

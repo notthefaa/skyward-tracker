@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import { useModalScrollLock } from "@/hooks/useModalScrollLock";
 import { supabase } from "@/lib/supabase";
 import { authFetch } from "@/lib/authFetch";
 import { useToast } from "@/components/ToastProvider";
@@ -54,6 +55,7 @@ function getCategoryIcon(category: string) {
 }
 
 export default function MxTemplatePickerModal({ aircraft, show, onClose, onRefresh }: MxTemplatePickerModalProps) {
+  useModalScrollLock(show);
   const { showError, showWarning } = useToast();
   const [step, setStep] = useState<Step>('pick');
   const [selectedTemplate, setSelectedTemplate] = useState<MxTemplate | null>(null);
@@ -269,20 +271,14 @@ export default function MxTemplatePickerModal({ aircraft, show, onClose, onRefre
   const totalItems = selectedTemplate?.items.length || 0;
 
   return (
-    <div 
-      className="fixed inset-0 bg-black/60 z-[10000] flex items-center justify-center animate-fade-in"
-      style={{ 
-        overscrollBehavior: 'contain',
-        paddingTop: 'calc(3.5rem + env(safe-area-inset-top, 0px) + 8px)',
-        paddingBottom: 'calc(3.5rem + env(safe-area-inset-bottom, 0px) + 8px)',
-        paddingLeft: '0.75rem',
-        paddingRight: '0.75rem',
-      }}
+    <div
+      className="fixed inset-0 bg-black/60 z-[10000] overflow-y-auto animate-fade-in"
+      style={{ overscrollBehavior: 'contain' }}
       onClick={onClose}
     >
-      <div 
-        className="bg-white rounded shadow-2xl w-full max-w-lg p-5 border-t-4 border-[#F08B46] max-h-full overflow-y-auto animate-slide-up"
-        style={{ overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch' }}
+      <div className="flex min-h-full items-center justify-center p-4">
+      <div
+        className="bg-white rounded shadow-2xl w-full max-w-lg p-5 border-t-4 border-[#F08B46] animate-slide-up"
         onClick={e => e.stopPropagation()}
       >
         {/* ─── HEADER ─── */}
@@ -511,6 +507,7 @@ export default function MxTemplatePickerModal({ aircraft, show, onClose, onRefre
             )}
           </div>
         )}
+      </div>
       </div>
     </div>
   );

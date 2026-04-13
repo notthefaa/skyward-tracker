@@ -9,6 +9,7 @@ import type { AircraftWithMetrics, SystemSettings, AircraftRole, MxSubTab } from
 import useSWR from "swr";
 import { Wrench, Trash2, Plus, X, Edit2, Calendar, Send, ExternalLink, ChevronRight, HelpCircle, AlertTriangle, Download, Layers, Settings } from "lucide-react";
 import { PrimaryButton } from "@/components/AppButtons";
+import { useModalScrollLock } from "@/hooks/useModalScrollLock";
 import ServiceEventModal from "@/components/modals/ServiceEventModal";
 import MxGuideModal from "@/components/modals/MxGuideModal";
 import MxTemplatePickerModal from "@/components/modals/MxTemplatePickerModal";
@@ -69,6 +70,8 @@ export default function MaintenanceTab({
   const [confirmResendId, setConfirmResendId] = useState<string | null>(null);
   const [resendingEventId, setResendingEventId] = useState<string | null>(null);
   const [isExportingMx, setIsExportingMx] = useState(false);
+
+  useModalScrollLock(showMxModal || !!confirmResendId);
 
   // ─── Separate items into active tracking vs needs-setup ───
   const needsSetupItems = mxItems.filter(item => {
@@ -400,8 +403,9 @@ export default function MaintenanceTab({
 
           {/* ─── MX ITEM FORM MODAL ─── */}
           {showMxModal && canEditMx && (
-            <div className="fixed inset-0 bg-black/60 z-[10000] flex items-center justify-center p-3 animate-fade-in">
-              <div className="bg-white rounded shadow-2xl w-full max-w-md p-5 border-t-4 border-[#F08B46] max-h-[90vh] overflow-y-auto animate-slide-up">
+            <div className="fixed inset-0 bg-black/60 z-[10000] overflow-y-auto animate-fade-in" style={{ overscrollBehavior: 'contain' }}>
+            <div className="flex min-h-full items-center justify-center p-3">
+              <div className="bg-white rounded shadow-2xl w-full max-w-md p-5 border-t-4 border-[#F08B46] animate-slide-up">
                 <div className="flex justify-between items-center mb-6">
                   <h2 className="font-oswald text-2xl font-bold uppercase text-navy">{editingId ? 'Edit MX Item' : 'Track New Item'}</h2>
                   <button onClick={() => setShowMxModal(false)} className="text-gray-400 hover:text-[#CE3732] transition-colors"><X size={24}/></button>
@@ -447,10 +451,12 @@ export default function MaintenanceTab({
                 </form>
               </div>
             </div>
+            </div>
           )}
 
           {confirmResendId && (
-            <div className="fixed inset-0 bg-black/60 z-[10001] flex items-center justify-center p-4 animate-fade-in" onClick={() => setConfirmResendId(null)}>
+            <div className="fixed inset-0 bg-black/60 z-[10001] overflow-y-auto animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => setConfirmResendId(null)}>
+            <div className="flex min-h-full items-center justify-center p-4">
               <div className="bg-white rounded shadow-2xl w-full max-w-sm p-6 border-t-4 border-[#F08B46] animate-slide-up" onClick={e => e.stopPropagation()}>
                 <h3 className="font-oswald text-xl font-bold uppercase text-navy mb-3">Resend Work Package?</h3>
                 <p className="text-sm text-gray-600 mb-6">Are you sure you want to resend the work order to <strong>{activeEvents.find(e => e.id === confirmResendId)?.mx_contact_name || 'the primary maintenance contact'}</strong>?</p>
@@ -459,6 +465,7 @@ export default function MaintenanceTab({
                   <button onClick={() => handleResendWorkpackage(confirmResendId)} disabled={resendingEventId === confirmResendId} className="flex-1 bg-[#F08B46] text-white font-oswald font-bold uppercase tracking-widest py-3 rounded text-xs active:scale-95 disabled:opacity-50">{resendingEventId === confirmResendId ? 'Sending...' : 'Resend'}</button>
                 </div>
               </div>
+            </div>
             </div>
           )}
         </>
