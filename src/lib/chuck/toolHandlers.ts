@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { tavily } from '@tavily/core';
 
 type ToolHandler = (params: any, sb: SupabaseClient, aircraftId: string) => Promise<any>;
 
@@ -142,6 +143,72 @@ const handlers: Record<string, ToolHandler> = {
       .single();
     if (error) return { error: error.message };
     return { settings: data };
+  },
+
+  web_search: async (params) => {
+    if (!params.query || typeof params.query !== 'string') return { error: 'Search query is required.' };
+    try {
+      const client = tavily({ apiKey: process.env.TAVILY_API_KEY! });
+      const response = await client.search(params.query, {
+        maxResults: 5,
+        searchDepth: 'basic',
+        includeAnswer: true,
+      });
+      return {
+        answer: response.answer || null,
+        results: (response.results || []).map((r: any) => ({
+          title: r.title,
+          url: r.url,
+          content: r.content?.slice(0, 500),
+        })),
+      };
+    } catch (err: any) {
+      return { error: `Web search failed: ${err.message}` };
+    }
+  },
+
+  get_weather_briefing: async (params) => {
+    if (!params.airports || !Array.isArray(params.airports) || params.airports.length === 0) {
+      return { error: 'At least one airport ICAO code is required.' };
+    }
+    const ids = params.airports.map((a: string) => a.toUpperCase().trim()).join(',');
+    try {
+      const [metarRes, tafRes] = await Promise.all([
+        fetch(`https://aviationweather.gov/api/data/metar?ids=${ids}&format=json&hours=2`),
+        fetch(`https://aviationweather.gov/api/data/taf?ids=${ids}&format=json`),
+      ]);
+      const metars = metarRes.ok ? await metarRes.json() : [];
+      const tafs = tafRes.ok ? await tafRes.json() : [];
+      return {
+        metars: Array.isArray(metars) ? metars : [],
+        tafs: Array.isArray(tafs) ? tafs : [],
+        airports_queried: params.airports,
+      };
+    } catch (err: any) {
+      return { error: `Weather fetch failed: ${err.message}` };
+    }
+  },
+
+  get_aviation_hazards: async (params) => {
+    if (!params.airports || !Array.isArray(params.airports) || params.airports.length === 0) {
+      return { error: 'At least one airport ICAO code is required.' };
+    }
+    const ids = params.airports.map((a: string) => a.toUpperCase().trim()).join(',');
+    try {
+      const [pirepRes, sigmetRes] = await Promise.all([
+        fetch(`https://aviationweather.gov/api/data/pirep?id=${ids}&format=json&age=2`),
+        fetch(`https://aviationweather.gov/api/data/airsigmet?format=json`),
+      ]);
+      const pireps = pirepRes.ok ? await pirepRes.json() : [];
+      const sigmets = sigmetRes.ok ? await sigmetRes.json() : [];
+      return {
+        pireps: Array.isArray(pireps) ? pireps.slice(0, 20) : [],
+        sigmets_airmets: Array.isArray(sigmets) ? sigmets.slice(0, 15) : [],
+        airports_queried: params.airports,
+      };
+    } catch (err: any) {
+      return { error: `Hazard fetch failed: ${err.message}` };
+    }
   },
 };
 

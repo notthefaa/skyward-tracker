@@ -116,4 +116,45 @@ export const tools: Anthropic.Tool[] = [
       required: [],
     },
   },
+  {
+    name: 'web_search',
+    description: 'Search the web for information not available in the aircraft database. Use for: finding maintenance shops, regulatory questions (FARs, ADs), part numbers, general aviation knowledge, or any question the other tools cannot answer. This is a fallback — try internal tools first.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        query: { type: 'string', description: 'The search query' },
+      },
+      required: ['query'],
+    },
+  },
+  {
+    name: 'get_weather_briefing',
+    description: 'Get aviation weather briefing for airports. Returns METARs (current conditions) and TAFs (forecasts). Use for pre-flight weather checks, go/no-go decisions, and route weather planning.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        airports: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Array of ICAO airport codes (e.g. ["KDAL", "KAUS", "KHOU"])',
+        },
+      },
+      required: ['airports'],
+    },
+  },
+  {
+    name: 'get_aviation_hazards',
+    description: 'Get aviation hazard reports: PIREPs (pilot reports), SIGMETs, and AIRMETs near specified airports. Use alongside get_weather_briefing for comprehensive pre-flight briefing.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        airports: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Array of ICAO airport codes to check hazards near',
+        },
+      },
+      required: ['airports'],
+    },
+  },
 ];
