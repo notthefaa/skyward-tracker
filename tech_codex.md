@@ -478,5 +478,6 @@ The UI (ServiceEventModal) shows checkboxes next to each pending item in the com
 | `002_roles_calendar_notifications.sql` | `aircraft_role` column, `aft_reservations` with exclusion constraint, `aft_notification_preferences`, CASCADE on `created_by`, `btree_gist` extension |
 | `003_squawk_cross_reference.sql` | `resolved_by_event_id` on `aft_squawks`, completion tracking columns on `aft_event_line_items` |
 | `004_schema_optimization.sql` | Drop redundant index, add MX due-date index, normalize pod/poa to text, create `aft_user_profiles`, add all missing FKs to `auth.users`, swap notification_preferences PK to natural key |
+| `005_user_preferences.sql` | Generic `aft_user_preferences` key-value table (user_id + pref_key PK, jsonb value). RLS, auto-updated_at trigger. Used for nav tray order and future cross-device prefs |
 
 Migrations are run manually in the Supabase SQL Editor. Storage buckets are created via the Supabase Storage UI.

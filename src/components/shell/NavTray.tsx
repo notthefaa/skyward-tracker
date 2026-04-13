@@ -19,6 +19,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import type { LucideIcon } from "lucide-react";
 import { GripVertical } from "lucide-react";
+import { supabase } from "@/lib/supabase";
 
 // ─── Types ───
 
@@ -41,21 +42,57 @@ interface NavTrayProps {
   onClose: () => void;
 }
 
-// ─── localStorage helpers ───
+// ─── Preference persistence (Supabase + localStorage cache) ───
 
-function loadOrder(storageKey: string, userId: string | null): string[] | null {
+const PREF_PREFIX = 'tray_order_'; // Supabase pref_key prefix
+const LS_PREFIX = 'aft_tray_order_'; // localStorage cache prefix
+
+/** Read order from localStorage cache (instant, sync) */
+function loadCachedOrder(storageKey: string, userId: string | null): string[] | null {
   if (!userId) return null;
   try {
-    const raw = localStorage.getItem(`aft_tray_order_${storageKey}_${userId}`);
+    const raw = localStorage.getItem(`${LS_PREFIX}${storageKey}_${userId}`);
     return raw ? JSON.parse(raw) : null;
   } catch {
     return null;
   }
 }
 
-function saveOrder(storageKey: string, userId: string | null, keys: string[]) {
+/** Write order to localStorage cache */
+function cacheOrder(storageKey: string, userId: string | null, keys: string[]) {
   if (!userId) return;
-  localStorage.setItem(`aft_tray_order_${storageKey}_${userId}`, JSON.stringify(keys));
+  localStorage.setItem(`${LS_PREFIX}${storageKey}_${userId}`, JSON.stringify(keys));
+}
+
+/** Load order from Supabase (async, cross-device source of truth) */
+async function loadRemoteOrder(storageKey: string, userId: string): Promise<string[] | null> {
+  try {
+    const { data, error } = await supabase
+      .from('aft_user_preferences')
+      .select('value')
+      .eq('user_id', userId)
+      .eq('pref_key', `${PREF_PREFIX}${storageKey}`)
+      .maybeSingle();
+    if (error || !data) return null;
+    return data.value as string[];
+  } catch {
+    return null;
+  }
+}
+
+/** Save order to both Supabase and localStorage cache */
+function saveOrder(storageKey: string, userId: string | null, keys: string[]) {
+  // Instant local cache
+  cacheOrder(storageKey, userId, keys);
+  // Async remote persist (fire-and-forget)
+  if (userId) {
+    supabase.from('aft_user_preferences').upsert(
+      { user_id: userId, pref_key: `${PREF_PREFIX}${storageKey}`, value: keys },
+      { onConflict: 'user_id,pref_key' }
+    ).then(({ error }) => {
+      if (error) console.warn('Failed to save tray order to Supabase:', error.message);
+    });
+  }
 }
 
 // ─── Sortable Item ───
@@ -148,27 +185,42 @@ export default function NavTray({
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressTriggered = useRef(false);
 
-  // Initialize / recompute ordered items when items or visibility changes
-  useEffect(() => {
-    const saved = loadOrder(storageKey, userId);
-    if (saved) {
-      // Re-order items based on saved key order, appending any new items at end
-      const itemMap = new Map(items.map(i => [i.key, i]));
-      const ordered: TrayItem[] = [];
-      for (const key of saved) {
-        const item = itemMap.get(key);
-        if (item) {
-          ordered.push(item);
-          itemMap.delete(key);
-        }
+  /** Apply a saved key-order array to the items list */
+  const applyOrder = useCallback((savedKeys: string[]) => {
+    const itemMap = new Map(items.map(i => [i.key, i]));
+    const ordered: TrayItem[] = [];
+    for (const key of savedKeys) {
+      const item = itemMap.get(key);
+      if (item) {
+        ordered.push(item);
+        itemMap.delete(key);
       }
-      // Append any items not in saved order (newly added features)
-      Array.from(itemMap.values()).forEach(item => ordered.push(item));
-      setOrderedItems(ordered);
+    }
+    Array.from(itemMap.values()).forEach(item => ordered.push(item));
+    setOrderedItems(ordered);
+  }, [items]);
+
+  // Initialize: cache first (instant), then sync from Supabase
+  useEffect(() => {
+    // 1. Instant render from localStorage cache
+    const cached = loadCachedOrder(storageKey, userId);
+    if (cached) {
+      applyOrder(cached);
     } else {
       setOrderedItems([...items]);
     }
-  }, [items, storageKey, userId]);
+
+    // 2. Async sync from Supabase (cross-device source of truth)
+    if (userId) {
+      loadRemoteOrder(storageKey, userId).then(remote => {
+        if (remote) {
+          applyOrder(remote);
+          // Update local cache to match remote
+          cacheOrder(storageKey, userId, remote);
+        }
+      });
+    }
+  }, [items, storageKey, userId, applyOrder]);
 
   // Close reorder mode when tray hides
   useEffect(() => {
