@@ -29,6 +29,7 @@ const CalendarTab = dynamic(() => import("@/components/tabs/CalendarTab"), { loa
 const MaintenanceTab = dynamic(() => import("@/components/tabs/MaintenanceTab"), { loading: () => <TabSkeleton /> });
 const NotesTab = dynamic(() => import("@/components/tabs/NotesTab"), { loading: () => <TabSkeleton /> });
 const FleetSummary = dynamic(() => import("@/components/tabs/FleetSummary"), { loading: () => <FleetSkeleton /> });
+import NavTray, { type TrayItem } from "@/components/shell/NavTray";
 
 /** MX secondary toolbar items */
 const mxTrayItems = [
@@ -472,49 +473,35 @@ export default function AppShell({ session }: AppShellProps) {
         </div>
       </main>
 
-      {/* ─── BACKDROP (dismiss tray on tap outside) ─── */}
-      {expandedNav && (
-        <div className="fixed inset-0 z-[9997]" onClick={() => setExpandedNav(null)} />
-      )}
+      {/* ─── MX TRAY ─── */}
+      <NavTray
+        items={mxTrayItems as unknown as TrayItem[]}
+        visible={expandedNav === 'mx'}
+        userId={session?.user?.id ?? null}
+        storageKey="mx"
+        onSelect={(key) => {
+          if (key === 'due-items') setMxSubTab('maintenance');
+          else if (key === 'squawks') setMxSubTab('squawks');
+          navigateTab('mx');
+          setExpandedNav(null);
+        }}
+        onClose={() => setExpandedNav(null)}
+      />
 
-      {/* ─── SECONDARY TOOLBAR TRAY ─── */}
-      <div
-        className={`fixed left-0 right-0 z-[9998] transition-all duration-200 ease-out ${expandedNav ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0 pointer-events-none'}`}
-        style={{ bottom: 'calc(3rem + env(safe-area-inset-bottom, 0px))' }}
-      >
-        <div className="bg-[#F0EDE8] border-t border-gray-300 shadow-[0_-2px_8px_rgba(0,0,0,0.08)]">
-          <div className="flex justify-around items-center max-w-3xl mx-auto px-1 py-2">
-            {(expandedNav === 'mx' ? mxTrayItems : moreTrayItems).map(item => (
-              <button
-                key={item.key}
-                onClick={() => {
-                  if (item.soon) return;
-                  if (expandedNav === 'mx') {
-                    if (item.key === 'due-items') setMxSubTab('maintenance');
-                    else if (item.key === 'squawks') setMxSubTab('squawks');
-                    navigateTab('mx');
-                  } else {
-                    if (item.key === 'notes') navigateTab('notes');
-                  }
-                  setExpandedNav(null);
-                }}
-                className={`flex flex-col items-center justify-center gap-1 flex-1 py-1 rounded-lg transition-all ${item.soon ? 'opacity-40 cursor-default' : 'active:scale-95 active:bg-white/60'}`}
-              >
-                <div className="relative">
-                  <item.icon size={18} style={{ color: item.soon ? '#9CA3AF' : item.color }} />
-                  {item.key === 'notes' && unreadNotes > 0 && (
-                    <span className="absolute -top-1 -right-2 flex h-3 w-3">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#CE3732] opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-3 w-3 bg-[#CE3732] text-[8px] text-white font-bold items-center justify-center border border-white"></span>
-                    </span>
-                  )}
-                </div>
-                <span className={`text-[9px] font-bold uppercase tracking-wider leading-tight text-center ${item.soon ? 'text-gray-400' : 'text-navy'}`}>{item.label}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
+      {/* ─── MORE TRAY ─── */}
+      <NavTray
+        items={moreTrayItems as unknown as TrayItem[]}
+        visible={expandedNav === 'more'}
+        userId={session?.user?.id ?? null}
+        storageKey="more"
+        unreadBadgeKey="notes"
+        unreadCount={unreadNotes}
+        onSelect={(key) => {
+          if (key === 'notes') navigateTab('notes');
+          setExpandedNav(null);
+        }}
+        onClose={() => setExpandedNav(null)}
+      />
 
       <nav role="navigation" aria-label="Main navigation" className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-gray-200 z-[9999] pt-1 pb-[env(safe-area-inset-bottom)] shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
         <div className="flex justify-around items-center h-12 max-w-3xl mx-auto">
