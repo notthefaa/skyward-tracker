@@ -21,4 +21,5 @@ export const env = {
   SUPABASE_SERVICE_ROLE_KEY: requireEnv('SUPABASE_SERVICE_ROLE_KEY'),
   RESEND_API_KEY: requireEnv('RESEND_API_KEY'),
   CRON_SECRET: requireEnv('CRON_SECRET'),
+  ANTHROPIC_API_KEY: requireEnv('ANTHROPIC_API_KEY'),
 } as const;

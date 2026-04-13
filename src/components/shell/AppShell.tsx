@@ -30,6 +30,7 @@ const CalendarTab = dynamic(() => import("@/components/tabs/CalendarTab"), { loa
 const MaintenanceTab = dynamic(() => import("@/components/tabs/MaintenanceTab"), { loading: () => <TabSkeleton /> });
 const NotesTab = dynamic(() => import("@/components/tabs/NotesTab"), { loading: () => <TabSkeleton /> });
 const FleetSummary = dynamic(() => import("@/components/tabs/FleetSummary"), { loading: () => <FleetSkeleton /> });
+const ChuckTab = dynamic(() => import("@/components/tabs/ChuckTab"), { loading: () => <TabSkeleton /> });
 import NavTray, { type TrayItem } from "@/components/shell/NavTray";
 
 /** Log secondary toolbar items */
@@ -52,7 +53,7 @@ const mxTrayItems = [
 const moreTrayItems = [
   { key: 'notes', label: 'Notes', icon: FileText, color: '#525659', soon: false },
   { key: 'documents', label: 'Documents', icon: FolderOpen, color: '#56B94A', soon: true },
-  { key: 'chuck', label: 'Chuck', icon: ChuckIcon, color: '#0EA5E9', soon: true },
+  { key: 'chuck', label: 'Chuck', icon: ChuckIcon, color: '#0EA5E9', soon: false },
 ] as const;
 
 interface AppShellProps {
@@ -80,7 +81,7 @@ export default function AppShell({ session }: AppShellProps) {
   const [activeTab, setActiveTab] = useState<AppTab>(() => {
     if (typeof window !== 'undefined') {
       const saved = sessionStorage.getItem('aft_active_tab');
-      if (saved && ['fleet','summary','times','calendar','mx','notes','more'].includes(saved)) return saved as AppTab;
+      if (saved && ['fleet','summary','times','calendar','mx','notes','chuck','more'].includes(saved)) return saved as AppTab;
     }
     return 'fleet';
   });
@@ -473,6 +474,7 @@ export default function AppShell({ session }: AppShellProps) {
             />}
             {activeTab === 'mx' && <MaintenanceTab aircraft={selectedAircraftData} role={role} aircraftRole={currentAircraftRole} onGroundedStatusChange={() => checkGroundedStatus(activeTail)} sysSettings={sysSettings} session={session} userInitials={userInitials} initialSubTab={mxSubTab} />}
             {activeTab === 'notes' && <NotesTab aircraft={selectedAircraftData} session={session} role={role} aircraftRole={currentAircraftRole} userInitials={userInitials} onNotesRead={() => setUnreadNotes(0)} />}
+            {activeTab === 'chuck' && <ChuckTab aircraft={selectedAircraftData} session={session} />}
           </>)}
         </div>
       </main>
@@ -519,6 +521,7 @@ export default function AppShell({ session }: AppShellProps) {
         unreadCount={unreadNotes}
         onSelect={(key) => {
           if (key === 'notes') navigateTab('notes');
+          else if (key === 'chuck') navigateTab('chuck');
           setExpandedNav(null);
         }}
         onClose={() => setExpandedNav(null)}
@@ -541,7 +544,7 @@ export default function AppShell({ session }: AppShellProps) {
             const isActive = tab.id === 'summary'
               ? (activeTab === 'summary' || activeTab === 'fleet')
               : tab.id === 'log' ? activeTab === 'times'
-              : tab.id === 'more' ? activeTab === 'notes'
+              : tab.id === 'more' ? (activeTab === 'notes' || activeTab === 'chuck')
               : activeTab === tab.id;
             return (
             <button key={tab.id} onClick={() => {
