@@ -10,10 +10,10 @@ import { useToast } from "@/components/ToastProvider";
 import dynamic from "next/dynamic";
 import type { AircraftWithMetrics, AppTab } from "@/lib/types";
 import {
-  Wrench, AlertTriangle, FileText, Clock, LogOut,
+  Wrench, AlertTriangle, FileText, LogOut,
   ChevronDown, Home, LayoutGrid, Send, ShieldCheck, X, Share, Copy, WifiOff, Loader2, Calendar, Settings,
-  MoreHorizontal, FolderOpen, ShieldAlert, Compass, CloudSun, Bot,
-  ListChecks, BookOpen, Hammer, Droplets, Circle
+  MoreHorizontal, FolderOpen, ShieldAlert, Compass, Bot,
+  ListChecks, PenLine, Droplets, Circle, Plane
 } from "lucide-react";
 
 const PilotOnboarding = dynamic(() => import("@/components/PilotOnboarding"));
@@ -31,24 +31,27 @@ const NotesTab = dynamic(() => import("@/components/tabs/NotesTab"), { loading: 
 const FleetSummary = dynamic(() => import("@/components/tabs/FleetSummary"), { loading: () => <FleetSkeleton /> });
 import NavTray, { type TrayItem } from "@/components/shell/NavTray";
 
+/** Log secondary toolbar items */
+const logTrayItems = [
+  { key: 'flights', label: 'Flights', icon: Plane, color: '#3AB0FF', soon: false },
+  { key: 'vor', label: 'VOR', icon: Compass, color: '#F08B46', soon: true },
+  { key: 'tire', label: 'Tire', icon: Circle, color: '#525659', soon: true },
+  { key: 'oil', label: 'Oil', icon: Droplets, color: '#CE3732', soon: true },
+] as const;
+
 /** MX secondary toolbar items */
 const mxTrayItems = [
   { key: 'due-items', label: 'Due Items', icon: ListChecks, color: '#F08B46', soon: false },
   { key: 'squawks', label: 'Squawks', icon: AlertTriangle, color: '#CE3732', soon: false },
-  { key: 'logs', label: 'Logs', icon: BookOpen, color: '#3AB0FF', soon: true },
-  { key: 'service', label: 'Service', icon: Hammer, color: '#56B94A', soon: true },
-  { key: 'ads-sbs', label: 'ADs/SBs', icon: ShieldAlert, color: '#7C3AED', soon: true },
-  { key: 'ai', label: 'AI', icon: Bot, color: '#0EA5E9', soon: true },
+  { key: 'service', label: 'Service', icon: Wrench, color: '#56B94A', soon: true },
+  { key: 'ads', label: 'ADs', icon: ShieldAlert, color: '#7C3AED', soon: true },
 ] as const;
 
 /** More secondary toolbar items */
 const moreTrayItems = [
   { key: 'notes', label: 'Notes', icon: FileText, color: '#525659', soon: false },
-  { key: 'briefer', label: 'Briefer', icon: CloudSun, color: '#7C3AED', soon: true },
   { key: 'documents', label: 'Documents', icon: FolderOpen, color: '#56B94A', soon: true },
-  { key: 'vor-log', label: 'VOR Log', icon: Compass, color: '#F08B46', soon: true },
-  { key: 'tire-log', label: 'Tire Log', icon: Circle, color: '#525659', soon: true },
-  { key: 'oil-log', label: 'Oil Log', icon: Droplets, color: '#CE3732', soon: true },
+  { key: 'chuck', label: 'Chuck', icon: Bot, color: '#0EA5E9', soon: true },
 ] as const;
 
 interface AppShellProps {
@@ -84,7 +87,7 @@ export default function AppShell({ session }: AppShellProps) {
   const [showAdminMenu, setShowAdminMenu] = useState(false);
   const [showLogItModal, setShowLogItModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
-  const [expandedNav, setExpandedNav] = useState<'mx' | 'more' | null>(null);
+  const [expandedNav, setExpandedNav] = useState<'log' | 'mx' | 'more' | null>(null);
   useModalScrollLock(showLogItModal);
   const [mxSubTab, setMxSubTab] = useState<'maintenance' | 'squawks'>('maintenance');
   const [showAircraftModal, setShowAircraftModal] = useState(false);
@@ -319,12 +322,12 @@ export default function AppShell({ session }: AppShellProps) {
 
   const getTabColor = (id: string) => {
     if (activeTab !== id) return 'text-gray-400 hover:bg-gray-50';
-    const m: Record<string, string> = { summary: 'text-navy', times: 'text-[#3AB0FF]', calendar: 'text-[#56B94A]', mx: 'text-[#F08B46]', notes: 'text-[#525659]', more: 'text-[#525659]' };
+    const m: Record<string, string> = { summary: 'text-navy', log: 'text-[#3AB0FF]', times: 'text-[#3AB0FF]', calendar: 'text-[#56B94A]', mx: 'text-[#F08B46]', notes: 'text-[#525659]', more: 'text-[#525659]' };
     return m[id] || 'text-brandOrange';
   };
 
   const getIndicatorColor = (id: string) => {
-    const m: Record<string, string> = { summary: 'bg-navy', times: 'bg-[#3AB0FF]', calendar: 'bg-[#56B94A]', mx: 'bg-[#F08B46]', notes: 'bg-[#525659]', more: 'bg-[#525659]' };
+    const m: Record<string, string> = { summary: 'bg-navy', log: 'bg-[#3AB0FF]', times: 'bg-[#3AB0FF]', calendar: 'bg-[#56B94A]', mx: 'bg-[#F08B46]', notes: 'bg-[#525659]', more: 'bg-[#525659]' };
     return m[id] || 'bg-brandOrange';
   };
 
@@ -472,6 +475,19 @@ export default function AppShell({ session }: AppShellProps) {
         </div>
       </main>
 
+      {/* ─── LOG TRAY ─── */}
+      <NavTray
+        items={logTrayItems as unknown as TrayItem[]}
+        visible={expandedNav === 'log'}
+        userId={session?.user?.id ?? null}
+        storageKey="log"
+        onSelect={(key) => {
+          if (key === 'flights') navigateTab('times');
+          setExpandedNav(null);
+        }}
+        onClose={() => setExpandedNav(null)}
+      />
+
       {/* ─── MX TRAY ─── */}
       <NavTray
         items={mxTrayItems as unknown as TrayItem[]}
@@ -511,18 +527,21 @@ export default function AppShell({ session }: AppShellProps) {
               label: activeTab === 'fleet' ? 'Fleet' : 'Home',
               badge: 0,
             },
-            { id: 'times', icon: Clock, label: 'Times', badge: 0 },
+            { id: 'log', icon: PenLine, label: 'Log', badge: 0 },
             { id: 'calendar', icon: Calendar, label: 'Calendar', badge: 0 },
             { id: 'mx', icon: Wrench, label: 'MX', badge: 0 },
             { id: 'more', icon: MoreHorizontal, label: 'More', badge: unreadNotes }
           ].map(tab => {
             const isActive = tab.id === 'summary'
               ? (activeTab === 'summary' || activeTab === 'fleet')
+              : tab.id === 'log' ? activeTab === 'times'
               : tab.id === 'more' ? activeTab === 'notes'
               : activeTab === tab.id;
             return (
             <button key={tab.id} onClick={() => {
-              if (tab.id === 'mx') {
+              if (tab.id === 'log') {
+                setExpandedNav(prev => prev === 'log' ? null : 'log');
+              } else if (tab.id === 'mx') {
                 setExpandedNav(prev => prev === 'mx' ? null : 'mx');
               } else if (tab.id === 'more') {
                 setExpandedNav(prev => prev === 'more' ? null : 'more');
@@ -537,7 +556,7 @@ export default function AppShell({ session }: AppShellProps) {
                 setExpandedNav(null);
                 navigateTab(tab.id as AppTab);
               }
-            }} aria-label={tab.label} aria-current={isActive ? 'page' : undefined} className={`flex-1 pb-1 flex flex-col items-center justify-center transition-all relative active:scale-95 ${isActive || (tab.id === 'mx' && expandedNav === 'mx') || (tab.id === 'more' && expandedNav === 'more') ? (tab.id === 'summary' ? 'text-navy' : getTabColor(tab.id)) : 'text-gray-400 hover:bg-gray-50'}`}>
+            }} aria-label={tab.label} aria-current={isActive ? 'page' : undefined} className={`flex-1 pb-1 flex flex-col items-center justify-center transition-all relative active:scale-95 ${isActive || (tab.id === 'log' && expandedNav === 'log') || (tab.id === 'mx' && expandedNav === 'mx') || (tab.id === 'more' && expandedNav === 'more') ? (tab.id === 'summary' ? 'text-navy' : getTabColor(tab.id)) : 'text-gray-400 hover:bg-gray-50'}`}>
               <div className="relative mb-1"><tab.icon size={20} />{tab.badge > 0 && <span className="absolute -top-1 -right-2 flex h-3 w-3"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#CE3732] opacity-75"></span><span className="relative inline-flex rounded-full h-3 w-3 bg-[#CE3732] text-[8px] text-white font-bold items-center justify-center border border-white"></span></span>}</div>
               <span className="text-[10px] font-bold uppercase tracking-widest">{tab.label}</span>
               {isActive && <div className={`absolute bottom-0 w-12 h-1 rounded-t-full ${getIndicatorColor(tab.id)}`}></div>}

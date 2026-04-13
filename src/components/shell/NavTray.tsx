@@ -140,7 +140,7 @@ function SortableItem({
       }}
     >
       <div className="relative">
-        <Icon size={18} style={{ color: item.soon && !reordering ? '#9CA3AF' : item.color }} />
+        <Icon size={20} style={{ color: item.soon && !reordering ? '#9CA3AF' : item.color }} />
         {!reordering && item.key === unreadBadgeKey && (unreadCount ?? 0) > 0 && (
           <span className="absolute -top-1 -right-2 flex h-3 w-3">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#CE3732] opacity-75"></span>
