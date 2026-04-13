@@ -17,15 +17,16 @@ import {
   arrayMove,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import type { LucideIcon } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
 // ─── Types ───
 
+type IconComponent = React.ComponentType<{ size?: number; style?: React.CSSProperties; className?: string }>;
+
 export interface TrayItem {
   key: string;
   label: string;
-  icon: LucideIcon;
+  icon: IconComponent;
   color: string;
   soon: boolean;
 }
@@ -293,7 +294,7 @@ export default function NavTray({
           <div className="relative max-w-3xl mx-auto">
             <div
               ref={scrollRef}
-              className={`flex items-center gap-1 px-2 py-2 scrollbar-hide ${reordering ? 'overflow-x-hidden' : 'overflow-x-auto'}`}
+              className={`flex items-center justify-center gap-1 px-2 py-2 scrollbar-hide ${reordering ? 'overflow-x-hidden' : 'overflow-x-auto'}`}
               style={{ WebkitOverflowScrolling: 'touch' }}
               onPointerDown={!reordering ? handlePointerDown : undefined}
               onPointerUp={!reordering ? clearLongPress : undefined}

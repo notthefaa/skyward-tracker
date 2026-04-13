@@ -12,9 +12,10 @@ import type { AircraftWithMetrics, AppTab } from "@/lib/types";
 import {
   Wrench, AlertTriangle, FileText, LogOut,
   ChevronDown, Home, LayoutGrid, Send, ShieldCheck, X, Share, Copy, WifiOff, Loader2, Calendar, Settings,
-  MoreHorizontal, FolderOpen, ShieldAlert, Compass, Bot,
-  ListChecks, PenLine, Droplets, Circle, Plane
+  MoreHorizontal, FolderOpen, ShieldAlert, Compass,
+  ListChecks, PenLine, Droplets, Plane
 } from "lucide-react";
+import { TireIcon, ChuckIcon } from "@/components/shell/TrayIcons";
 
 const PilotOnboarding = dynamic(() => import("@/components/PilotOnboarding"));
 const AircraftModal = dynamic(() => import("@/components/modals/AircraftModal"));
@@ -35,7 +36,7 @@ import NavTray, { type TrayItem } from "@/components/shell/NavTray";
 const logTrayItems = [
   { key: 'flights', label: 'Flights', icon: Plane, color: '#3AB0FF', soon: false },
   { key: 'vor', label: 'VOR', icon: Compass, color: '#F08B46', soon: true },
-  { key: 'tire', label: 'Tire', icon: Circle, color: '#525659', soon: true },
+  { key: 'tire', label: 'Tire', icon: TireIcon, color: '#525659', soon: true },
   { key: 'oil', label: 'Oil', icon: Droplets, color: '#CE3732', soon: true },
 ] as const;
 
@@ -51,7 +52,7 @@ const mxTrayItems = [
 const moreTrayItems = [
   { key: 'notes', label: 'Notes', icon: FileText, color: '#525659', soon: false },
   { key: 'documents', label: 'Documents', icon: FolderOpen, color: '#56B94A', soon: true },
-  { key: 'chuck', label: 'Chuck', icon: Bot, color: '#0EA5E9', soon: true },
+  { key: 'chuck', label: 'Chuck', icon: ChuckIcon, color: '#0EA5E9', soon: true },
 ] as const;
 
 interface AppShellProps {
