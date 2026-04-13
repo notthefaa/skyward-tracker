@@ -12,7 +12,7 @@ import type { AircraftWithMetrics, AppTab } from "@/lib/types";
 import {
   Wrench, AlertTriangle, FileText, Clock, LogOut,
   ChevronDown, Home, LayoutGrid, Send, ShieldCheck, X, Share, Copy, WifiOff, Loader2, Calendar, Settings,
-  MoreHorizontal, DollarSign, FolderOpen, ShieldAlert, Compass, CloudSun, Bot,
+  MoreHorizontal, FolderOpen, ShieldAlert, Compass, CloudSun, Bot,
   ListChecks, BookOpen, Hammer, Droplets, Circle
 } from "lucide-react";
 
@@ -44,7 +44,6 @@ const mxTrayItems = [
 /** More secondary toolbar items */
 const moreTrayItems = [
   { key: 'notes', label: 'Notes', icon: FileText, color: '#525659', soon: false },
-  { key: 'expenses', label: 'Expenses', icon: DollarSign, color: '#3AB0FF', soon: true },
   { key: 'briefer', label: 'Briefer', icon: CloudSun, color: '#7C3AED', soon: true },
   { key: 'documents', label: 'Documents', icon: FolderOpen, color: '#56B94A', soon: true },
   { key: 'vor-log', label: 'VOR Log', icon: Compass, color: '#F08B46', soon: true },

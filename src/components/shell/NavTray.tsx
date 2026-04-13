@@ -18,7 +18,6 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import type { LucideIcon } from "lucide-react";
-import { GripVertical } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
 // ─── Types ───
@@ -44,10 +43,9 @@ interface NavTrayProps {
 
 // ─── Preference persistence (Supabase + localStorage cache) ───
 
-const PREF_PREFIX = 'tray_order_'; // Supabase pref_key prefix
-const LS_PREFIX = 'aft_tray_order_'; // localStorage cache prefix
+const PREF_PREFIX = 'tray_order_';
+const LS_PREFIX = 'aft_tray_order_';
 
-/** Read order from localStorage cache (instant, sync) */
 function loadCachedOrder(storageKey: string, userId: string | null): string[] | null {
   if (!userId) return null;
   try {
@@ -58,13 +56,11 @@ function loadCachedOrder(storageKey: string, userId: string | null): string[] | 
   }
 }
 
-/** Write order to localStorage cache */
 function cacheOrder(storageKey: string, userId: string | null, keys: string[]) {
   if (!userId) return;
   localStorage.setItem(`${LS_PREFIX}${storageKey}_${userId}`, JSON.stringify(keys));
 }
 
-/** Load order from Supabase (async, cross-device source of truth) */
 async function loadRemoteOrder(storageKey: string, userId: string): Promise<string[] | null> {
   try {
     const { data, error } = await supabase
@@ -80,11 +76,8 @@ async function loadRemoteOrder(storageKey: string, userId: string): Promise<stri
   }
 }
 
-/** Save order to both Supabase and localStorage cache */
 function saveOrder(storageKey: string, userId: string | null, keys: string[]) {
-  // Instant local cache
   cacheOrder(storageKey, userId, keys);
-  // Async remote persist (fire-and-forget)
   if (userId) {
     supabase.from('aft_user_preferences').upsert(
       { user_id: userId, pref_key: `${PREF_PREFIX}${storageKey}`, value: keys },
@@ -119,11 +112,11 @@ function SortableItem({
     isDragging,
   } = useSortable({ id: item.key, disabled: !reordering });
 
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
+  // Only apply translate — no scale/transition-all that fights the drag
+  const style: React.CSSProperties = {
+    transform: transform ? `translate3d(${Math.round(transform.x)}px, ${Math.round(transform.y)}px, 0)` : undefined,
+    transition: isDragging ? 'none' : transition,
     zIndex: isDragging ? 50 : undefined,
-    opacity: isDragging ? 0.8 : undefined,
   };
 
   const Icon = item.icon;
@@ -134,22 +127,18 @@ function SortableItem({
       style={style}
       {...attributes}
       {...(reordering ? listeners : {})}
-      className={`flex flex-col items-center justify-center gap-1 rounded-lg transition-all shrink-0
-        ${reordering ? 'w-16 py-1.5' : 'w-16 py-1'}
-        ${isDragging ? 'scale-110 shadow-lg bg-white/80 rounded-xl' : ''}
-        ${reordering && !isDragging ? 'animate-[wiggle_0.3s_ease-in-out_infinite]' : ''}
+      className={`flex flex-col items-center justify-center gap-1 shrink-0 w-16 py-1 rounded-lg
+        ${isDragging ? 'opacity-90 shadow-lg bg-white/90 rounded-xl scale-105' : ''}
+        ${reordering && !isDragging ? 'bg-white/40 ring-1 ring-gray-300/50' : ''}
         ${!reordering && item.soon ? 'opacity-40 cursor-default' : ''}
-        ${!reordering && !item.soon ? 'active:scale-95 active:bg-white/60 cursor-pointer' : ''}
-        ${reordering ? 'cursor-grab active:cursor-grabbing' : ''}
+        ${!reordering && !item.soon ? 'active:scale-95 active:bg-white/60 cursor-pointer transition-transform' : ''}
+        ${reordering ? 'cursor-grab active:cursor-grabbing touch-none' : ''}
       `}
       onClick={() => {
         if (reordering || item.soon) return;
         onSelect(item.key);
       }}
     >
-      {reordering && (
-        <GripVertical size={10} className="text-gray-400 -mb-0.5" />
-      )}
       <div className="relative">
         <Icon size={18} style={{ color: item.soon && !reordering ? '#9CA3AF' : item.color }} />
         {!reordering && item.key === unreadBadgeKey && (unreadCount ?? 0) > 0 && (
@@ -178,14 +167,11 @@ export default function NavTray({
   onSelect,
   onClose,
 }: NavTrayProps) {
-  // Build ordered list from saved order + defaults
   const [orderedItems, setOrderedItems] = useState<TrayItem[]>([]);
   const [reordering, setReordering] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const longPressTriggered = useRef(false);
 
-  /** Apply a saved key-order array to the items list */
   const applyOrder = useCallback((savedKeys: string[]) => {
     const itemMap = new Map(items.map(i => [i.key, i]));
     const ordered: TrayItem[] = [];
@@ -200,62 +186,49 @@ export default function NavTray({
     setOrderedItems(ordered);
   }, [items]);
 
-  // Initialize: cache first (instant), then sync from Supabase
   useEffect(() => {
-    // 1. Instant render from localStorage cache
     const cached = loadCachedOrder(storageKey, userId);
     if (cached) {
       applyOrder(cached);
     } else {
       setOrderedItems([...items]);
     }
-
-    // 2. Async sync from Supabase (cross-device source of truth)
     if (userId) {
       loadRemoteOrder(storageKey, userId).then(remote => {
         if (remote) {
           applyOrder(remote);
-          // Update local cache to match remote
           cacheOrder(storageKey, userId, remote);
         }
       });
     }
   }, [items, storageKey, userId, applyOrder]);
 
-  // Close reorder mode when tray hides
   useEffect(() => {
     if (!visible) setReordering(false);
   }, [visible]);
 
   // ─── Long-press detection ───
+  const clearLongPress = useCallback(() => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  }, []);
+
   const handlePointerDown = useCallback(() => {
-    longPressTriggered.current = false;
+    clearLongPress();
     longPressTimer.current = setTimeout(() => {
-      longPressTriggered.current = true;
+      longPressTimer.current = null;
       setReordering(true);
     }, 500);
-  }, []);
+  }, [clearLongPress]);
 
-  const handlePointerUp = useCallback(() => {
-    if (longPressTimer.current) {
-      clearTimeout(longPressTimer.current);
-      longPressTimer.current = null;
-    }
-  }, []);
-
-  const handlePointerLeave = useCallback(() => {
-    if (longPressTimer.current) {
-      clearTimeout(longPressTimer.current);
-      longPressTimer.current = null;
-    }
-  }, []);
-
-  // ─── DnD sensors (only active in reorder mode) ───
+  // ─── DnD sensors ───
   const pointerSensor = useSensor(PointerSensor, {
-    activationConstraint: { distance: 5 },
+    activationConstraint: { distance: 8 },
   });
   const touchSensor = useSensor(TouchSensor, {
-    activationConstraint: { delay: 0, tolerance: 5 },
+    activationConstraint: { delay: 0, tolerance: 8 },
   });
   const sensors = useSensors(pointerSensor, touchSensor);
 
@@ -275,7 +248,7 @@ export default function NavTray({
     [storageKey, userId]
   );
 
-  // ─── Scroll fade state ───
+  // ─── Scroll fade ───
   const [showFade, setShowFade] = useState(false);
 
   useEffect(() => {
@@ -296,7 +269,6 @@ export default function NavTray({
 
   return (
     <>
-      {/* Backdrop */}
       {visible && !reordering && (
         <div className="fixed inset-0 z-[9997]" onClick={onClose} />
       )}
@@ -306,9 +278,9 @@ export default function NavTray({
         style={{ bottom: 'calc(3rem + env(safe-area-inset-bottom, 0px))' }}
       >
         <div className="bg-[#F0EDE8] border-t border-gray-300 shadow-[0_-2px_8px_rgba(0,0,0,0.08)]">
-          {/* Done button row */}
           {reordering && (
-            <div className="flex justify-end px-3 pt-1.5">
+            <div className="flex justify-between items-center px-3 pt-1.5">
+              <span className="text-[9px] font-bold uppercase tracking-widest text-gray-400">Hold & drag to reorder</span>
               <button
                 onClick={() => setReordering(false)}
                 className="text-[10px] font-bold uppercase tracking-widest text-[#3AB0FF] active:scale-95 px-2 py-0.5"
@@ -319,14 +291,14 @@ export default function NavTray({
           )}
 
           <div className="relative max-w-3xl mx-auto">
-            {/* Scrollable row */}
             <div
               ref={scrollRef}
-              className="flex items-center gap-1 px-2 py-2 overflow-x-auto scrollbar-hide"
-              style={{ WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none' }}
+              className={`flex items-center gap-1 px-2 py-2 scrollbar-hide ${reordering ? 'overflow-x-hidden' : 'overflow-x-auto'}`}
+              style={{ WebkitOverflowScrolling: 'touch' }}
               onPointerDown={!reordering ? handlePointerDown : undefined}
-              onPointerUp={!reordering ? handlePointerUp : undefined}
-              onPointerLeave={!reordering ? handlePointerLeave : undefined}
+              onPointerUp={!reordering ? clearLongPress : undefined}
+              onPointerLeave={!reordering ? clearLongPress : undefined}
+              onPointerCancel={!reordering ? clearLongPress : undefined}
             >
               <DndContext
                 sensors={sensors}
@@ -351,7 +323,6 @@ export default function NavTray({
               </DndContext>
             </div>
 
-            {/* Right fade hint */}
             {showFade && !reordering && (
               <div className="absolute right-0 top-0 bottom-0 w-8 pointer-events-none bg-gradient-to-l from-[#F0EDE8] to-transparent" />
             )}
