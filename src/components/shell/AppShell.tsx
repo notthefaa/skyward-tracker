@@ -9,9 +9,11 @@ import { NETWORK_TIMEOUT_MS } from "@/lib/constants";
 import { useToast } from "@/components/ToastProvider";
 import dynamic from "next/dynamic";
 import type { AircraftWithMetrics, AppTab } from "@/lib/types";
-import { 
-  Wrench, AlertTriangle, FileText, Clock, LogOut, 
-  ChevronDown, Home, LayoutGrid, Send, ShieldCheck, X, Share, Copy, WifiOff, Loader2, Calendar, Settings
+import {
+  Wrench, AlertTriangle, FileText, Clock, LogOut,
+  ChevronDown, Home, LayoutGrid, Send, ShieldCheck, X, Share, Copy, WifiOff, Loader2, Calendar, Settings,
+  MoreHorizontal, DollarSign, FolderOpen, ShieldAlert, Compass, CloudSun, Bot,
+  ListChecks, BookOpen, Hammer, Droplets, Circle
 } from "lucide-react";
 
 const PilotOnboarding = dynamic(() => import("@/components/PilotOnboarding"));
@@ -28,42 +30,26 @@ const MaintenanceTab = dynamic(() => import("@/components/tabs/MaintenanceTab"),
 const NotesTab = dynamic(() => import("@/components/tabs/NotesTab"), { loading: () => <TabSkeleton /> });
 const FleetSummary = dynamic(() => import("@/components/tabs/FleetSummary"), { loading: () => <FleetSkeleton /> });
 
-/** Inline MX sub-tab picker with "remember selection" checkbox */
-function MxPicker({ onSelect, onClose }: { onSelect: (sub: 'maintenance' | 'squawks') => void, onClose: () => void }) {
-  useModalScrollLock();
-  const [remember, setRemember] = useState(false);
-  const handleSelect = (sub: 'maintenance' | 'squawks') => {
-    if (remember) localStorage.setItem('aft_mx_default_subtab', sub);
-    onSelect(sub);
-  };
-  return (
-    <div className="fixed inset-0 z-[10000] overflow-y-auto bg-black/50 animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={onClose}>
-      <div className="flex min-h-full items-center justify-center p-4">
-      <div role="dialog" aria-label="Select maintenance or squawks view" className="bg-white w-full max-w-sm rounded-lg shadow-2xl p-5 animate-slide-up" onClick={e => e.stopPropagation()}>
-        <div className="flex gap-3">
-          <button onClick={() => handleSelect('maintenance')} className="flex-1 bg-cream border-2 border-[#F08B46] rounded-lg p-5 flex flex-col items-center gap-3 hover:bg-orange-50 active:scale-95 transition-all">
-            <div className="bg-[#F08B46] text-white p-3 rounded-full"><Wrench size={24} /></div>
-            <span className="font-oswald text-sm font-bold uppercase tracking-widest text-navy">Maintenance</span>
-            <span className="text-[10px] text-gray-500 text-center leading-tight">Track items, schedule service, manage work packages</span>
-          </button>
-          <button onClick={() => handleSelect('squawks')} className="flex-1 bg-cream border-2 border-[#CE3732] rounded-lg p-5 flex flex-col items-center gap-3 hover:bg-red-50 active:scale-95 transition-all">
-            <div className="bg-[#CE3732] text-white p-3 rounded-full"><AlertTriangle size={24} /></div>
-            <span className="font-oswald text-sm font-bold uppercase tracking-widest text-navy">Squawks</span>
-            <span className="text-[10px] text-gray-500 text-center leading-tight">Report discrepancies, track open issues, manage deferrals</span>
-          </button>
-        </div>
-        <label className="flex items-center justify-center gap-2 mt-4 pt-3 border-t border-gray-100 cursor-pointer">
-          <input type="checkbox" checked={remember} onChange={e => setRemember(e.target.checked)} className="w-4 h-4 text-navy border-gray-300 rounded" />
-          <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Remember my selection</span>
-        </label>
-        {localStorage.getItem('aft_mx_default_subtab') && (
-          <button onClick={() => { localStorage.removeItem('aft_mx_default_subtab'); onClose(); }} className="w-full mt-2 text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:text-[#CE3732] transition-colors py-1">Clear Saved Preference</button>
-        )}
-      </div>
-      </div>
-    </div>
-  );
-}
+/** MX secondary toolbar items */
+const mxTrayItems = [
+  { key: 'due-items', label: 'Due Items', icon: ListChecks, color: '#F08B46', soon: false },
+  { key: 'squawks', label: 'Squawks', icon: AlertTriangle, color: '#CE3732', soon: false },
+  { key: 'logs', label: 'Logs', icon: BookOpen, color: '#3AB0FF', soon: true },
+  { key: 'service', label: 'Service', icon: Hammer, color: '#56B94A', soon: true },
+  { key: 'ads-sbs', label: 'ADs/SBs', icon: ShieldAlert, color: '#7C3AED', soon: true },
+  { key: 'ai', label: 'AI', icon: Bot, color: '#0EA5E9', soon: true },
+] as const;
+
+/** More secondary toolbar items */
+const moreTrayItems = [
+  { key: 'notes', label: 'Notes', icon: FileText, color: '#525659', soon: false },
+  { key: 'expenses', label: 'Expenses', icon: DollarSign, color: '#3AB0FF', soon: true },
+  { key: 'briefer', label: 'Briefer', icon: CloudSun, color: '#7C3AED', soon: true },
+  { key: 'documents', label: 'Documents', icon: FolderOpen, color: '#56B94A', soon: true },
+  { key: 'vor-log', label: 'VOR Log', icon: Compass, color: '#F08B46', soon: true },
+  { key: 'tire-log', label: 'Tire Log', icon: Circle, color: '#525659', soon: true },
+  { key: 'oil-log', label: 'Oil Log', icon: Droplets, color: '#CE3732', soon: true },
+] as const;
 
 interface AppShellProps {
   session: any;
@@ -90,7 +76,7 @@ export default function AppShell({ session }: AppShellProps) {
   const [activeTab, setActiveTab] = useState<AppTab>(() => {
     if (typeof window !== 'undefined') {
       const saved = sessionStorage.getItem('aft_active_tab');
-      if (saved && ['fleet','summary','times','calendar','mx','notes'].includes(saved)) return saved as AppTab;
+      if (saved && ['fleet','summary','times','calendar','mx','notes','more'].includes(saved)) return saved as AppTab;
     }
     return 'fleet';
   });
@@ -98,7 +84,7 @@ export default function AppShell({ session }: AppShellProps) {
   const [showAdminMenu, setShowAdminMenu] = useState(false);
   const [showLogItModal, setShowLogItModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
-  const [showMxPicker, setShowMxPicker] = useState(false);
+  const [expandedNav, setExpandedNav] = useState<'mx' | 'more' | null>(null);
   useModalScrollLock(showLogItModal);
   const [mxSubTab, setMxSubTab] = useState<'maintenance' | 'squawks'>('maintenance');
   const [showAircraftModal, setShowAircraftModal] = useState(false);
@@ -170,7 +156,7 @@ export default function AppShell({ session }: AppShellProps) {
 
   // ─── Disable pull-to-refresh when any modal is open ───
   useEffect(() => {
-    const anyPageModalOpen = showAdminMenu || showLogItModal || showSettingsModal || showMxPicker || showAircraftModal || showTailDropdown;
+    const anyPageModalOpen = showAdminMenu || showLogItModal || showSettingsModal || expandedNav !== null || showAircraftModal || showTailDropdown;
     if (anyPageModalOpen) {
       setPullEnabled(false);
       return;
@@ -188,7 +174,7 @@ export default function AppShell({ session }: AppShellProps) {
     observer.observe(document.body, { childList: true, subtree: true });
 
     return () => observer.disconnect();
-  }, [showAdminMenu, showLogItModal, showSettingsModal, showMxPicker, showAircraftModal, showTailDropdown, setPullEnabled]);
+  }, [showAdminMenu, showLogItModal, showSettingsModal, expandedNav, showAircraftModal, showTailDropdown, setPullEnabled]);
 
   // ─── Initial Data Fetch ───
   useEffect(() => {
@@ -333,12 +319,12 @@ export default function AppShell({ session }: AppShellProps) {
 
   const getTabColor = (id: string) => {
     if (activeTab !== id) return 'text-gray-400 hover:bg-gray-50';
-    const m: Record<string, string> = { summary: 'text-navy', times: 'text-[#3AB0FF]', calendar: 'text-[#56B94A]', mx: 'text-[#F08B46]', notes: 'text-[#525659]' };
+    const m: Record<string, string> = { summary: 'text-navy', times: 'text-[#3AB0FF]', calendar: 'text-[#56B94A]', mx: 'text-[#F08B46]', notes: 'text-[#525659]', more: 'text-[#525659]' };
     return m[id] || 'text-brandOrange';
   };
 
   const getIndicatorColor = (id: string) => {
-    const m: Record<string, string> = { summary: 'bg-navy', times: 'bg-[#3AB0FF]', calendar: 'bg-[#56B94A]', mx: 'bg-[#F08B46]', notes: 'bg-[#525659]' };
+    const m: Record<string, string> = { summary: 'bg-navy', times: 'bg-[#3AB0FF]', calendar: 'bg-[#56B94A]', mx: 'bg-[#F08B46]', notes: 'bg-[#525659]', more: 'bg-[#525659]' };
     return m[id] || 'bg-brandOrange';
   };
 
@@ -486,6 +472,50 @@ export default function AppShell({ session }: AppShellProps) {
         </div>
       </main>
 
+      {/* ─── BACKDROP (dismiss tray on tap outside) ─── */}
+      {expandedNav && (
+        <div className="fixed inset-0 z-[9997]" onClick={() => setExpandedNav(null)} />
+      )}
+
+      {/* ─── SECONDARY TOOLBAR TRAY ─── */}
+      <div
+        className={`fixed left-0 right-0 z-[9998] transition-all duration-200 ease-out ${expandedNav ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0 pointer-events-none'}`}
+        style={{ bottom: 'calc(3rem + env(safe-area-inset-bottom, 0px))' }}
+      >
+        <div className="bg-[#F0EDE8] border-t border-gray-300 shadow-[0_-2px_8px_rgba(0,0,0,0.08)]">
+          <div className="flex justify-around items-center max-w-3xl mx-auto px-1 py-2">
+            {(expandedNav === 'mx' ? mxTrayItems : moreTrayItems).map(item => (
+              <button
+                key={item.key}
+                onClick={() => {
+                  if (item.soon) return;
+                  if (expandedNav === 'mx') {
+                    if (item.key === 'due-items') setMxSubTab('maintenance');
+                    else if (item.key === 'squawks') setMxSubTab('squawks');
+                    navigateTab('mx');
+                  } else {
+                    if (item.key === 'notes') navigateTab('notes');
+                  }
+                  setExpandedNav(null);
+                }}
+                className={`flex flex-col items-center justify-center gap-1 flex-1 py-1 rounded-lg transition-all ${item.soon ? 'opacity-40 cursor-default' : 'active:scale-95 active:bg-white/60'}`}
+              >
+                <div className="relative">
+                  <item.icon size={18} style={{ color: item.soon ? '#9CA3AF' : item.color }} />
+                  {item.key === 'notes' && unreadNotes > 0 && (
+                    <span className="absolute -top-1 -right-2 flex h-3 w-3">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#CE3732] opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-3 w-3 bg-[#CE3732] text-[8px] text-white font-bold items-center justify-center border border-white"></span>
+                    </span>
+                  )}
+                </div>
+                <span className={`text-[9px] font-bold uppercase tracking-wider leading-tight text-center ${item.soon ? 'text-gray-400' : 'text-navy'}`}>{item.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
       <nav role="navigation" aria-label="Main navigation" className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-gray-200 z-[9999] pt-1 pb-[env(safe-area-inset-bottom)] shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
         <div className="flex justify-around items-center h-12 max-w-3xl mx-auto">
           {[
@@ -498,42 +528,30 @@ export default function AppShell({ session }: AppShellProps) {
             { id: 'times', icon: Clock, label: 'Times', badge: 0 },
             { id: 'calendar', icon: Calendar, label: 'Calendar', badge: 0 },
             { id: 'mx', icon: Wrench, label: 'MX', badge: 0 },
-            { id: 'notes', icon: FileText, label: 'Notes', badge: unreadNotes }
+            { id: 'more', icon: MoreHorizontal, label: 'More', badge: unreadNotes }
           ].map(tab => {
             const isActive = tab.id === 'summary'
               ? (activeTab === 'summary' || activeTab === 'fleet')
+              : tab.id === 'more' ? activeTab === 'notes'
               : activeTab === tab.id;
             return (
             <button key={tab.id} onClick={() => {
               if (tab.id === 'mx') {
-                if (activeTab === 'mx') {
-                  // Already on MX — tap the tab again to toggle between
-                  // Maintenance and Squawks. Faster on the ramp than
-                  // re-opening the picker modal.
-                  setMxSubTab(prev => prev === 'maintenance' ? 'squawks' : 'maintenance');
-                } else {
-                  const remembered = localStorage.getItem('aft_mx_default_subtab');
-                  if (remembered === 'maintenance' || remembered === 'squawks') {
-                    setMxSubTab(remembered);
-                    navigateTab('mx');
-                  } else {
-                    setShowMxPicker(true);
-                  }
-                }
+                setExpandedNav(prev => prev === 'mx' ? null : 'mx');
+              } else if (tab.id === 'more') {
+                setExpandedNav(prev => prev === 'more' ? null : 'more');
               } else if (tab.id === 'summary') {
-                // Home/Fleet toggle: from any non-home tab, first tap lands on
-                // the active tail's home. A second tap (already on summary)
-                // jumps out to the fleet grid. Tapping again while on fleet
-                // is a no-op — pick an aircraft from the grid to return.
+                setExpandedNav(null);
                 if (activeTab === 'summary' && showFleetButton) {
                   navigateTab('fleet');
                 } else if (activeTab !== 'fleet') {
                   navigateTab('summary');
                 }
               } else {
+                setExpandedNav(null);
                 navigateTab(tab.id as AppTab);
               }
-            }} aria-label={tab.label} aria-current={isActive ? 'page' : undefined} className={`flex-1 pb-1 flex flex-col items-center justify-center transition-all relative active:scale-95 ${isActive ? (tab.id === 'summary' ? 'text-navy' : getTabColor(tab.id)) : 'text-gray-400 hover:bg-gray-50'}`}>
+            }} aria-label={tab.label} aria-current={isActive ? 'page' : undefined} className={`flex-1 pb-1 flex flex-col items-center justify-center transition-all relative active:scale-95 ${isActive || (tab.id === 'mx' && expandedNav === 'mx') || (tab.id === 'more' && expandedNav === 'more') ? (tab.id === 'summary' ? 'text-navy' : getTabColor(tab.id)) : 'text-gray-400 hover:bg-gray-50'}`}>
               <div className="relative mb-1"><tab.icon size={20} />{tab.badge > 0 && <span className="absolute -top-1 -right-2 flex h-3 w-3"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#CE3732] opacity-75"></span><span className="relative inline-flex rounded-full h-3 w-3 bg-[#CE3732] text-[8px] text-white font-bold items-center justify-center border border-white"></span></span>}</div>
               <span className="text-[10px] font-bold uppercase tracking-widest">{tab.label}</span>
               {isActive && <div className={`absolute bottom-0 w-12 h-1 rounded-t-full ${getIndicatorColor(tab.id)}`}></div>}
@@ -542,14 +560,6 @@ export default function AppShell({ session }: AppShellProps) {
           })}
         </div>
       </nav>
-
-      {/* ─── MX ENTRY PICKER ─── */}
-      {showMxPicker && (
-        <MxPicker 
-          onSelect={(sub) => { setMxSubTab(sub); navigateTab('mx'); setShowMxPicker(false); }} 
-          onClose={() => setShowMxPicker(false)} 
-        />
-      )}
     </div>
   );
 }
