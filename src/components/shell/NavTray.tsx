@@ -128,7 +128,8 @@ function SortableItem({
       style={style}
       {...attributes}
       {...(reordering ? listeners : {})}
-      className={`flex flex-col items-center justify-center gap-1 shrink-0 w-16 py-1 rounded-lg
+      className={`flex flex-col items-center justify-center gap-1 py-1 rounded-lg
+        ${reordering ? 'shrink-0 w-16' : 'flex-1 min-w-[3.5rem]'}
         ${isDragging ? 'opacity-90 shadow-lg bg-white/90 rounded-xl scale-105' : ''}
         ${reordering && !isDragging ? 'bg-white/40 ring-1 ring-gray-300/50' : ''}
         ${!reordering && item.soon ? 'opacity-40 cursor-default' : ''}

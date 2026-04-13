@@ -8,7 +8,7 @@ import { useModalScrollLock } from "@/hooks/useModalScrollLock";
 import { NETWORK_TIMEOUT_MS } from "@/lib/constants";
 import { useToast } from "@/components/ToastProvider";
 import dynamic from "next/dynamic";
-import type { AircraftWithMetrics, AppTab } from "@/lib/types";
+import type { AircraftWithMetrics, AppTab, LogSubTab } from "@/lib/types";
 import {
   Wrench, AlertTriangle, FileText, LogOut,
   ChevronDown, Home, LayoutGrid, Send, ShieldCheck, X, Share, Copy, WifiOff, Loader2, Calendar, Settings,
@@ -25,7 +25,7 @@ const SettingsModal = dynamic(() => import("@/components/modals/SettingsModal"))
 const PullIndicator = dynamic(() => import("@/components/PullIndicator"));
 import { SummarySkeleton, FleetSkeleton, TabSkeleton } from "@/components/Skeletons";
 const SummaryTab = dynamic(() => import("@/components/tabs/SummaryTab"), { loading: () => <SummarySkeleton /> });
-const TimesTab = dynamic(() => import("@/components/tabs/TimesTab"), { loading: () => <TabSkeleton /> });
+const LogRouter = dynamic(() => import("@/components/tabs/LogRouter"), { loading: () => <TabSkeleton /> });
 const CalendarTab = dynamic(() => import("@/components/tabs/CalendarTab"), { loading: () => <TabSkeleton /> });
 const MaintenanceTab = dynamic(() => import("@/components/tabs/MaintenanceTab"), { loading: () => <TabSkeleton /> });
 const NotesTab = dynamic(() => import("@/components/tabs/NotesTab"), { loading: () => <TabSkeleton /> });
@@ -35,9 +35,9 @@ import NavTray, { type TrayItem } from "@/components/shell/NavTray";
 /** Log secondary toolbar items */
 const logTrayItems = [
   { key: 'flights', label: 'Flights', icon: Plane, color: '#3AB0FF', soon: false },
-  { key: 'vor', label: 'VOR', icon: Compass, color: '#F08B46', soon: true },
-  { key: 'tire', label: 'Tire', icon: TireIcon, color: '#525659', soon: true },
-  { key: 'oil', label: 'Oil', icon: Droplets, color: '#CE3732', soon: true },
+  { key: 'vor', label: 'VOR', icon: Compass, color: '#F08B46', soon: false },
+  { key: 'tire', label: 'Tire', icon: TireIcon, color: '#525659', soon: false },
+  { key: 'oil', label: 'Oil', icon: Droplets, color: '#CE3732', soon: false },
 ] as const;
 
 /** MX secondary toolbar items */
@@ -91,6 +91,7 @@ export default function AppShell({ session }: AppShellProps) {
   const [expandedNav, setExpandedNav] = useState<'log' | 'mx' | 'more' | null>(null);
   useModalScrollLock(showLogItModal);
   const [mxSubTab, setMxSubTab] = useState<'maintenance' | 'squawks'>('maintenance');
+  const [logSubTab, setLogSubTab] = useState<LogSubTab>('flights');
   const [showAircraftModal, setShowAircraftModal] = useState(false);
   const [editingAircraftId, setEditingAircraftId] = useState<string | null>(null);
   const [showTailDropdown, setShowTailDropdown] = useState(false);
@@ -460,7 +461,7 @@ export default function AppShell({ session }: AppShellProps) {
               }}
             />}
             {activeTab === 'summary' && <SummaryTab aircraft={selectedAircraftData} setActiveTab={(t: AppTab) => navigateTab(t)} onNavigateToSquawks={() => { setMxSubTab('squawks'); navigateTab('mx'); }} role={role} aircraftRole={currentAircraftRole} onDeleteAircraft={handleDeleteAircraft} sysSettings={sysSettings} onEditAircraft={() => openAircraftForm(selectedAircraftData)} refreshData={() => fetchAircraftData(session.user.id)} session={session} />}
-            {activeTab === 'times' && <TimesTab aircraft={selectedAircraftData} session={session} role={role} userInitials={userInitials} onUpdate={() => fetchAircraftData(session.user.id)} />}
+            {activeTab === 'times' && <LogRouter logSubTab={logSubTab} aircraft={selectedAircraftData} session={session} role={role} userInitials={userInitials} onUpdate={() => fetchAircraftData(session.user.id)} />}
             {activeTab === 'calendar' && <CalendarTab
               aircraft={selectedAircraftData}
               session={session}
@@ -483,7 +484,11 @@ export default function AppShell({ session }: AppShellProps) {
         userId={session?.user?.id ?? null}
         storageKey="log"
         onSelect={(key) => {
-          if (key === 'flights') navigateTab('times');
+          if (key === 'flights') setLogSubTab('flights');
+          else if (key === 'vor') setLogSubTab('vor');
+          else if (key === 'tire') setLogSubTab('tire');
+          else if (key === 'oil') setLogSubTab('oil');
+          navigateTab('times');
           setExpandedNav(null);
         }}
         onClose={() => setExpandedNav(null)}

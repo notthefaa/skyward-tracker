@@ -203,3 +203,43 @@ export type AircraftRole = 'admin' | 'pilot';
 export type AircraftStatus = 'airworthy' | 'issues' | 'grounded';
 export type AppTab = 'fleet' | 'summary' | 'times' | 'calendar' | 'mx' | 'notes';
 export type MxSubTab = 'maintenance' | 'squawks';
+export type LogSubTab = 'flights' | 'vor' | 'tire' | 'oil';
+
+export type VorCheckType = 'VOT' | 'Ground Checkpoint' | 'Airborne Checkpoint' | 'Dual VOR';
+
+export interface VorCheck {
+  id: string;
+  aircraft_id: string;
+  user_id?: string | null;
+  check_type: VorCheckType;
+  station: string;
+  bearing_error: number;
+  tolerance: number;
+  passed: boolean;
+  initials: string;
+  created_at: string;
+}
+
+export interface TireCheck {
+  id: string;
+  aircraft_id: string;
+  user_id?: string | null;
+  nose_psi: number;
+  left_main_psi: number;
+  right_main_psi: number;
+  initials: string;
+  notes?: string | null;
+  created_at: string;
+}
+
+export interface OilLog {
+  id: string;
+  aircraft_id: string;
+  user_id?: string | null;
+  oil_qty: number;
+  oil_added?: number | null;
+  engine_hours: number;
+  initials: string;
+  notes?: string | null;
+  created_at: string;
+}
