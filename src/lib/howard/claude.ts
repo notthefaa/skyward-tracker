@@ -99,11 +99,19 @@ export async function* sendMessageStream(
     totalUsage.cache_read_input_tokens += (finalMsg.usage as any).cache_read_input_tokens || 0;
     totalUsage.cache_creation_input_tokens += (finalMsg.usage as any).cache_creation_input_tokens || 0;
 
+    // Accumulate every text block from this round — Claude can emit
+    // multiple, and intermediate rounds may also produce text. We keep
+    // everything the user saw stream so the saved message matches.
+    for (const block of finalMsg.content) {
+      if (block.type === 'text' && block.text) {
+        if (assistantText && !assistantText.endsWith('\n')) assistantText += '\n\n';
+        assistantText += block.text;
+      }
+    }
+
     const hasToolUse = finalMsg.content.some(b => b.type === 'tool_use');
 
     if (finalMsg.stop_reason === 'end_turn' || !hasToolUse) {
-      const textBlock = finalMsg.content.find(b => b.type === 'text');
-      assistantText = textBlock?.type === 'text' ? textBlock.text : '';
       yield {
         type: 'complete',
         assistantText,
