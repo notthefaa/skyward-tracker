@@ -27,7 +27,7 @@ export async function GET(req: Request) {
     const { user, supabaseAdmin } = await requireAuth(req);
 
     const { data: threads, error: tErr } = await supabaseAdmin
-      .from('aft_chuck_threads')
+      .from('aft_howard_threads')
       .select('id, aircraft_id')
       .eq('user_id', user.id);
     if (tErr) throw tErr;
@@ -47,7 +47,7 @@ export async function GET(req: Request) {
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
 
     const { data: messages, error: mErr } = await supabaseAdmin
-      .from('aft_chuck_messages')
+      .from('aft_howard_messages')
       .select('thread_id, created_at, input_tokens, output_tokens, cache_read_tokens, cache_create_tokens')
       .in('thread_id', threadIds)
       .eq('role', 'assistant')

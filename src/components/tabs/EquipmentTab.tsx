@@ -9,7 +9,7 @@ import { useToast } from "@/components/ToastProvider";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { useModalScrollLock } from "@/hooks/useModalScrollLock";
 import { INPUT_WHITE_BG } from "@/lib/styles";
-import AskChuckButton from "@/components/chuck/AskChuckButton";
+import AskHowardButton from "@/components/howard/AskHowardButton";
 import type { AircraftWithMetrics, AircraftEquipment, EquipmentCategory, AircraftRole } from "@/lib/types";
 
 const CATEGORIES: Array<{ value: EquipmentCategory; label: string }> = [
@@ -218,10 +218,10 @@ export default function EquipmentTab({ aircraft, role, aircraftRole }: Props) {
           <span className="text-[10px] font-bold uppercase tracking-widest text-[#525659]">{active.length} installed on {aircraft.tail_number}</span>
         </div>
         <div className="flex items-center gap-2">
-          <AskChuckButton
+          <AskHowardButton
             size="xs"
             prompt={`Help me inventory the installed equipment on ${aircraft.tail_number} (${aircraft.aircraft_type}). Based on typical equipment for this aircraft type, suggest the items I should add (transponder, ELT, altimeter, pitot-static, avionics, etc.) with reasonable defaults. Ask me what's actually installed.`}
-            label="Chuck help"
+            label="Howard help"
           />
           {canEdit && (
             <PrimaryButton onClick={openAdd}><Plus size={14} /> Add</PrimaryButton>

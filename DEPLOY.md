@@ -13,7 +13,7 @@ All required on Vercel (Project → Settings → Environment Variables). No **ne
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL | pre-existing |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon key | pre-existing |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role (admin) | pre-existing |
-| `ANTHROPIC_API_KEY` | Chuck model | pre-existing |
+| `ANTHROPIC_API_KEY` | Howard model | pre-existing |
 | `OPENAI_API_KEY` | Document embeddings | pre-existing |
 | `TAVILY_API_KEY` | Web search | pre-existing |
 | `RESEND_API_KEY` | MX email | pre-existing |
@@ -37,7 +37,7 @@ Run in the Supabase SQL Editor, **in order**. Each file is idempotent — safe t
 6. `014_signoff_completeness.sql` — extends `aft_event_line_items` with 43.11 fields (cert_type, cert_expiry, tach/hobbs at completion, logbook_ref), adds lock-after-completion columns + triggers.
 
 ### Session 3
-7. `015_proposed_actions.sql` — creates `aft_proposed_actions` for Chuck's propose-confirm write framework. RLS: users see/update only their own actions.
+7. `015_proposed_actions.sql` — creates `aft_proposed_actions` for Howard's propose-confirm write framework. RLS: users see/update only their own actions.
 
 ---
 
@@ -90,7 +90,7 @@ After running migration 013, backfill `make` / `model` / `is_ifr_equipped` / `is
 
 ## 8. FAA DRS feed URL verification (Session 2)
 
-The Chuck `search_ads` and the nightly sync at `/api/cron/ads-sync` both hit the URL configured at `src/lib/drs.ts` → `DRS_BULK_URL`, defaulting to `https://drs.faa.gov/api/public/search/ads`.
+The Howard `search_ads` and the nightly sync at `/api/cron/ads-sync` both hit the URL configured at `src/lib/drs.ts` → `DRS_BULK_URL`, defaulting to `https://drs.faa.gov/api/public/search/ads`.
 
 **IMPORTANT:** The FAA does not publish a stable, documented JSON API for DRS. That default URL is a best-effort pattern based on how the DRS web UI fetches data. On first production run, verify:
 
@@ -112,15 +112,15 @@ The code handles feed failures gracefully — a DRS fetch error returns `{error,
 - Log a flight that would push Hobbs backwards — expect a 400 with a clear monotonicity error.
 - Hard-delete attempt via `aft_aircraft` DELETE — should instead soft-delete; the row stays with `deleted_at` set, child records too.
 - Upload the same PDF twice — second upload returns 409.
-- Clear a Chuck conversation — thread + messages are hard-deleted (intentional).
+- Clear a Howard conversation — thread + messages are hard-deleted (intentional).
 - Query `aft_record_history` after any edit — confirm user_id + old_row + new_row are captured.
 - Open the ADs tab, add an AD manually, log compliance — confirm it moves between Overdue/Due Soon/Compliant buckets correctly.
 - Open the Equipment tab, add a transponder with a due date — confirm the airworthiness check flags it when the date passes.
 - Run the AD sync cron manually: `curl -H "Authorization: Bearer $CRON_SECRET" https://yourdomain.com/api/cron/ads-sync` → should return per-aircraft result counts.
 - Complete an MX event via the UI — confirm line items become locked (trying to edit them via SQL should raise the P0003 error).
 - Export 91.417(b) CSV from the ADs tab — confirm it downloads and looks right.
-- Ask Chuck "is my aircraft airworthy?" — it should call `check_airworthiness` and return a structured verdict with regulatory citations.
-- Ask Chuck "book me the aircraft for tomorrow 9-11am, pilot JKL, KDAL to KAUS" — it should call `propose_reservation` and surface a confirmation card with Confirm/Cancel. Tap Confirm — the reservation should appear on the Calendar. Row should show `status=executed` in `aft_proposed_actions`.
-- Ask Chuck "add a note: oil changed, 3 qts added" — it should call `propose_note`. Confirm → note appears on NotesTab.
-- Ask Chuck "schedule maintenance for next Tuesday to address the annual and the open brake squawk" — admin should see `propose_mx_schedule` card; non-admin should get a role-denied message.
-- Tap Cancel on a pending Chuck proposal — row marked `cancelled`, no side effects.
+- Ask Howard "is my aircraft airworthy?" — it should call `check_airworthiness` and return a structured verdict with regulatory citations.
+- Ask Howard "book me the aircraft for tomorrow 9-11am, pilot JKL, KDAL to KAUS" — it should call `propose_reservation` and surface a confirmation card with Confirm/Cancel. Tap Confirm — the reservation should appear on the Calendar. Row should show `status=executed` in `aft_proposed_actions`.
+- Ask Howard "add a note: oil changed, 3 qts added" — it should call `propose_note`. Confirm → note appears on NotesTab.
+- Ask Howard "schedule maintenance for next Tuesday to address the annual and the open brake squawk" — admin should see `propose_mx_schedule` card; non-admin should get a role-denied message.
+- Tap Cancel on a pending Howard proposal — row marked `cancelled`, no side effects.

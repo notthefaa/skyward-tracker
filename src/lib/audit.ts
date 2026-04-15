@@ -51,7 +51,7 @@ export async function softDelete(
 
 /**
  * List of tables that use soft-delete. Keep in sync with migration 009.
- * Anything outside this list can be hard-deleted (chuck messages,
+ * Anything outside this list can be hard-deleted (howard messages,
  * user access grants, note_reads, preferences).
  */
 export const SOFT_DELETE_TABLES = new Set<string>([

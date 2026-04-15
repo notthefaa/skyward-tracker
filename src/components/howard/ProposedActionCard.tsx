@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { authFetch } from "@/lib/authFetch";
 import { CheckCircle, X, Loader2, Sparkles, Calendar, FileText, Wrench, Plane, AlertTriangle } from "lucide-react";
-import type { ProposedAction } from "@/lib/chuck/proposedActions";
+import type { ProposedAction } from "@/lib/howard/proposedActions";
 
 interface Props {
   action: ProposedAction;
@@ -79,7 +79,7 @@ export default function ProposedActionCard({ action, onChange }: Props) {
   const handleConfirm = async () => {
     setIsPending('confirm'); setError(null);
     try {
-      const res = await authFetch(`/api/chuck/actions/${action.id}`, { method: 'POST' });
+      const res = await authFetch(`/api/howard/actions/${action.id}`, { method: 'POST' });
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
         throw new Error(d.error || 'Failed to confirm');
@@ -95,7 +95,7 @@ export default function ProposedActionCard({ action, onChange }: Props) {
   const handleCancel = async () => {
     setIsPending('cancel'); setError(null);
     try {
-      const res = await authFetch(`/api/chuck/actions/${action.id}`, { method: 'DELETE' });
+      const res = await authFetch(`/api/howard/actions/${action.id}`, { method: 'DELETE' });
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
         throw new Error(d.error || 'Failed to cancel');
@@ -123,7 +123,7 @@ export default function ProposedActionCard({ action, onChange }: Props) {
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-[9px] font-bold uppercase tracking-widest text-gray-500">Chuck proposed</span>
+            <span className="text-[9px] font-bold uppercase tracking-widest text-gray-500">Howard proposed</span>
             {action.status === 'pending' && <span className="text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-[#0EA5E9]/10 text-[#0EA5E9]">Pending</span>}
             {action.status === 'executed' && <span className="text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-[#56B94A]/10 text-[#56B94A]">Confirmed</span>}
             {action.status === 'cancelled' && <span className="text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-gray-200 text-gray-500">Cancelled</span>}

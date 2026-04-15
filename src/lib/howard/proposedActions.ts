@@ -1,13 +1,13 @@
 // =============================================================
-// CHUCK PROPOSED ACTIONS — propose-confirm write model
+// HOWARD PROPOSED ACTIONS — propose-confirm write model
 // =============================================================
-// Chuck can't write directly. Every write action flows through:
-//   1. Chuck calls a propose_* tool → this module inserts a row in
+// Howard can't write directly. Every write action flows through:
+//   1. Howard calls a propose_* tool → this module inserts a row in
 //      aft_proposed_actions with status='pending', returns the id.
 //   2. The UI renders a confirmation card in chat.
-//   3. User taps Confirm → /api/chuck/actions/[id] POST → executeAction()
+//   3. User taps Confirm → /api/howard/actions/[id] POST → executeAction()
 //      runs the actual write using existing API logic.
-//   4. User taps Cancel → /api/chuck/actions/[id] DELETE → status='cancelled'.
+//   4. User taps Cancel → /api/howard/actions/[id] DELETE → status='cancelled'.
 //
 // Role gating: each action type declares required_role ('access' or 'admin').
 // ExecuteAction enforces this at confirmation time using requireAircraft* helpers.
@@ -45,7 +45,7 @@ export interface ProposedAction {
   error_message?: string | null;
 }
 
-// Payload shapes — documented here so Chuck's tool schemas and the
+// Payload shapes — documented here so Howard's tool schemas and the
 // execute handlers agree on the contract.
 
 export interface ReservationPayload {
@@ -134,8 +134,8 @@ export function summarize(type: ActionType, payload: any, aircraftTail: string):
 }
 
 /**
- * Insert a proposed action. Called by the Chuck propose_* tool handlers.
- * Returns the id + summary so Chuck can reference it in its reply.
+ * Insert a proposed action. Called by the Howard propose_* tool handlers.
+ * Returns the id + summary so Howard can reference it in its reply.
  */
 export async function proposeAction(
   sb: SupabaseClient,
@@ -170,7 +170,7 @@ export async function proposeAction(
 /**
  * Execute a confirmed action. Reuses existing API logic by inserting
  * directly through the admin client (user's permission is checked
- * at the /api/chuck/actions endpoint before this runs).
+ * at the /api/howard/actions endpoint before this runs).
  *
  * Returns the created record ID + table, or throws on failure.
  */

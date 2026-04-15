@@ -6,7 +6,7 @@ import useSWR from "swr";
 import dynamic from "next/dynamic";
 import { PlaneTakeoff, Wrench, AlertTriangle, Droplet, Clock, LayoutGrid, Calendar } from "lucide-react";
 import { FleetSkeleton } from "@/components/Skeletons";
-import AskChuckButton from "@/components/chuck/AskChuckButton";
+import AskHowardButton from "@/components/howard/AskHowardButton";
 
 const FleetSchedule = dynamic(() => import("@/components/tabs/FleetSchedule"));
 
@@ -179,8 +179,9 @@ export default function FleetSummary({
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <AskChuckButton
-                    size="xs"
+                  <AskHowardButton
+                    size="sm"
+                    iconOnly
                     onBeforeOpen={() => onSelectAircraft(ac.tail_number)}
                     prompt={`Give me a quick situational briefing on ${ac.tail_number} (${ac.aircraft_type}). Current status: ${ac.status}. Next MX: ${ac.nextMxName || 'nothing tracked'}${ac.nextMxDueLabel ? ` (${ac.nextMxDueLabel})` : ''}. ${ac.squawkCount} open squawk${ac.squawkCount === 1 ? '' : 's'}. What should I prioritize? Pull any relevant data.`}
                   />

@@ -6,7 +6,7 @@ import type { AircraftWithMetrics, AircraftRole } from "@/lib/types";
 import useSWR from "swr";
 import { AlertTriangle, Plus, X, Upload, Mail, Edit2, ChevronLeft, ChevronRight, Download, CheckSquare, Trash2, CheckCircle, Link2, Clock, MapPin, User } from "lucide-react";
 import { PrimaryButton } from "@/components/AppButtons";
-import AskChuckButton from "@/components/chuck/AskChuckButton";
+import AskHowardButton from "@/components/howard/AskHowardButton";
 import SignatureCanvas from "react-signature-canvas";
 import imageCompression from "browser-image-compression";
 import { useToast } from "@/components/ToastProvider";
@@ -350,8 +350,9 @@ export default function SquawksTab({
                 )}
                 </button>
                 <div className="absolute top-3 right-3">
-                  <AskChuckButton
+                  <AskHowardButton
                     size="xs"
+                    iconOnly
                     prompt={`Help me understand this ${sq.affects_airworthiness ? 'AOG' : 'open'} squawk on ${aircraft?.tail_number || 'the aircraft'}${sq.is_deferred ? ` (deferred under ${sq.deferral_category})` : ''}. Location: ${sq.location || 'unspecified'}. Description: "${sq.description}". What are likely causes and what needs to happen to clear it?`}
                   />
                 </div>

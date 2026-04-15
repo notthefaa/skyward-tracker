@@ -4,14 +4,14 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { authFetch } from "@/lib/authFetch";
 import { supabase } from "@/lib/supabase";
 import type { AircraftWithMetrics } from "@/lib/types";
-import type { ChuckMessage } from "@/lib/chuck/types";
+import type { HowardMessage } from "@/lib/howard/types";
 import useSWR from "swr";
 import { Send, Wrench, Globe, CloudSun, FileSearch, Database, BarChart3, Trash2 } from "lucide-react";
-import { ChuckIcon } from "@/components/shell/TrayIcons";
+import { HowardIcon } from "@/components/shell/TrayIcons";
 import { useToast } from "@/components/ToastProvider";
 import { useConfirm } from "@/components/ConfirmProvider";
-import ProposedActionCard from "@/components/chuck/ProposedActionCard";
-import type { ProposedAction } from "@/lib/chuck/proposedActions";
+import ProposedActionCard from "@/components/howard/ProposedActionCard";
+import type { ProposedAction } from "@/lib/howard/proposedActions";
 
 const SUGGESTIONS = [
   "What maintenance is coming due?",
@@ -48,7 +48,7 @@ function toolChipName(name: string): string {
   return name.replace(/_/g, ' ');
 }
 
-export default function ChuckTab({
+export default function HowardTab({
   aircraft, session
 }: {
   aircraft: AircraftWithMetrics | null;
@@ -64,11 +64,11 @@ export default function ChuckTab({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const { data, mutate } = useSWR(
-    aircraft ? `chuck-${aircraft.id}` : null,
+    aircraft ? `howard-${aircraft.id}` : null,
     async () => {
-      const res = await authFetch(`/api/chuck?aircraftId=${aircraft!.id}`);
+      const res = await authFetch(`/api/howard?aircraftId=${aircraft!.id}`);
       if (!res.ok) throw new Error('Failed to load conversation');
-      return await res.json() as { thread: any; messages: ChuckMessage[] };
+      return await res.json() as { thread: any; messages: HowardMessage[] };
     }
   );
 
@@ -77,9 +77,9 @@ export default function ChuckTab({
 
   // Proposed actions for this thread, keyed by id.
   const { data: actionsData, mutate: mutateActions } = useSWR(
-    threadId ? `chuck-actions-${threadId}` : null,
+    threadId ? `howard-actions-${threadId}` : null,
     async () => {
-      const res = await authFetch(`/api/chuck/actions?threadId=${threadId}`);
+      const res = await authFetch(`/api/howard/actions?threadId=${threadId}`);
       if (!res.ok) throw new Error('Failed to load actions');
       return await res.json() as { actions: ProposedAction[] };
     }
@@ -108,7 +108,7 @@ export default function ChuckTab({
     setStreamingText('');
     setActiveToolName(null);
 
-    const optimisticUserMsg: ChuckMessage = {
+    const optimisticUserMsg: HowardMessage = {
       id: 'pending-user',
       thread_id: '',
       role: 'user',
@@ -126,7 +126,7 @@ export default function ChuckTab({
 
     try {
       const { data: { session: s } } = await supabase.auth.getSession();
-      const res = await fetch('/api/chuck', {
+      const res = await fetch('/api/howard', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -143,8 +143,8 @@ export default function ChuckTab({
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
-      let savedUserMsg: ChuckMessage | null = null;
-      let savedAssistantMsg: ChuckMessage | null = null;
+      let savedUserMsg: HowardMessage | null = null;
+      let savedAssistantMsg: HowardMessage | null = null;
       let accumulated = '';
 
       while (true) {
@@ -190,7 +190,7 @@ export default function ChuckTab({
         return { ...prev, messages: next };
       }, false);
 
-      // If Chuck created any proposed actions, pick them up for the cards.
+      // If Howard created any proposed actions, pick them up for the cards.
       mutateActions();
     } catch (err: any) {
       showError(err.message);
@@ -216,14 +216,14 @@ export default function ChuckTab({
     if (!aircraft || isSending) return;
     const ok = await confirm({
       title: 'Clear conversation?',
-      message: `This will permanently delete your entire chat history with Chuck for ${aircraft.tail_number}. Usage totals are unaffected.`,
+      message: `This will permanently delete your entire chat history with Howard for ${aircraft.tail_number}. Usage totals are unaffected.`,
       confirmText: 'Clear',
       cancelText: 'Cancel',
       variant: 'danger',
     });
     if (!ok) return;
     try {
-      const res = await authFetch(`/api/chuck?aircraftId=${aircraft.id}`, { method: 'DELETE' });
+      const res = await authFetch(`/api/howard?aircraftId=${aircraft.id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error((await res.json()).error || 'Failed to clear conversation');
       mutate({ thread: null, messages: [] }, false);
       showSuccess('Conversation cleared.');
@@ -232,14 +232,14 @@ export default function ChuckTab({
     }
   }, [aircraft, isSending, confirm, mutate, showSuccess, showError]);
 
-  // Prefill handoff from AskChuck buttons elsewhere in the app.
-  // sessionStorage key "aft_chuck_prefill" (JSON: {prompt, autoSend})
+  // Prefill handoff from AskHoward buttons elsewhere in the app.
+  // sessionStorage key "aft_howard_prefill" (JSON: {prompt, autoSend})
   useEffect(() => {
     if (!aircraft || isSending) return;
     try {
-      const raw = sessionStorage.getItem('aft_chuck_prefill');
+      const raw = sessionStorage.getItem('aft_howard_prefill');
       if (!raw) return;
-      sessionStorage.removeItem('aft_chuck_prefill');
+      sessionStorage.removeItem('aft_howard_prefill');
       const { prompt, autoSend } = JSON.parse(raw);
       if (typeof prompt !== 'string' || !prompt.trim()) return;
       if (autoSend) {
@@ -261,18 +261,18 @@ export default function ChuckTab({
       <div className="flex items-center justify-between gap-3 mb-4">
         <div className="flex items-center gap-3 min-w-0">
           <div className="p-2 rounded-full bg-[#0EA5E9]/10 shrink-0">
-            <ChuckIcon size={24} style={{ color: '#0EA5E9' }} />
+            <HowardIcon size={24} style={{ color: '#0EA5E9' }} />
           </div>
           <div className="min-w-0">
-            <h2 className="font-oswald text-2xl md:text-3xl font-bold uppercase text-navy m-0 leading-none">Chuck</h2>
+            <h2 className="font-oswald text-2xl md:text-3xl font-bold uppercase text-navy m-0 leading-none">Howard</h2>
             <span className="text-[10px] font-bold uppercase tracking-widest text-[#0EA5E9] truncate block">AI Copilot for {aircraft.tail_number}</span>
           </div>
         </div>
         <div className="flex items-center gap-3 shrink-0">
           <button
-            onClick={() => window.dispatchEvent(new CustomEvent('aft:navigate-chuck-usage'))}
-            title="View Chuck usage"
-            aria-label="View Chuck usage"
+            onClick={() => window.dispatchEvent(new CustomEvent('aft:navigate-howard-usage'))}
+            title="View Howard usage"
+            aria-label="View Howard usage"
             className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-gray-500 hover:text-[#0EA5E9] active:scale-95 transition-colors"
           >
             <BarChart3 size={14} />
@@ -297,8 +297,8 @@ export default function ChuckTab({
       <div className="flex-1 overflow-y-auto bg-cream shadow-lg rounded-sm p-4 mb-3 min-h-[300px]">
         {messages.length === 0 && !isSending ? (
           <div className="flex flex-col items-center justify-center h-full text-center py-8">
-            <ChuckIcon size={40} style={{ color: '#0EA5E9' }} />
-            <p className="font-roboto text-sm text-navy mt-3 mb-1 font-bold">Hey, I&apos;m Chuck.</p>
+            <HowardIcon size={40} style={{ color: '#0EA5E9' }} />
+            <p className="font-roboto text-sm text-navy mt-3 mb-1 font-bold">Hey, I&apos;m Howard.</p>
             <p className="font-roboto text-xs text-gray-500 mb-4 max-w-xs">
               I can look up your flight logs, maintenance items, squawks, VOR checks, and more. Ask me anything about {aircraft.tail_number}.
             </p>
@@ -417,7 +417,7 @@ export default function ChuckTab({
           value={input}
           onChange={handleInputChange}
           onKeyDown={handleKeyDown}
-          placeholder="Ask Chuck anything..."
+          placeholder="Ask Howard anything..."
           maxLength={2000}
           rows={1}
           disabled={isSending}

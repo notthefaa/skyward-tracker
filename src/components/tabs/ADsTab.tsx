@@ -9,7 +9,7 @@ import { useToast } from "@/components/ToastProvider";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { useModalScrollLock } from "@/hooks/useModalScrollLock";
 import { INPUT_WHITE_BG } from "@/lib/styles";
-import AskChuckButton from "@/components/chuck/AskChuckButton";
+import AskHowardButton from "@/components/howard/AskHowardButton";
 import type { AircraftWithMetrics, AirworthinessDirective, AircraftRole } from "@/lib/types";
 
 interface Props {
@@ -166,14 +166,14 @@ export default function ADsTab({ aircraft, role, aircraftRole }: Props) {
     if (!aircraft) return;
     setIsSyncing(true);
     try {
-      const res = await authFetch('/api/chuck', {
+      const res = await authFetch('/api/howard', {
         method: 'POST',
         body: JSON.stringify({ aircraftId: aircraft.id, message: 'Refresh the ADs for this aircraft from the FAA DRS.' }),
       });
       if (!res.ok) throw new Error('Refresh failed');
-      // Let Chuck's response handle the reply; just revalidate the list.
+      // Let Howard's response handle the reply; just revalidate the list.
       await mutate();
-      showSuccess('AD refresh requested. Chuck will report back shortly.');
+      showSuccess('AD refresh requested. Howard will report back shortly.');
     } catch (err: any) { showError(err.message); }
     finally { setIsSyncing(false); }
   };
@@ -199,7 +199,7 @@ export default function ADsTab({ aircraft, role, aircraftRole }: Props) {
           <span className="text-[10px] font-bold uppercase tracking-widest text-[#7C3AED]">{ads.length} tracked on {aircraft.tail_number}</span>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <AskChuckButton
+          <AskHowardButton
             size="xs"
             prompt={`Give me an AD compliance summary for ${aircraft.tail_number} (${aircraft.aircraft_type}). Which ADs are overdue, due soon, or need attention? Use search_ads.`}
           />

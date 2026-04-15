@@ -1,4 +1,4 @@
-export interface ChuckThread {
+export interface HowardThread {
   id: string;
   aircraft_id: string;
   user_id: string;
@@ -7,7 +7,7 @@ export interface ChuckThread {
   updated_at: string;
 }
 
-export interface ChuckMessage {
+export interface HowardMessage {
   id: string;
   thread_id: string;
   role: 'user' | 'assistant';

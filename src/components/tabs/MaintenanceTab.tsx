@@ -9,7 +9,7 @@ import type { AircraftWithMetrics, SystemSettings, AircraftRole, MxSubTab } from
 import useSWR from "swr";
 import { Wrench, Trash2, Plus, X, Edit2, Calendar, Send, ExternalLink, ChevronRight, HelpCircle, AlertTriangle, Download, Layers, Settings } from "lucide-react";
 import { PrimaryButton } from "@/components/AppButtons";
-import AskChuckButton from "@/components/chuck/AskChuckButton";
+import AskHowardButton from "@/components/howard/AskHowardButton";
 import { useModalScrollLock } from "@/hooks/useModalScrollLock";
 import ServiceEventModal from "@/components/modals/ServiceEventModal";
 import MxGuideModal from "@/components/modals/MxGuideModal";
@@ -399,8 +399,9 @@ export default function MaintenanceTab({
                       )}
                     </div>
                     <div className="flex items-center gap-3 pl-4 shrink-0">
-                      <AskChuckButton
+                      <AskHowardButton
                         size="xs"
+                        iconOnly
                         prompt={`What does "${item.item_name}" maintenance involve for ${aircraft.tail_number} (${aircraft.aircraft_type})? It's ${item.is_required ? 'required' : 'optional'}, ${item.tracking_type}-tracked. Current status: ${processed.dueText}${processed.isExpired ? ' — EXPIRED' : ''}. What's the regulatory basis (if any) and what steps are typical to complete it?`}
                       />
                       {canEditMx && (

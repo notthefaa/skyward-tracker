@@ -15,7 +15,7 @@ import {
   MoreHorizontal, FolderOpen, ShieldAlert, Compass,
   ListChecks, PenLine, Droplets, Plane, BarChart3
 } from "lucide-react";
-import { TireIcon, ChuckIcon } from "@/components/shell/TrayIcons";
+import { TireIcon, HowardIcon } from "@/components/shell/TrayIcons";
 
 const PilotOnboarding = dynamic(() => import("@/components/PilotOnboarding"));
 const AircraftModal = dynamic(() => import("@/components/modals/AircraftModal"));
@@ -30,8 +30,8 @@ const CalendarTab = dynamic(() => import("@/components/tabs/CalendarTab"), { loa
 const MaintenanceTab = dynamic(() => import("@/components/tabs/MaintenanceTab"), { loading: () => <TabSkeleton /> });
 const NotesTab = dynamic(() => import("@/components/tabs/NotesTab"), { loading: () => <TabSkeleton /> });
 const FleetSummary = dynamic(() => import("@/components/tabs/FleetSummary"), { loading: () => <FleetSkeleton /> });
-const ChuckTab = dynamic(() => import("@/components/tabs/ChuckTab"), { loading: () => <TabSkeleton /> });
-const ChuckUsageTab = dynamic(() => import("@/components/tabs/ChuckUsageTab"), { loading: () => <TabSkeleton /> });
+const HowardTab = dynamic(() => import("@/components/tabs/HowardTab"), { loading: () => <TabSkeleton /> });
+const HowardUsageTab = dynamic(() => import("@/components/tabs/HowardUsageTab"), { loading: () => <TabSkeleton /> });
 const DocumentsTab = dynamic(() => import("@/components/tabs/DocumentsTab"), { loading: () => <TabSkeleton /> });
 const EquipmentTab = dynamic(() => import("@/components/tabs/EquipmentTab"), { loading: () => <TabSkeleton /> });
 const ADsTab = dynamic(() => import("@/components/tabs/ADsTab"), { loading: () => <TabSkeleton /> });
@@ -58,8 +58,8 @@ const moreTrayItems = [
   { key: 'notes', label: 'Notes', icon: FileText, color: '#525659', soon: false },
   { key: 'documents', label: 'Documents', icon: FolderOpen, color: '#56B94A', soon: false },
   { key: 'equipment', label: 'Equipment', icon: Plane, color: '#3AB0FF', soon: false },
-  { key: 'chuck', label: 'Chuck', icon: ChuckIcon, color: '#0EA5E9', soon: false },
-  { key: 'chuck-usage', label: 'Usage', icon: BarChart3, color: '#7C3AED', soon: false },
+  { key: 'howard', label: 'Howard', icon: HowardIcon, color: '#0EA5E9', soon: false },
+  { key: 'howard-usage', label: 'Usage', icon: BarChart3, color: '#7C3AED', soon: false },
 ] as const;
 
 interface AppShellProps {
@@ -87,7 +87,7 @@ export default function AppShell({ session }: AppShellProps) {
   const [activeTab, setActiveTab] = useState<AppTab>(() => {
     if (typeof window !== 'undefined') {
       const saved = sessionStorage.getItem('aft_active_tab');
-      if (saved && ['fleet','summary','times','calendar','mx','notes','chuck','chuck-usage','documents','equipment','ads','more'].includes(saved)) return saved as AppTab;
+      if (saved && ['fleet','summary','times','calendar','mx','notes','howard','howard-usage','documents','equipment','ads','more'].includes(saved)) return saved as AppTab;
     }
     return 'fleet';
   });
@@ -134,21 +134,21 @@ export default function AppShell({ session }: AppShellProps) {
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
-  // Listen for cross-app "Ask Chuck" button clicks
+  // Listen for cross-app "Ask Howard" button clicks
   useEffect(() => {
-    const handleNavigateChuck = () => {
+    const handleNavigateHoward = () => {
       setExpandedNav(null);
-      navigateTab('chuck');
+      navigateTab('howard');
     };
-    const handleNavigateChuckUsage = () => {
+    const handleNavigateHowardUsage = () => {
       setExpandedNav(null);
-      navigateTab('chuck-usage');
+      navigateTab('howard-usage');
     };
-    window.addEventListener('aft:navigate-chuck', handleNavigateChuck);
-    window.addEventListener('aft:navigate-chuck-usage', handleNavigateChuckUsage);
+    window.addEventListener('aft:navigate-howard', handleNavigateHoward);
+    window.addEventListener('aft:navigate-howard-usage', handleNavigateHowardUsage);
     return () => {
-      window.removeEventListener('aft:navigate-chuck', handleNavigateChuck);
-      window.removeEventListener('aft:navigate-chuck-usage', handleNavigateChuckUsage);
+      window.removeEventListener('aft:navigate-howard', handleNavigateHoward);
+      window.removeEventListener('aft:navigate-howard-usage', handleNavigateHowardUsage);
     };
   }, [navigateTab]);
 
@@ -498,8 +498,8 @@ export default function AppShell({ session }: AppShellProps) {
             />}
             {activeTab === 'mx' && <MaintenanceTab aircraft={selectedAircraftData} role={role} aircraftRole={currentAircraftRole} onGroundedStatusChange={() => checkGroundedStatus(activeTail)} sysSettings={sysSettings} session={session} userInitials={userInitials} initialSubTab={mxSubTab} />}
             {activeTab === 'notes' && <NotesTab aircraft={selectedAircraftData} session={session} role={role} aircraftRole={currentAircraftRole} userInitials={userInitials} onNotesRead={() => setUnreadNotes(0)} />}
-            {activeTab === 'chuck' && <ChuckTab aircraft={selectedAircraftData} session={session} />}
-            {activeTab === 'chuck-usage' && <ChuckUsageTab />}
+            {activeTab === 'howard' && <HowardTab aircraft={selectedAircraftData} session={session} />}
+            {activeTab === 'howard-usage' && <HowardUsageTab />}
             {activeTab === 'documents' && <DocumentsTab aircraft={selectedAircraftData} session={session} role={role} />}
             {activeTab === 'equipment' && <EquipmentTab aircraft={selectedAircraftData} role={role} aircraftRole={currentAircraftRole} />}
             {activeTab === 'ads' && <ADsTab aircraft={selectedAircraftData} role={role} aircraftRole={currentAircraftRole} />}
@@ -549,8 +549,8 @@ export default function AppShell({ session }: AppShellProps) {
         unreadCount={unreadNotes}
         onSelect={(key) => {
           if (key === 'notes') navigateTab('notes');
-          else if (key === 'chuck') navigateTab('chuck');
-          else if (key === 'chuck-usage') navigateTab('chuck-usage');
+          else if (key === 'howard') navigateTab('howard');
+          else if (key === 'howard-usage') navigateTab('howard-usage');
           else if (key === 'documents') navigateTab('documents');
           else if (key === 'equipment') navigateTab('equipment');
           setExpandedNav(null);
@@ -576,7 +576,7 @@ export default function AppShell({ session }: AppShellProps) {
               ? (activeTab === 'summary' || activeTab === 'fleet')
               : tab.id === 'log' ? activeTab === 'times'
               : tab.id === 'mx' ? (activeTab === 'mx' || activeTab === 'ads')
-              : tab.id === 'more' ? (activeTab === 'notes' || activeTab === 'chuck' || activeTab === 'chuck-usage' || activeTab === 'documents' || activeTab === 'equipment')
+              : tab.id === 'more' ? (activeTab === 'notes' || activeTab === 'howard' || activeTab === 'howard-usage' || activeTab === 'documents' || activeTab === 'equipment')
               : activeTab === tab.id;
             return (
             <button key={tab.id} onClick={() => {

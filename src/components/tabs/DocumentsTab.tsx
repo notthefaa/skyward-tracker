@@ -6,7 +6,7 @@ import type { AircraftWithMetrics, AircraftDocument, DocType } from "@/lib/types
 import useSWR from "swr";
 import { Upload, Trash2, FileText, Loader2, CheckCircle, AlertCircle } from "lucide-react";
 import { PrimaryButton } from "@/components/AppButtons";
-import AskChuckButton from "@/components/chuck/AskChuckButton";
+import AskHowardButton from "@/components/howard/AskHowardButton";
 import { useToast } from "@/components/ToastProvider";
 import { useConfirm } from "@/components/ConfirmProvider";
 
@@ -92,7 +92,7 @@ export default function DocumentsTab({
 
   const handleDelete = async (doc: AircraftDocument) => {
     if (!aircraft) return;
-    const ok = await confirm({ title: 'Delete Document?', message: `Delete "${doc.filename}"? Chuck will no longer be able to reference it.`, confirmText: 'Delete', variant: 'danger' });
+    const ok = await confirm({ title: 'Delete Document?', message: `Delete "${doc.filename}"? Howard will no longer be able to reference it.`, confirmText: 'Delete', variant: 'danger' });
     if (!ok) return;
     try {
       const res = await authFetch('/api/documents', {
@@ -177,7 +177,7 @@ export default function DocumentsTab({
             </thead>
             <tbody className="text-xs font-roboto text-navy">
               {documents.length === 0 && (
-                <tr><td colSpan={7} className="text-center text-gray-400 py-8">No documents uploaded yet. Upload a POH or AFM to let Chuck reference it.</td></tr>
+                <tr><td colSpan={7} className="text-center text-gray-400 py-8">No documents uploaded yet. Upload a POH or AFM to let Howard reference it.</td></tr>
               )}
               {documents.map(doc => (
                 <tr key={doc.id} className="border-b border-gray-200 hover:bg-blue-50/50 transition-colors">
@@ -197,8 +197,9 @@ export default function DocumentsTab({
                   <td className="py-3 pr-4 whitespace-nowrap">{new Date(doc.created_at).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: '2-digit' })}</td>
                   <td className="py-3 pr-4 whitespace-nowrap">
                     {doc.status === 'ready' && (
-                      <AskChuckButton
+                      <AskHowardButton
                         size="xs"
+                        iconOnly
                         prompt={`Summarize the key points I should know from our ${doc.doc_type} "${doc.filename}". Focus on limitations, procedures, and anything pilot-critical. Search the document for relevant sections.`}
                       />
                     )}
@@ -215,7 +216,7 @@ export default function DocumentsTab({
         </div>
 
         <p className="text-[10px] text-gray-400 mt-4 text-center">
-          Uploaded documents are searchable by Chuck. Ask questions like &quot;What is the Vne?&quot; or &quot;Show me the emergency checklist.&quot;
+          Uploaded documents are searchable by Howard. Ask questions like &quot;What is the Vne?&quot; or &quot;Show me the emergency checklist.&quot;
         </p>
       </div>
     </>

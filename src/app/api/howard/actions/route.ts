@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireAuth, handleApiError } from '@/lib/auth';
 
-// GET /api/chuck/actions?threadId=xxx — list all proposed actions for a thread
+// GET /api/howard/actions?threadId=xxx — list all proposed actions for a thread
 export async function GET(req: Request) {
   try {
     const { user, supabaseAdmin } = await requireAuth(req);

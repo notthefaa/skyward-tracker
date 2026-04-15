@@ -4,7 +4,7 @@ import { setAppUser, SOFT_DELETE_TABLES } from '@/lib/audit';
 
 // Tables that carry an aircraft_id FK and should be soft-deleted when the
 // aircraft itself is soft-deleted. Kept narrow: retention-critical tables
-// only. User access grants and Chuck threads stay hard-delete.
+// only. User access grants and Howard threads stay hard-delete.
 const CASCADE_TABLES = [
   'aft_flight_logs',
   'aft_maintenance_items',

@@ -273,7 +273,7 @@ export interface SystemSettings {
 export type AppRole = 'admin' | 'pilot';
 export type AircraftRole = 'admin' | 'pilot';
 export type AircraftStatus = 'airworthy' | 'issues' | 'grounded';
-export type AppTab = 'fleet' | 'summary' | 'times' | 'calendar' | 'mx' | 'notes' | 'chuck' | 'chuck-usage' | 'documents' | 'equipment' | 'ads';
+export type AppTab = 'fleet' | 'summary' | 'times' | 'calendar' | 'mx' | 'notes' | 'howard' | 'howard-usage' | 'documents' | 'equipment' | 'ads';
 export type MxSubTab = 'maintenance' | 'squawks';
 export type LogSubTab = 'flights' | 'vor' | 'tire' | 'oil';
 

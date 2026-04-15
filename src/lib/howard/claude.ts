@@ -1,19 +1,19 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { tools } from './tools';
 import { executeTool } from './toolHandlers';
-import { CHUCK_STABLE_PRELUDE, buildAircraftContext } from './systemPrompt';
+import { HOWARD_STABLE_PRELUDE, buildAircraftContext } from './systemPrompt';
 import type { Aircraft } from '@/lib/types';
-import type { ChuckMessage } from './types';
+import type { HowardMessage } from './types';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 const client = new Anthropic();
 
-export const CHUCK_MODEL = 'claude-sonnet-4-6';
+export const HOWARD_MODEL = 'claude-sonnet-4-6';
 const MAX_OUTPUT_TOKENS = 1500;
 const MAX_TOOL_ROUNDS = 5;
 const CONTEXT_WINDOW = 20;
 
-export interface ChuckUsage {
+export interface HowardUsage {
   input_tokens: number;
   output_tokens: number;
   cache_read_input_tokens: number;
@@ -29,12 +29,12 @@ export type StreamEvent =
       assistantText: string;
       toolCalls: any[] | null;
       toolResults: any[] | null;
-      usage: ChuckUsage;
+      usage: HowardUsage;
     };
 
 export async function* sendMessageStream(
   userText: string,
-  conversationHistory: ChuckMessage[],
+  conversationHistory: HowardMessage[],
   aircraft: Aircraft,
   userRole: string,
   userId: string,
@@ -61,7 +61,7 @@ export async function* sendMessageStream(
 
   const allToolCalls: any[] = [];
   const allToolResults: any[] = [];
-  const totalUsage: ChuckUsage = {
+  const totalUsage: HowardUsage = {
     input_tokens: 0,
     output_tokens: 0,
     cache_read_input_tokens: 0,
@@ -71,10 +71,10 @@ export async function* sendMessageStream(
 
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
     const stream = client.messages.stream({
-      model: CHUCK_MODEL,
+      model: HOWARD_MODEL,
       max_tokens: MAX_OUTPUT_TOKENS,
       system: [
-        { type: 'text', text: CHUCK_STABLE_PRELUDE, cache_control: { type: 'ephemeral' } },
+        { type: 'text', text: HOWARD_STABLE_PRELUDE, cache_control: { type: 'ephemeral' } },
         { type: 'text', text: aircraftContext },
       ],
       tools,

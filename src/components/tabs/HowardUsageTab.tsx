@@ -3,7 +3,7 @@
 import { authFetch } from "@/lib/authFetch";
 import useSWR from "swr";
 import { BarChart3, Coins, MessageSquare, Plane, ArrowRight } from "lucide-react";
-import { ChuckIcon } from "@/components/shell/TrayIcons";
+import { HowardIcon } from "@/components/shell/TrayIcons";
 
 interface UsageResponse {
   totals: {
@@ -66,11 +66,11 @@ function buildDaySeries(perDay: UsageResponse['perDay'], days: number) {
   return out;
 }
 
-export default function ChuckUsageTab() {
+export default function HowardUsageTab() {
   const { data, isLoading, error } = useSWR<UsageResponse>(
-    'chuck-usage',
+    'howard-usage',
     async () => {
-      const res = await authFetch('/api/chuck/usage');
+      const res = await authFetch('/api/howard/usage');
       if (!res.ok) throw new Error('Failed to load usage');
       return await res.json();
     },
@@ -104,10 +104,10 @@ export default function ChuckUsageTab() {
       {/* Header */}
       <div className="flex items-center gap-3">
         <div className="p-2 rounded-full bg-[#0EA5E9]/10">
-          <ChuckIcon size={24} style={{ color: '#0EA5E9' }} />
+          <HowardIcon size={24} style={{ color: '#0EA5E9' }} />
         </div>
         <div>
-          <h2 className="font-oswald text-2xl md:text-3xl font-bold uppercase text-navy m-0 leading-none">Chuck Usage</h2>
+          <h2 className="font-oswald text-2xl md:text-3xl font-bold uppercase text-navy m-0 leading-none">Howard Usage</h2>
           <span className="text-[10px] font-bold uppercase tracking-widest text-[#0EA5E9]">Last 30 days</span>
         </div>
       </div>
@@ -115,16 +115,16 @@ export default function ChuckUsageTab() {
       {/* Empty state — first-time users */}
       {isEmpty && (
         <div className="bg-cream shadow-lg rounded-sm p-6 border-t-4 border-[#0EA5E9] text-center">
-          <ChuckIcon size={40} style={{ color: '#0EA5E9' }} className="mx-auto mb-3" />
+          <HowardIcon size={40} style={{ color: '#0EA5E9' }} className="mx-auto mb-3" />
           <p className="font-oswald text-lg font-bold uppercase text-navy mb-1">No usage yet</p>
           <p className="text-xs text-gray-500 font-roboto mb-4 max-w-sm mx-auto">
-            Start a conversation with Chuck to see your token usage, daily activity, and estimated cost tracked here.
+            Start a conversation with Howard to see your token usage, daily activity, and estimated cost tracked here.
           </p>
           <button
-            onClick={() => window.dispatchEvent(new CustomEvent('aft:navigate-chuck'))}
+            onClick={() => window.dispatchEvent(new CustomEvent('aft:navigate-howard'))}
             className="inline-flex items-center gap-2 bg-[#0EA5E9] text-white font-oswald font-bold uppercase tracking-widest text-sm px-4 py-2 rounded-lg active:scale-95 transition-transform"
           >
-            Go to Chuck <ArrowRight size={14} />
+            Go to Howard <ArrowRight size={14} />
           </button>
         </div>
       )}
@@ -162,7 +162,7 @@ export default function ChuckUsageTab() {
       <div className="bg-cream shadow-lg rounded-sm p-4 md:p-6 border-t-4 border-[#0EA5E9]">
         <h3 className="font-oswald text-lg font-bold uppercase text-navy mb-4">Daily activity</h3>
         {totals.messages === 0 ? (
-          <p className="text-sm text-gray-400 italic text-center py-8">No Chuck conversations yet. Start chatting to see your usage here.</p>
+          <p className="text-sm text-gray-400 italic text-center py-8">No Howard conversations yet. Start chatting to see your usage here.</p>
         ) : (
           <div className="flex items-end gap-[2px] h-32">
             {daySeries.map(d => {

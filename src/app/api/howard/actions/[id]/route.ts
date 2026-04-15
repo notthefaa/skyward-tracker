@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
 import { requireAuth, requireAircraftAccess, requireAircraftAdmin, handleApiError } from '@/lib/auth';
 import { setAppUser } from '@/lib/audit';
-import { executeAction, type ProposedAction } from '@/lib/chuck/proposedActions';
+import { executeAction, type ProposedAction } from '@/lib/howard/proposedActions';
 
-// POST /api/chuck/actions/[id] — confirm and execute a proposed action
+// POST /api/howard/actions/[id] — confirm and execute a proposed action
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
@@ -67,7 +67,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   } catch (error) { return handleApiError(error); }
 }
 
-// DELETE /api/chuck/actions/[id] — cancel a pending proposal
+// DELETE /api/howard/actions/[id] — cancel a pending proposal
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
@@ -93,7 +93,7 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
   } catch (error) { return handleApiError(error); }
 }
 
-// GET /api/chuck/actions/[id] — fetch a single action (for the UI card)
+// GET /api/howard/actions/[id] — fetch a single action (for the UI card)
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;

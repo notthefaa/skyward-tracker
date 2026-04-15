@@ -39,8 +39,8 @@ export function TireIcon({ size = 20, style, className }: IconProps) {
   );
 }
 
-/** Chuck icon — robot head with aviator goggles */
-export function ChuckIcon({ size = 20, style, className }: IconProps) {
+/** Howard icon — robot head with aviator goggles */
+export function HowardIcon({ size = 20, style, className }: IconProps) {
   const color = style?.color || 'currentColor';
   return (
     <svg
