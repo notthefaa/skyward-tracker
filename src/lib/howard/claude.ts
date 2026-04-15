@@ -10,7 +10,7 @@ const client = new Anthropic();
 
 export const HOWARD_MODEL = 'claude-sonnet-4-6';
 const MAX_OUTPUT_TOKENS = 1500;
-const MAX_TOOL_ROUNDS = 5;
+const MAX_TOOL_ROUNDS = 3;
 const CONTEXT_WINDOW = 20;
 
 export interface HowardUsage {

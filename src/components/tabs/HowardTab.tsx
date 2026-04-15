@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
+import { flushSync } from "react-dom";
 import { authFetch } from "@/lib/authFetch";
 import { supabase } from "@/lib/supabase";
 import type { AircraftWithMetrics } from "@/lib/types";
@@ -206,15 +207,23 @@ export default function HowardTab({
             created_at: new Date().toISOString(),
           }
         : null;
-      mutate(prev => {
-        if (!prev) return prev;
-        const filtered = prev.messages.filter(m => m.id !== 'pending-user');
-        const next = [...filtered];
-        if (savedUserMsg) next.push(savedUserMsg);
-        if (savedAssistantMsg) next.push(savedAssistantMsg);
-        else if (partialFallback) next.push(partialFallback);
-        return { ...prev, messages: next };
-      }, false);
+      // flushSync forces the mutate-triggered re-render to complete
+      // before we fall into the finally that clears streamingText.
+      // Without this, SWR's subscription update and the finally's
+      // setStates can land in separate renders, producing a one-frame
+      // gap where the streaming bubble has hidden but the saved
+      // message hasn't appeared yet — which reads as a vanishing reply.
+      flushSync(() => {
+        mutate(prev => {
+          const base = prev ?? { thread: null, messages: [] };
+          const filtered = base.messages.filter(m => m.id !== 'pending-user');
+          const next = [...filtered];
+          if (savedUserMsg) next.push(savedUserMsg);
+          if (savedAssistantMsg) next.push(savedAssistantMsg);
+          else if (partialFallback) next.push(partialFallback);
+          return { ...base, messages: next };
+        }, false);
+      });
       if (!savedAssistantMsg && partialFallback) {
         showError('Connection cut off before Howard finished. Partial reply kept.');
       }
@@ -226,29 +235,31 @@ export default function HowardTab({
       // Preserve whatever text already streamed so the user doesn't lose
       // the reply when the connection drops mid-response.
       const partial = accumulated.trim();
-      mutate(prev => {
-        if (!prev) return prev;
-        const filtered = prev.messages.filter(m => m.id !== 'pending-user');
-        const next = [...filtered];
-        if (savedUserMsg) next.push(savedUserMsg);
-        if (partial) {
-          next.push({
-            id: `local-partial-${Date.now()}`,
-            thread_id: '',
-            role: 'assistant',
-            content: partial,
-            tool_calls: null,
-            tool_results: null,
-            input_tokens: null,
-            output_tokens: null,
-            cache_read_tokens: null,
-            cache_create_tokens: null,
-            model: null,
-            created_at: new Date().toISOString(),
-          });
-        }
-        return { ...prev, messages: next };
-      }, false);
+      flushSync(() => {
+        mutate(prev => {
+          const base = prev ?? { thread: null, messages: [] };
+          const filtered = base.messages.filter(m => m.id !== 'pending-user');
+          const next = [...filtered];
+          if (savedUserMsg) next.push(savedUserMsg);
+          if (partial) {
+            next.push({
+              id: `local-partial-${Date.now()}`,
+              thread_id: '',
+              role: 'assistant',
+              content: partial,
+              tool_calls: null,
+              tool_results: null,
+              input_tokens: null,
+              output_tokens: null,
+              cache_read_tokens: null,
+              cache_create_tokens: null,
+              model: null,
+              created_at: new Date().toISOString(),
+            });
+          }
+          return { ...base, messages: next };
+        }, false);
+      });
     } finally {
       setIsSending(false);
       setStreamingText('');

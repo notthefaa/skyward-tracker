@@ -152,6 +152,10 @@ export async function POST(req: Request) {
           controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
         };
 
+        // Hoisted so the catch block can recover partial text from
+        // events that already streamed before the failure.
+        let streamedSoFar = '';
+
         try {
           send({ type: 'user_saved', userMessage: userMsg, threadId });
 
@@ -176,6 +180,7 @@ export async function POST(req: Request) {
               finalToolCalls = ev.toolCalls;
               finalToolResults = ev.toolResults;
             } else {
+              if (ev.type === 'text_delta') streamedSoFar += ev.delta;
               send(ev);
             }
           }
@@ -206,16 +211,23 @@ export async function POST(req: Request) {
           send({ type: 'done', assistantMessage: assistantMsg, threadId });
           controller.close();
         } catch (err: any) {
-          // Persist an error placeholder so the user's question doesn't hang
+          // Persist an error record so the user's question doesn't hang
           // in history with no reply — matters for an audit-style chat log.
+          // Preserve any text Howard had already streamed before the error
+          // so the user doesn't watch their reply get replaced by a bare
+          // warning.
           const reason = err?.message || 'Stream failed';
+          const partial = streamedSoFar.trim();
+          const content = partial
+            ? `${partial}\n\n⚠️ Howard got cut off before finishing. (${reason})`
+            : `⚠️ I ran into a problem responding to that. (${reason}) Please try again.`;
           try {
             const { data: errorMsg } = await supabaseAdmin
               .from('aft_howard_messages')
               .insert({
                 thread_id: threadId,
                 role: 'assistant',
-                content: `⚠️ I ran into a problem responding to that. (${reason}) Please try again.`,
+                content,
                 model: HOWARD_MODEL,
               })
               .select()
