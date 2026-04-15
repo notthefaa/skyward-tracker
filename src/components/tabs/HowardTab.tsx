@@ -25,16 +25,27 @@ const MARKDOWN_COMPONENTS = {
   p: (props: any) => <p className="font-roboto text-sm leading-relaxed mb-2 last:mb-0" {...props} />,
   strong: (props: any) => <strong className="font-bold text-navy" {...props} />,
   em: (props: any) => <em className="italic" {...props} />,
-  ul: (props: any) => <ul className="list-disc pl-5 my-2 space-y-0.5 text-sm" {...props} />,
-  ol: (props: any) => <ol className="list-decimal pl-5 my-2 space-y-0.5 text-sm" {...props} />,
+  ul: (props: any) => <ul className="list-none pl-0 my-2 space-y-1 text-sm marker:text-[#0EA5E9] [&>li]:relative [&>li]:pl-4 [&>li]:before:content-['•'] [&>li]:before:absolute [&>li]:before:left-0 [&>li]:before:text-[#0EA5E9] [&>li]:before:font-bold" {...props} />,
+  ol: (props: any) => <ol className="list-decimal pl-5 my-2 space-y-1 text-sm marker:text-[#0EA5E9] marker:font-bold" {...props} />,
   li: (props: any) => <li className="leading-relaxed" {...props} />,
-  code: (props: any) => <code className="font-mono text-[0.85em] bg-black/5 px-1 py-0.5 rounded" {...props} />,
+  code: (props: any) => <code className="font-mono text-[0.85em] bg-[#0EA5E9]/10 text-[#0284C7] px-1.5 py-0.5 rounded border border-[#0EA5E9]/20" {...props} />,
   a: (props: any) => <a className="text-[#0EA5E9] underline" target="_blank" rel="noopener noreferrer" {...props} />,
+  // Howard is told not to use headers, but if one slips through, render
+  // as a bold lead-in rather than big heading chrome.
   h1: (props: any) => <p className="font-bold text-sm mt-2 mb-1" {...props} />,
   h2: (props: any) => <p className="font-bold text-sm mt-2 mb-1" {...props} />,
   h3: (props: any) => <p className="font-bold text-sm mt-2 mb-1" {...props} />,
   h4: (props: any) => <p className="font-bold text-sm mt-2 mb-1" {...props} />,
-  hr: () => <hr className="my-2 border-gray-200" />,
+  // Callout block — good for a one-line caveat or advisory handoff.
+  blockquote: (props: any) => (
+    <blockquote
+      className="relative my-2 pl-3 pr-3 py-2 rounded-r bg-[#0EA5E9]/5 border-l-4 border-[#0EA5E9] text-sm text-navy italic [&>p]:mb-0"
+      {...props}
+    />
+  ),
+  // Visible separator — Howard may use `---` to split a status header
+  // from the detail beneath.
+  hr: () => <hr className="my-3 border-t border-dashed border-[#0EA5E9]/30" />,
 };
 
 const SUGGESTIONS = [
