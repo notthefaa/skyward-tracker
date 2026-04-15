@@ -6,7 +6,6 @@ import type { AircraftWithMetrics, AircraftDocument, DocType } from "@/lib/types
 import useSWR from "swr";
 import { Upload, Trash2, FileText, Loader2, CheckCircle, AlertCircle } from "lucide-react";
 import { PrimaryButton } from "@/components/AppButtons";
-import AskHowardButton from "@/components/howard/AskHowardButton";
 import { useToast } from "@/components/ToastProvider";
 import { useConfirm } from "@/components/ConfirmProvider";
 
@@ -195,15 +194,7 @@ export default function DocumentsTab({
                     {doc.status === 'error' && <span className="inline-flex items-center gap-1 text-[#CE3732] font-bold"><AlertCircle size={12} /> Error</span>}
                   </td>
                   <td className="py-3 pr-4 whitespace-nowrap">{new Date(doc.created_at).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: '2-digit' })}</td>
-                  <td className="py-3 pr-4 whitespace-nowrap">
-                    {doc.status === 'ready' && (
-                      <AskHowardButton
-                        size="xs"
-                        iconOnly
-                        prompt={`Summarize the key points I should know from our ${doc.doc_type} "${doc.filename}". Focus on limitations, procedures, and anything pilot-critical. Search the document for relevant sections.`}
-                      />
-                    )}
-                  </td>
+                  <td className="py-3 pr-4 whitespace-nowrap" />
                   {isAdmin && (
                     <td className="py-3 text-right">
                       <button onClick={() => handleDelete(doc)} className="text-gray-400 hover:text-[#CE3732] transition-colors"><Trash2 size={14} /></button>

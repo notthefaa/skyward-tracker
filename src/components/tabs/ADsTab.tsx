@@ -9,7 +9,6 @@ import { useToast } from "@/components/ToastProvider";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { useModalScrollLock } from "@/hooks/useModalScrollLock";
 import { INPUT_WHITE_BG } from "@/lib/styles";
-import AskHowardButton from "@/components/howard/AskHowardButton";
 import type { AircraftWithMetrics, AirworthinessDirective, AircraftRole } from "@/lib/types";
 
 interface Props {
@@ -199,10 +198,6 @@ export default function ADsTab({ aircraft, role, aircraftRole }: Props) {
           <span className="text-[10px] font-bold uppercase tracking-widest text-[#7C3AED]">{ads.length} tracked on {aircraft.tail_number}</span>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <AskHowardButton
-            size="xs"
-            prompt={`Give me an AD compliance summary for ${aircraft.tail_number} (${aircraft.aircraft_type}). Which ADs are overdue, due soon, or need attention? Use search_ads.`}
-          />
           <button onClick={handleRefresh} disabled={isSyncing} className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-[#7C3AED] bg-purple-50 border border-purple-200 rounded px-2.5 py-1 hover:bg-purple-100 active:scale-95 disabled:opacity-50">
             <RefreshCw size={12} className={isSyncing ? 'animate-spin' : ''} /> Sync from DRS
           </button>

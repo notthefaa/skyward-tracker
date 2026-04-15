@@ -32,6 +32,7 @@ const NotesTab = dynamic(() => import("@/components/tabs/NotesTab"), { loading: 
 const FleetSummary = dynamic(() => import("@/components/tabs/FleetSummary"), { loading: () => <FleetSkeleton /> });
 const HowardTab = dynamic(() => import("@/components/tabs/HowardTab"), { loading: () => <TabSkeleton /> });
 const HowardUsageTab = dynamic(() => import("@/components/tabs/HowardUsageTab"), { loading: () => <TabSkeleton /> });
+const HowardLauncher = dynamic(() => import("@/components/howard/HowardLauncher"), { ssr: false });
 const DocumentsTab = dynamic(() => import("@/components/tabs/DocumentsTab"), { loading: () => <TabSkeleton /> });
 const EquipmentTab = dynamic(() => import("@/components/tabs/EquipmentTab"), { loading: () => <TabSkeleton /> });
 const ADsTab = dynamic(() => import("@/components/tabs/ADsTab"), { loading: () => <TabSkeleton /> });
@@ -557,6 +558,11 @@ export default function AppShell({ session }: AppShellProps) {
         }}
         onClose={() => setExpandedNav(null)}
       />
+
+      {/* ─── HOWARD FLOATING LAUNCHER ─── */}
+      {selectedAircraftData && activeTab !== 'howard' && activeTab !== 'howard-usage' && (
+        <HowardLauncher aircraft={selectedAircraftData} />
+      )}
 
       <nav role="navigation" aria-label="Main navigation" className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-gray-200 z-[9999] pt-1 pb-[env(safe-area-inset-bottom)] shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
         <div className="flex justify-around items-center h-12 max-w-3xl mx-auto">

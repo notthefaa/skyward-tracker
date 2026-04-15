@@ -6,7 +6,6 @@ import useSWR from "swr";
 import dynamic from "next/dynamic";
 import { PlaneTakeoff, Wrench, AlertTriangle, Droplet, Clock, LayoutGrid, Calendar } from "lucide-react";
 import { FleetSkeleton } from "@/components/Skeletons";
-import AskHowardButton from "@/components/howard/AskHowardButton";
 
 const FleetSchedule = dynamic(() => import("@/components/tabs/FleetSchedule"));
 
@@ -178,16 +177,8 @@ export default function FleetSummary({
                     <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mt-1">{ac.aircraft_type}</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <AskHowardButton
-                    size="sm"
-                    iconOnly
-                    onBeforeOpen={() => onSelectAircraft(ac.tail_number)}
-                    prompt={`Tell me about ${ac.tail_number} and it's airworthiness status.`}
-                  />
-                  <div className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-widest text-white shadow-inner ${statusColor}`}>
-                    {ac.status === 'grounded' ? 'Grounded' : 'Airworthy'}
-                  </div>
+                <div className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-widest text-white shadow-inner ${statusColor}`}>
+                  {ac.status === 'grounded' ? 'Grounded' : 'Airworthy'}
                 </div>
               </div>
               {(() => {

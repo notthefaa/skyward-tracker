@@ -301,7 +301,7 @@ export default function HowardTab({
     }
   }, [aircraft, isSending, confirm, mutate, showSuccess, showError]);
 
-  // Prefill handoff from AskHoward buttons elsewhere in the app.
+  // Prefill handoff from the floating HowardLauncher (or any caller).
   // sessionStorage key "aft_howard_prefill" (JSON: {prompt, autoSend})
   useEffect(() => {
     if (!aircraft || isSending) return;
