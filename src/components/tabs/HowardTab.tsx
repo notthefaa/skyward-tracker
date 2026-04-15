@@ -13,6 +13,29 @@ import { useToast } from "@/components/ToastProvider";
 import { useConfirm } from "@/components/ConfirmProvider";
 import ProposedActionCard from "@/components/howard/ProposedActionCard";
 import type { ProposedAction } from "@/lib/howard/proposedActions";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+
+/**
+ * Tight markdown preset — Howard writes conversationally, so we want
+ * bold / italic / lists / inline code to render, but we don't want big
+ * heading chrome. Pass as `components` to ReactMarkdown.
+ */
+const MARKDOWN_COMPONENTS = {
+  p: (props: any) => <p className="font-roboto text-sm leading-relaxed mb-2 last:mb-0" {...props} />,
+  strong: (props: any) => <strong className="font-bold text-navy" {...props} />,
+  em: (props: any) => <em className="italic" {...props} />,
+  ul: (props: any) => <ul className="list-disc pl-5 my-2 space-y-0.5 text-sm" {...props} />,
+  ol: (props: any) => <ol className="list-decimal pl-5 my-2 space-y-0.5 text-sm" {...props} />,
+  li: (props: any) => <li className="leading-relaxed" {...props} />,
+  code: (props: any) => <code className="font-mono text-[0.85em] bg-black/5 px-1 py-0.5 rounded" {...props} />,
+  a: (props: any) => <a className="text-[#0EA5E9] underline" target="_blank" rel="noopener noreferrer" {...props} />,
+  h1: (props: any) => <p className="font-bold text-sm mt-2 mb-1" {...props} />,
+  h2: (props: any) => <p className="font-bold text-sm mt-2 mb-1" {...props} />,
+  h3: (props: any) => <p className="font-bold text-sm mt-2 mb-1" {...props} />,
+  h4: (props: any) => <p className="font-bold text-sm mt-2 mb-1" {...props} />,
+  hr: () => <hr className="my-2 border-gray-200" />,
+};
 
 const SUGGESTIONS = [
   "What maintenance is coming due?",
@@ -410,7 +433,15 @@ export default function HowardTab({
                       ? 'bg-[#3AB0FF] text-white'
                       : 'bg-white border border-gray-200 text-navy'
                   }`}>
-                    <p className="font-roboto text-sm whitespace-pre-wrap leading-relaxed">{msg.content}</p>
+                    {msg.role === 'user' ? (
+                      <p className="font-roboto text-sm whitespace-pre-wrap leading-relaxed">{msg.content}</p>
+                    ) : (
+                      <div className="howard-markdown">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]} components={MARKDOWN_COMPONENTS}>
+                          {msg.content}
+                        </ReactMarkdown>
+                      </div>
+                    )}
                     <span className={`block text-[9px] mt-1 ${msg.role === 'user' ? 'text-white/60' : 'text-gray-400'}`}>
                       {new Date(msg.created_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
                     </span>
@@ -436,10 +467,12 @@ export default function HowardTab({
                     </div>
                   )}
                   {streamingText && (
-                    <p className="font-roboto text-sm whitespace-pre-wrap leading-relaxed">
-                      {streamingText}
+                    <div className="howard-markdown">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]} components={MARKDOWN_COMPONENTS}>
+                        {streamingText}
+                      </ReactMarkdown>
                       <span className="inline-block w-1.5 h-3.5 ml-0.5 bg-[#0EA5E9] align-middle animate-pulse" />
-                    </p>
+                    </div>
                   )}
                 </div>
               </div>

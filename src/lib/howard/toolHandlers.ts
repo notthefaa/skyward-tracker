@@ -20,6 +20,20 @@ function clampLimit(limit: any, defaultVal = 10, max = 50): number {
 }
 
 /**
+ * Normalize an airport identifier to ICAO form where we can. Most
+ * continental-US airports have ICAO = "K" + FAA 3-letter code (CMA → KCMA).
+ * Hawaii / Alaska / international prefixes (PH, PA, CY, etc.) don't follow
+ * this rule, so we only prepend K for 3-letter US-style codes. 4+ chars
+ * pass through as-is. Non-alpha input is passed through too — let Howard
+ * catch and correct it conversationally if it matters.
+ */
+function normalizeIcao(raw: string): string {
+  const s = String(raw || '').trim().toUpperCase();
+  if (/^[A-Z]{3}$/.test(s)) return `K${s}`;
+  return s;
+}
+
+/**
  * Per-tool-call aircraft access verification. Belt-and-suspenders against
  * prompt-injection — the request-level check already ran, but we want the
  * window between that check and each tool call to be narrow.
@@ -265,7 +279,8 @@ const handlers: Record<string, ToolHandler> = {
     if (!params.airports || !Array.isArray(params.airports) || params.airports.length === 0) {
       return { error: 'At least one airport ICAO code is required.' };
     }
-    const ids = params.airports.map((a: string) => a.toUpperCase().trim()).join(',');
+    const normalized = params.airports.map(normalizeIcao);
+    const ids = normalized.join(',');
     try {
       const [metarRes, tafRes] = await Promise.all([
         fetch(`https://aviationweather.gov/api/data/metar?ids=${ids}&format=json&hours=2`),
@@ -274,9 +289,10 @@ const handlers: Record<string, ToolHandler> = {
       const metars = metarRes.ok ? await metarRes.json() : [];
       const tafs = tafRes.ok ? await tafRes.json() : [];
       return {
+        source: 'aviationweather.gov (NOAA AWC)',
         metars: Array.isArray(metars) ? metars : [],
         tafs: Array.isArray(tafs) ? tafs : [],
-        airports_queried: params.airports,
+        airports_queried: normalized,
       };
     } catch (err: any) {
       return { error: `Weather fetch failed: ${err.message}` };
@@ -438,7 +454,8 @@ const handlers: Record<string, ToolHandler> = {
     if (!params.airports || !Array.isArray(params.airports) || params.airports.length === 0) {
       return { error: 'At least one airport ICAO code is required.' };
     }
-    const ids = params.airports.map((a: string) => a.toUpperCase().trim()).join(',');
+    const normalized = params.airports.map(normalizeIcao);
+    const ids = normalized.join(',');
     try {
       const [pirepRes, sigmetRes] = await Promise.all([
         fetch(`https://aviationweather.gov/api/data/pirep?id=${ids}&format=json&age=2`),
@@ -450,7 +467,7 @@ const handlers: Record<string, ToolHandler> = {
         source: 'aviationweather.gov (NOAA AWC)',
         pireps: Array.isArray(pireps) ? pireps.slice(0, 20) : [],
         sigmets_airmets: Array.isArray(sigmets) ? sigmets.slice(0, 15) : [],
-        airports_queried: params.airports,
+        airports_queried: normalized,
       };
     } catch (err: any) {
       return { error: `Hazard fetch failed: ${err.message}` };
@@ -470,7 +487,7 @@ const handlers: Record<string, ToolHandler> = {
       };
     }
 
-    const airports = params.airports.map((a: string) => a.toUpperCase().trim()).filter(Boolean);
+    const airports = params.airports.map(normalizeIcao).filter(Boolean);
     const now = Date.now();
     const results: Record<string, any> = {};
 

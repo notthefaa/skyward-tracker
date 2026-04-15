@@ -146,7 +146,7 @@ export default function HowardLauncher({ aircraft, session }: Props) {
     return parts.join(' ');
   };
 
-  const canSubmitBriefing = dep.trim().length >= 3 && dest.trim().length >= 3;
+  const canSubmitBriefing = dep.trim().length >= 3 && dest.trim().length >= 3 && dep.trim().length <= 5 && dest.trim().length <= 5;
 
   return (
     <>
@@ -267,8 +267,8 @@ export default function HowardLauncher({ aircraft, session }: Props) {
                         type="text"
                         value={dep}
                         onChange={e => setDep(e.target.value)}
-                        placeholder="KDAL"
-                        maxLength={4}
+                        placeholder="KDAL or DAL"
+                        maxLength={5}
                         autoCapitalize="characters"
                         className="w-full px-3 py-2 border border-gray-300 rounded text-sm uppercase"
                         style={{ backgroundColor: '#ffffff' }}
@@ -282,8 +282,8 @@ export default function HowardLauncher({ aircraft, session }: Props) {
                         type="text"
                         value={dest}
                         onChange={e => setDest(e.target.value)}
-                        placeholder="KAUS"
-                        maxLength={4}
+                        placeholder="KAUS or AUS"
+                        maxLength={5}
                         autoCapitalize="characters"
                         className="w-full px-3 py-2 border border-gray-300 rounded text-sm uppercase"
                         style={{ backgroundColor: '#ffffff' }}
@@ -310,8 +310,8 @@ export default function HowardLauncher({ aircraft, session }: Props) {
                       type="text"
                       value={alt}
                       onChange={e => setAlt(e.target.value)}
-                      placeholder="KADS"
-                      maxLength={4}
+                      placeholder="KADS or ADS"
+                      maxLength={5}
                       autoCapitalize="characters"
                       className="w-full px-3 py-2 border border-gray-300 rounded text-sm uppercase"
                       style={{ backgroundColor: '#ffffff' }}

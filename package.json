@@ -27,7 +27,9 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-image-crop": "^11.0.10",
+    "react-markdown": "^10.1.0",
     "react-signature-canvas": "^1.1.0-alpha.2",
+    "remark-gfm": "^4.0.1",
     "resend": "^6.9.4",
     "swr": "^2.4.1",
     "tailwind-merge": "^2.2.0"
