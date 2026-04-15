@@ -69,7 +69,10 @@ export default function HowardTab({
       const res = await authFetch(`/api/howard?aircraftId=${aircraft!.id}`);
       if (!res.ok) throw new Error('Failed to load conversation');
       return await res.json() as { thread: any; messages: HowardMessage[] };
-    }
+    },
+    // Focus/reconnect revalidation mid-stream can wipe optimistic/streamed
+    // state. Load once, and only refetch when we explicitly call mutate().
+    { revalidateOnFocus: false, revalidateOnReconnect: false, revalidateIfStale: false }
   );
 
   const messages = data?.messages || [];
@@ -124,6 +127,12 @@ export default function HowardTab({
     };
     mutate(prev => prev ? { ...prev, messages: [...prev.messages, optimisticUserMsg] } : prev, false);
 
+    // Hoisted so the catch block can recover partial state if the stream
+    // errors mid-response.
+    let savedUserMsg: HowardMessage | null = null;
+    let savedAssistantMsg: HowardMessage | null = null;
+    let accumulated = '';
+
     try {
       const { data: { session: s } } = await supabase.auth.getSession();
       const res = await fetch('/api/howard', {
@@ -143,9 +152,6 @@ export default function HowardTab({
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
-      let savedUserMsg: HowardMessage | null = null;
-      let savedAssistantMsg: HowardMessage | null = null;
-      let accumulated = '';
 
       while (true) {
         const { done, value } = await reader.read();
@@ -194,9 +200,31 @@ export default function HowardTab({
       mutateActions();
     } catch (err: any) {
       showError(err.message);
+      // Preserve whatever text already streamed so the user doesn't lose
+      // the reply when the connection drops mid-response.
+      const partial = accumulated.trim();
       mutate(prev => {
         if (!prev) return prev;
-        return { ...prev, messages: prev.messages.filter(m => m.id !== 'pending-user') };
+        const filtered = prev.messages.filter(m => m.id !== 'pending-user');
+        const next = [...filtered];
+        if (savedUserMsg) next.push(savedUserMsg);
+        if (partial) {
+          next.push({
+            id: `local-partial-${Date.now()}`,
+            thread_id: '',
+            role: 'assistant',
+            content: partial,
+            tool_calls: null,
+            tool_results: null,
+            input_tokens: null,
+            output_tokens: null,
+            cache_read_tokens: null,
+            cache_create_tokens: null,
+            model: null,
+            created_at: new Date().toISOString(),
+          });
+        }
+        return { ...prev, messages: next };
       }, false);
     } finally {
       setIsSending(false);

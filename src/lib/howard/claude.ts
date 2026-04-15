@@ -81,6 +81,10 @@ export async function* sendMessageStream(
       messages,
     });
 
+    // Capture text exactly as it streams so the saved message matches
+    // what the user sees — not reconstructed from finalMsg.content,
+    // where block boundaries and concatenation can drift.
+    let roundStreamedText = '';
     for await (const event of stream) {
       if (event.type === 'content_block_start') {
         if (event.content_block.type === 'tool_use') {
@@ -88,6 +92,7 @@ export async function* sendMessageStream(
         }
       } else if (event.type === 'content_block_delta') {
         if (event.delta.type === 'text_delta') {
+          roundStreamedText += event.delta.text;
           yield { type: 'text_delta', delta: event.delta.text };
         }
       }
@@ -99,15 +104,7 @@ export async function* sendMessageStream(
     totalUsage.cache_read_input_tokens += (finalMsg.usage as any).cache_read_input_tokens || 0;
     totalUsage.cache_creation_input_tokens += (finalMsg.usage as any).cache_creation_input_tokens || 0;
 
-    // Accumulate every text block from this round — Claude can emit
-    // multiple, and intermediate rounds may also produce text. We keep
-    // everything the user saw stream so the saved message matches.
-    for (const block of finalMsg.content) {
-      if (block.type === 'text' && block.text) {
-        if (assistantText && !assistantText.endsWith('\n')) assistantText += '\n\n';
-        assistantText += block.text;
-      }
-    }
+    if (roundStreamedText) assistantText += roundStreamedText;
 
     const hasToolUse = finalMsg.content.some(b => b.type === 'tool_use');
 
