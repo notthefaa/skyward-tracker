@@ -141,7 +141,7 @@ export const tools: Anthropic.Tool[] = [
   },
   {
     name: 'get_weather_briefing',
-    description: 'Get aviation weather briefing for airports. Returns METARs (current conditions) and TAFs (forecasts). Use for pre-flight weather checks, go/no-go decisions, and route weather planning.',
+    description: 'Get aviation weather briefing for airports. Returns METARs (current conditions) and TAFs (forecasts). Source: aviationweather.gov (NOAA AWC — official). Use for pre-flight weather checks, go/no-go decisions, and route weather planning.',
     input_schema: {
       type: 'object' as const,
       properties: {
@@ -156,7 +156,7 @@ export const tools: Anthropic.Tool[] = [
   },
   {
     name: 'get_aviation_hazards',
-    description: 'Get aviation hazard reports: PIREPs (pilot reports), SIGMETs, and AIRMETs near specified airports. Use alongside get_weather_briefing for comprehensive pre-flight briefing.',
+    description: 'Get aviation hazard reports: PIREPs (pilot reports), SIGMETs, and AIRMETs near specified airports. Source: aviationweather.gov (NOAA AWC — official). Use alongside get_weather_briefing for comprehensive pre-flight briefing.',
     input_schema: {
       type: 'object' as const,
       properties: {
@@ -164,6 +164,21 @@ export const tools: Anthropic.Tool[] = [
           type: 'array',
           items: { type: 'string' },
           description: 'Array of ICAO airport codes to check hazards near',
+        },
+      },
+      required: ['airports'],
+    },
+  },
+  {
+    name: 'get_notams',
+    description: 'Fetch official NOTAMs from the FAA NOTAM API (external-api.faa.gov). This is the authoritative source — always use this for flight briefings, never web_search. Returns currently-effective NOTAMs per airport.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        airports: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'ICAO airport codes to pull NOTAMs for (e.g. ["KDAL", "KAUS", "KADS"])',
         },
       },
       required: ['airports'],

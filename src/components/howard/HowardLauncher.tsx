@@ -141,7 +141,7 @@ export default function HowardLauncher({ aircraft, session }: Props) {
     if (when) parts.push(`Planned for ${when}.`);
     if (alt) parts.push(`Alternate: ${alt.toUpperCase()}.`);
     parts.push(
-      `Pull weather (get_weather_briefing + get_aviation_hazards) and NOTAMs (web_search per airport — critical). Flag anything on the aircraft side I should know about. Keep the top-level briefing tight; I'll ask for depth where I need it.`
+      `Pull official weather (get_weather_briefing + get_aviation_hazards — aviationweather.gov) and official NOTAMs (get_notams — FAA NOTAM API) for each airport. Flag anything on the aircraft side I should know about. Keep the top-level briefing tight; I'll ask for depth where I need it.`
     );
     return parts.join(' ');
   };

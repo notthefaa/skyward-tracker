@@ -447,6 +447,7 @@ const handlers: Record<string, ToolHandler> = {
       const pireps = pirepRes.ok ? await pirepRes.json() : [];
       const sigmets = sigmetRes.ok ? await sigmetRes.json() : [];
       return {
+        source: 'aviationweather.gov (NOAA AWC)',
         pireps: Array.isArray(pireps) ? pireps.slice(0, 20) : [],
         sigmets_airmets: Array.isArray(sigmets) ? sigmets.slice(0, 15) : [],
         airports_queried: params.airports,
@@ -454,6 +455,83 @@ const handlers: Record<string, ToolHandler> = {
     } catch (err: any) {
       return { error: `Hazard fetch failed: ${err.message}` };
     }
+  },
+
+  get_notams: async (params) => {
+    if (!params.airports || !Array.isArray(params.airports) || params.airports.length === 0) {
+      return { error: 'At least one airport ICAO code is required.' };
+    }
+
+    const clientId = process.env.FAA_NOTAM_CLIENT_ID;
+    const clientSecret = process.env.FAA_NOTAM_CLIENT_SECRET;
+    if (!clientId || !clientSecret) {
+      return {
+        error: 'FAA NOTAM API credentials not configured on the server. NOTAMs cannot be pulled — tell the user to have the admin set FAA_NOTAM_CLIENT_ID and FAA_NOTAM_CLIENT_SECRET (from api.faa.gov) in the environment.',
+      };
+    }
+
+    const airports = params.airports.map((a: string) => a.toUpperCase().trim()).filter(Boolean);
+    const now = Date.now();
+    const results: Record<string, any> = {};
+
+    await Promise.all(airports.map(async (icao: string) => {
+      try {
+        const url = `https://external-api.faa.gov/notamapi/v1/notams?icaoLocation=${icao}&pageSize=50&sortBy=effectiveStartDate&sortOrder=Desc`;
+        const res = await fetch(url, {
+          headers: {
+            'client_id': clientId,
+            'client_secret': clientSecret,
+            'Accept': 'application/json',
+          },
+        });
+        if (!res.ok) {
+          results[icao] = { error: `FAA NOTAM API returned ${res.status}` };
+          return;
+        }
+        const data = await res.json();
+        const rawItems: any[] = Array.isArray(data?.items) ? data.items : [];
+
+        // Flatten and keep only currently-effective or imminent NOTAMs
+        // (effectiveStart <= now+24h AND effectiveEnd >= now OR null).
+        const items = rawItems
+          .map(item => {
+            const core = item?.properties?.coreNOTAMData?.notam ?? {};
+            const translation = Array.isArray(item?.properties?.coreNOTAMData?.notamTranslation)
+              ? item.properties.coreNOTAMData.notamTranslation
+              : [];
+            const formatted = translation.find((t: any) => t?.type === 'LOCAL_FORMAT')?.formattedText
+              || translation[0]?.formattedText
+              || core.text
+              || '';
+            return {
+              number: core.number,
+              type: core.type,
+              classification: core.classification,
+              issued: core.issued,
+              effective_start: core.effectiveStart,
+              effective_end: core.effectiveEnd,
+              icao: core.icaoLocation,
+              text: typeof formatted === 'string' ? formatted.trim() : '',
+            };
+          })
+          .filter(n => {
+            const start = n.effective_start ? new Date(n.effective_start).getTime() : 0;
+            const end = n.effective_end ? new Date(n.effective_end).getTime() : Infinity;
+            return start <= now + 24 * 3600 * 1000 && end >= now;
+          })
+          .slice(0, 30);
+
+        results[icao] = { count: items.length, notams: items };
+      } catch (err: any) {
+        results[icao] = { error: err.message };
+      }
+    }));
+
+    return {
+      source: 'FAA NOTAM API (external-api.faa.gov/notamapi/v1) — official',
+      airports,
+      results,
+    };
   },
 };
 
@@ -463,6 +541,7 @@ const GLOBAL_TOOLS = new Set([
   'web_search',
   'get_weather_briefing',
   'get_aviation_hazards',
+  'get_notams',
   'get_system_settings',
 ]);
 

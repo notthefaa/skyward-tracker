@@ -19,6 +19,8 @@ All required on Vercel (Project → Settings → Environment Variables). No **ne
 | `RESEND_API_KEY` | MX email | pre-existing |
 | `CRON_SECRET` | Cron endpoint auth header | pre-existing (used by `/api/cron/mx-reminders`; reused for `/api/cron/ads-sync`) |
 | `FAA_DRS_FEED_URL` | **Optional.** Override for the FAA AD feed URL. Default is `https://drs.faa.gov/api/public/search/ads`. See §8 below for verification notes. | Session 2 |
+| `FAA_NOTAM_CLIENT_ID` | FAA NOTAM API client ID. Register at https://api.faa.gov to get one. Required for Howard's `get_notams` tool — without it, flight-briefing NOTAM requests return an error. | Howard briefings |
+| `FAA_NOTAM_CLIENT_SECRET` | FAA NOTAM API client secret (paired with above). | Howard briefings |
 
 ---
 
