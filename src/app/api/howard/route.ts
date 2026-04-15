@@ -5,6 +5,10 @@ import { sendMessageStream, HOWARD_MODEL } from '@/lib/howard/claude';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+// Howard streams a reply that can involve multiple tool rounds. The
+// default platform timeout (10–15s) kills the function mid-stream,
+// which is why replies appeared to vanish. Vercel Hobby caps at 60s.
+export const maxDuration = 60;
 
 // DELETE — clear thread + messages for current user + aircraft
 export async function DELETE(req: Request) {

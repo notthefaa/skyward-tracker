@@ -186,15 +186,38 @@ export default function HowardTab({
         }
       }
 
-      // Replace optimistic + streaming placeholder with persisted records
+      // Replace optimistic + streaming placeholder with persisted records.
+      // If the stream ended cleanly but never sent a `done` event (e.g.
+      // the serverless function was cut off), fall back to the text we
+      // already streamed so the user doesn't lose the reply.
+      const partialFallback = !savedAssistantMsg && accumulated.trim()
+        ? {
+            id: `local-partial-${Date.now()}`,
+            thread_id: '',
+            role: 'assistant' as const,
+            content: accumulated,
+            tool_calls: null,
+            tool_results: null,
+            input_tokens: null,
+            output_tokens: null,
+            cache_read_tokens: null,
+            cache_create_tokens: null,
+            model: null,
+            created_at: new Date().toISOString(),
+          }
+        : null;
       mutate(prev => {
         if (!prev) return prev;
         const filtered = prev.messages.filter(m => m.id !== 'pending-user');
         const next = [...filtered];
         if (savedUserMsg) next.push(savedUserMsg);
         if (savedAssistantMsg) next.push(savedAssistantMsg);
+        else if (partialFallback) next.push(partialFallback);
         return { ...prev, messages: next };
       }, false);
+      if (!savedAssistantMsg && partialFallback) {
+        showError('Connection cut off before Howard finished. Partial reply kept.');
+      }
 
       // If Howard created any proposed actions, pick them up for the cards.
       mutateActions();
