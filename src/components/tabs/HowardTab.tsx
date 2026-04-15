@@ -30,25 +30,6 @@ function toolLabel(name: string): { label: string; Icon: any } {
   return { label: 'Using ' + name, Icon: Wrench };
 }
 
-// Compact name for the tool-chip badge shown beneath finished assistant messages
-function toolChipName(name: string): string {
-  if (name === 'web_search') return 'web';
-  if (name === 'search_documents') return 'docs';
-  if (name === 'get_weather_briefing') return 'weather';
-  if (name === 'get_aviation_hazards') return 'hazards';
-  if (name === 'get_flight_logs') return 'flight logs';
-  if (name === 'get_maintenance_items') return 'MX items';
-  if (name === 'get_squawks') return 'squawks';
-  if (name === 'get_service_events') return 'service';
-  if (name === 'get_notes') return 'notes';
-  if (name === 'get_reservations') return 'reservations';
-  if (name === 'get_vor_checks') return 'VOR';
-  if (name === 'get_tire_and_oil_logs') return 'tire/oil';
-  if (name === 'get_system_settings') return 'settings';
-  if (name === 'get_event_line_items') return 'line items';
-  return name.replace(/_/g, ' ');
-}
-
 export default function HowardTab({
   aircraft, session, compact = false,
 }: {
@@ -391,10 +372,6 @@ export default function HowardTab({
         ) : (
           <div className="flex flex-col gap-3">
             {messages.map(msg => {
-              const toolNames: string[] = msg.role === 'assistant' && Array.isArray(msg.tool_calls)
-                ? Array.from(new Set((msg.tool_calls as any[]).map(t => t.name).filter(Boolean)))
-                : [];
-
               // Find any propose_* tool calls and their resulting
               // proposed_action_ids (parsed from tool_results).
               const proposedActions: ProposedAction[] = [];
@@ -425,15 +402,6 @@ export default function HowardTab({
                       : 'bg-white border border-gray-200 text-navy'
                   }`}>
                     <p className="font-roboto text-sm whitespace-pre-wrap leading-relaxed">{msg.content}</p>
-                    {toolNames.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mt-2">
-                        {toolNames.map(n => (
-                          <span key={n} className="text-[8.5px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-[#0EA5E9]/10 text-[#0EA5E9] border border-[#0EA5E9]/20">
-                            {toolChipName(n)}
-                          </span>
-                        ))}
-                      </div>
-                    )}
                     <span className={`block text-[9px] mt-1 ${msg.role === 'user' ? 'text-white/60' : 'text-gray-400'}`}>
                       {new Date(msg.created_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
                     </span>
