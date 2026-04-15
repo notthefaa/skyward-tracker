@@ -3,39 +3,42 @@ import type Anthropic from '@anthropic-ai/sdk';
 export const tools: Anthropic.Tool[] = [
   {
     name: 'get_flight_logs',
-    description: 'Retrieve flight logs for the current aircraft. Returns date, route (POD/POA), cumulative times (AFTT, FTT, Hobbs, Tach), landings, engine cycles, fuel, pilot initials, and trip reason.',
+    description: 'Retrieve flight logs for the named aircraft. Returns date, route (POD/POA), cumulative times (AFTT, FTT, Hobbs, Tach), landings, engine cycles, fuel, pilot initials, and trip reason.',
     input_schema: {
       type: 'object' as const,
       properties: {
+        tail: { type: 'string', description: 'Aircraft tail number. Ask the user if you don\'t already know which aircraft.' },
         limit: { type: 'number', description: 'Max rows (default 10, max 50)' },
         date_from: { type: 'string', description: 'ISO date, inclusive lower bound' },
         date_to: { type: 'string', description: 'ISO date, inclusive upper bound' },
       },
-      required: [],
+      required: ['tail'],
     },
   },
   {
     name: 'get_maintenance_items',
-    description: 'Retrieve maintenance tracking items for the current aircraft. Returns item name, tracking type (time/date), intervals, due time/date, required status, and completion history.',
+    description: 'Retrieve maintenance tracking items for the named aircraft. Returns item name, tracking type (time/date), intervals, due time/date, required status, and completion history.',
     input_schema: {
       type: 'object' as const,
       properties: {
+        tail: { type: 'string', description: 'Aircraft tail number.' },
         tracking_type: { type: 'string', enum: ['time', 'date'], description: 'Filter by tracking type' },
         required_only: { type: 'boolean', description: 'Only return required/regulatory items' },
       },
-      required: [],
+      required: ['tail'],
     },
   },
   {
     name: 'get_service_events',
-    description: 'Retrieve maintenance service events (work packages). Returns status, dates, mechanic info, and addon services. Statuses: draft, scheduling, confirmed, in_progress, ready_for_pickup, complete.',
+    description: 'Retrieve maintenance service events (work packages) for the named aircraft. Returns status, dates, mechanic info, and addon services. Statuses: draft, scheduling, confirmed, in_progress, ready_for_pickup, complete.',
     input_schema: {
       type: 'object' as const,
       properties: {
+        tail: { type: 'string', description: 'Aircraft tail number.' },
         status: { type: 'string', description: 'Filter by status (e.g. "in_progress", "complete")' },
         limit: { type: 'number', description: 'Max rows (default 10, max 50)' },
       },
-      required: [],
+      required: ['tail'],
     },
   },
   {
@@ -44,67 +47,73 @@ export const tools: Anthropic.Tool[] = [
     input_schema: {
       type: 'object' as const,
       properties: {
+        tail: { type: 'string', description: 'Aircraft tail number the event belongs to.' },
         event_id: { type: 'string', description: 'UUID of the service event' },
       },
-      required: ['event_id'],
+      required: ['tail', 'event_id'],
     },
   },
   {
     name: 'get_squawks',
-    description: 'Retrieve squawk (discrepancy) reports. Returns location, description, airworthiness impact, status, deferral info, and reporter details.',
+    description: 'Retrieve squawk (discrepancy) reports for the named aircraft. Returns location, description, airworthiness impact, status, deferral info, and reporter details.',
     input_schema: {
       type: 'object' as const,
       properties: {
+        tail: { type: 'string', description: 'Aircraft tail number.' },
         status: { type: 'string', enum: ['open', 'resolved', 'all'], description: 'Filter by status (default: all)' },
       },
-      required: [],
+      required: ['tail'],
     },
   },
   {
     name: 'get_notes',
-    description: 'Retrieve pilot notes for the current aircraft. Returns author, content, and timestamps.',
+    description: 'Retrieve pilot notes for the named aircraft. Returns author, content, and timestamps.',
     input_schema: {
       type: 'object' as const,
       properties: {
+        tail: { type: 'string', description: 'Aircraft tail number.' },
         limit: { type: 'number', description: 'Max rows (default 10, max 50)' },
       },
-      required: [],
+      required: ['tail'],
     },
   },
   {
     name: 'get_reservations',
-    description: 'Retrieve calendar reservations/bookings for the current aircraft. Returns dates, pilot, route, and status.',
+    description: 'Retrieve calendar reservations/bookings for the named aircraft. Returns dates, pilot, route, and status.',
     input_schema: {
       type: 'object' as const,
       properties: {
+        tail: { type: 'string', description: 'Aircraft tail number.' },
         date_from: { type: 'string', description: 'ISO date, inclusive lower bound' },
         date_to: { type: 'string', description: 'ISO date, inclusive upper bound' },
         status: { type: 'string', enum: ['confirmed', 'cancelled'], description: 'Filter by status (default: confirmed)' },
       },
-      required: [],
+      required: ['tail'],
     },
   },
   {
     name: 'get_vor_checks',
-    description: 'Retrieve VOR operational check records (FAR 91.171). Returns check type, station, bearing error, tolerance, pass/fail, and date. VOR checks are valid for 30 days.',
+    description: 'Retrieve VOR operational check records (FAR 91.171) for the named aircraft. Returns check type, station, bearing error, tolerance, pass/fail, and date. VOR checks are valid for 30 days.',
     input_schema: {
       type: 'object' as const,
       properties: {
+        tail: { type: 'string', description: 'Aircraft tail number.' },
         limit: { type: 'number', description: 'Max rows (default 10, max 50)' },
       },
-      required: [],
+      required: ['tail'],
     },
   },
   {
     name: 'get_tire_and_oil_logs',
-    description: 'Retrieve tire pressure checks and/or oil consumption logs. Tire: nose/left/right PSI. Oil: quantity, amount added, engine hours.',
+    description: 'Retrieve tire pressure checks and/or oil consumption logs for the named aircraft. Tire: nose/left/right PSI. Oil: quantity, amount added, engine hours.',
     input_schema: {
       type: 'object' as const,
       properties: {
+        tail: { type: 'string', description: 'Aircraft tail number.' },
         type: { type: 'string', enum: ['tire', 'oil', 'both'], description: 'Which logs to retrieve (default: both)' },
         limit: { type: 'number', description: 'Max rows per type (default 10, max 50)' },
       },
-      required: [],
+      required: ['tail'],
     },
   },
   {
@@ -118,14 +127,15 @@ export const tools: Anthropic.Tool[] = [
   },
   {
     name: 'search_documents',
-    description: 'Search uploaded aircraft documents (POH, AFM, supplements, MEL, SOPs) for specific information. Uses semantic search to find relevant sections. Use for questions about aircraft performance, limitations, procedures, checklists, or any aircraft-specific reference material.',
+    description: 'Search uploaded documents (POH, AFM, supplements, MEL, SOPs) for the named aircraft. Uses semantic search to find relevant sections. Use for questions about aircraft performance, limitations, procedures, checklists, or any aircraft-specific reference material.',
     input_schema: {
       type: 'object' as const,
       properties: {
+        tail: { type: 'string', description: 'Aircraft tail number whose documents to search.' },
         query: { type: 'string', description: 'What to search for in the documents' },
         doc_type: { type: 'string', enum: ['POH', 'AFM', 'Supplement', 'MEL', 'SOP', 'Other'], description: 'Optionally filter by document type' },
       },
-      required: ['query'],
+      required: ['tail', 'query'],
     },
   },
   {
@@ -186,10 +196,11 @@ export const tools: Anthropic.Tool[] = [
   },
   {
     name: 'search_ads',
-    description: 'Retrieve Airworthiness Directives tracked against the current aircraft. Returns AD number, subject, compliance status, next-due hours/date, and source URL.',
+    description: 'Retrieve Airworthiness Directives tracked against the named aircraft. Returns AD number, subject, compliance status, next-due hours/date, and source URL.',
     input_schema: {
       type: 'object' as const,
       properties: {
+        tail: { type: 'string', description: 'Aircraft tail number.' },
         status: {
           type: 'string',
           enum: ['all', 'overdue', 'due_soon', 'compliant'],
@@ -200,24 +211,27 @@ export const tools: Anthropic.Tool[] = [
           description: 'Include superseded ADs in the result (default: false)',
         },
       },
-      required: [],
+      required: ['tail'],
     },
   },
   {
     name: 'refresh_ads_drs',
-    description: 'Force an on-demand FAA DRS sync for the current aircraft. Use when the user asks to refresh ADs or to check for newly issued directives. Returns counts of inserted/updated ADs. The nightly cron normally handles this.',
+    description: 'Force an on-demand FAA DRS sync for the named aircraft. Use when the user asks to refresh ADs or to check for newly issued directives. Returns counts of inserted/updated ADs. The nightly cron normally handles this.',
     input_schema: {
       type: 'object' as const,
-      properties: {},
-      required: [],
+      properties: {
+        tail: { type: 'string', description: 'Aircraft tail number.' },
+      },
+      required: ['tail'],
     },
   },
   {
     name: 'get_equipment',
-    description: 'List the current aircraft\'s installed equipment with make/model/serial and capability flags (IFR, ADS-B Out, transponder class, ELT, etc.). Use when answering equipment questions or evaluating airworthiness.',
+    description: 'List the named aircraft\'s installed equipment with make/model/serial and capability flags (IFR, ADS-B Out, transponder class, ELT, etc.). Use when answering equipment questions or evaluating airworthiness.',
     input_schema: {
       type: 'object' as const,
       properties: {
+        tail: { type: 'string', description: 'Aircraft tail number.' },
         category: {
           type: 'string',
           description: 'Optional category filter (e.g. "transponder", "avionics", "elt")',
@@ -227,24 +241,27 @@ export const tools: Anthropic.Tool[] = [
           description: 'Include equipment that has been removed (historical). Default false.',
         },
       },
-      required: [],
+      required: ['tail'],
     },
   },
   {
     name: 'check_airworthiness',
-    description: 'Run the explicit airworthiness check (91.205 / 91.411 / 91.413 / 91.207 / 91.417) combining equipment, MX, squawks, and ADs. Returns a structured verdict with status, citation, and all findings. Preferred over guessing based on individual tool results when the user asks "is my aircraft airworthy?".',
+    description: 'Run the explicit airworthiness check (91.205 / 91.411 / 91.413 / 91.207 / 91.417) for the named aircraft, combining equipment, MX, squawks, and ADs. Returns a structured verdict with status, citation, and all findings. Preferred over guessing based on individual tool results when the user asks "is my aircraft airworthy?".',
     input_schema: {
       type: 'object' as const,
-      properties: {},
-      required: [],
+      properties: {
+        tail: { type: 'string', description: 'Aircraft tail number.' },
+      },
+      required: ['tail'],
     },
   },
   {
     name: 'propose_reservation',
-    description: 'Propose a new reservation (booking) for the current aircraft. The user must tap Confirm on the card before anything is written. Use when the user asks to book, schedule, or reserve the aircraft.',
+    description: 'Propose a new reservation (booking) for the named aircraft. The user must tap Confirm on the card before anything is written. Use when the user asks to book, schedule, or reserve the aircraft.',
     input_schema: {
       type: 'object' as const,
       properties: {
+        tail: { type: 'string', description: 'Aircraft tail number to reserve.' },
         start_time: { type: 'string', description: 'ISO datetime for start of reservation' },
         end_time: { type: 'string', description: 'ISO datetime for end of reservation' },
         pilot_initials: { type: 'string', description: 'Pilot initials (2-3 chars)' },
@@ -252,15 +269,16 @@ export const tools: Anthropic.Tool[] = [
         poa: { type: 'string', description: 'Point of arrival airport code (optional)' },
         notes: { type: 'string', description: 'Optional notes' },
       },
-      required: ['start_time', 'end_time', 'pilot_initials'],
+      required: ['tail', 'start_time', 'end_time', 'pilot_initials'],
     },
   },
   {
     name: 'propose_mx_schedule',
-    description: 'Propose a maintenance service event (work package) for the current aircraft. Bundles MX items and/or squawks into a single event draft. The user must confirm before the draft is created. Admin-only.',
+    description: 'Propose a maintenance service event (work package) for the named aircraft. Bundles MX items and/or squawks into a single event draft. The user must confirm before the draft is created. Admin-only.',
     input_schema: {
       type: 'object' as const,
       properties: {
+        tail: { type: 'string', description: 'Aircraft tail number.' },
         proposed_date: { type: 'string', description: 'ISO date the user wants the work done (optional)' },
         mx_item_ids: {
           type: 'array', items: { type: 'string' },
@@ -276,7 +294,7 @@ export const tools: Anthropic.Tool[] = [
         },
         notes: { type: 'string', description: 'Optional notes for the mechanic' },
       },
-      required: [],
+      required: ['tail'],
     },
   },
   {
@@ -285,29 +303,32 @@ export const tools: Anthropic.Tool[] = [
     input_schema: {
       type: 'object' as const,
       properties: {
+        tail: { type: 'string', description: 'Aircraft tail number the squawk belongs to.' },
         squawk_id: { type: 'string', description: 'UUID of the squawk from get_squawks' },
         resolution_note: { type: 'string', description: 'Description of how the squawk was resolved' },
       },
-      required: ['squawk_id', 'resolution_note'],
+      required: ['tail', 'squawk_id', 'resolution_note'],
     },
   },
   {
     name: 'propose_note',
-    description: 'Propose adding a pilot note to the aircraft. User confirms before the note is saved.',
+    description: 'Propose adding a pilot note to the named aircraft. User confirms before the note is saved.',
     input_schema: {
       type: 'object' as const,
       properties: {
+        tail: { type: 'string', description: 'Aircraft tail number.' },
         content: { type: 'string', description: 'Note content' },
       },
-      required: ['content'],
+      required: ['tail', 'content'],
     },
   },
   {
     name: 'propose_equipment_entry',
-    description: 'Propose adding an equipment record for the current aircraft. User confirms before the record is inserted. Admin-only. Use during initial aircraft setup or when the user describes a newly-installed piece of equipment.',
+    description: 'Propose adding an equipment record for the named aircraft. User confirms before the record is inserted. Admin-only. Use during initial aircraft setup or when the user describes a newly-installed piece of equipment.',
     input_schema: {
       type: 'object' as const,
       properties: {
+        tail: { type: 'string', description: 'Aircraft tail number.' },
         name: { type: 'string', description: 'Equipment name (e.g. "Primary Transponder")' },
         category: {
           type: 'string',
@@ -328,7 +349,7 @@ export const tools: Anthropic.Tool[] = [
         elt_battery_expires: { type: 'string', description: 'ISO date ELT battery expires' },
         notes: { type: 'string' },
       },
-      required: ['name', 'category'],
+      required: ['tail', 'name', 'category'],
     },
   },
 ];

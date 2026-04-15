@@ -41,6 +41,10 @@ Run in the Supabase SQL Editor, **in order**. Each file is idempotent — safe t
 ### Session 3
 7. `015_proposed_actions.sql` — creates `aft_proposed_actions` for Howard's propose-confirm write framework. RLS: users see/update only their own actions.
 
+### Howard Howardization
+8. `016_rename_chuck_to_howard.sql` — renames `aft_chuck_*` tables and policies to `aft_howard_*`.
+9. `017_howard_user_threads.sql` — switches Howard threads from per-aircraft to per-user. Wipes existing Howard history (pre-prod reset; proposed actions cascade).
+
 ---
 
 ## 3. Vercel cron schedules

@@ -12,7 +12,8 @@ import {
 const HowardTab = dynamic(() => import("@/components/tabs/HowardTab"), { ssr: false });
 
 interface Props {
-  aircraft: AircraftWithMetrics | null;
+  /** Aircraft currently selected in the surrounding UI — optional hint. */
+  currentAircraft: AircraftWithMetrics | null;
   session?: any;
 }
 
@@ -26,13 +27,17 @@ interface FollowUp {
 interface QuickPrompt {
   icon: React.ComponentType<{ size?: number; className?: string }>;
   label: string;
-  /** Static prompt text — will be resolved with the current tail. */
   prompt: string;
-  /** Optional chips surfaced under Howard's first reply for depth. */
   followUps?: FollowUp[];
 }
 
-export default function HowardLauncher({ aircraft, session }: Props) {
+/**
+ * Floating entry point to Howard. Always available (Howard is a per-user
+ * advisor now — picks aircraft conversationally when needed). The prompts
+ * are aircraft-agnostic; if a tail is needed for the question, Howard
+ * confirms against the currently-selected aircraft or asks.
+ */
+export default function HowardLauncher({ currentAircraft, session }: Props) {
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<Mode>('menu');
   const [dep, setDep] = useState('');
@@ -54,12 +59,8 @@ export default function HowardLauncher({ aircraft, session }: Props) {
     return () => window.removeEventListener('keydown', onKey);
   }, [open]);
 
-  if (!aircraft) return null;
+  const currentTail = currentAircraft?.tail_number || null;
 
-  const tail = aircraft.tail_number;
-
-  /** Prime the sessionStorage handoff (prompt + optional follow-ups) and
-   * jump the embedded HowardTab into chat mode. */
   const sendPrompt = (prompt: string, followUps?: FollowUp[]) => {
     try {
       sessionStorage.setItem(
@@ -70,7 +71,6 @@ export default function HowardLauncher({ aircraft, session }: Props) {
     setMode('chat');
   };
 
-  /** Open chat with no prefill so the user can type a free-form question. */
   const openFreeChat = () => {
     try { sessionStorage.removeItem('aft_howard_prefill'); } catch {}
     setMode('chat');
@@ -81,11 +81,13 @@ export default function HowardLauncher({ aircraft, session }: Props) {
     setOpen(false);
   };
 
+  // Prompts stay aircraft-agnostic; Howard confirms which aircraft based
+  // on the system-prompt rules (uses currentTail hint, asks if unknown).
   const quickPrompts: QuickPrompt[] = [
     {
       icon: Shield,
       label: 'Airworthiness check',
-      prompt: `Is ${tail} airworthy right now? Walk me through it.`,
+      prompt: `Is my aircraft airworthy right now? Walk me through it.`,
       followUps: [
         { label: 'Blockers vs warnings', prompt: 'Which of those are blockers and which are just warnings?' },
         { label: 'How to clear each', prompt: 'What does it take to clear each finding?' },
@@ -95,7 +97,7 @@ export default function HowardLauncher({ aircraft, session }: Props) {
     {
       icon: Wrench,
       label: 'Maintenance overview',
-      prompt: `Give me the maintenance picture on ${tail}: anything overdue or due now, upcoming inspections in the next 30–90 days, open squawks, and any ADs I need to act on. Order by urgency.`,
+      prompt: `Give me the maintenance picture: anything overdue or due now, upcoming inspections in the next 30–90 days, open squawks, and any ADs to act on. Order by urgency.`,
       followUps: [
         { label: 'Required vs optional', prompt: 'Split those by required vs optional so I know what I can defer.' },
         { label: 'Bundle for one visit', prompt: "Help me group these into a single shop visit to minimize downtime." },
@@ -107,12 +109,12 @@ export default function HowardLauncher({ aircraft, session }: Props) {
     {
       icon: CalendarPlus,
       label: 'Book some time',
-      prompt: `I'd like to book some time on ${tail}. Ask me for the details you need.`,
+      prompt: `I'd like to book some time. Ask me for the details you need.`,
     },
     {
       icon: Activity,
       label: 'Recent activity',
-      prompt: `What's been happening with ${tail} the last 30 days — flights, squawks, MX work?`,
+      prompt: `What's been happening the last 30 days — flights, squawks, MX work?`,
       followUps: [
         { label: "Who's flying it", prompt: "Who's been flying it? Any patterns?" },
         { label: 'Fuel burn trends', prompt: "How's the fuel burn looking across those flights?" },
@@ -134,14 +136,14 @@ export default function HowardLauncher({ aircraft, session }: Props) {
     const when = time
       ? new Date(time).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })
       : null;
-    const parts: string[] = [`Flight briefing for ${tail}.`];
+    const parts: string[] = [`Flight briefing.`];
     if (dep && dest) parts.push(`Departing ${dep.toUpperCase()} to ${dest.toUpperCase()}.`);
     else if (dep) parts.push(`Departing ${dep.toUpperCase()}.`);
     else if (dest) parts.push(`Heading to ${dest.toUpperCase()}.`);
     if (when) parts.push(`Planned for ${when}.`);
     if (alt) parts.push(`Alternate: ${alt.toUpperCase()}.`);
     parts.push(
-      `Pull official weather (get_weather_briefing + get_aviation_hazards — aviationweather.gov) and official NOTAMs (get_notams — FAA NOTAM API) for each airport. Flag anything on the aircraft side I should know about. Keep the top-level briefing tight; I'll ask for depth where I need it.`
+      `Pull official weather (get_weather_briefing + get_aviation_hazards — aviationweather.gov) and official NOTAMs (get_notams — FAA NOTAM API) for each airport. Also flag aircraft-side concerns (confirm which aircraft first). Keep the top-level briefing tight; I'll ask for depth where I need it.`
     );
     return parts.join(' ');
   };
@@ -192,7 +194,7 @@ export default function HowardLauncher({ aircraft, session }: Props) {
                     {mode === 'flight-briefing' ? 'Flight Briefing' : 'Howard'}
                   </h3>
                   <p className="text-[10px] font-bold uppercase tracking-widest text-[#0EA5E9] truncate">
-                    For {tail}
+                    {currentTail ? `Selected: ${currentTail}` : 'Hangar helper'}
                   </p>
                 </div>
               </div>
@@ -255,7 +257,7 @@ export default function HowardLauncher({ aircraft, session }: Props) {
             {mode === 'flight-briefing' && (
               <div className="p-4">
                 <p className="font-roboto text-sm text-gray-700 mb-4">
-                  Where and when? I&apos;ll pull weather, NOTAMs, hazards, and flag anything on {tail}&apos;s side worth noting.
+                  Where and when? I&apos;ll pull weather, NOTAMs, hazards, and flag aircraft-side concerns (I&apos;ll confirm which aircraft).
                 </p>
                 <div className="flex flex-col gap-3">
                   <div className="grid grid-cols-2 gap-3">
@@ -330,7 +332,7 @@ export default function HowardLauncher({ aircraft, session }: Props) {
 
             {mode === 'chat' && (
               <div className="flex-1 min-h-0 p-4 pt-3">
-                <HowardTab aircraft={aircraft} session={session} compact />
+                <HowardTab currentAircraft={currentAircraft} session={session} compact />
               </div>
             )}
           </div>

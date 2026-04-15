@@ -8,8 +8,12 @@ import { proposeAction, type ActionType } from './proposedActions';
 export interface ToolContext {
   userId: string;
   threadId: string;
+  /** Filled in by executeTool after resolving params.tail. Empty for global tools. */
   aircraftId: string;
+  /** Filled in by executeTool after resolving params.tail. Empty for global tools. */
   aircraftTail: string;
+  /** Optional hint: aircraft currently selected in the UI. */
+  currentTail?: string | null;
 }
 
 type ToolHandler = (params: any, sb: SupabaseClient, aircraftId: string, ctx: ToolContext) => Promise<any>;
@@ -54,6 +58,36 @@ async function verifyAccess(sb: SupabaseClient, userId: string, aircraftId: stri
     .eq('aircraft_id', aircraftId)
     .maybeSingle();
   return !!access;
+}
+
+/**
+ * Resolve a user-supplied tail number to an aircraft_id the caller has
+ * access to. Returns a clear error message Howard can surface to the
+ * user if the aircraft doesn't exist, is deleted, or isn't accessible.
+ */
+async function resolveAircraftFromTail(
+  sb: SupabaseClient,
+  userId: string,
+  tail: unknown,
+): Promise<{ ok: true; aircraftId: string; tail: string } | { ok: false; error: string }> {
+  if (!tail || typeof tail !== 'string') {
+    return { ok: false, error: 'Aircraft tail number is required. Ask the user which aircraft they mean.' };
+  }
+  const normalized = tail.toUpperCase().trim();
+  const { data: aircraft } = await sb
+    .from('aft_aircraft')
+    .select('id, tail_number')
+    .eq('tail_number', normalized)
+    .is('deleted_at', null)
+    .maybeSingle();
+  if (!aircraft) {
+    return { ok: false, error: `No aircraft ${normalized} found in the user's fleet.` };
+  }
+  const allowed = await verifyAccess(sb, userId, aircraft.id);
+  if (!allowed) {
+    return { ok: false, error: `User doesn't have access to ${normalized}.` };
+  }
+  return { ok: true, aircraftId: aircraft.id, tail: aircraft.tail_number };
 }
 
 const handlers: Record<string, ToolHandler> = {
@@ -593,13 +627,22 @@ export async function executeTool(
   const handler = handlers[name];
   if (!handler) return JSON.stringify({ error: `Unknown tool: ${name}` });
 
-  if (!GLOBAL_TOOLS.has(name)) {
-    const allowed = await verifyAccess(supabaseAdmin, ctx.userId, ctx.aircraftId);
-    if (!allowed) {
-      return JSON.stringify({ error: 'Access denied to this aircraft.' });
-    }
+  // Global tools don't need a specific aircraft; invoke directly.
+  if (GLOBAL_TOOLS.has(name)) {
+    const result = await handler(params, supabaseAdmin, '', ctx);
+    return JSON.stringify(result);
   }
 
-  const result = await handler(params, supabaseAdmin, ctx.aircraftId, ctx);
+  // Aircraft-scoped tool: resolve `tail` param to an aircraft_id the
+  // current user is allowed to read, then run the handler with that.
+  const resolved = await resolveAircraftFromTail(supabaseAdmin, ctx.userId, params?.tail);
+  if (!resolved.ok) return JSON.stringify({ error: resolved.error });
+
+  const enrichedCtx: ToolContext = {
+    ...ctx,
+    aircraftId: resolved.aircraftId,
+    aircraftTail: resolved.tail,
+  };
+  const result = await handler(params, supabaseAdmin, resolved.aircraftId, enrichedCtx);
   return JSON.stringify(result);
 }

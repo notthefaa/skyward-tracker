@@ -1,7 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { tools } from './tools';
 import { executeTool } from './toolHandlers';
-import { HOWARD_STABLE_PRELUDE, buildAircraftContext } from './systemPrompt';
+import { HOWARD_STABLE_PRELUDE, buildUserContext } from './systemPrompt';
 import type { Aircraft } from '@/lib/types';
 import type { HowardMessage } from './types';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -38,22 +38,25 @@ export type StreamEvent =
 export async function* sendMessageStream(
   userText: string,
   conversationHistory: HowardMessage[],
-  aircraft: Aircraft,
+  userAircraft: Aircraft[],
+  currentAircraft: Aircraft | null,
   userRole: string,
   userId: string,
   threadId: string,
   supabaseAdmin: SupabaseClient,
-  aircraftId: string,
 ): AsyncGenerator<StreamEvent, void, unknown> {
-  // Two-block system prompt: stable prelude is prompt-cached (tools + this
-  // block are cached together), aircraft context is a per-request delta.
-  const aircraftContext = buildAircraftContext(aircraft, userRole);
+  // Two-block system prompt: stable prelude is prompt-cached, user context
+  // (the user's aircraft fleet + currently-selected aircraft) is a per-
+  // request delta. Aircraft for each tool call is resolved server-side
+  // from a `tail` param Howard provides.
+  const userContext = buildUserContext(userAircraft, currentAircraft, userRole);
 
   const toolCtx = {
     userId,
     threadId,
-    aircraftId,
-    aircraftTail: aircraft.tail_number,
+    aircraftId: '',
+    aircraftTail: '',
+    currentTail: currentAircraft?.tail_number || null,
   };
 
   const messages: Anthropic.MessageParam[] = conversationHistory
@@ -78,7 +81,7 @@ export async function* sendMessageStream(
       max_tokens: MAX_OUTPUT_TOKENS,
       system: [
         { type: 'text', text: HOWARD_STABLE_PRELUDE, cache_control: { type: 'ephemeral' } },
-        { type: 'text', text: aircraftContext },
+        { type: 'text', text: userContext },
       ],
       tools,
       messages,

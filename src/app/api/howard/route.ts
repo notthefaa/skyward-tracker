@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { requireAuth, requireAircraftAccess, handleApiError } from '@/lib/auth';
+import { requireAuth, handleApiError } from '@/lib/auth';
 import { checkRateLimit } from '@/lib/howard/rateLimit';
 import { sendMessageStream, HOWARD_MODEL } from '@/lib/howard/claude';
 
@@ -10,25 +10,54 @@ export const dynamic = 'force-dynamic';
 // which is why replies appeared to vanish. Vercel Hobby caps at 60s.
 export const maxDuration = 60;
 
-// DELETE — clear thread + messages for current user + aircraft
+/** Load the user's fleet for Howard's per-request context. */
+async function loadUserFleet(supabaseAdmin: any, userId: string) {
+  // Global admins see every aircraft; regular users see the ones they
+  // have access to via aft_user_aircraft_access.
+  const { data: role } = await supabaseAdmin
+    .from('aft_user_roles')
+    .select('role')
+    .eq('user_id', userId)
+    .maybeSingle();
+  const isAdmin = (role as any)?.role === 'admin';
+
+  if (isAdmin) {
+    const { data } = await supabaseAdmin
+      .from('aft_aircraft')
+      .select('*')
+      .is('deleted_at', null)
+      .order('tail_number');
+    return data || [];
+  }
+
+  const { data: access } = await supabaseAdmin
+    .from('aft_user_aircraft_access')
+    .select('aircraft_id')
+    .eq('user_id', userId);
+  const ids = (access || []).map((a: any) => a.aircraft_id);
+  if (ids.length === 0) return [];
+  const { data } = await supabaseAdmin
+    .from('aft_aircraft')
+    .select('*')
+    .in('id', ids)
+    .is('deleted_at', null)
+    .order('tail_number');
+  return data || [];
+}
+
+// DELETE — clear the current user's Howard thread
 export async function DELETE(req: Request) {
   try {
     const { user, supabaseAdmin } = await requireAuth(req);
-    const { searchParams } = new URL(req.url);
-    const aircraftId = searchParams.get('aircraftId');
-    if (!aircraftId) return NextResponse.json({ error: 'Aircraft ID required.' }, { status: 400 });
-    await requireAircraftAccess(supabaseAdmin, user.id, aircraftId);
 
     const { data: thread } = await supabaseAdmin
       .from('aft_howard_threads')
       .select('id')
-      .eq('aircraft_id', aircraftId)
       .eq('user_id', user.id)
       .maybeSingle();
 
     if (!thread) return NextResponse.json({ success: true, cleared: 0 });
 
-    // Delete messages first (FK), then the thread itself
     await supabaseAdmin.from('aft_howard_messages').delete().eq('thread_id', thread.id);
     await supabaseAdmin.from('aft_howard_threads').delete().eq('id', thread.id);
 
@@ -36,19 +65,14 @@ export async function DELETE(req: Request) {
   } catch (error) { return handleApiError(error); }
 }
 
-// GET — load thread + messages for current user + aircraft
+// GET — load the current user's thread + messages + fleet
 export async function GET(req: Request) {
   try {
     const { user, supabaseAdmin } = await requireAuth(req);
-    const { searchParams } = new URL(req.url);
-    const aircraftId = searchParams.get('aircraftId');
-    if (!aircraftId) return NextResponse.json({ error: 'Aircraft ID required.' }, { status: 400 });
-    await requireAircraftAccess(supabaseAdmin, user.id, aircraftId);
 
     const { data: thread } = await supabaseAdmin
       .from('aft_howard_threads')
       .select('*')
-      .eq('aircraft_id', aircraftId)
       .eq('user_id', user.id)
       .maybeSingle();
 
@@ -70,9 +94,8 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const { user, supabaseAdmin } = await requireAuth(req);
-    const { aircraftId, message } = await req.json();
+    const { message, currentTail } = await req.json();
 
-    if (!aircraftId) return NextResponse.json({ error: 'Aircraft ID required.' }, { status: 400 });
     if (!message || typeof message !== 'string' || message.trim().length === 0) {
       return NextResponse.json({ error: 'Message is required.' }, { status: 400 });
     }
@@ -88,20 +111,17 @@ export async function POST(req: Request) {
       );
     }
 
-    await requireAircraftAccess(supabaseAdmin, user.id, aircraftId);
-
-    // Get or create thread
+    // Get or create the user's single thread
     let { data: thread } = await supabaseAdmin
       .from('aft_howard_threads')
       .select('*')
-      .eq('aircraft_id', aircraftId)
       .eq('user_id', user.id)
       .maybeSingle();
 
     if (!thread) {
       const { data: newThread, error } = await supabaseAdmin
         .from('aft_howard_threads')
-        .insert({ aircraft_id: aircraftId, user_id: user.id })
+        .insert({ user_id: user.id })
         .select()
         .single();
       if (error) throw error;
@@ -115,22 +135,34 @@ export async function POST(req: Request) {
       .eq('thread_id', thread.id)
       .order('created_at', { ascending: true });
 
-    // Fetch aircraft profile
-    const { data: aircraft } = await supabaseAdmin
-      .from('aft_aircraft')
-      .select('*')
-      .eq('id', aircraftId)
-      .single();
-    if (!aircraft) return NextResponse.json({ error: 'Aircraft not found.' }, { status: 404 });
+    // Load the user's full fleet for Howard's context
+    const userAircraft = await loadUserFleet(supabaseAdmin, user.id);
 
-    // Determine user role (for this aircraft)
-    const { data: access } = await supabaseAdmin
-      .from('aft_user_aircraft_access')
-      .select('aircraft_role')
+    // Resolve the currently-selected aircraft (if any) from the tail hint.
+    // Must be one of the user's aircraft.
+    let currentAircraft: any = null;
+    if (currentTail && typeof currentTail === 'string') {
+      const normalized = currentTail.toUpperCase().trim();
+      currentAircraft = userAircraft.find((a: any) => a.tail_number === normalized) || null;
+    }
+
+    // User role — global first, else fall back to per-aircraft role for
+    // the currently-selected aircraft (or 'pilot' if none).
+    const { data: globalRole } = await supabaseAdmin
+      .from('aft_user_roles')
+      .select('role')
       .eq('user_id', user.id)
-      .eq('aircraft_id', aircraftId)
       .maybeSingle();
-    const userRole = access?.aircraft_role || 'pilot';
+    let userRole: string = (globalRole as any)?.role || 'pilot';
+    if (userRole !== 'admin' && currentAircraft) {
+      const { data: acAccess } = await supabaseAdmin
+        .from('aft_user_aircraft_access')
+        .select('aircraft_role')
+        .eq('user_id', user.id)
+        .eq('aircraft_id', currentAircraft.id)
+        .maybeSingle();
+      userRole = (acAccess as any)?.aircraft_role || userRole;
+    }
 
     // Save user message up-front
     const { data: userMsg, error: userMsgErr } = await supabaseAdmin
@@ -167,12 +199,12 @@ export async function POST(req: Request) {
           for await (const ev of sendMessageStream(
             trimmed,
             historySnapshot,
-            aircraft,
+            userAircraft,
+            currentAircraft,
             userRole,
             user.id,
             threadId,
             supabaseAdmin,
-            aircraftId,
           )) {
             if (ev.type === 'complete') {
               assistantText = ev.assistantText;
@@ -211,11 +243,6 @@ export async function POST(req: Request) {
           send({ type: 'done', assistantMessage: assistantMsg, threadId });
           controller.close();
         } catch (err: any) {
-          // Persist an error record so the user's question doesn't hang
-          // in history with no reply — matters for an audit-style chat log.
-          // Preserve any text Howard had already streamed before the error
-          // so the user doesn't watch their reply get replaced by a bare
-          // warning.
           const reason = err?.message || 'Stream failed';
           const partial = streamedSoFar.trim();
           const content = partial

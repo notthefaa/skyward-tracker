@@ -54,9 +54,12 @@ function toolLabel(name: string): { label: string; Icon: any } {
 }
 
 export default function HowardTab({
-  aircraft, session, compact = false,
+  currentAircraft, session, compact = false,
 }: {
-  aircraft: AircraftWithMetrics | null;
+  /** Aircraft currently selected in the surrounding UI — purely a hint
+   * for Howard. Conversations are user-scoped; each aircraft-specific
+   * tool call carries a `tail` resolved from the conversation. */
+  currentAircraft: AircraftWithMetrics | null;
   session: any;
   /** Render without the "Howard" logo header (used when embedded in the
    * launcher popup, which has its own header). */
@@ -75,10 +78,11 @@ export default function HowardTab({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  const userId = session?.user?.id;
   const { data, mutate } = useSWR(
-    aircraft ? `howard-${aircraft.id}` : null,
+    userId ? `howard-user-${userId}` : null,
     async () => {
-      const res = await authFetch(`/api/howard?aircraftId=${aircraft!.id}`);
+      const res = await authFetch(`/api/howard`);
       if (!res.ok) throw new Error('Failed to load conversation');
       return await res.json() as { thread: any; messages: HowardMessage[] };
     },
@@ -115,7 +119,7 @@ export default function HowardTab({
 
   const handleSend = useCallback(async (text?: string) => {
     const msg = (text || input).trim();
-    if (!msg || !aircraft || isSending) return;
+    if (!msg || !userId || isSending) return;
 
     setInput('');
     if (textareaRef.current) textareaRef.current.style.height = 'auto';
@@ -160,7 +164,10 @@ export default function HowardTab({
           'Content-Type': 'application/json',
           ...(s?.access_token ? { Authorization: `Bearer ${s.access_token}` } : {}),
         },
-        body: JSON.stringify({ aircraftId: aircraft.id, message: msg }),
+        body: JSON.stringify({
+          message: msg,
+          currentTail: currentAircraft?.tail_number ?? null,
+        }),
       });
 
       if (!res.ok || !res.body) {
@@ -283,7 +290,7 @@ export default function HowardTab({
       setStreamingText('');
       setActiveToolName(null);
     }
-  }, [input, aircraft, isSending, mutate, mutateActions, showError]);
+  }, [input, userId, currentAircraft, isSending, mutate, mutateActions, showError]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -295,29 +302,29 @@ export default function HowardTab({
   }, [handleSend]);
 
   const handleClearThread = useCallback(async () => {
-    if (!aircraft || isSending) return;
+    if (isSending) return;
     const ok = await confirm({
       title: 'Clear conversation?',
-      message: `This will permanently delete your entire chat history with Howard for ${aircraft.tail_number}. Usage totals are unaffected.`,
+      message: `This will permanently delete your entire chat history with Howard. Usage totals are unaffected.`,
       confirmText: 'Clear',
       cancelText: 'Cancel',
       variant: 'danger',
     });
     if (!ok) return;
     try {
-      const res = await authFetch(`/api/howard?aircraftId=${aircraft.id}`, { method: 'DELETE' });
+      const res = await authFetch(`/api/howard`, { method: 'DELETE' });
       if (!res.ok) throw new Error((await res.json()).error || 'Failed to clear conversation');
       mutate({ thread: null, messages: [] }, false);
       showSuccess('Conversation cleared.');
     } catch (err: any) {
       showError(err.message);
     }
-  }, [aircraft, isSending, confirm, mutate, showSuccess, showError]);
+  }, [isSending, confirm, mutate, showSuccess, showError]);
 
   // Prefill handoff from the floating HowardLauncher (or any caller).
   // sessionStorage key "aft_howard_prefill" (JSON: {prompt, autoSend, followUps?})
   useEffect(() => {
-    if (!aircraft || isSending) return;
+    if (isSending) return;
     try {
       const raw = sessionStorage.getItem('aft_howard_prefill');
       if (!raw) return;
@@ -334,9 +341,7 @@ export default function HowardTab({
         textareaRef.current?.focus();
       }
     } catch {}
-  }, [aircraft?.id]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  if (!aircraft) return null;
+  }, [currentAircraft?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const toolInfo = activeToolName ? toolLabel(activeToolName) : null;
 
@@ -351,7 +356,9 @@ export default function HowardTab({
             </div>
             <div className="min-w-0">
               <h2 className="font-oswald text-2xl md:text-3xl font-bold uppercase text-navy m-0 leading-none">Howard</h2>
-              <span className="text-[10px] font-bold uppercase tracking-widest text-[#0EA5E9] truncate block">AI Copilot for {aircraft.tail_number}</span>
+              <span className="text-[10px] font-bold uppercase tracking-widest text-[#0EA5E9] truncate block">
+                {currentAircraft ? `Hangar helper · ${currentAircraft.tail_number}` : 'Hangar helper'}
+              </span>
             </div>
           </div>
           <div className="flex items-center gap-3 shrink-0">
@@ -387,7 +394,7 @@ export default function HowardTab({
             <HowardIcon size={40} style={{ color: '#0EA5E9' }} />
             <p className="font-roboto text-sm text-navy mt-3 mb-1 font-bold">Hey, I&apos;m Howard.</p>
             <p className="font-roboto text-xs text-gray-500 mb-4 max-w-xs">
-              I can look up your flight logs, maintenance items, squawks, VOR checks, and more. Ask me anything about {aircraft.tail_number}.
+              Ask me about any aircraft in your fleet — maintenance, squawks, airworthiness, flight briefings. I&apos;ll pull real data, never guess.
             </p>
             <div className="flex flex-wrap gap-2 justify-center">
               {SUGGESTIONS.map(s => (
