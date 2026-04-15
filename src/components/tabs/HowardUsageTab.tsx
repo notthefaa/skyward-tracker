@@ -214,8 +214,8 @@ export default function HowardUsageTab() {
 
       {/* Footnote */}
       <p className="text-[10px] text-center text-gray-400 font-bold uppercase tracking-widest">
-        Est. cost uses Claude Sonnet 4.6 list pricing ($3 / $15 per MTok).
-        Cache reads ($0.30/MTok) and writes ($3.75/MTok) counted separately.
+        Est. cost uses Claude Haiku 4.5 list pricing ($1 / $5 per MTok).
+        Cache reads ($0.10/MTok) and writes ($1.25/MTok) counted separately.
       </p>
     </div>
   );

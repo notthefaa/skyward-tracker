@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server';
 import { requireAuth, handleApiError } from '@/lib/auth';
 
-// Claude Sonnet 4.6 pricing (USD per million tokens)
+// Claude Haiku 4.5 pricing (USD per million tokens)
 const PRICE_PER_MTOK = {
-  input: 3,
-  output: 15,
-  cache_read: 0.3,
-  cache_create: 3.75,
+  input: 1,
+  output: 5,
+  cache_read: 0.1,
+  cache_create: 1.25,
 };
 
 function costUsd(tokens: { input: number; output: number; cache_read: number; cache_create: number }) {

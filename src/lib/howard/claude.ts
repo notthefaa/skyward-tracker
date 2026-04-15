@@ -8,10 +8,13 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 const client = new Anthropic();
 
-export const HOWARD_MODEL = 'claude-sonnet-4-6';
-const MAX_OUTPUT_TOKENS = 1500;
+// Haiku 4.5 — fast, cheap, and naturally concise. Handles tool use
+// well and matches Howard's "short, conversational" register much better
+// than Sonnet, which tended to produce report-style replies.
+export const HOWARD_MODEL = 'claude-haiku-4-5-20251001';
+const MAX_OUTPUT_TOKENS = 500;
 const MAX_TOOL_ROUNDS = 3;
-const CONTEXT_WINDOW = 20;
+const CONTEXT_WINDOW = 10;
 
 export interface HowardUsage {
   input_tokens: number;
