@@ -126,7 +126,14 @@ export default function HowardTab({
       model: null,
       created_at: new Date().toISOString(),
     };
-    mutate(prev => prev ? { ...prev, messages: [...prev.messages, optimisticUserMsg] } : prev, false);
+    // When launched from an "Ask Howard" button elsewhere in the app,
+    // HowardTab may still be mounting and SWR may not have resolved yet,
+    // so prev is undefined. Seed an empty base so the optimistic user
+    // bubble renders immediately instead of waiting for the server.
+    mutate(prev => {
+      const base = prev ?? { thread: null, messages: [] };
+      return { ...base, messages: [...base.messages, optimisticUserMsg] };
+    }, false);
 
     // Hoisted so the catch block can recover partial state if the stream
     // errors mid-response.
