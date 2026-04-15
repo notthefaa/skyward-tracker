@@ -4,10 +4,11 @@ import { useState, useEffect } from "react";
 import dynamic from "next/dynamic";
 import { HowardIcon } from "@/components/shell/TrayIcons";
 import type { AircraftWithMetrics } from "@/lib/types";
-import { X, ArrowLeft, Plane, Maximize2 } from "lucide-react";
+import {
+  X, ArrowLeft, Plane, Maximize2, Shield, Wrench, CalendarPlus,
+  Activity, MessageSquare,
+} from "lucide-react";
 
-// HowardTab is big; lazy-load it so the FAB bundle stays tiny until
-// the user actually opens a chat.
 const HowardTab = dynamic(() => import("@/components/tabs/HowardTab"), { ssr: false });
 
 interface Props {
@@ -17,16 +18,20 @@ interface Props {
 
 type Mode = 'menu' | 'flight-briefing' | 'chat';
 
-/**
- * Floating entry point to Howard. Appears globally while an aircraft is
- * selected (hidden on the Howard tab itself). Tap the FAB → popup with
- * a brief intro and a set of pre-drafted prompts. Pick one and the chat
- * opens inside the popup so the user can keep talking without leaving
- * their current page.
- *
- * The "Flight briefing" path first collects departure / destination /
- * time / alternate, then builds a richer prompt.
- */
+interface FollowUp {
+  label: string;
+  prompt: string;
+}
+
+interface QuickPrompt {
+  icon: React.ComponentType<{ size?: number; className?: string }>;
+  label: string;
+  /** Static prompt text — will be resolved with the current tail. */
+  prompt: string;
+  /** Optional chips surfaced under Howard's first reply for depth. */
+  followUps?: FollowUp[];
+}
+
 export default function HowardLauncher({ aircraft, session }: Props) {
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<Mode>('menu');
@@ -35,9 +40,6 @@ export default function HowardLauncher({ aircraft, session }: Props) {
   const [time, setTime] = useState('');
   const [alt, setAlt] = useState('');
 
-  // Reset to menu when the popup fully closes, so reopening is a fresh
-  // starting point. (The conversation itself persists in the DB so the
-  // chat view will still show history when re-entered.)
   useEffect(() => {
     if (!open) {
       const t = setTimeout(() => setMode('menu'), 250);
@@ -45,7 +47,6 @@ export default function HowardLauncher({ aircraft, session }: Props) {
     }
   }, [open]);
 
-  // Close on Escape
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
@@ -57,46 +58,76 @@ export default function HowardLauncher({ aircraft, session }: Props) {
 
   const tail = aircraft.tail_number;
 
-  /** Prime the sessionStorage handoff and jump the embedded HowardTab
-   * into chat mode. The tab reads the prefill on mount and auto-sends. */
-  const sendPrompt = (prompt: string) => {
+  /** Prime the sessionStorage handoff (prompt + optional follow-ups) and
+   * jump the embedded HowardTab into chat mode. */
+  const sendPrompt = (prompt: string, followUps?: FollowUp[]) => {
     try {
-      sessionStorage.setItem('aft_howard_prefill', JSON.stringify({ prompt, autoSend: true }));
+      sessionStorage.setItem(
+        'aft_howard_prefill',
+        JSON.stringify({ prompt, autoSend: true, followUps: followUps || null })
+      );
     } catch {}
     setMode('chat');
   };
 
-  /** Expand to the full-page Howard tab and close the popup. */
+  /** Open chat with no prefill so the user can type a free-form question. */
+  const openFreeChat = () => {
+    try { sessionStorage.removeItem('aft_howard_prefill'); } catch {}
+    setMode('chat');
+  };
+
   const expandToFullPage = () => {
     window.dispatchEvent(new CustomEvent('aft:navigate-howard'));
     setOpen(false);
   };
 
-  const quickPrompts: { label: string; prompt: string }[] = [
+  const quickPrompts: QuickPrompt[] = [
     {
+      icon: Shield,
       label: 'Airworthiness check',
       prompt: `Is ${tail} airworthy right now? Walk me through it.`,
+      followUps: [
+        { label: 'Blockers vs warnings', prompt: 'Which of those are blockers and which are just warnings?' },
+        { label: 'How to clear each', prompt: 'What does it take to clear each finding?' },
+        { label: 'Regulatory basis', prompt: 'What regs back up those findings?' },
+      ],
     },
     {
-      label: "What's due now",
-      prompt: `Anything on ${tail} overdue or due right now? Required items first.`,
+      icon: Wrench,
+      label: 'Maintenance overview',
+      prompt: `Give me the maintenance picture on ${tail}: anything overdue or due now, upcoming inspections in the next 30–90 days, open squawks, and any ADs I need to act on. Order by urgency.`,
+      followUps: [
+        { label: 'Required vs optional', prompt: 'Split those by required vs optional so I know what I can defer.' },
+        { label: 'Bundle for one visit', prompt: "Help me group these into a single shop visit to minimize downtime." },
+        { label: "What's grounding me", prompt: 'Which of those actually affect airworthiness right now?' },
+        { label: 'Open squawks detail', prompt: 'Dig into the open squawks — causes and what it takes to clear them.' },
+        { label: 'AD detail', prompt: 'More on the ADs — overdue, due soon, and what each requires.' },
+      ],
     },
     {
-      label: 'Upcoming maintenance',
-      prompt: `What maintenance is coming due on ${tail} in the next 30 to 90 days? Order by urgency.`,
+      icon: CalendarPlus,
+      label: 'Book some time',
+      prompt: `I'd like to book some time on ${tail}. Ask me for the details you need.`,
     },
     {
-      label: 'Open squawks',
-      prompt: `Rundown of open squawks on ${tail}. Flag anything affecting airworthiness.`,
-    },
-    {
-      label: 'AD compliance',
-      prompt: `Any ADs on ${tail} I need to act on? Overdue or due soon.`,
-    },
-    {
+      icon: Activity,
       label: 'Recent activity',
-      prompt: `What's been going on with ${tail} the last 30 days — flights, squawks, MX work?`,
+      prompt: `What's been happening with ${tail} the last 30 days — flights, squawks, MX work?`,
+      followUps: [
+        { label: "Who's flying it", prompt: "Who's been flying it? Any patterns?" },
+        { label: 'Fuel burn trends', prompt: "How's the fuel burn looking across those flights?" },
+        { label: 'Anything unusual', prompt: 'Anything unusual in the last month I should know about?' },
+      ],
     },
+  ];
+
+  const briefingFollowUps: FollowUp[] = [
+    { label: 'More on weather', prompt: "Dig deeper on the weather — what's trending, and what should I be watching?" },
+    { label: 'NOTAMs detail', prompt: 'More on the NOTAMs. Anything critical I should know for each airport or the route?' },
+    { label: 'Hazards detail', prompt: 'Dig into SIGMETs, AIRMETs, and notable PIREPs along the route.' },
+    { label: 'Alternate options', prompt: 'Suggest realistic alternates and the thinking behind them.' },
+    { label: 'Aircraft concerns', prompt: "More on the aircraft side — anything I should address pre-flight?" },
+    { label: 'Fuel planning', prompt: 'Help me think about fuel — reserves, burn, and any weather impact.' },
   ];
 
   const buildBriefingPrompt = () => {
@@ -109,7 +140,9 @@ export default function HowardLauncher({ aircraft, session }: Props) {
     else if (dest) parts.push(`Heading to ${dest.toUpperCase()}.`);
     if (when) parts.push(`Planned for ${when}.`);
     if (alt) parts.push(`Alternate: ${alt.toUpperCase()}.`);
-    parts.push(`Pull weather and hazards, and flag anything on the aircraft side I should know about.`);
+    parts.push(
+      `Pull weather (get_weather_briefing + get_aviation_hazards) and NOTAMs (web_search per airport — critical). Flag anything on the aircraft side I should know about. Keep the top-level briefing tight; I'll ask for depth where I need it.`
+    );
     return parts.join(' ');
   };
 
@@ -117,7 +150,6 @@ export default function HowardLauncher({ aircraft, session }: Props) {
 
   return (
     <>
-      {/* Floating action button */}
       {!open && (
         <button
           onClick={() => setOpen(true)}
@@ -129,7 +161,6 @@ export default function HowardLauncher({ aircraft, session }: Props) {
         </button>
       )}
 
-      {/* Popup */}
       {open && (
         <div
           className="fixed inset-0 z-[99999] bg-black/50 flex items-end md:items-center justify-center p-0 md:p-4"
@@ -141,7 +172,6 @@ export default function HowardLauncher({ aircraft, session }: Props) {
             }`}
             onClick={e => e.stopPropagation()}
           >
-            {/* Header (shared across modes) */}
             <div className="flex items-start justify-between gap-3 p-4 border-b border-gray-100 shrink-0">
               <div className="flex items-center gap-3 min-w-0">
                 {mode !== 'menu' && (
@@ -187,27 +217,37 @@ export default function HowardLauncher({ aircraft, session }: Props) {
               </div>
             </div>
 
-            {/* Body */}
             {mode === 'menu' && (
               <div className="p-4 flex flex-col gap-2">
                 <p className="font-roboto text-sm text-gray-700 mb-1">
                   Hey, I&apos;m Howard, your hangar helper and advisor. I&apos;ve got plenty of aviation stories to share, but before we get into that, what can I help you with?
                 </p>
-                {quickPrompts.map(p => (
-                  <button
-                    key={p.label}
-                    onClick={() => sendPrompt(p.prompt)}
-                    className="text-left px-4 py-3 bg-gray-50 hover:bg-[#0EA5E9]/10 hover:border-[#0EA5E9] border border-gray-200 rounded-lg text-sm font-bold text-navy transition-colors active:scale-[0.98]"
-                  >
-                    {p.label}
-                  </button>
-                ))}
+                {quickPrompts.map(p => {
+                  const Icon = p.icon;
+                  return (
+                    <button
+                      key={p.label}
+                      onClick={() => sendPrompt(p.prompt, p.followUps)}
+                      className="text-left px-4 py-3 bg-gray-50 hover:bg-[#0EA5E9]/10 hover:border-[#0EA5E9] border border-gray-200 rounded-lg text-sm font-bold text-navy transition-colors active:scale-[0.98] flex items-center gap-3"
+                    >
+                      <Icon size={16} className="text-[#0EA5E9] shrink-0" />
+                      <span>{p.label}</span>
+                    </button>
+                  );
+                })}
                 <button
                   onClick={() => setMode('flight-briefing')}
-                  className="text-left px-4 py-3 bg-[#0EA5E9]/5 hover:bg-[#0EA5E9]/15 border border-[#0EA5E9]/50 rounded-lg text-sm font-bold text-navy transition-colors active:scale-[0.98] flex items-center gap-2"
+                  className="text-left px-4 py-3 bg-[#0EA5E9]/5 hover:bg-[#0EA5E9]/15 border border-[#0EA5E9]/50 rounded-lg text-sm font-bold text-navy transition-colors active:scale-[0.98] flex items-center gap-3"
                 >
-                  <Plane size={14} className="text-[#0EA5E9]" />
-                  Flight briefing…
+                  <Plane size={16} className="text-[#0EA5E9] shrink-0" />
+                  <span>Flight briefing…</span>
+                </button>
+                <button
+                  onClick={openFreeChat}
+                  className="text-left px-4 py-3 bg-white hover:bg-gray-50 border border-dashed border-gray-300 rounded-lg text-sm font-bold text-gray-600 transition-colors active:scale-[0.98] flex items-center gap-3"
+                >
+                  <MessageSquare size={16} className="text-gray-500 shrink-0" />
+                  <span>Something else…</span>
                 </button>
               </div>
             )}
@@ -215,7 +255,7 @@ export default function HowardLauncher({ aircraft, session }: Props) {
             {mode === 'flight-briefing' && (
               <div className="p-4">
                 <p className="font-roboto text-sm text-gray-700 mb-4">
-                  Where and when? I'll pull weather, hazards, and flag anything on {tail}'s side worth noting.
+                  Where and when? I&apos;ll pull weather, NOTAMs, hazards, and flag anything on {tail}&apos;s side worth noting.
                 </p>
                 <div className="flex flex-col gap-3">
                   <div className="grid grid-cols-2 gap-3">
@@ -279,7 +319,7 @@ export default function HowardLauncher({ aircraft, session }: Props) {
                   </div>
                 </div>
                 <button
-                  onClick={() => sendPrompt(buildBriefingPrompt())}
+                  onClick={() => sendPrompt(buildBriefingPrompt(), briefingFollowUps)}
                   disabled={!canSubmitBriefing}
                   className="mt-5 w-full bg-[#0EA5E9] text-white font-oswald font-bold uppercase tracking-widest text-sm py-3 rounded-lg disabled:opacity-40 active:scale-95 transition-transform"
                 >

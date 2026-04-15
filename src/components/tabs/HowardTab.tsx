@@ -45,6 +45,10 @@ export default function HowardTab({
   const [isSending, setIsSending] = useState(false);
   const [streamingText, setStreamingText] = useState('');
   const [activeToolName, setActiveToolName] = useState<string | null>(null);
+  // Contextual follow-up chips (set by the launcher prefill). Shown beneath
+  // the latest assistant reply so the user can drill into depth without
+  // retyping. Cleared when the user sends a manual (typed) message.
+  const [followUps, setFollowUps] = useState<{ label: string; prompt: string }[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -261,6 +265,8 @@ export default function HowardTab({
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
+      // Manual (typed) send ends the launcher's follow-up context.
+      setFollowUps([]);
       handleSend();
     }
   }, [handleSend]);
@@ -286,14 +292,17 @@ export default function HowardTab({
   }, [aircraft, isSending, confirm, mutate, showSuccess, showError]);
 
   // Prefill handoff from the floating HowardLauncher (or any caller).
-  // sessionStorage key "aft_howard_prefill" (JSON: {prompt, autoSend})
+  // sessionStorage key "aft_howard_prefill" (JSON: {prompt, autoSend, followUps?})
   useEffect(() => {
     if (!aircraft || isSending) return;
     try {
       const raw = sessionStorage.getItem('aft_howard_prefill');
       if (!raw) return;
       sessionStorage.removeItem('aft_howard_prefill');
-      const { prompt, autoSend } = JSON.parse(raw);
+      const { prompt, autoSend, followUps: fu } = JSON.parse(raw);
+      if (Array.isArray(fu)) {
+        setFollowUps(fu.filter((x: any) => typeof x?.label === 'string' && typeof x?.prompt === 'string'));
+      }
       if (typeof prompt !== 'string' || !prompt.trim()) return;
       if (autoSend) {
         handleSend(prompt);
@@ -447,6 +456,25 @@ export default function HowardTab({
               </div>
             )}
 
+            {/* Follow-up chips — surfaced after a launcher-prefilled reply so
+                the user can drill into depth without retyping. */}
+            {!isSending && followUps.length > 0 && messages.length > 0 && messages[messages.length - 1]?.role === 'assistant' && (
+              <div className="flex flex-col gap-1.5 pt-1">
+                <span className="text-[9px] font-bold uppercase tracking-widest text-gray-400 pl-1">Dig in?</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {followUps.map(f => (
+                    <button
+                      key={f.label}
+                      onClick={() => handleSend(f.prompt)}
+                      className="text-[11px] font-roboto font-medium text-[#0EA5E9] bg-white border border-[#0EA5E9]/40 rounded-full px-3 py-1.5 hover:bg-[#0EA5E9]/10 active:scale-95 transition-all"
+                    >
+                      {f.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div ref={messagesEndRef} />
           </div>
         )}
@@ -467,7 +495,7 @@ export default function HowardTab({
           style={{ backgroundColor: '#ffffff' }}
         />
         <button
-          onClick={() => handleSend()}
+          onClick={() => { setFollowUps([]); handleSend(); }}
           disabled={!input.trim() || isSending}
           className="bg-[#0EA5E9] text-white p-3 rounded-lg active:scale-95 transition-transform disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
         >
