@@ -6,6 +6,7 @@ import useSWR from "swr";
 import dynamic from "next/dynamic";
 import { PlaneTakeoff, Wrench, AlertTriangle, Droplet, Clock, LayoutGrid, Calendar } from "lucide-react";
 import { FleetSkeleton } from "@/components/Skeletons";
+import AskChuckButton from "@/components/chuck/AskChuckButton";
 
 const FleetSchedule = dynamic(() => import("@/components/tabs/FleetSchedule"));
 
@@ -177,8 +178,15 @@ export default function FleetSummary({
                     <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mt-1">{ac.aircraft_type}</p>
                   </div>
                 </div>
-                <div className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-widest text-white shadow-inner ${statusColor}`}>
-                  {ac.status === 'grounded' ? 'Grounded' : 'Airworthy'}
+                <div className="flex items-center gap-2">
+                  <AskChuckButton
+                    size="xs"
+                    onBeforeOpen={() => onSelectAircraft(ac.tail_number)}
+                    prompt={`Give me a quick situational briefing on ${ac.tail_number} (${ac.aircraft_type}). Current status: ${ac.status}. Next MX: ${ac.nextMxName || 'nothing tracked'}${ac.nextMxDueLabel ? ` (${ac.nextMxDueLabel})` : ''}. ${ac.squawkCount} open squawk${ac.squawkCount === 1 ? '' : 's'}. What should I prioritize? Pull any relevant data.`}
+                  />
+                  <div className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-widest text-white shadow-inner ${statusColor}`}>
+                    {ac.status === 'grounded' ? 'Grounded' : 'Airworthy'}
+                  </div>
                 </div>
               </div>
               {(() => {

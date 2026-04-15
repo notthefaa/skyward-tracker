@@ -43,6 +43,7 @@ export default function TireTab({
         .from('aft_tire_checks')
         .select('*', { count: 'exact' })
         .eq('aircraft_id', aircraft!.id)
+        .is('deleted_at', null)
         .order('created_at', { ascending: false })
         .range(from, to);
       const total = count ?? 0;

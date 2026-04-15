@@ -14,7 +14,7 @@ export async function POST(req: Request) {
     await requireAircraftAdmin(supabaseAdmin, user.id, aircraftId);
 
     const { data: aircraft, error: acErr } = await supabaseAdmin
-      .from('aft_aircraft').select('*').eq('id', aircraftId).single();
+      .from('aft_aircraft').select('*').eq('id', aircraftId).is('deleted_at', null).maybeSingle();
     if (acErr || !aircraft) {
       return NextResponse.json({ error: 'Aircraft not found.' }, { status: 404 });
     }
@@ -44,7 +44,7 @@ export async function POST(req: Request) {
     // 2. Create line items from MX items
     if (mxItemIds && mxItemIds.length > 0) {
       const { data: mxItems } = await supabaseAdmin
-        .from('aft_maintenance_items').select('*').in('id', mxItemIds);
+        .from('aft_maintenance_items').select('*').in('id', mxItemIds).is('deleted_at', null);
 
       if (mxItems && mxItems.length > 0) {
         const lineItems = mxItems.map((mx: any) => ({
@@ -63,7 +63,7 @@ export async function POST(req: Request) {
     // 3. Create line items from squawks
     if (squawkIds && squawkIds.length > 0) {
       const { data: squawks } = await supabaseAdmin
-        .from('aft_squawks').select('*').in('id', squawkIds);
+        .from('aft_squawks').select('*').in('id', squawkIds).is('deleted_at', null);
 
       if (squawks && squawks.length > 0) {
         const lineItems = squawks.map((sq: any) => ({

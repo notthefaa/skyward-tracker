@@ -25,6 +25,78 @@ export interface Aircraft {
   current_fuel_gallons?: number;
   fuel_last_updated?: string | null;
   created_by?: string | null;
+  make?: string | null;
+  model?: string | null;
+  year_mfg?: number | null;
+  is_ifr_equipped?: boolean | null;
+  is_for_hire?: boolean | null;
+}
+
+export type EquipmentCategory =
+  | 'engine' | 'propeller' | 'avionics' | 'transponder' | 'altimeter'
+  | 'pitot_static' | 'elt' | 'adsb' | 'autopilot' | 'gps' | 'radio'
+  | 'intercom' | 'instrument' | 'landing_gear' | 'lighting'
+  | 'accessory' | 'other';
+
+export interface AircraftEquipment {
+  id: string;
+  aircraft_id: string;
+  category: EquipmentCategory;
+  name: string;
+  make?: string | null;
+  model?: string | null;
+  serial?: string | null;
+  part_number?: string | null;
+  installed_at?: string | null;
+  installed_by?: string | null;
+  removed_at?: string | null;
+  removed_reason?: string | null;
+  ifr_capable: boolean;
+  adsb_out: boolean;
+  adsb_in: boolean;
+  transponder_class?: string | null;
+  is_elt: boolean;
+  elt_battery_expires?: string | null;
+  elt_battery_cumulative_hours?: number | null;
+  pitot_static_due_date?: string | null;
+  transponder_due_date?: string | null;
+  altimeter_due_date?: string | null;
+  vor_due_date?: string | null;
+  notes?: string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at?: string | null;
+}
+
+export interface AirworthinessDirective {
+  id: string;
+  aircraft_id: string;
+  ad_number: string;
+  amendment?: string | null;
+  subject: string;
+  applicability?: string | null;
+  source_url?: string | null;
+  source: 'drs_sync' | 'manual' | 'user_added';
+  effective_date?: string | null;
+  is_superseded: boolean;
+  superseded_by?: string | null;
+  compliance_type: 'one_time' | 'recurring';
+  initial_compliance_hours?: number | null;
+  initial_compliance_date?: string | null;
+  recurring_interval_hours?: number | null;
+  recurring_interval_months?: number | null;
+  last_complied_date?: string | null;
+  last_complied_time?: number | null;
+  last_complied_by?: string | null;
+  next_due_date?: string | null;
+  next_due_time?: number | null;
+  compliance_method?: string | null;
+  notes?: string | null;
+  affects_airworthiness: boolean;
+  synced_at?: string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at?: string | null;
 }
 
 export interface AircraftWithMetrics extends Aircraft {
@@ -58,7 +130,7 @@ export interface MaintenanceItem {
   id: string;
   aircraft_id: string;
   item_name: string;
-  tracking_type: 'time' | 'date';
+  tracking_type: 'time' | 'date' | 'both';
   is_required: boolean;
   last_completed_time?: number | null;
   time_interval?: number | null;
@@ -201,7 +273,7 @@ export interface SystemSettings {
 export type AppRole = 'admin' | 'pilot';
 export type AircraftRole = 'admin' | 'pilot';
 export type AircraftStatus = 'airworthy' | 'issues' | 'grounded';
-export type AppTab = 'fleet' | 'summary' | 'times' | 'calendar' | 'mx' | 'notes' | 'chuck' | 'documents';
+export type AppTab = 'fleet' | 'summary' | 'times' | 'calendar' | 'mx' | 'notes' | 'chuck' | 'chuck-usage' | 'documents' | 'equipment' | 'ads';
 export type MxSubTab = 'maintenance' | 'squawks';
 export type LogSubTab = 'flights' | 'vor' | 'tire' | 'oil';
 

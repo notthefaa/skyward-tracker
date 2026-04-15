@@ -113,6 +113,7 @@ export default function OilTab({
         .from('aft_oil_logs')
         .select('*', { count: 'exact' })
         .eq('aircraft_id', aircraft!.id)
+        .is('deleted_at', null)
         .order('created_at', { ascending: false })
         .range(from, to);
       const total = count ?? 0;
@@ -128,6 +129,7 @@ export default function OilTab({
         .from('aft_oil_logs')
         .select('*')
         .eq('aircraft_id', aircraft!.id)
+        .is('deleted_at', null)
         .order('engine_hours', { ascending: true })
         .limit(15);
       return (logs || []) as OilLog[];

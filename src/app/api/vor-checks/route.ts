@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireAuth, requireAircraftAccess, requireAircraftAdmin, handleApiError } from '@/lib/auth';
+import { setAppUser } from '@/lib/audit';
 
 const VOR_TOLERANCES: Record<string, number> = {
   'VOT': 4,
@@ -29,6 +30,7 @@ export async function POST(req: Request) {
     const tolerance = VOR_TOLERANCES[check_type];
     const passed = Math.abs(error) <= tolerance;
 
+    await setAppUser(supabaseAdmin, user.id);
     await supabaseAdmin.from('aft_vor_checks').insert({
       aircraft_id: aircraftId,
       user_id: user.id,
@@ -44,7 +46,7 @@ export async function POST(req: Request) {
   } catch (error) { return handleApiError(error); }
 }
 
-// DELETE — delete VOR check (admin only)
+// DELETE — soft-delete VOR check (admin only)
 export async function DELETE(req: Request) {
   try {
     const { user, supabaseAdmin } = await requireAuth(req);
@@ -52,7 +54,11 @@ export async function DELETE(req: Request) {
     if (!logId || !aircraftId) return NextResponse.json({ error: 'Log ID and Aircraft ID required.' }, { status: 400 });
     await requireAircraftAdmin(supabaseAdmin, user.id, aircraftId);
 
-    await supabaseAdmin.from('aft_vor_checks').delete().eq('id', logId);
+    await setAppUser(supabaseAdmin, user.id);
+    await supabaseAdmin
+      .from('aft_vor_checks')
+      .update({ deleted_at: new Date().toISOString(), deleted_by: user.id })
+      .eq('id', logId);
     return NextResponse.json({ success: true });
   } catch (error) { return handleApiError(error); }
 }

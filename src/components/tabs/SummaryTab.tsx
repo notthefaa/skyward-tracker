@@ -64,7 +64,7 @@ export default function SummaryTab({
     aircraft ? `summary-note-${aircraft.id}` : null,
     async () => {
       const { data } = await supabase.from('aft_notes')
-        .select('*').eq('aircraft_id', aircraft!.id).order('created_at', { ascending: false }).limit(1);
+        .select('*').eq('aircraft_id', aircraft!.id).is('deleted_at', null).order('created_at', { ascending: false }).limit(1);
       return data?.[0] || null;
     },
   );

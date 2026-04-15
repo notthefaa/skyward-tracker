@@ -63,6 +63,7 @@ export default function VorTab({
         .from('aft_vor_checks')
         .select('*', { count: 'exact' })
         .eq('aircraft_id', aircraft!.id)
+        .is('deleted_at', null)
         .order('created_at', { ascending: false })
         .range(from, to);
       const total = count ?? 0;
@@ -78,6 +79,7 @@ export default function VorTab({
         .from('aft_vor_checks')
         .select('*')
         .eq('aircraft_id', aircraft!.id)
+        .is('deleted_at', null)
         .order('created_at', { ascending: false })
         .limit(1);
       return (checks && checks.length > 0) ? checks[0] as VorCheck : null;

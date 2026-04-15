@@ -13,7 +13,7 @@ import {
   Wrench, AlertTriangle, FileText, LogOut,
   ChevronDown, Home, LayoutGrid, Send, ShieldCheck, X, Share, Copy, WifiOff, Loader2, Calendar, Settings,
   MoreHorizontal, FolderOpen, ShieldAlert, Compass,
-  ListChecks, PenLine, Droplets, Plane
+  ListChecks, PenLine, Droplets, Plane, BarChart3
 } from "lucide-react";
 import { TireIcon, ChuckIcon } from "@/components/shell/TrayIcons";
 
@@ -31,7 +31,10 @@ const MaintenanceTab = dynamic(() => import("@/components/tabs/MaintenanceTab"),
 const NotesTab = dynamic(() => import("@/components/tabs/NotesTab"), { loading: () => <TabSkeleton /> });
 const FleetSummary = dynamic(() => import("@/components/tabs/FleetSummary"), { loading: () => <FleetSkeleton /> });
 const ChuckTab = dynamic(() => import("@/components/tabs/ChuckTab"), { loading: () => <TabSkeleton /> });
+const ChuckUsageTab = dynamic(() => import("@/components/tabs/ChuckUsageTab"), { loading: () => <TabSkeleton /> });
 const DocumentsTab = dynamic(() => import("@/components/tabs/DocumentsTab"), { loading: () => <TabSkeleton /> });
+const EquipmentTab = dynamic(() => import("@/components/tabs/EquipmentTab"), { loading: () => <TabSkeleton /> });
+const ADsTab = dynamic(() => import("@/components/tabs/ADsTab"), { loading: () => <TabSkeleton /> });
 import NavTray, { type TrayItem } from "@/components/shell/NavTray";
 
 /** Log secondary toolbar items */
@@ -47,14 +50,16 @@ const mxTrayItems = [
   { key: 'due-items', label: 'Due Items', icon: ListChecks, color: '#F08B46', soon: false },
   { key: 'squawks', label: 'Squawks', icon: AlertTriangle, color: '#CE3732', soon: false },
   { key: 'service', label: 'Service', icon: Wrench, color: '#56B94A', soon: true },
-  { key: 'ads', label: 'ADs', icon: ShieldAlert, color: '#7C3AED', soon: true },
+  { key: 'ads', label: 'ADs', icon: ShieldAlert, color: '#7C3AED', soon: false },
 ] as const;
 
 /** More secondary toolbar items */
 const moreTrayItems = [
   { key: 'notes', label: 'Notes', icon: FileText, color: '#525659', soon: false },
   { key: 'documents', label: 'Documents', icon: FolderOpen, color: '#56B94A', soon: false },
+  { key: 'equipment', label: 'Equipment', icon: Plane, color: '#3AB0FF', soon: false },
   { key: 'chuck', label: 'Chuck', icon: ChuckIcon, color: '#0EA5E9', soon: false },
+  { key: 'chuck-usage', label: 'Usage', icon: BarChart3, color: '#7C3AED', soon: false },
 ] as const;
 
 interface AppShellProps {
@@ -82,7 +87,7 @@ export default function AppShell({ session }: AppShellProps) {
   const [activeTab, setActiveTab] = useState<AppTab>(() => {
     if (typeof window !== 'undefined') {
       const saved = sessionStorage.getItem('aft_active_tab');
-      if (saved && ['fleet','summary','times','calendar','mx','notes','chuck','documents','more'].includes(saved)) return saved as AppTab;
+      if (saved && ['fleet','summary','times','calendar','mx','notes','chuck','chuck-usage','documents','equipment','ads','more'].includes(saved)) return saved as AppTab;
     }
     return 'fleet';
   });
@@ -128,6 +133,24 @@ export default function AppShell({ session }: AppShellProps) {
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
+
+  // Listen for cross-app "Ask Chuck" button clicks
+  useEffect(() => {
+    const handleNavigateChuck = () => {
+      setExpandedNav(null);
+      navigateTab('chuck');
+    };
+    const handleNavigateChuckUsage = () => {
+      setExpandedNav(null);
+      navigateTab('chuck-usage');
+    };
+    window.addEventListener('aft:navigate-chuck', handleNavigateChuck);
+    window.addEventListener('aft:navigate-chuck-usage', handleNavigateChuckUsage);
+    return () => {
+      window.removeEventListener('aft:navigate-chuck', handleNavigateChuck);
+      window.removeEventListener('aft:navigate-chuck-usage', handleNavigateChuckUsage);
+    };
+  }, [navigateTab]);
 
   // ─── Derived State (extracted hooks) ───
   const { aircraftStatus, groundedReason, checkGroundedStatus } = useGroundedStatus(allAircraftList);
@@ -249,7 +272,7 @@ export default function AppShell({ session }: AppShellProps) {
   const fetchUnreadNotes = async (tail: string, userId: string) => {
     const ac = allAircraftList.find(a => a.tail_number === tail);
     if (!ac) return;
-    const { data: notes } = await supabase.from('aft_notes').select('id').eq('aircraft_id', ac.id);
+    const { data: notes } = await supabase.from('aft_notes').select('id').eq('aircraft_id', ac.id).is('deleted_at', null);
     if (!notes || notes.length === 0) return setUnreadNotes(0);
     const ids = notes.map(n => n.id);
     const { data: reads } = await supabase.from('aft_note_reads').select('note_id').eq('user_id', userId).in('note_id', ids);
@@ -476,7 +499,10 @@ export default function AppShell({ session }: AppShellProps) {
             {activeTab === 'mx' && <MaintenanceTab aircraft={selectedAircraftData} role={role} aircraftRole={currentAircraftRole} onGroundedStatusChange={() => checkGroundedStatus(activeTail)} sysSettings={sysSettings} session={session} userInitials={userInitials} initialSubTab={mxSubTab} />}
             {activeTab === 'notes' && <NotesTab aircraft={selectedAircraftData} session={session} role={role} aircraftRole={currentAircraftRole} userInitials={userInitials} onNotesRead={() => setUnreadNotes(0)} />}
             {activeTab === 'chuck' && <ChuckTab aircraft={selectedAircraftData} session={session} />}
+            {activeTab === 'chuck-usage' && <ChuckUsageTab />}
             {activeTab === 'documents' && <DocumentsTab aircraft={selectedAircraftData} session={session} role={role} />}
+            {activeTab === 'equipment' && <EquipmentTab aircraft={selectedAircraftData} role={role} aircraftRole={currentAircraftRole} />}
+            {activeTab === 'ads' && <ADsTab aircraft={selectedAircraftData} role={role} aircraftRole={currentAircraftRole} />}
           </>)}
         </div>
       </main>
@@ -505,9 +531,9 @@ export default function AppShell({ session }: AppShellProps) {
         userId={session?.user?.id ?? null}
         storageKey="mx"
         onSelect={(key) => {
-          if (key === 'due-items') setMxSubTab('maintenance');
-          else if (key === 'squawks') setMxSubTab('squawks');
-          navigateTab('mx');
+          if (key === 'due-items') { setMxSubTab('maintenance'); navigateTab('mx'); }
+          else if (key === 'squawks') { setMxSubTab('squawks'); navigateTab('mx'); }
+          else if (key === 'ads') { navigateTab('ads'); }
           setExpandedNav(null);
         }}
         onClose={() => setExpandedNav(null)}
@@ -524,7 +550,9 @@ export default function AppShell({ session }: AppShellProps) {
         onSelect={(key) => {
           if (key === 'notes') navigateTab('notes');
           else if (key === 'chuck') navigateTab('chuck');
+          else if (key === 'chuck-usage') navigateTab('chuck-usage');
           else if (key === 'documents') navigateTab('documents');
+          else if (key === 'equipment') navigateTab('equipment');
           setExpandedNav(null);
         }}
         onClose={() => setExpandedNav(null)}
@@ -547,7 +575,8 @@ export default function AppShell({ session }: AppShellProps) {
             const isActive = tab.id === 'summary'
               ? (activeTab === 'summary' || activeTab === 'fleet')
               : tab.id === 'log' ? activeTab === 'times'
-              : tab.id === 'more' ? (activeTab === 'notes' || activeTab === 'chuck' || activeTab === 'documents')
+              : tab.id === 'mx' ? (activeTab === 'mx' || activeTab === 'ads')
+              : tab.id === 'more' ? (activeTab === 'notes' || activeTab === 'chuck' || activeTab === 'chuck-usage' || activeTab === 'documents' || activeTab === 'equipment')
               : activeTab === tab.id;
             return (
             <button key={tab.id} onClick={() => {

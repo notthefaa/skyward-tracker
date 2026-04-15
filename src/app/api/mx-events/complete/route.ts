@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireAuth, requireAircraftAccess, requireAircraftAdmin, handleApiError } from '@/lib/auth';
+import { setAppUser } from '@/lib/audit';
 
 export async function POST(req: Request) {
   try {
@@ -12,7 +13,7 @@ export async function POST(req: Request) {
 
     // Fetch the event
     const { data: event, error: evErr } = await supabaseAdmin
-      .from('aft_maintenance_events').select('*').eq('id', eventId).single();
+      .from('aft_maintenance_events').select('*').eq('id', eventId).is('deleted_at', null).maybeSingle();
 
     if (evErr || !event) {
       return NextResponse.json({ error: 'Maintenance event not found.' }, { status: 404 });
@@ -20,14 +21,22 @@ export async function POST(req: Request) {
 
     // Verify the user is an admin for this aircraft
     await requireAircraftAdmin(supabaseAdmin, user.id, event.aircraft_id);
+    await setAppUser(supabaseAdmin, user.id);
 
     // Process each line item completion
     const completedNames: string[] = [];
 
     for (const completion of lineCompletions) {
-      const { lineItemId, completionDate, completionTime, completedByName, completedByCert, workDescription } = completion;
+      const {
+        lineItemId, completionDate, completionTime,
+        completedByName, completedByCert, workDescription,
+        certType, certNumber, certExpiry,
+        tachAtCompletion, hobbsAtCompletion, logbookRef,
+      } = completion;
 
-      // Update the line item with completion data
+      // Update the line item with completion data. 43.11 fields are
+      // optional at the API layer so this works for older clients,
+      // but the UI is expected to collect them for a clean signoff.
       await supabaseAdmin.from('aft_event_line_items').update({
         line_status: 'complete',
         completion_date: completionDate || null,
@@ -35,6 +44,12 @@ export async function POST(req: Request) {
         completed_by_name: completedByName || null,
         completed_by_cert: completedByCert || null,
         work_description: workDescription || null,
+        cert_type: certType || null,
+        cert_number: certNumber || null,
+        cert_expiry: certExpiry || null,
+        tach_at_completion: tachAtCompletion != null && tachAtCompletion !== '' ? parseFloat(tachAtCompletion) : null,
+        hobbs_at_completion: hobbsAtCompletion != null && hobbsAtCompletion !== '' ? parseFloat(hobbsAtCompletion) : null,
+        logbook_ref: logbookRef || null,
       }).eq('id', lineItemId).eq('event_id', eventId);
 
       // Fetch the line item to check if it's linked to an MX item
@@ -59,17 +74,20 @@ export async function POST(req: Request) {
               primary_heads_up_sent: false,
             };
 
-            if (mxItem.tracking_type === 'time' && completionTime) {
+            const advanceTime = (mxItem.tracking_type === 'time' || mxItem.tracking_type === 'both') && completionTime;
+            const advanceDate = (mxItem.tracking_type === 'date' || mxItem.tracking_type === 'both') && completionDate;
+
+            if (advanceTime) {
               mxUpdate.last_completed_time = parseFloat(completionTime);
               if (mxItem.time_interval) {
                 mxUpdate.due_time = parseFloat(completionTime) + mxItem.time_interval;
               }
-            } else if (mxItem.tracking_type === 'date' && completionDate) {
+            }
+            if (advanceDate) {
               mxUpdate.last_completed_date = completionDate;
               if (mxItem.date_interval_days) {
-                // Parse the completion date as UTC midnight so getUTC*/setUTC* stays
-                // in-sync. Using bare `new Date('YYYY-MM-DD')` + local getDate/setDate
-                // shifts the result by one day in negative-UTC zones.
+                // Parse as UTC midnight so getUTC*/setUTC* stays in-sync —
+                // local-TZ parse + setDate drifts by one day in negative UTC zones.
                 const nextDue = new Date(completionDate + 'T00:00:00Z');
                 nextDue.setUTCDate(nextDue.getUTCDate() + mxItem.date_interval_days);
                 mxUpdate.due_date = nextDue.toISOString().split('T')[0];

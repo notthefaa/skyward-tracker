@@ -1,0 +1,164 @@
+"use client";
+
+import { useState } from "react";
+import { authFetch } from "@/lib/authFetch";
+import { CheckCircle, X, Loader2, Sparkles, Calendar, FileText, Wrench, Plane, AlertTriangle } from "lucide-react";
+import type { ProposedAction } from "@/lib/chuck/proposedActions";
+
+interface Props {
+  action: ProposedAction;
+  onChange: () => void;
+}
+
+function actionIcon(type: string) {
+  if (type === 'reservation') return Calendar;
+  if (type === 'note') return FileText;
+  if (type === 'mx_schedule') return Wrench;
+  if (type === 'squawk_resolve') return AlertTriangle;
+  if (type === 'equipment') return Plane;
+  return Sparkles;
+}
+
+function describePayload(action: ProposedAction): React.ReactNode {
+  const p = action.payload || {};
+  switch (action.action_type) {
+    case 'reservation':
+      return (
+        <div className="text-xs text-gray-600 space-y-0.5">
+          <div><span className="font-bold uppercase tracking-widest text-[9px] text-gray-500">When: </span>{new Date(p.start_time).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })} → {new Date(p.end_time).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</div>
+          <div><span className="font-bold uppercase tracking-widest text-[9px] text-gray-500">Pilot: </span>{p.pilot_initials}</div>
+          {(p.pod || p.poa) && <div><span className="font-bold uppercase tracking-widest text-[9px] text-gray-500">Route: </span>{p.pod || '?'} → {p.poa || '?'}</div>}
+          {p.notes && <div><span className="font-bold uppercase tracking-widest text-[9px] text-gray-500">Notes: </span>{p.notes}</div>}
+        </div>
+      );
+    case 'note':
+      return (
+        <div className="text-xs text-gray-700 italic whitespace-pre-wrap border-l-2 border-gray-300 pl-2">
+          {p.content}
+        </div>
+      );
+    case 'squawk_resolve':
+      return (
+        <div className="text-xs text-gray-600">
+          <div><span className="font-bold uppercase tracking-widest text-[9px] text-gray-500">Resolution: </span>{p.resolution_note}</div>
+        </div>
+      );
+    case 'equipment':
+      return (
+        <div className="text-xs text-gray-600 space-y-0.5">
+          <div><span className="font-bold uppercase tracking-widest text-[9px] text-gray-500">Category: </span>{p.category} — {p.name}</div>
+          {(p.make || p.model || p.serial) && <div><span className="font-bold uppercase tracking-widest text-[9px] text-gray-500">ID: </span>{[p.make, p.model, p.serial && `S/N ${p.serial}`].filter(Boolean).join(' · ')}</div>}
+          {p.installed_at && <div><span className="font-bold uppercase tracking-widest text-[9px] text-gray-500">Installed: </span>{p.installed_at}{p.installed_by ? ` by ${p.installed_by}` : ''}</div>}
+          {(p.ifr_capable || p.adsb_out || p.is_elt) && (
+            <div className="flex flex-wrap gap-1 pt-1">
+              {p.ifr_capable && <span className="text-[8.5px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-[#3AB0FF]/10 text-[#3AB0FF] border border-[#3AB0FF]/20">IFR</span>}
+              {p.adsb_out && <span className="text-[8.5px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-[#56B94A]/10 text-[#56B94A] border border-[#56B94A]/20">ADS-B Out</span>}
+              {p.is_elt && <span className="text-[8.5px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-[#F08B46]/10 text-[#F08B46] border border-[#F08B46]/20">ELT</span>}
+            </div>
+          )}
+        </div>
+      );
+    case 'mx_schedule':
+      return (
+        <div className="text-xs text-gray-600 space-y-0.5">
+          {p.proposed_date && <div><span className="font-bold uppercase tracking-widest text-[9px] text-gray-500">Proposed: </span>{p.proposed_date}</div>}
+          <div><span className="font-bold uppercase tracking-widest text-[9px] text-gray-500">Items: </span>{(p.mx_item_ids?.length || 0)} MX · {(p.squawk_ids?.length || 0)} squawks</div>
+          {p.addon_services?.length > 0 && <div><span className="font-bold uppercase tracking-widest text-[9px] text-gray-500">Add-ons: </span>{p.addon_services.join(', ')}</div>}
+          {p.notes && <div><span className="font-bold uppercase tracking-widest text-[9px] text-gray-500">Notes: </span>{p.notes}</div>}
+        </div>
+      );
+  }
+}
+
+export default function ProposedActionCard({ action, onChange }: Props) {
+  const [isPending, setIsPending] = useState<'confirm' | 'cancel' | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const Icon = actionIcon(action.action_type);
+
+  const handleConfirm = async () => {
+    setIsPending('confirm'); setError(null);
+    try {
+      const res = await authFetch(`/api/chuck/actions/${action.id}`, { method: 'POST' });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || 'Failed to confirm');
+      }
+      onChange();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setIsPending(null);
+    }
+  };
+
+  const handleCancel = async () => {
+    setIsPending('cancel'); setError(null);
+    try {
+      const res = await authFetch(`/api/chuck/actions/${action.id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || 'Failed to cancel');
+      }
+      onChange();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setIsPending(null);
+    }
+  };
+
+  // Status-specific styling
+  const base = "bg-white border rounded-lg p-3 text-navy";
+  let statusClasses = "border-[#0EA5E9]/40 shadow-sm";
+  if (action.status === 'executed') statusClasses = "border-[#56B94A]/40 bg-green-50/50";
+  if (action.status === 'cancelled') statusClasses = "border-gray-300 bg-gray-50 opacity-70";
+  if (action.status === 'failed') statusClasses = "border-[#CE3732]/40 bg-red-50";
+
+  return (
+    <div className={`${base} ${statusClasses}`}>
+      <div className="flex items-start gap-2">
+        <div className={`p-1.5 rounded-full shrink-0 ${action.status === 'executed' ? 'bg-[#56B94A]/10 text-[#56B94A]' : action.status === 'cancelled' ? 'bg-gray-200 text-gray-500' : action.status === 'failed' ? 'bg-[#CE3732]/10 text-[#CE3732]' : 'bg-[#0EA5E9]/10 text-[#0EA5E9]'}`}>
+          <Icon size={14} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-[9px] font-bold uppercase tracking-widest text-gray-500">Chuck proposed</span>
+            {action.status === 'pending' && <span className="text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-[#0EA5E9]/10 text-[#0EA5E9]">Pending</span>}
+            {action.status === 'executed' && <span className="text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-[#56B94A]/10 text-[#56B94A]">Confirmed</span>}
+            {action.status === 'cancelled' && <span className="text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-gray-200 text-gray-500">Cancelled</span>}
+            {action.status === 'failed' && <span className="text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-[#CE3732]/10 text-[#CE3732]">Failed</span>}
+          </div>
+          <p className="text-sm font-oswald font-bold uppercase text-navy mt-1 leading-tight">{action.summary}</p>
+          <div className="mt-2">{describePayload(action)}</div>
+
+          {action.status === 'failed' && action.error_message && (
+            <p className="text-[10px] text-[#CE3732] mt-2 italic">Error: {action.error_message}</p>
+          )}
+          {error && <p className="text-[10px] text-[#CE3732] mt-2 italic">{error}</p>}
+
+          {action.status === 'pending' && (
+            <div className="flex gap-2 mt-3">
+              <button
+                onClick={handleConfirm}
+                disabled={isPending !== null}
+                className="flex-1 bg-[#56B94A] text-white font-oswald font-bold uppercase tracking-widest text-[10px] py-2 rounded active:scale-95 transition-transform disabled:opacity-50 flex items-center justify-center gap-1.5"
+              >
+                {isPending === 'confirm' ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle size={12} />}
+                Confirm
+              </button>
+              <button
+                onClick={handleCancel}
+                disabled={isPending !== null}
+                className="flex-1 border border-gray-300 text-gray-600 font-oswald font-bold uppercase tracking-widest text-[10px] py-2 rounded active:scale-95 transition-transform disabled:opacity-50 flex items-center justify-center gap-1.5"
+              >
+                {isPending === 'cancel' ? <Loader2 size={12} className="animate-spin" /> : <X size={12} />}
+                Cancel
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

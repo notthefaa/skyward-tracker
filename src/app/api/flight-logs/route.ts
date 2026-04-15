@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireAuth, requireAircraftAccess, requireAircraftAdmin, handleApiError } from '@/lib/auth';
+import { setAppUser } from '@/lib/audit';
 
 // Ensure numeric fields on a log payload are non-negative. Returns an error
 // message on the first violation, or null if the payload is clean.
@@ -22,7 +23,10 @@ function validateLogData(logData: any): string | null {
   return null;
 }
 
-// POST — create flight log (any user with aircraft access)
+// POST — create flight log atomically (any user with aircraft access).
+// Uses log_flight_atomic RPC: locks the aircraft row, enforces monotonicity
+// + sanity bounds, and updates totals in a single transaction so two
+// simultaneous writers can't clobber aircraft hours.
 export async function POST(req: Request) {
   try {
     const { user, supabaseAdmin } = await requireAuth(req);
@@ -32,9 +36,18 @@ export async function POST(req: Request) {
     if (validationError) return NextResponse.json({ error: validationError }, { status: 400 });
     await requireAircraftAccess(supabaseAdmin, user.id, aircraftId);
 
-    await supabaseAdmin.from('aft_flight_logs').insert({ ...logData, aircraft_id: aircraftId, user_id: user.id });
-    if (aircraftUpdate && Object.keys(aircraftUpdate).length > 0) {
-      await supabaseAdmin.from('aft_aircraft').update(aircraftUpdate).eq('id', aircraftId);
+    const { error: rpcErr } = await supabaseAdmin.rpc('log_flight_atomic', {
+      p_aircraft_id: aircraftId,
+      p_user_id: user.id,
+      p_log_data: logData ?? {},
+      p_aircraft_update: aircraftUpdate ?? {},
+    });
+    if (rpcErr) {
+      // P0001 = check violation (monotonicity / sanity bound) — show to user.
+      // P0002 = aircraft not found.
+      const msg = rpcErr.message || 'Failed to save flight log.';
+      const status = rpcErr.code === 'P0002' ? 404 : rpcErr.code === 'P0001' ? 400 : 500;
+      return NextResponse.json({ error: msg }, { status });
     }
 
     return NextResponse.json({ success: true });
@@ -51,6 +64,7 @@ export async function PUT(req: Request) {
     if (validationError) return NextResponse.json({ error: validationError }, { status: 400 });
     await requireAircraftAdmin(supabaseAdmin, user.id, aircraftId);
 
+    await setAppUser(supabaseAdmin, user.id);
     await supabaseAdmin.from('aft_flight_logs').update(logData).eq('id', logId);
     if (aircraftUpdate && Object.keys(aircraftUpdate).length > 0) {
       await supabaseAdmin.from('aft_aircraft').update(aircraftUpdate).eq('id', aircraftId);
@@ -60,7 +74,8 @@ export async function PUT(req: Request) {
   } catch (error) { return handleApiError(error); }
 }
 
-// DELETE — delete latest flight log (admin only)
+// DELETE — soft-delete latest flight log (admin only). The row stays in the
+// DB for retention; the trigger logs the operation in aft_record_history.
 export async function DELETE(req: Request) {
   try {
     const { user, supabaseAdmin } = await requireAuth(req);
@@ -68,8 +83,14 @@ export async function DELETE(req: Request) {
     if (!logId || !aircraftId) return NextResponse.json({ error: 'Log ID and Aircraft ID required.' }, { status: 400 });
     await requireAircraftAdmin(supabaseAdmin, user.id, aircraftId);
 
-    await supabaseAdmin.from('aft_flight_logs').delete().eq('id', logId);
-    await supabaseAdmin.from('aft_aircraft').update(aircraftUpdate).eq('id', aircraftId);
+    await setAppUser(supabaseAdmin, user.id);
+    await supabaseAdmin
+      .from('aft_flight_logs')
+      .update({ deleted_at: new Date().toISOString(), deleted_by: user.id })
+      .eq('id', logId);
+    if (aircraftUpdate) {
+      await supabaseAdmin.from('aft_aircraft').update(aircraftUpdate).eq('id', aircraftId);
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) { return handleApiError(error); }

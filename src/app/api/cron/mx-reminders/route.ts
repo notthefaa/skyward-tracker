@@ -27,8 +27,8 @@ export async function GET(req: Request) {
 
     const supabaseAdmin = createAdminClient();
 
-    const { data: aircraftList } = await supabaseAdmin.from('aft_aircraft').select('*');
-    const { data: mxItems } = await supabaseAdmin.from('aft_maintenance_items').select('*').eq('is_required', true);
+    const { data: aircraftList } = await supabaseAdmin.from('aft_aircraft').select('*').is('deleted_at', null);
+    const { data: mxItems } = await supabaseAdmin.from('aft_maintenance_items').select('*').eq('is_required', true).is('deleted_at', null);
 
     if (!aircraftList || !mxItems) return NextResponse.json({ success: true, note: 'No data' });
 

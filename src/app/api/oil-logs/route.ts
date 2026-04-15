@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireAuth, requireAircraftAccess, requireAircraftAdmin, handleApiError } from '@/lib/auth';
+import { setAppUser } from '@/lib/audit';
 
 // POST — create oil log (any user with aircraft access)
 export async function POST(req: Request) {
@@ -25,6 +26,7 @@ export async function POST(req: Request) {
       if (Number.isNaN(num) || num < 0) return NextResponse.json({ error: `Invalid ${field}: must be a non-negative number.` }, { status: 400 });
     }
 
+    await setAppUser(supabaseAdmin, user.id);
     await supabaseAdmin.from('aft_oil_logs').insert({
       aircraft_id: aircraftId,
       user_id: user.id,
@@ -39,7 +41,7 @@ export async function POST(req: Request) {
   } catch (error) { return handleApiError(error); }
 }
 
-// DELETE — delete oil log (admin only)
+// DELETE — soft-delete oil log (admin only)
 export async function DELETE(req: Request) {
   try {
     const { user, supabaseAdmin } = await requireAuth(req);
@@ -47,7 +49,11 @@ export async function DELETE(req: Request) {
     if (!logId || !aircraftId) return NextResponse.json({ error: 'Log ID and Aircraft ID required.' }, { status: 400 });
     await requireAircraftAdmin(supabaseAdmin, user.id, aircraftId);
 
-    await supabaseAdmin.from('aft_oil_logs').delete().eq('id', logId);
+    await setAppUser(supabaseAdmin, user.id);
+    await supabaseAdmin
+      .from('aft_oil_logs')
+      .update({ deleted_at: new Date().toISOString(), deleted_by: user.id })
+      .eq('id', logId);
     return NextResponse.json({ success: true });
   } catch (error) { return handleApiError(error); }
 }

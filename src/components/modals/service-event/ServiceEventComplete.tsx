@@ -21,6 +21,8 @@ export default function ServiceEventComplete({
   const today = new Date().toISOString().split('T')[0];
   const currentTime = aircraft?.total_engine_time?.toFixed(1) || "";
 
+  const currentHobbs = aircraft?.total_airframe_time?.toFixed(1) || "";
+
   const [completionItems, setCompletionItems] = useState(() => {
     return eventLineItems
       .filter(li => li.item_type === 'maintenance' || li.item_type === 'squawk')
@@ -32,6 +34,13 @@ export default function ServiceEventComplete({
         completedByName: "",
         completedByCert: "",
         workDescription: "",
+        // 43.11 fields
+        certType: "A&P",
+        certNumber: "",
+        certExpiry: "",
+        tachAtCompletion: currentTime,
+        hobbsAtCompletion: currentHobbs,
+        logbookRef: "",
         markComplete: true,
       }));
   });
@@ -62,6 +71,12 @@ export default function ServiceEventComplete({
         completedByName: c.completedByName || null,
         completedByCert: c.completedByCert || null,
         workDescription: c.workDescription || null,
+        certType: c.certType || null,
+        certNumber: c.certNumber || c.completedByCert || null,
+        certExpiry: c.certExpiry || null,
+        tachAtCompletion: c.tachAtCompletion || null,
+        hobbsAtCompletion: c.hobbsAtCompletion || null,
+        logbookRef: c.logbookRef || null,
       }));
 
       const res = await authFetch('/api/mx-events/complete', {
@@ -119,12 +134,42 @@ export default function ServiceEventComplete({
               <div className="grid grid-cols-2 gap-3">
                 <div className="min-w-0">
                   <label className="text-[10px] font-bold uppercase tracking-widest text-navy block">Signed By</label>
-                  <input type="text" value={item.completedByName} onChange={e => updateItem(idx, 'completedByName', e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-[#56B94A] outline-none" placeholder="IA / A&P" />
+                  <input type="text" value={item.completedByName} onChange={e => updateItem(idx, 'completedByName', e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-[#56B94A] outline-none" placeholder="Name of mechanic" />
                 </div>
                 <div className="min-w-0">
-                  <label className="text-[10px] font-bold uppercase tracking-widest text-navy block">Certificate #</label>
-                  <input type="text" value={item.completedByCert} onChange={e => updateItem(idx, 'completedByCert', e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-[#56B94A] outline-none" />
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-navy block">Cert Type</label>
+                  <select value={item.certType} onChange={e => updateItem(idx, 'certType', e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-[#56B94A] outline-none">
+                    <option value="A&P">A&amp;P</option>
+                    <option value="IA">IA</option>
+                    <option value="Repairman">Repairman</option>
+                    <option value="Pilot-Owner">Pilot-Owner (91.411)</option>
+                    <option value="Other">Other</option>
+                  </select>
                 </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="min-w-0">
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-navy block">Certificate #</label>
+                  <input type="text" value={item.certNumber} onChange={e => updateItem(idx, 'certNumber', e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-[#56B94A] outline-none" />
+                </div>
+                <div className="min-w-0">
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-navy block">{item.certType === 'IA' ? 'IA Expiry' : 'Cert Expiry (optional)'}</label>
+                  <input type="date" value={item.certExpiry} onChange={e => updateItem(idx, 'certExpiry', e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-[#56B94A] outline-none" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="min-w-0">
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-navy block">Tach at Completion</label>
+                  <input type="number" step="0.1" value={item.tachAtCompletion} onChange={e => updateItem(idx, 'tachAtCompletion', e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-[#56B94A] outline-none" />
+                </div>
+                <div className="min-w-0">
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-navy block">Hobbs at Completion</label>
+                  <input type="number" step="0.1" value={item.hobbsAtCompletion} onChange={e => updateItem(idx, 'hobbsAtCompletion', e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-[#56B94A] outline-none" />
+                </div>
+              </div>
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-widest text-navy block">Logbook Reference</label>
+                <input type="text" value={item.logbookRef} onChange={e => updateItem(idx, 'logbookRef', e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-[#56B94A] outline-none" placeholder="e.g. Airframe logbook p.42, Engine logbook p.17" />
               </div>
               <div>
                 <label className="text-[10px] font-bold uppercase tracking-widest text-navy block">Work Performed</label>

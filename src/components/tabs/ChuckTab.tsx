@@ -2,12 +2,16 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { authFetch } from "@/lib/authFetch";
+import { supabase } from "@/lib/supabase";
 import type { AircraftWithMetrics } from "@/lib/types";
 import type { ChuckMessage } from "@/lib/chuck/types";
 import useSWR from "swr";
-import { Send, Loader2 } from "lucide-react";
+import { Send, Wrench, Globe, CloudSun, FileSearch, Database, BarChart3, Trash2 } from "lucide-react";
 import { ChuckIcon } from "@/components/shell/TrayIcons";
 import { useToast } from "@/components/ToastProvider";
+import { useConfirm } from "@/components/ConfirmProvider";
+import ProposedActionCard from "@/components/chuck/ProposedActionCard";
+import type { ProposedAction } from "@/lib/chuck/proposedActions";
 
 const SUGGESTIONS = [
   "What maintenance is coming due?",
@@ -16,19 +20,49 @@ const SUGGESTIONS = [
   "When is my VOR check due?",
 ];
 
+// Friendly label for tool-use indicator
+function toolLabel(name: string): { label: string; Icon: any } {
+  if (name === 'web_search') return { label: 'Searching the web', Icon: Globe };
+  if (name === 'search_documents') return { label: 'Searching documents', Icon: FileSearch };
+  if (name === 'get_weather_briefing' || name === 'get_aviation_hazards') return { label: 'Pulling weather', Icon: CloudSun };
+  if (name.startsWith('get_')) return { label: 'Looking up ' + name.replace('get_', '').replace(/_/g, ' '), Icon: Database };
+  return { label: 'Using ' + name, Icon: Wrench };
+}
+
+// Compact name for the tool-chip badge shown beneath finished assistant messages
+function toolChipName(name: string): string {
+  if (name === 'web_search') return 'web';
+  if (name === 'search_documents') return 'docs';
+  if (name === 'get_weather_briefing') return 'weather';
+  if (name === 'get_aviation_hazards') return 'hazards';
+  if (name === 'get_flight_logs') return 'flight logs';
+  if (name === 'get_maintenance_items') return 'MX items';
+  if (name === 'get_squawks') return 'squawks';
+  if (name === 'get_service_events') return 'service';
+  if (name === 'get_notes') return 'notes';
+  if (name === 'get_reservations') return 'reservations';
+  if (name === 'get_vor_checks') return 'VOR';
+  if (name === 'get_tire_and_oil_logs') return 'tire/oil';
+  if (name === 'get_system_settings') return 'settings';
+  if (name === 'get_event_line_items') return 'line items';
+  return name.replace(/_/g, ' ');
+}
+
 export default function ChuckTab({
   aircraft, session
 }: {
   aircraft: AircraftWithMetrics | null;
   session: any;
 }) {
-  const { showError } = useToast();
+  const { showError, showSuccess } = useToast();
+  const confirm = useConfirm();
   const [input, setInput] = useState('');
   const [isSending, setIsSending] = useState(false);
+  const [streamingText, setStreamingText] = useState('');
+  const [activeToolName, setActiveToolName] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Load conversation thread
   const { data, mutate } = useSWR(
     aircraft ? `chuck-${aircraft.id}` : null,
     async () => {
@@ -39,13 +73,24 @@ export default function ChuckTab({
   );
 
   const messages = data?.messages || [];
+  const threadId = data?.thread?.id;
 
-  // Auto-scroll to bottom on new messages
+  // Proposed actions for this thread, keyed by id.
+  const { data: actionsData, mutate: mutateActions } = useSWR(
+    threadId ? `chuck-actions-${threadId}` : null,
+    async () => {
+      const res = await authFetch(`/api/chuck/actions?threadId=${threadId}`);
+      if (!res.ok) throw new Error('Failed to load actions');
+      return await res.json() as { actions: ProposedAction[] };
+    }
+  );
+  const actionsById: Record<string, ProposedAction> = {};
+  for (const a of actionsData?.actions || []) actionsById[a.id] = a;
+
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages.length, isSending]);
+  }, [messages.length, streamingText, activeToolName]);
 
-  // Auto-resize textarea
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInput(e.target.value);
     const el = e.target;
@@ -60,8 +105,9 @@ export default function ChuckTab({
     setInput('');
     if (textareaRef.current) textareaRef.current.style.height = 'auto';
     setIsSending(true);
+    setStreamingText('');
+    setActiveToolName(null);
 
-    // Optimistic update — add user message immediately
     const optimisticUserMsg: ChuckMessage = {
       id: 'pending-user',
       thread_id: '',
@@ -79,35 +125,85 @@ export default function ChuckTab({
     mutate(prev => prev ? { ...prev, messages: [...prev.messages, optimisticUserMsg] } : prev, false);
 
     try {
-      const res = await authFetch('/api/chuck', {
+      const { data: { session: s } } = await supabase.auth.getSession();
+      const res = await fetch('/api/chuck', {
         method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(s?.access_token ? { Authorization: `Bearer ${s.access_token}` } : {}),
+        },
         body: JSON.stringify({ aircraftId: aircraft.id, message: msg }),
       });
 
-      if (!res.ok) {
-        const d = await res.json();
+      if (!res.ok || !res.body) {
+        const d = await res.json().catch(() => ({ error: 'Failed to send message' }));
         throw new Error(d.error || 'Failed to send message');
       }
 
-      const { userMessage, assistantMessage } = await res.json();
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let savedUserMsg: ChuckMessage | null = null;
+      let savedAssistantMsg: ChuckMessage | null = null;
+      let accumulated = '';
 
-      // Replace optimistic message with real data
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        const parts = buffer.split('\n\n');
+        buffer = parts.pop() || '';
+
+        for (const part of parts) {
+          const line = part.trim();
+          if (!line.startsWith('data: ')) continue;
+          const payload = line.slice(6);
+          let ev: any;
+          try { ev = JSON.parse(payload); } catch { continue; }
+
+          if (ev.type === 'user_saved') {
+            savedUserMsg = ev.userMessage;
+          } else if (ev.type === 'text_delta') {
+            accumulated += ev.delta;
+            setStreamingText(accumulated);
+            setActiveToolName(null);
+          } else if (ev.type === 'tool_use_start') {
+            setActiveToolName(ev.name);
+          } else if (ev.type === 'tool_use_end') {
+            setActiveToolName(null);
+          } else if (ev.type === 'done') {
+            savedAssistantMsg = ev.assistantMessage;
+          } else if (ev.type === 'error') {
+            throw new Error(ev.error || 'Stream error');
+          }
+        }
+      }
+
+      // Replace optimistic + streaming placeholder with persisted records
       mutate(prev => {
         if (!prev) return prev;
         const filtered = prev.messages.filter(m => m.id !== 'pending-user');
-        return { ...prev, messages: [...filtered, userMessage, assistantMessage] };
+        const next = [...filtered];
+        if (savedUserMsg) next.push(savedUserMsg);
+        if (savedAssistantMsg) next.push(savedAssistantMsg);
+        return { ...prev, messages: next };
       }, false);
+
+      // If Chuck created any proposed actions, pick them up for the cards.
+      mutateActions();
     } catch (err: any) {
       showError(err.message);
-      // Remove optimistic message on failure
       mutate(prev => {
         if (!prev) return prev;
         return { ...prev, messages: prev.messages.filter(m => m.id !== 'pending-user') };
       }, false);
     } finally {
       setIsSending(false);
+      setStreamingText('');
+      setActiveToolName(null);
     }
-  }, [input, aircraft, isSending, mutate, showError]);
+  }, [input, aircraft, isSending, mutate, mutateActions, showError]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -116,18 +212,84 @@ export default function ChuckTab({
     }
   }, [handleSend]);
 
+  const handleClearThread = useCallback(async () => {
+    if (!aircraft || isSending) return;
+    const ok = await confirm({
+      title: 'Clear conversation?',
+      message: `This will permanently delete your entire chat history with Chuck for ${aircraft.tail_number}. Usage totals are unaffected.`,
+      confirmText: 'Clear',
+      cancelText: 'Cancel',
+      variant: 'danger',
+    });
+    if (!ok) return;
+    try {
+      const res = await authFetch(`/api/chuck?aircraftId=${aircraft.id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error((await res.json()).error || 'Failed to clear conversation');
+      mutate({ thread: null, messages: [] }, false);
+      showSuccess('Conversation cleared.');
+    } catch (err: any) {
+      showError(err.message);
+    }
+  }, [aircraft, isSending, confirm, mutate, showSuccess, showError]);
+
+  // Prefill handoff from AskChuck buttons elsewhere in the app.
+  // sessionStorage key "aft_chuck_prefill" (JSON: {prompt, autoSend})
+  useEffect(() => {
+    if (!aircraft || isSending) return;
+    try {
+      const raw = sessionStorage.getItem('aft_chuck_prefill');
+      if (!raw) return;
+      sessionStorage.removeItem('aft_chuck_prefill');
+      const { prompt, autoSend } = JSON.parse(raw);
+      if (typeof prompt !== 'string' || !prompt.trim()) return;
+      if (autoSend) {
+        handleSend(prompt);
+      } else {
+        setInput(prompt);
+        textareaRef.current?.focus();
+      }
+    } catch {}
+  }, [aircraft?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
   if (!aircraft) return null;
+
+  const toolInfo = activeToolName ? toolLabel(activeToolName) : null;
 
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="flex items-center gap-3 mb-4">
-        <div className="p-2 rounded-full bg-[#0EA5E9]/10">
-          <ChuckIcon size={24} style={{ color: '#0EA5E9' }} />
+      <div className="flex items-center justify-between gap-3 mb-4">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="p-2 rounded-full bg-[#0EA5E9]/10 shrink-0">
+            <ChuckIcon size={24} style={{ color: '#0EA5E9' }} />
+          </div>
+          <div className="min-w-0">
+            <h2 className="font-oswald text-2xl md:text-3xl font-bold uppercase text-navy m-0 leading-none">Chuck</h2>
+            <span className="text-[10px] font-bold uppercase tracking-widest text-[#0EA5E9] truncate block">AI Copilot for {aircraft.tail_number}</span>
+          </div>
         </div>
-        <div>
-          <h2 className="font-oswald text-2xl md:text-3xl font-bold uppercase text-navy m-0 leading-none">Chuck</h2>
-          <span className="text-[10px] font-bold uppercase tracking-widest text-[#0EA5E9]">AI Copilot for {aircraft.tail_number}</span>
+        <div className="flex items-center gap-3 shrink-0">
+          <button
+            onClick={() => window.dispatchEvent(new CustomEvent('aft:navigate-chuck-usage'))}
+            title="View Chuck usage"
+            aria-label="View Chuck usage"
+            className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-gray-500 hover:text-[#0EA5E9] active:scale-95 transition-colors"
+          >
+            <BarChart3 size={14} />
+            <span className="hidden sm:inline">Usage</span>
+          </button>
+          {messages.length > 0 && (
+            <button
+              onClick={handleClearThread}
+              disabled={isSending}
+              title="Clear conversation"
+              aria-label="Clear conversation"
+              className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-gray-500 hover:text-[#CE3732] active:scale-95 transition-colors disabled:opacity-40"
+            >
+              <Trash2 size={14} />
+              <span className="hidden sm:inline">Clear</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -154,28 +316,95 @@ export default function ChuckTab({
           </div>
         ) : (
           <div className="flex flex-col gap-3">
-            {messages.map(msg => (
-              <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 ${
-                  msg.role === 'user'
-                    ? 'bg-[#3AB0FF] text-white'
-                    : 'bg-white border border-gray-200 text-navy'
-                }`}>
-                  <p className="font-roboto text-sm whitespace-pre-wrap leading-relaxed">{msg.content}</p>
-                  <span className={`block text-[9px] mt-1 ${msg.role === 'user' ? 'text-white/60' : 'text-gray-400'}`}>
-                    {new Date(msg.created_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
-                  </span>
+            {messages.map(msg => {
+              const toolNames: string[] = msg.role === 'assistant' && Array.isArray(msg.tool_calls)
+                ? Array.from(new Set((msg.tool_calls as any[]).map(t => t.name).filter(Boolean)))
+                : [];
+
+              // Find any propose_* tool calls and their resulting
+              // proposed_action_ids (parsed from tool_results).
+              const proposedActions: ProposedAction[] = [];
+              if (msg.role === 'assistant' && Array.isArray(msg.tool_calls) && Array.isArray(msg.tool_results)) {
+                const resultById = new Map<string, any>();
+                for (const r of msg.tool_results as any[]) {
+                  if (r?.tool_use_id) resultById.set(r.tool_use_id, r.result);
+                }
+                for (const call of msg.tool_calls as any[]) {
+                  if (!call?.name?.startsWith('propose_')) continue;
+                  const raw = resultById.get(call.id);
+                  if (!raw) continue;
+                  try {
+                    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+                    const id = parsed?.proposed_action_id;
+                    if (id && actionsById[id]) {
+                      proposedActions.push(actionsById[id]);
+                    }
+                  } catch {}
+                }
+              }
+
+              return (
+                <div key={msg.id} className={`flex flex-col gap-2 ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
+                  <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 ${
+                    msg.role === 'user'
+                      ? 'bg-[#3AB0FF] text-white'
+                      : 'bg-white border border-gray-200 text-navy'
+                  }`}>
+                    <p className="font-roboto text-sm whitespace-pre-wrap leading-relaxed">{msg.content}</p>
+                    {toolNames.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-2">
+                        {toolNames.map(n => (
+                          <span key={n} className="text-[8.5px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-[#0EA5E9]/10 text-[#0EA5E9] border border-[#0EA5E9]/20">
+                            {toolChipName(n)}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    <span className={`block text-[9px] mt-1 ${msg.role === 'user' ? 'text-white/60' : 'text-gray-400'}`}>
+                      {new Date(msg.created_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+                    </span>
+                  </div>
+
+                  {proposedActions.map(a => (
+                    <div key={a.id} className="max-w-[85%] w-full">
+                      <ProposedActionCard action={a} onChange={() => mutateActions()} />
+                    </div>
+                  ))}
                 </div>
-              </div>
-            ))}
-            {isSending && (
+              );
+            })}
+
+            {/* Streaming assistant bubble */}
+            {isSending && (streamingText || toolInfo) && (
               <div className="flex justify-start">
-                <div className="bg-white border border-gray-200 rounded-2xl px-4 py-3 flex items-center gap-2">
-                  <Loader2 size={14} className="animate-spin text-[#0EA5E9]" />
-                  <span className="text-xs text-gray-400 font-roboto">Chuck is thinking...</span>
+                <div className="max-w-[85%] bg-white border border-gray-200 rounded-2xl px-4 py-2.5 text-navy">
+                  {toolInfo && (
+                    <div className="flex items-center gap-1.5 mb-1.5 text-[#0EA5E9]">
+                      <toolInfo.Icon size={12} className="animate-pulse" />
+                      <span className="text-[10px] font-bold uppercase tracking-widest">{toolInfo.label}…</span>
+                    </div>
+                  )}
+                  {streamingText && (
+                    <p className="font-roboto text-sm whitespace-pre-wrap leading-relaxed">
+                      {streamingText}
+                      <span className="inline-block w-1.5 h-3.5 ml-0.5 bg-[#0EA5E9] align-middle animate-pulse" />
+                    </p>
+                  )}
                 </div>
               </div>
             )}
+
+            {/* Pre-stream thinking indicator */}
+            {isSending && !streamingText && !toolInfo && (
+              <div className="flex justify-start">
+                <div className="bg-white border border-gray-200 rounded-2xl px-4 py-3 flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#0EA5E9] animate-bounce" style={{ animationDelay: '0ms' }} />
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#0EA5E9] animate-bounce" style={{ animationDelay: '150ms' }} />
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#0EA5E9] animate-bounce" style={{ animationDelay: '300ms' }} />
+                </div>
+              </div>
+            )}
+
             <div ref={messagesEndRef} />
           </div>
         )}

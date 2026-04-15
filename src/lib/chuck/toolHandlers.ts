@@ -1,12 +1,45 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { tavily } from '@tavily/core';
 import OpenAI from 'openai';
+import { computeAirworthinessStatus } from '@/lib/airworthiness';
+import { syncAdsForAircraft } from '@/lib/drs';
+import { proposeAction, type ActionType } from './proposedActions';
 
-type ToolHandler = (params: any, sb: SupabaseClient, aircraftId: string) => Promise<any>;
+export interface ToolContext {
+  userId: string;
+  threadId: string;
+  aircraftId: string;
+  aircraftTail: string;
+}
+
+type ToolHandler = (params: any, sb: SupabaseClient, aircraftId: string, ctx: ToolContext) => Promise<any>;
 
 function clampLimit(limit: any, defaultVal = 10, max = 50): number {
   const n = Number(limit) || defaultVal;
   return Math.min(Math.max(1, n), max);
+}
+
+/**
+ * Per-tool-call aircraft access verification. Belt-and-suspenders against
+ * prompt-injection — the request-level check already ran, but we want the
+ * window between that check and each tool call to be narrow.
+ */
+async function verifyAccess(sb: SupabaseClient, userId: string, aircraftId: string): Promise<boolean> {
+  // Global admins bypass
+  const { data: role } = await sb
+    .from('aft_user_roles')
+    .select('role')
+    .eq('user_id', userId)
+    .single();
+  if (role?.role === 'admin') return true;
+
+  const { data: access } = await sb
+    .from('aft_user_aircraft_access')
+    .select('aircraft_role')
+    .eq('user_id', userId)
+    .eq('aircraft_id', aircraftId)
+    .maybeSingle();
+  return !!access;
 }
 
 const handlers: Record<string, ToolHandler> = {
@@ -15,6 +48,7 @@ const handlers: Record<string, ToolHandler> = {
     let query = sb.from('aft_flight_logs')
       .select('*')
       .eq('aircraft_id', aircraftId)
+      .is('deleted_at', null)
       .order('created_at', { ascending: false })
       .limit(limit);
     if (params.date_from) query = query.gte('created_at', params.date_from);
@@ -28,6 +62,7 @@ const handlers: Record<string, ToolHandler> = {
     let query = sb.from('aft_maintenance_items')
       .select('*')
       .eq('aircraft_id', aircraftId)
+      .is('deleted_at', null)
       .order('due_date', { ascending: true })
       .order('due_time', { ascending: true });
     if (params.tracking_type) query = query.eq('tracking_type', params.tracking_type);
@@ -42,6 +77,7 @@ const handlers: Record<string, ToolHandler> = {
     let query = sb.from('aft_maintenance_events')
       .select('*')
       .eq('aircraft_id', aircraftId)
+      .is('deleted_at', null)
       .order('created_at', { ascending: false })
       .limit(limit);
     if (params.status) query = query.eq('status', params.status);
@@ -50,11 +86,22 @@ const handlers: Record<string, ToolHandler> = {
     return { count: (data || []).length, events: data };
   },
 
-  get_event_line_items: async (params, sb) => {
+  get_event_line_items: async (params, sb, aircraftId) => {
     if (!params.event_id) return { error: 'event_id is required' };
+
+    const { data: ev } = await sb
+      .from('aft_maintenance_events')
+      .select('id, aircraft_id, deleted_at')
+      .eq('id', params.event_id)
+      .maybeSingle();
+    if (!ev || ev.aircraft_id !== aircraftId || ev.deleted_at) {
+      return { error: 'Event not found for this aircraft.' };
+    }
+
     const { data, error } = await sb.from('aft_event_line_items')
       .select('*')
       .eq('event_id', params.event_id)
+      .is('deleted_at', null)
       .order('created_at', { ascending: true });
     if (error) return { error: error.message };
     return { count: (data || []).length, line_items: data };
@@ -64,6 +111,7 @@ const handlers: Record<string, ToolHandler> = {
     let query = sb.from('aft_squawks')
       .select('*')
       .eq('aircraft_id', aircraftId)
+      .is('deleted_at', null)
       .order('created_at', { ascending: false });
     if (params.status && params.status !== 'all') query = query.eq('status', params.status);
     const { data, error } = await query;
@@ -76,6 +124,7 @@ const handlers: Record<string, ToolHandler> = {
     const { data, error } = await sb.from('aft_notes')
       .select('*')
       .eq('aircraft_id', aircraftId)
+      .is('deleted_at', null)
       .order('created_at', { ascending: false })
       .limit(limit);
     if (error) return { error: error.message };
@@ -101,6 +150,7 @@ const handlers: Record<string, ToolHandler> = {
     const { data, error } = await sb.from('aft_vor_checks')
       .select('*')
       .eq('aircraft_id', aircraftId)
+      .is('deleted_at', null)
       .order('created_at', { ascending: false })
       .limit(limit);
     if (error) return { error: error.message };
@@ -116,6 +166,7 @@ const handlers: Record<string, ToolHandler> = {
       const { data, error } = await sb.from('aft_tire_checks')
         .select('*')
         .eq('aircraft_id', aircraftId)
+        .is('deleted_at', null)
         .order('created_at', { ascending: false })
         .limit(limit);
       if (error) return { error: error.message };
@@ -127,6 +178,7 @@ const handlers: Record<string, ToolHandler> = {
       const { data, error } = await sb.from('aft_oil_logs')
         .select('*')
         .eq('aircraft_id', aircraftId)
+        .is('deleted_at', null)
         .order('created_at', { ascending: false })
         .limit(limit);
       if (error) return { error: error.message };
@@ -231,6 +283,157 @@ const handlers: Record<string, ToolHandler> = {
     }
   },
 
+  search_ads: async (params, sb, aircraftId) => {
+    const includeSuperseded = !!params.include_superseded;
+    let query = sb.from('aft_airworthiness_directives')
+      .select('*')
+      .eq('aircraft_id', aircraftId)
+      .is('deleted_at', null)
+      .order('next_due_date', { ascending: true, nullsFirst: false });
+    if (!includeSuperseded) query = query.eq('is_superseded', false);
+
+    const { data: ads, error } = await query;
+    if (error) return { error: error.message };
+
+    const { data: ac } = await sb.from('aft_aircraft')
+      .select('total_engine_time')
+      .eq('id', aircraftId)
+      .maybeSingle();
+    const et = (ac as any)?.total_engine_time || 0;
+    const today = new Date(new Date().setHours(0, 0, 0, 0));
+
+    const annotated = (ads || []).map((a: any) => {
+      const timeOverdue = a.next_due_time != null && et >= a.next_due_time;
+      const dateOverdue = a.next_due_date != null &&
+        new Date(a.next_due_date + 'T00:00:00') < today;
+      const overdue = timeOverdue || dateOverdue;
+      const daysOut = a.next_due_date
+        ? Math.ceil((new Date(a.next_due_date + 'T00:00:00').getTime() - today.getTime()) / 86400000)
+        : null;
+      const hrsOut = a.next_due_time != null ? a.next_due_time - et : null;
+      let status: 'overdue' | 'due_soon' | 'compliant' = 'compliant';
+      if (overdue) status = 'overdue';
+      else if ((daysOut != null && daysOut <= 30) || (hrsOut != null && hrsOut <= 10)) status = 'due_soon';
+      return { ...a, _status: status, _days_out: daysOut, _hours_out: hrsOut };
+    });
+
+    const filterBy = params.status && params.status !== 'all' ? params.status : null;
+    const filtered = filterBy ? annotated.filter(a => a._status === filterBy) : annotated;
+    return { count: filtered.length, ads: filtered };
+  },
+
+  refresh_ads_drs: async (_params, sb, aircraftId) => {
+    const { data: ac } = await sb.from('aft_aircraft')
+      .select('id, make, model, aircraft_type, engine_type')
+      .eq('id', aircraftId)
+      .maybeSingle();
+    if (!ac) return { error: 'Aircraft not found.' };
+    const result = await syncAdsForAircraft(sb, ac as any);
+    return result;
+  },
+
+  get_equipment: async (params, sb, aircraftId) => {
+    let query = sb.from('aft_aircraft_equipment')
+      .select('*')
+      .eq('aircraft_id', aircraftId)
+      .is('deleted_at', null)
+      .order('category', { ascending: true });
+    if (params.category) query = query.eq('category', params.category);
+    if (!params.include_removed) query = query.is('removed_at', null);
+    const { data, error } = await query;
+    if (error) return { error: error.message };
+    return { count: (data || []).length, equipment: data };
+  },
+
+  check_airworthiness: async (_params, sb, aircraftId) => {
+    const [acRes, eqRes, mxRes, sqRes, adRes] = await Promise.all([
+      sb.from('aft_aircraft')
+        .select('id, tail_number, total_engine_time, is_ifr_equipped, is_for_hire')
+        .eq('id', aircraftId).maybeSingle(),
+      sb.from('aft_aircraft_equipment').select('*')
+        .eq('aircraft_id', aircraftId).is('deleted_at', null).is('removed_at', null),
+      sb.from('aft_maintenance_items').select('*')
+        .eq('aircraft_id', aircraftId).is('deleted_at', null),
+      sb.from('aft_squawks').select('affects_airworthiness, location, status')
+        .eq('aircraft_id', aircraftId).is('deleted_at', null).eq('status', 'open'),
+      sb.from('aft_airworthiness_directives').select('*')
+        .eq('aircraft_id', aircraftId).is('deleted_at', null).eq('is_superseded', false),
+    ]);
+
+    if (!acRes.data) return { error: 'Aircraft not found.' };
+
+    const verdict = computeAirworthinessStatus({
+      aircraft: acRes.data as any,
+      equipment: (eqRes.data || []) as any,
+      mxItems: mxRes.data || [],
+      squawks: (sqRes.data || []) as any,
+      ads: (adRes.data || []) as any,
+    });
+    return verdict;
+  },
+
+  // ─── Write tools (propose-confirm) ─────────────────────────
+
+  propose_reservation: async (params, sb, _aircraftId, ctx) => {
+    if (!params.start_time || !params.end_time || !params.pilot_initials) {
+      return { error: 'start_time, end_time, and pilot_initials are required.' };
+    }
+    return makeProposal(sb, ctx, 'reservation', params);
+  },
+
+  propose_mx_schedule: async (params, sb, aircraftId, ctx) => {
+    // Validate mx_item_ids / squawk_ids belong to this aircraft.
+    if (Array.isArray(params.mx_item_ids) && params.mx_item_ids.length > 0) {
+      const { data } = await sb.from('aft_maintenance_items')
+        .select('id, aircraft_id')
+        .in('id', params.mx_item_ids);
+      const bad = (data || []).find((r: any) => r.aircraft_id !== aircraftId);
+      if (bad || (data || []).length !== params.mx_item_ids.length) {
+        return { error: 'One or more MX items do not belong to this aircraft.' };
+      }
+    }
+    if (Array.isArray(params.squawk_ids) && params.squawk_ids.length > 0) {
+      const { data } = await sb.from('aft_squawks')
+        .select('id, aircraft_id')
+        .in('id', params.squawk_ids);
+      const bad = (data || []).find((r: any) => r.aircraft_id !== aircraftId);
+      if (bad || (data || []).length !== params.squawk_ids.length) {
+        return { error: 'One or more squawks do not belong to this aircraft.' };
+      }
+    }
+    return makeProposal(sb, ctx, 'mx_schedule', params);
+  },
+
+  propose_squawk_resolve: async (params, sb, aircraftId, ctx) => {
+    if (!params.squawk_id || !params.resolution_note) {
+      return { error: 'squawk_id and resolution_note are required.' };
+    }
+    const { data: sq } = await sb.from('aft_squawks')
+      .select('id, aircraft_id, deleted_at, status')
+      .eq('id', params.squawk_id).maybeSingle();
+    if (!sq || sq.aircraft_id !== aircraftId || sq.deleted_at) {
+      return { error: 'Squawk not found for this aircraft.' };
+    }
+    if (sq.status === 'resolved') {
+      return { error: 'Squawk is already resolved.' };
+    }
+    return makeProposal(sb, ctx, 'squawk_resolve', params);
+  },
+
+  propose_note: async (params, sb, _aircraftId, ctx) => {
+    if (!params.content || typeof params.content !== 'string' || !params.content.trim()) {
+      return { error: 'Note content is required.' };
+    }
+    return makeProposal(sb, ctx, 'note', { content: params.content.trim() });
+  },
+
+  propose_equipment_entry: async (params, sb, _aircraftId, ctx) => {
+    if (!params.name || !params.category) {
+      return { error: 'name and category are required.' };
+    }
+    return makeProposal(sb, ctx, 'equipment', params);
+  },
+
   get_aviation_hazards: async (params) => {
     if (!params.airports || !Array.isArray(params.airports) || params.airports.length === 0) {
       return { error: 'At least one airport ICAO code is required.' };
@@ -254,14 +457,53 @@ const handlers: Record<string, ToolHandler> = {
   },
 };
 
+// Tools that don't touch per-aircraft data — skip the access re-check to
+// avoid pointless DB round-trips.
+const GLOBAL_TOOLS = new Set([
+  'web_search',
+  'get_weather_briefing',
+  'get_aviation_hazards',
+  'get_system_settings',
+]);
+
+async function makeProposal(
+  sb: SupabaseClient,
+  ctx: ToolContext,
+  actionType: ActionType,
+  payload: any,
+): Promise<any> {
+  const proposal = await proposeAction(sb, {
+    threadId: ctx.threadId,
+    userId: ctx.userId,
+    aircraftId: ctx.aircraftId,
+    aircraftTail: ctx.aircraftTail,
+    actionType,
+    payload,
+  });
+  return {
+    proposed_action_id: proposal.id,
+    summary: proposal.summary,
+    requires_confirmation: true,
+    note: 'I\'ve prepared this action. The user needs to tap Confirm on the card to apply it.',
+  };
+}
+
 export async function executeTool(
   name: string,
   params: any,
+  ctx: ToolContext,
   supabaseAdmin: SupabaseClient,
-  aircraftId: string,
 ): Promise<string> {
   const handler = handlers[name];
   if (!handler) return JSON.stringify({ error: `Unknown tool: ${name}` });
-  const result = await handler(params, supabaseAdmin, aircraftId);
+
+  if (!GLOBAL_TOOLS.has(name)) {
+    const allowed = await verifyAccess(supabaseAdmin, ctx.userId, ctx.aircraftId);
+    if (!allowed) {
+      return JSON.stringify({ error: 'Access denied to this aircraft.' });
+    }
+  }
+
+  const result = await handler(params, supabaseAdmin, ctx.aircraftId, ctx);
   return JSON.stringify(result);
 }

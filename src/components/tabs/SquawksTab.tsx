@@ -6,6 +6,7 @@ import type { AircraftWithMetrics, AircraftRole } from "@/lib/types";
 import useSWR from "swr";
 import { AlertTriangle, Plus, X, Upload, Mail, Edit2, ChevronLeft, ChevronRight, Download, CheckSquare, Trash2, CheckCircle, Link2, Clock, MapPin, User } from "lucide-react";
 import { PrimaryButton } from "@/components/AppButtons";
+import AskChuckButton from "@/components/chuck/AskChuckButton";
 import SignatureCanvas from "react-signature-canvas";
 import imageCompression from "browser-image-compression";
 import { useToast } from "@/components/ToastProvider";
@@ -24,6 +25,7 @@ export default function SquawksTab({
     async () => {
       const { data } = await supabase
         .from('aft_squawks').select('*').eq('aircraft_id', aircraft!.id)
+        .is('deleted_at', null)
         .order('created_at', { ascending: false });
 
       const resolved = (data || []).filter((s: any) => s.resolved_by_event_id);
@@ -320,7 +322,8 @@ export default function SquawksTab({
         <div className="space-y-4">
           {activeSquawks.length === 0 ? (<p className="text-center text-sm text-gray-400 italic py-4">No active squawks!</p>) : (
             activeSquawks.map(sq => (
-              <button key={sq.id} onClick={() => openDetailModal(sq)} className={`w-full text-left p-4 border rounded transition-colors active:scale-[0.98] ${sq.affects_airworthiness ? 'border-[#CE3732]/30 bg-[#CE3732]/10 hover:bg-[#CE3732]/15' : 'border-[#F08B46]/30 bg-[#F08B46]/10 hover:bg-[#F08B46]/15'}`}>
+              <div key={sq.id} className="relative">
+                <button onClick={() => openDetailModal(sq)} className={`w-full text-left p-4 border rounded transition-colors active:scale-[0.98] ${sq.affects_airworthiness ? 'border-[#CE3732]/30 bg-[#CE3732]/10 hover:bg-[#CE3732]/15' : 'border-[#F08B46]/30 bg-[#F08B46]/10 hover:bg-[#F08B46]/15'}`}>
                 <div className="flex justify-between items-start mb-2">
                   <div className="flex items-center gap-2">
                     <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded text-white flex items-center gap-1 ${sq.affects_airworthiness ? 'bg-[#CE3732]' : 'bg-[#F08B46]'}`}>
@@ -345,7 +348,14 @@ export default function SquawksTab({
                     {sq.pictures.length > 4 && <div className="h-16 w-16 rounded bg-gray-200 flex items-center justify-center text-xs font-bold text-gray-500 shrink-0">+{sq.pictures.length - 4}</div>}
                   </div>
                 )}
-              </button>
+                </button>
+                <div className="absolute top-3 right-3">
+                  <AskChuckButton
+                    size="xs"
+                    prompt={`Help me understand this ${sq.affects_airworthiness ? 'AOG' : 'open'} squawk on ${aircraft?.tail_number || 'the aircraft'}${sq.is_deferred ? ` (deferred under ${sq.deferral_category})` : ''}. Location: ${sq.location || 'unspecified'}. Description: "${sq.description}". What are likely causes and what needs to happen to clear it?`}
+                  />
+                </div>
+              </div>
             ))
           )}
         </div>

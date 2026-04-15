@@ -9,6 +9,7 @@ import type { AircraftWithMetrics, SystemSettings, AircraftRole, MxSubTab } from
 import useSWR from "swr";
 import { Wrench, Trash2, Plus, X, Edit2, Calendar, Send, ExternalLink, ChevronRight, HelpCircle, AlertTriangle, Download, Layers, Settings } from "lucide-react";
 import { PrimaryButton } from "@/components/AppButtons";
+import AskChuckButton from "@/components/chuck/AskChuckButton";
 import { useModalScrollLock } from "@/hooks/useModalScrollLock";
 import ServiceEventModal from "@/components/modals/ServiceEventModal";
 import MxGuideModal from "@/components/modals/MxGuideModal";
@@ -42,7 +43,7 @@ export default function MaintenanceTab({
   const { data: mxItems = [], mutate } = useSWR(
     aircraft ? `mx-${aircraft.id}` : null,
     async () => {
-      const { data } = await supabase.from('aft_maintenance_items').select('*').eq('aircraft_id', aircraft!.id).order('due_date').order('due_time');
+      const { data } = await supabase.from('aft_maintenance_items').select('*').eq('aircraft_id', aircraft!.id).is('deleted_at', null).order('due_date').order('due_time');
       return (data || []) as any[];
     }
   );
@@ -50,7 +51,7 @@ export default function MaintenanceTab({
   const { data: activeEvents = [], mutate: mutateEvents } = useSWR(
     aircraft ? `mx-events-${aircraft.id}` : null,
     async () => {
-      const { data } = await supabase.from('aft_maintenance_events').select('*').eq('aircraft_id', aircraft!.id).in('status', ['draft', 'scheduling', 'confirmed', 'in_progress', 'ready_for_pickup']).order('created_at', { ascending: false });
+      const { data } = await supabase.from('aft_maintenance_events').select('*').eq('aircraft_id', aircraft!.id).is('deleted_at', null).in('status', ['draft', 'scheduling', 'confirmed', 'in_progress', 'ready_for_pickup']).order('created_at', { ascending: false });
       return data || [];
     }
   );
@@ -62,7 +63,7 @@ export default function MaintenanceTab({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [mxName, setMxName] = useState("");
-  const [mxTrackingType, setMxTrackingType] = useState<'time'|'date'>('date');
+  const [mxTrackingType, setMxTrackingType] = useState<'time'|'date'|'both'>('date');
   const [mxIsRequired, setMxIsRequired] = useState(true);
   const [mxLastTime, setMxLastTime] = useState(""); const [mxIntervalTime, setMxIntervalTime] = useState(""); const [mxDueTime, setMxDueTime] = useState("");
   const [mxLastDate, setMxLastDate] = useState(""); const [mxIntervalDays, setMxIntervalDays] = useState(""); const [mxDueDate, setMxDueDate] = useState("");
@@ -92,7 +93,7 @@ export default function MaintenanceTab({
     try {
       const { data: completedEvents } = await supabase
         .from('aft_maintenance_events').select('*')
-        .eq('aircraft_id', aircraft.id).eq('status', 'complete')
+        .eq('aircraft_id', aircraft.id).eq('status', 'complete').is('deleted_at', null)
         .order('completed_at', { ascending: false });
 
       if (!completedEvents || completedEvents.length === 0) {
@@ -202,16 +203,24 @@ export default function MaintenanceTab({
   const submitMxItem = async (e: React.FormEvent) => {
     e.preventDefault(); setIsSubmitting(true);
     const payload: Record<string, any> = { aircraft_id: aircraft!.id, item_name: mxName, tracking_type: mxTrackingType, is_required: mxIsRequired, automate_scheduling: automateScheduling };
-    if (mxTrackingType === 'time') {
+
+    const wantTime = mxTrackingType === 'time' || mxTrackingType === 'both';
+    const wantDate = mxTrackingType === 'date' || mxTrackingType === 'both';
+
+    if (wantTime) {
       payload.last_completed_time = parseFloat(mxLastTime) || 0;
       payload.time_interval = mxIntervalTime ? parseFloat(mxIntervalTime) : null;
       payload.due_time = mxDueTime ? parseFloat(mxDueTime) : (parseFloat(mxLastTime) + parseFloat(mxIntervalTime || '0'));
-      payload.last_completed_date = null; payload.date_interval_days = null; payload.due_date = null;
     } else {
-      payload.last_completed_date = mxLastDate;
+      payload.last_completed_time = null; payload.time_interval = null; payload.due_time = null;
+    }
+
+    if (wantDate) {
+      payload.last_completed_date = mxLastDate || null;
       payload.date_interval_days = mxIntervalDays ? parseInt(mxIntervalDays) : null;
       payload.due_date = mxDueDate || (mxLastDate && mxIntervalDays ? new Date(new Date(mxLastDate).getTime() + parseInt(mxIntervalDays) * 86400000).toISOString().split('T')[0] : null);
-      payload.last_completed_time = null; payload.time_interval = null; payload.due_time = null;
+    } else {
+      payload.last_completed_date = null; payload.date_interval_days = null; payload.due_date = null;
     }
     if (editingId) {
       const res = await authFetch('/api/maintenance-items', { method: 'PUT', body: JSON.stringify({ itemId: editingId, aircraftId: aircraft!.id, itemData: payload }) });
@@ -389,12 +398,18 @@ export default function MaintenanceTab({
                         </div>
                       )}
                     </div>
-                    {canEditMx && (
-                      <div className="flex gap-3 pl-4">
-                        <button onClick={() => openMxForm(item)} className="text-gray-400 hover:text-[#F08B46] transition-colors active:scale-95"><Edit2 size={16}/></button>
-                        <button onClick={() => deleteMxItem(item.id)} className="text-gray-400 hover:text-[#CE3732] transition-colors active:scale-95"><Trash2 size={16}/></button>
-                      </div>
-                    )}
+                    <div className="flex items-center gap-3 pl-4 shrink-0">
+                      <AskChuckButton
+                        size="xs"
+                        prompt={`What does "${item.item_name}" maintenance involve for ${aircraft.tail_number} (${aircraft.aircraft_type})? It's ${item.is_required ? 'required' : 'optional'}, ${item.tracking_type}-tracked. Current status: ${processed.dueText}${processed.isExpired ? ' — EXPIRED' : ''}. What's the regulatory basis (if any) and what steps are typical to complete it?`}
+                      />
+                      {canEditMx && (
+                        <>
+                          <button onClick={() => openMxForm(item)} className="text-gray-400 hover:text-[#F08B46] transition-colors active:scale-95"><Edit2 size={16}/></button>
+                          <button onClick={() => deleteMxItem(item.id)} className="text-gray-400 hover:text-[#CE3732] transition-colors active:scale-95"><Trash2 size={16}/></button>
+                        </>
+                      )}
+                    </div>
                   </div>
                 );
               })}
@@ -417,21 +432,28 @@ export default function MaintenanceTab({
                   </div>
                   <div className="pt-2">
                     <label className="text-[10px] font-bold uppercase tracking-widest text-navy block mb-2">Tracking Method</label>
-                    <div className="flex gap-4">
+                    <div className="flex flex-wrap gap-x-4 gap-y-2">
                       <label className="flex items-center gap-2 text-sm font-bold text-navy cursor-pointer"><input type="radio" checked={mxTrackingType==='time'} onChange={()=>setMxTrackingType('time')} /> Track by Time</label>
                       <label className="flex items-center gap-2 text-sm font-bold text-navy cursor-pointer"><input type="radio" checked={mxTrackingType==='date'} onChange={()=>setMxTrackingType('date')} /> Track by Date</label>
+                      <label className="flex items-center gap-2 text-sm font-bold text-navy cursor-pointer"><input type="radio" checked={mxTrackingType==='both'} onChange={()=>setMxTrackingType('both')} /> Both (whichever first)</label>
                     </div>
+                    {mxTrackingType === 'both' && (
+                      <p className="text-[10px] text-gray-500 font-roboto mt-2 leading-tight">For items like Annual (12 months OR 100 hrs) — the item comes due whenever either interval expires.</p>
+                    )}
                   </div>
-                  {mxTrackingType === 'time' ? (
+                  {(mxTrackingType === 'time' || mxTrackingType === 'both') && (
                     <div className="bg-gray-50 p-3 md:p-4 rounded border border-gray-200 space-y-3">
+                      <p className="text-[9px] font-bold uppercase tracking-widest text-gray-500">Time Interval</p>
                       <div className="w-full min-w-0"><label className="text-[10px] font-bold uppercase tracking-widest text-navy block truncate">Last Completed ({isTurbine ? 'FTT' : 'Tach'}) *</label><input type="number" step="0.1" required value={mxLastTime} onChange={e=>setMxLastTime(e.target.value)} style={INPUT_WHITE_BG} className="w-full min-w-0 border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" /></div>
                       <div className="grid grid-cols-2 gap-3 w-full min-w-0">
                         <div className="min-w-0"><label className="text-[10px] font-bold uppercase tracking-widest text-navy block truncate">Interval (Hrs)</label><input type="number" step="0.1" value={mxIntervalTime} onChange={e=>setMxIntervalTime(e.target.value)} style={INPUT_WHITE_BG} className="w-full min-w-0 border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" /></div>
                         <div className="min-w-0"><label className="text-[10px] font-bold uppercase tracking-widest text-navy block truncate">OR Exact Due</label><input type="number" step="0.1" required={!mxIntervalTime} value={mxDueTime} onChange={e=>setMxDueTime(e.target.value)} style={INPUT_WHITE_BG} className="w-full min-w-0 border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" /></div>
                       </div>
                     </div>
-                  ) : (
+                  )}
+                  {(mxTrackingType === 'date' || mxTrackingType === 'both') && (
                     <div className="bg-gray-50 p-3 md:p-4 rounded border border-gray-200 space-y-3">
+                      <p className="text-[9px] font-bold uppercase tracking-widest text-gray-500">Date Interval</p>
                       <div className="w-full min-w-0"><label className="text-[10px] font-bold uppercase tracking-widest text-navy block truncate">Last Completed Date *</label><input type="date" required value={mxLastDate} onChange={e=>setMxLastDate(e.target.value)} style={INPUT_WHITE_BG} className="w-full min-w-0 border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" /></div>
                       <div className="grid grid-cols-2 gap-3 w-full min-w-0">
                         <div className="min-w-0"><label className="text-[10px] font-bold uppercase tracking-widest text-navy block truncate">Interval (Days)</label><input type="number" value={mxIntervalDays} onChange={e=>setMxIntervalDays(e.target.value)} style={INPUT_WHITE_BG} className="w-full min-w-0 border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" /></div>

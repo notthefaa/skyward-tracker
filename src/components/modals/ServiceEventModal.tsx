@@ -64,7 +64,7 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
 
   const fetchEvents = async () => {
     const { data } = await supabase
-      .from('aft_maintenance_events').select('*').eq('aircraft_id', aircraft.id)
+      .from('aft_maintenance_events').select('*').eq('aircraft_id', aircraft.id).is('deleted_at', null)
       .neq('status', 'cancelled').order('created_at', { ascending: false });
     setEvents(data || []);
     setView('list');
@@ -72,8 +72,8 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
 
   const fetchEventDetail = async (eventId: string) => {
     const [{ data: ev }, { data: lines }, { data: msgs }] = await Promise.all([
-      supabase.from('aft_maintenance_events').select('*').eq('id', eventId).single(),
-      supabase.from('aft_event_line_items').select('*').eq('event_id', eventId).order('created_at'),
+      supabase.from('aft_maintenance_events').select('*').eq('id', eventId).is('deleted_at', null).maybeSingle(),
+      supabase.from('aft_event_line_items').select('*').eq('event_id', eventId).is('deleted_at', null).order('created_at'),
       supabase.from('aft_event_messages').select('*').eq('event_id', eventId).order('created_at'),
     ]);
     if (ev) setSelectedEvent(ev);
@@ -83,8 +83,8 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
 
   const loadMxAndSquawks = async () => {
     const [{ data: mx }, { data: sq }] = await Promise.all([
-      supabase.from('aft_maintenance_items').select('*').eq('aircraft_id', aircraft.id).order('due_time').order('due_date'),
-      supabase.from('aft_squawks').select('*').eq('aircraft_id', aircraft.id).eq('status', 'open').order('created_at', { ascending: false }),
+      supabase.from('aft_maintenance_items').select('*').eq('aircraft_id', aircraft.id).is('deleted_at', null).order('due_time').order('due_date'),
+      supabase.from('aft_squawks').select('*').eq('aircraft_id', aircraft.id).eq('status', 'open').is('deleted_at', null).order('created_at', { ascending: false }),
     ]);
     setMxItems(mx || []);
     setSquawks(sq || []);

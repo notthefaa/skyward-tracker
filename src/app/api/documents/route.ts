@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
+import { createHash } from 'crypto';
 import { requireAuth, requireAircraftAccess, requireAircraftAdmin, handleApiError } from '@/lib/auth';
+import { setAppUser } from '@/lib/audit';
 import { PDFParse } from 'pdf-parse';
 import OpenAI from 'openai';
 
@@ -50,6 +52,7 @@ export async function GET(req: Request) {
       .from('aft_documents')
       .select('*')
       .eq('aircraft_id', aircraftId)
+      .is('deleted_at', null)
       .order('created_at', { ascending: false });
 
     return NextResponse.json({ documents: docs || [] });
@@ -72,11 +75,31 @@ export async function POST(req: Request) {
     if (file.type !== 'application/pdf') return NextResponse.json({ error: 'Only PDF files are supported.' }, { status: 400 });
 
     await requireAircraftAccess(supabaseAdmin, user.id, aircraftId);
+    await setAppUser(supabaseAdmin, user.id);
 
     // Upload PDF to Supabase Storage
     const fileName = `${aircraftId}_${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
+
+    // SHA-256 tamper-evidence hash — computed before upload so we can
+    // detect post-upload mutation of the storage object.
+    const sha256 = createHash('sha256').update(buffer).digest('hex');
+
+    // Reject duplicate uploads (same aircraft, same bytes).
+    const { data: dup } = await supabaseAdmin
+      .from('aft_documents')
+      .select('id, filename')
+      .eq('aircraft_id', aircraftId)
+      .eq('sha256', sha256)
+      .is('deleted_at', null)
+      .maybeSingle();
+    if (dup) {
+      return NextResponse.json(
+        { error: `This exact file is already uploaded as "${dup.filename}".` },
+        { status: 409 }
+      );
+    }
 
     const { data: uploadData, error: uploadError } = await supabaseAdmin.storage
       .from('aft_aircraft_documents')
@@ -97,6 +120,8 @@ export async function POST(req: Request) {
         file_url: urlData.publicUrl,
         doc_type: docType,
         status: 'processing',
+        sha256,
+        file_size: file.size,
       })
       .select()
       .single();
@@ -152,7 +177,9 @@ export async function POST(req: Request) {
   } catch (error) { return handleApiError(error); }
 }
 
-// DELETE — remove document + chunks (admin only)
+// DELETE — soft-delete document (admin only). Chunks are hard-deleted so
+// RAG search doesn't hit removed content; the parent document row stays
+// for retention/history.
 export async function DELETE(req: Request) {
   try {
     const { user, supabaseAdmin } = await requireAuth(req);
@@ -160,8 +187,12 @@ export async function DELETE(req: Request) {
     if (!documentId || !aircraftId) return NextResponse.json({ error: 'Document ID and Aircraft ID required.' }, { status: 400 });
     await requireAircraftAdmin(supabaseAdmin, user.id, aircraftId);
 
-    // Chunks cascade-delete with document
-    await supabaseAdmin.from('aft_documents').delete().eq('id', documentId);
+    await setAppUser(supabaseAdmin, user.id);
+    await supabaseAdmin.from('aft_document_chunks').delete().eq('document_id', documentId);
+    await supabaseAdmin
+      .from('aft_documents')
+      .update({ deleted_at: new Date().toISOString(), deleted_by: user.id })
+      .eq('id', documentId);
     return NextResponse.json({ success: true });
   } catch (error) { return handleApiError(error); }
 }

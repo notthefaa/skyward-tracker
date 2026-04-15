@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireAuth, requireAircraftAccess, requireAircraftAdmin, handleApiError } from '@/lib/auth';
+import { setAppUser } from '@/lib/audit';
 
 // POST — report squawk (any user with aircraft access)
 export async function POST(req: Request) {
@@ -9,6 +10,7 @@ export async function POST(req: Request) {
     if (!aircraftId) return NextResponse.json({ error: 'Aircraft ID required.' }, { status: 400 });
     await requireAircraftAccess(supabaseAdmin, user.id, aircraftId);
 
+    await setAppUser(supabaseAdmin, user.id);
     const { data, error } = await supabaseAdmin.from('aft_squawks').insert({ ...squawkData, aircraft_id: aircraftId }).select().single();
     if (error) throw error;
 
@@ -31,6 +33,7 @@ export async function PUT(req: Request) {
       await requireAircraftAdmin(supabaseAdmin, user.id, aircraftId);
     }
 
+    await setAppUser(supabaseAdmin, user.id);
     const { error } = await supabaseAdmin.from('aft_squawks').update(squawkData).eq('id', squawkId);
     if (error) throw error;
 
@@ -38,7 +41,7 @@ export async function PUT(req: Request) {
   } catch (error) { return handleApiError(error); }
 }
 
-// DELETE — delete squawk (author or aircraft admin)
+// DELETE — soft-delete squawk (author or aircraft admin)
 export async function DELETE(req: Request) {
   try {
     const { user, supabaseAdmin } = await requireAuth(req);
@@ -53,7 +56,11 @@ export async function DELETE(req: Request) {
       await requireAircraftAdmin(supabaseAdmin, user.id, aircraftId);
     }
 
-    const { error } = await supabaseAdmin.from('aft_squawks').delete().eq('id', squawkId);
+    await setAppUser(supabaseAdmin, user.id);
+    const { error } = await supabaseAdmin
+      .from('aft_squawks')
+      .update({ deleted_at: new Date().toISOString(), deleted_by: user.id })
+      .eq('id', squawkId);
     if (error) throw error;
 
     return NextResponse.json({ success: true });

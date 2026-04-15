@@ -169,4 +169,151 @@ export const tools: Anthropic.Tool[] = [
       required: ['airports'],
     },
   },
+  {
+    name: 'search_ads',
+    description: 'Retrieve Airworthiness Directives tracked against the current aircraft. Returns AD number, subject, compliance status, next-due hours/date, and source URL.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        status: {
+          type: 'string',
+          enum: ['all', 'overdue', 'due_soon', 'compliant'],
+          description: 'Filter by compliance status (default: all)',
+        },
+        include_superseded: {
+          type: 'boolean',
+          description: 'Include superseded ADs in the result (default: false)',
+        },
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'refresh_ads_drs',
+    description: 'Force an on-demand FAA DRS sync for the current aircraft. Use when the user asks to refresh ADs or to check for newly issued directives. Returns counts of inserted/updated ADs. The nightly cron normally handles this.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {},
+      required: [],
+    },
+  },
+  {
+    name: 'get_equipment',
+    description: 'List the current aircraft\'s installed equipment with make/model/serial and capability flags (IFR, ADS-B Out, transponder class, ELT, etc.). Use when answering equipment questions or evaluating airworthiness.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        category: {
+          type: 'string',
+          description: 'Optional category filter (e.g. "transponder", "avionics", "elt")',
+        },
+        include_removed: {
+          type: 'boolean',
+          description: 'Include equipment that has been removed (historical). Default false.',
+        },
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'check_airworthiness',
+    description: 'Run the explicit airworthiness check (91.205 / 91.411 / 91.413 / 91.207 / 91.417) combining equipment, MX, squawks, and ADs. Returns a structured verdict with status, citation, and all findings. Preferred over guessing based on individual tool results when the user asks "is my aircraft airworthy?".',
+    input_schema: {
+      type: 'object' as const,
+      properties: {},
+      required: [],
+    },
+  },
+  {
+    name: 'propose_reservation',
+    description: 'Propose a new reservation (booking) for the current aircraft. The user must tap Confirm on the card before anything is written. Use when the user asks to book, schedule, or reserve the aircraft.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        start_time: { type: 'string', description: 'ISO datetime for start of reservation' },
+        end_time: { type: 'string', description: 'ISO datetime for end of reservation' },
+        pilot_initials: { type: 'string', description: 'Pilot initials (2-3 chars)' },
+        pod: { type: 'string', description: 'Point of departure airport code (optional)' },
+        poa: { type: 'string', description: 'Point of arrival airport code (optional)' },
+        notes: { type: 'string', description: 'Optional notes' },
+      },
+      required: ['start_time', 'end_time', 'pilot_initials'],
+    },
+  },
+  {
+    name: 'propose_mx_schedule',
+    description: 'Propose a maintenance service event (work package) for the current aircraft. Bundles MX items and/or squawks into a single event draft. The user must confirm before the draft is created. Admin-only.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        proposed_date: { type: 'string', description: 'ISO date the user wants the work done (optional)' },
+        mx_item_ids: {
+          type: 'array', items: { type: 'string' },
+          description: 'UUIDs of MX items from get_maintenance_items to include',
+        },
+        squawk_ids: {
+          type: 'array', items: { type: 'string' },
+          description: 'UUIDs of squawks from get_squawks to include',
+        },
+        addon_services: {
+          type: 'array', items: { type: 'string' },
+          description: 'Optional addon services (wash, detail, etc.)',
+        },
+        notes: { type: 'string', description: 'Optional notes for the mechanic' },
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'propose_squawk_resolve',
+    description: 'Propose resolving an open squawk with a resolution note. User confirms before the squawk is marked resolved. Use when the user describes how a squawk was fixed.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        squawk_id: { type: 'string', description: 'UUID of the squawk from get_squawks' },
+        resolution_note: { type: 'string', description: 'Description of how the squawk was resolved' },
+      },
+      required: ['squawk_id', 'resolution_note'],
+    },
+  },
+  {
+    name: 'propose_note',
+    description: 'Propose adding a pilot note to the aircraft. User confirms before the note is saved.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        content: { type: 'string', description: 'Note content' },
+      },
+      required: ['content'],
+    },
+  },
+  {
+    name: 'propose_equipment_entry',
+    description: 'Propose adding an equipment record for the current aircraft. User confirms before the record is inserted. Admin-only. Use during initial aircraft setup or when the user describes a newly-installed piece of equipment.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        name: { type: 'string', description: 'Equipment name (e.g. "Primary Transponder")' },
+        category: {
+          type: 'string',
+          description: 'One of: engine, propeller, avionics, transponder, altimeter, pitot_static, elt, adsb, autopilot, gps, radio, intercom, instrument, landing_gear, lighting, accessory, other',
+        },
+        make: { type: 'string' },
+        model: { type: 'string' },
+        serial: { type: 'string' },
+        installed_at: { type: 'string', description: 'ISO date of installation' },
+        installed_by: { type: 'string', description: 'A&P name + cert' },
+        ifr_capable: { type: 'boolean' },
+        adsb_out: { type: 'boolean' },
+        is_elt: { type: 'boolean' },
+        transponder_class: { type: 'string' },
+        transponder_due_date: { type: 'string', description: 'ISO date for 91.413 next check' },
+        altimeter_due_date: { type: 'string', description: 'ISO date for 91.411 next check' },
+        pitot_static_due_date: { type: 'string', description: 'ISO date for 91.411 next check' },
+        elt_battery_expires: { type: 'string', description: 'ISO date ELT battery expires' },
+        notes: { type: 'string' },
+      },
+      required: ['name', 'category'],
+    },
+  },
 ];

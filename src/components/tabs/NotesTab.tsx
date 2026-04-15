@@ -22,6 +22,7 @@ export default function NotesTab({ aircraft, session, role, aircraftRole, userIn
         .from('aft_notes')
         .select('*')
         .eq('aircraft_id', aircraft.id)
+        .is('deleted_at', null)
         .order('created_at', { ascending: false });
       
       if (notesData && notesData.length > 0) {

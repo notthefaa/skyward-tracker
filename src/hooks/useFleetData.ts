@@ -77,6 +77,7 @@ export function useFleetData() {
         .from('aft_aircraft')
         .select('*')
         .in('id', assignedIds)
+        .is('deleted_at', null)
         .order('tail_number');
 
       allPlanes = (aircraftData || []).map((plane: any) => ({
@@ -108,6 +109,7 @@ export function useFleetData() {
     const { data } = await supabase
       .from('aft_aircraft')
       .select('id, tail_number, aircraft_type')
+      .is('deleted_at', null)
       .order('tail_number');
 
     const index = (data || []) as FleetIndexEntry[];
@@ -185,8 +187,8 @@ export function useFleetData() {
     ago.setDate(ago.getDate() - FLIGHT_DATA_LOOKBACK_DAYS);
 
     const [pR, lR] = await Promise.all([
-      supabase.from('aft_aircraft').select('*').eq('id', aircraftId).single(),
-      supabase.from('aft_flight_logs').select('aircraft_id, ftt, tach, created_at').eq('aircraft_id', aircraftId).gte('created_at', ago.toISOString()).order('created_at', { ascending: true }),
+      supabase.from('aft_aircraft').select('*').eq('id', aircraftId).is('deleted_at', null).maybeSingle(),
+      supabase.from('aft_flight_logs').select('aircraft_id, ftt, tach, created_at').eq('aircraft_id', aircraftId).is('deleted_at', null).gte('created_at', ago.toISOString()).order('created_at', { ascending: true }),
     ]);
 
     if (pR.data) {

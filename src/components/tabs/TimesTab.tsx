@@ -32,6 +32,7 @@ export default function TimesTab({
         .from('aft_flight_logs')
         .select('*', { count: 'exact' })
         .eq('aircraft_id', aircraft!.id)
+        .is('deleted_at', null)
         .order('created_at', { ascending: false })
         .range(from, to);
       const total = count ?? 0;
@@ -131,6 +132,7 @@ export default function TimesTab({
     const { data: previousLogs } = await supabase
       .from('aft_flight_logs').select('*')
       .eq('aircraft_id', aircraft!.id)
+      .is('deleted_at', null)
       .order('created_at', { ascending: false }).limit(2);
     
     const previousLog = previousLogs && previousLogs.length > 1 ? previousLogs[1] : null;
@@ -177,6 +179,7 @@ export default function TimesTab({
     const { data: exportData } = await supabase
       .from('aft_flight_logs').select('*')
       .eq('aircraft_id', aircraft!.id)
+      .is('deleted_at', null)
       .order('created_at', { ascending: false });
 
     if (!exportData || exportData.length === 0) { 
@@ -253,10 +256,12 @@ export default function TimesTab({
       const [{ data: prevLogs }, { data: nextLogs }] = await Promise.all([
         supabase.from('aft_flight_logs').select('*')
           .eq('aircraft_id', aircraft!.id)
+          .is('deleted_at', null)
           .lt('created_at', editingLog.created_at)
           .order('created_at', { ascending: false }).limit(1),
         supabase.from('aft_flight_logs').select('*')
           .eq('aircraft_id', aircraft!.id)
+          .is('deleted_at', null)
           .gt('created_at', editingLog.created_at)
           .order('created_at', { ascending: true }).limit(1),
       ]);
