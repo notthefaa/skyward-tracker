@@ -55,21 +55,28 @@ function isDateExpired(d: string | null | undefined): boolean {
 export function computeAirworthinessStatus(input: Inputs): AirworthinessVerdict {
   const findings: AirworthinessFinding[] = [];
   const activeEquipment = input.equipment.filter(e => !e.deleted_at && !e.removed_at);
+  // Treat an entirely empty equipment list as "tracking not set up yet"
+  // rather than "equipment is missing". Without this, every aircraft
+  // that hasn't populated the equipment tab reads as grounded on 91.207
+  // even when it's actually airworthy.
+  const equipmentTracked = activeEquipment.length > 0;
 
   // ─── 91.207 ELT ─────────────────────────────────────────────
-  const elt = activeEquipment.find(e => e.is_elt || e.category === 'elt');
-  if (!elt) {
-    findings.push({ severity: 'grounded', citation: '91.207', message: 'No ELT installed.' });
-  } else {
-    if (isDateExpired(elt.elt_battery_expires)) {
-      findings.push({ severity: 'grounded', citation: '91.207(d)', message: 'ELT battery expired.' });
-    }
-    if (elt.elt_battery_cumulative_hours != null && elt.elt_battery_cumulative_hours >= 1) {
-      findings.push({
-        severity: 'grounded',
-        citation: '91.207(a)(1)',
-        message: 'ELT battery cumulative emergency-use >1 hr — replace or recharge.',
-      });
+  if (equipmentTracked) {
+    const elt = activeEquipment.find(e => e.is_elt || e.category === 'elt');
+    if (!elt) {
+      findings.push({ severity: 'warning', citation: '91.207', message: 'No ELT tracked in equipment. 91.207 requires one.' });
+    } else {
+      if (isDateExpired(elt.elt_battery_expires)) {
+        findings.push({ severity: 'grounded', citation: '91.207(d)', message: 'ELT battery expired.' });
+      }
+      if (elt.elt_battery_cumulative_hours != null && elt.elt_battery_cumulative_hours >= 1) {
+        findings.push({
+          severity: 'grounded',
+          citation: '91.207(a)(1)',
+          message: 'ELT battery cumulative emergency-use >1 hr — replace or recharge.',
+        });
+      }
     }
   }
 
@@ -126,7 +133,10 @@ export function computeAirworthinessStatus(input: Inputs): AirworthinessVerdict 
   }
 
   // ─── MX items (required + expired) ──────────────────────────
+  // Only required items can ground the aircraft. Optional tracking
+  // (e.g. oil change reminders) shouldn't flip the nav to red.
   for (const item of input.mxItems) {
+    if (item.is_required !== true) continue;
     if (isMxExpired(item, input.aircraft.total_engine_time || 0)) {
       findings.push({
         severity: 'grounded',

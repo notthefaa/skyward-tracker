@@ -50,10 +50,13 @@ function toolChipName(name: string): string {
 }
 
 export default function HowardTab({
-  aircraft, session
+  aircraft, session, compact = false,
 }: {
   aircraft: AircraftWithMetrics | null;
   session: any;
+  /** Render without the "Howard" logo header (used when embedded in the
+   * launcher popup, which has its own header). */
+  compact?: boolean;
 }) {
   const { showError, showSuccess } = useToast();
   const confirm = useConfirm();
@@ -326,41 +329,43 @@ export default function HowardTab({
 
   return (
     <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="flex items-center justify-between gap-3 mb-4">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="p-2 rounded-full bg-[#0EA5E9]/10 shrink-0">
-            <HowardIcon size={24} style={{ color: '#0EA5E9' }} />
+      {/* Header — hidden in compact mode (the launcher popup has its own) */}
+      {!compact && (
+        <div className="flex items-center justify-between gap-3 mb-4">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="p-2 rounded-full bg-[#0EA5E9]/10 shrink-0">
+              <HowardIcon size={24} style={{ color: '#0EA5E9' }} />
+            </div>
+            <div className="min-w-0">
+              <h2 className="font-oswald text-2xl md:text-3xl font-bold uppercase text-navy m-0 leading-none">Howard</h2>
+              <span className="text-[10px] font-bold uppercase tracking-widest text-[#0EA5E9] truncate block">AI Copilot for {aircraft.tail_number}</span>
+            </div>
           </div>
-          <div className="min-w-0">
-            <h2 className="font-oswald text-2xl md:text-3xl font-bold uppercase text-navy m-0 leading-none">Howard</h2>
-            <span className="text-[10px] font-bold uppercase tracking-widest text-[#0EA5E9] truncate block">AI Copilot for {aircraft.tail_number}</span>
-          </div>
-        </div>
-        <div className="flex items-center gap-3 shrink-0">
-          <button
-            onClick={() => window.dispatchEvent(new CustomEvent('aft:navigate-howard-usage'))}
-            title="View Howard usage"
-            aria-label="View Howard usage"
-            className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-gray-500 hover:text-[#0EA5E9] active:scale-95 transition-colors"
-          >
-            <BarChart3 size={14} />
-            <span className="hidden sm:inline">Usage</span>
-          </button>
-          {messages.length > 0 && (
+          <div className="flex items-center gap-3 shrink-0">
             <button
-              onClick={handleClearThread}
-              disabled={isSending}
-              title="Clear conversation"
-              aria-label="Clear conversation"
-              className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-gray-500 hover:text-[#CE3732] active:scale-95 transition-colors disabled:opacity-40"
+              onClick={() => window.dispatchEvent(new CustomEvent('aft:navigate-howard-usage'))}
+              title="View Howard usage"
+              aria-label="View Howard usage"
+              className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-gray-500 hover:text-[#0EA5E9] active:scale-95 transition-colors"
             >
-              <Trash2 size={14} />
-              <span className="hidden sm:inline">Clear</span>
+              <BarChart3 size={14} />
+              <span className="hidden sm:inline">Usage</span>
             </button>
-          )}
+            {messages.length > 0 && (
+              <button
+                onClick={handleClearThread}
+                disabled={isSending}
+                title="Clear conversation"
+                aria-label="Clear conversation"
+                className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-gray-500 hover:text-[#CE3732] active:scale-95 transition-colors disabled:opacity-40"
+              >
+                <Trash2 size={14} />
+                <span className="hidden sm:inline">Clear</span>
+              </button>
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto bg-cream shadow-lg rounded-sm p-4 mb-3 min-h-[300px]">

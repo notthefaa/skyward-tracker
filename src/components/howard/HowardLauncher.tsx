@@ -1,26 +1,33 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import dynamic from "next/dynamic";
 import { HowardIcon } from "@/components/shell/TrayIcons";
 import type { AircraftWithMetrics } from "@/lib/types";
-import { X, ArrowLeft, Plane } from "lucide-react";
+import { X, ArrowLeft, Plane, Maximize2 } from "lucide-react";
+
+// HowardTab is big; lazy-load it so the FAB bundle stays tiny until
+// the user actually opens a chat.
+const HowardTab = dynamic(() => import("@/components/tabs/HowardTab"), { ssr: false });
 
 interface Props {
   aircraft: AircraftWithMetrics | null;
+  session?: any;
 }
 
-type Mode = 'menu' | 'flight-briefing';
+type Mode = 'menu' | 'flight-briefing' | 'chat';
 
 /**
  * Floating entry point to Howard. Appears globally while an aircraft is
  * selected (hidden on the Howard tab itself). Tap the FAB → popup with
- * a brief intro and a set of pre-drafted prompts. Select one and we
- * hand off to the full Howard tab with the prompt pre-filled.
+ * a brief intro and a set of pre-drafted prompts. Pick one and the chat
+ * opens inside the popup so the user can keep talking without leaving
+ * their current page.
  *
  * The "Flight briefing" path first collects departure / destination /
- * time / alternate, then constructs a richer prompt.
+ * time / alternate, then builds a richer prompt.
  */
-export default function HowardLauncher({ aircraft }: Props) {
+export default function HowardLauncher({ aircraft, session }: Props) {
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<Mode>('menu');
   const [dep, setDep] = useState('');
@@ -28,7 +35,9 @@ export default function HowardLauncher({ aircraft }: Props) {
   const [time, setTime] = useState('');
   const [alt, setAlt] = useState('');
 
-  // Reset sub-mode whenever the popup closes so reopening starts fresh.
+  // Reset to menu when the popup fully closes, so reopening is a fresh
+  // starting point. (The conversation itself persists in the DB so the
+  // chat view will still show history when re-entered.)
   useEffect(() => {
     if (!open) {
       const t = setTimeout(() => setMode('menu'), 250);
@@ -48,10 +57,17 @@ export default function HowardLauncher({ aircraft }: Props) {
 
   const tail = aircraft.tail_number;
 
+  /** Prime the sessionStorage handoff and jump the embedded HowardTab
+   * into chat mode. The tab reads the prefill on mount and auto-sends. */
   const sendPrompt = (prompt: string) => {
     try {
       sessionStorage.setItem('aft_howard_prefill', JSON.stringify({ prompt, autoSend: true }));
     } catch {}
+    setMode('chat');
+  };
+
+  /** Expand to the full-page Howard tab and close the popup. */
+  const expandToFullPage = () => {
     window.dispatchEvent(new CustomEvent('aft:navigate-howard'));
     setOpen(false);
   };
@@ -120,126 +136,113 @@ export default function HowardLauncher({ aircraft }: Props) {
           onClick={() => setOpen(false)}
         >
           <div
-            className="bg-white rounded-t-2xl md:rounded-xl shadow-2xl w-full md:max-w-md max-h-[85vh] overflow-y-auto border-t-4 border-[#0EA5E9]"
+            className={`bg-white rounded-t-2xl md:rounded-xl shadow-2xl w-full md:max-w-md border-t-4 border-[#0EA5E9] flex flex-col ${
+              mode === 'chat' ? 'h-[85vh] md:h-[70vh]' : 'max-h-[85vh] overflow-y-auto'
+            }`}
             onClick={e => e.stopPropagation()}
           >
-            <div className="p-5">
-              {/* Header */}
-              <div className="flex items-start justify-between gap-3 mb-3">
-                <div className="flex items-center gap-3 min-w-0">
-                  {mode === 'flight-briefing' && (
-                    <button
-                      onClick={() => setMode('menu')}
-                      className="text-gray-500 hover:text-navy p-1 -ml-1"
-                      aria-label="Back"
-                    >
-                      <ArrowLeft size={18} />
-                    </button>
-                  )}
-                  <div className="p-2 rounded-full bg-[#0EA5E9]/10 shrink-0">
-                    <HowardIcon size={24} style={{ color: '#0EA5E9' }} />
-                  </div>
-                  <div className="min-w-0">
-                    <h3 className="font-oswald text-xl font-bold uppercase text-navy leading-none">
-                      {mode === 'menu' ? 'Howard' : 'Flight Briefing'}
-                    </h3>
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-[#0EA5E9] truncate">
-                      For {tail}
-                    </p>
-                  </div>
+            {/* Header (shared across modes) */}
+            <div className="flex items-start justify-between gap-3 p-4 border-b border-gray-100 shrink-0">
+              <div className="flex items-center gap-3 min-w-0">
+                {mode !== 'menu' && (
+                  <button
+                    onClick={() => setMode('menu')}
+                    className="text-gray-500 hover:text-navy p-1 -ml-1"
+                    aria-label="Back"
+                    title="Back"
+                  >
+                    <ArrowLeft size={18} />
+                  </button>
+                )}
+                <div className="p-2 rounded-full bg-[#0EA5E9]/10 shrink-0">
+                  <HowardIcon size={22} style={{ color: '#0EA5E9' }} />
                 </div>
+                <div className="min-w-0">
+                  <h3 className="font-oswald text-lg font-bold uppercase text-navy leading-none">
+                    {mode === 'flight-briefing' ? 'Flight Briefing' : 'Howard'}
+                  </h3>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-[#0EA5E9] truncate">
+                    For {tail}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-1 shrink-0">
+                {mode === 'chat' && (
+                  <button
+                    onClick={expandToFullPage}
+                    aria-label="Open full page"
+                    title="Open full page"
+                    className="text-gray-400 hover:text-navy p-1"
+                  >
+                    <Maximize2 size={16} />
+                  </button>
+                )}
                 <button
                   onClick={() => setOpen(false)}
                   aria-label="Close"
-                  className="text-gray-400 hover:text-navy p-1 -mr-1"
+                  className="text-gray-400 hover:text-navy p-1"
                 >
                   <X size={18} />
                 </button>
               </div>
+            </div>
 
-              {mode === 'menu' ? (
-                <>
-                  <p className="font-roboto text-sm text-gray-700 mb-4">
-                    Howard here — old pilot, decades around the ramp. What do you want to know about {tail}?
-                  </p>
-                  <div className="flex flex-col gap-2">
-                    {quickPrompts.map(p => (
-                      <button
-                        key={p.label}
-                        onClick={() => sendPrompt(p.prompt)}
-                        className="text-left px-4 py-3 bg-gray-50 hover:bg-[#0EA5E9]/10 hover:border-[#0EA5E9] border border-gray-200 rounded-lg text-sm font-bold text-navy transition-colors active:scale-[0.98]"
-                      >
-                        {p.label}
-                      </button>
-                    ))}
-                    <button
-                      onClick={() => setMode('flight-briefing')}
-                      className="text-left px-4 py-3 bg-[#0EA5E9]/5 hover:bg-[#0EA5E9]/15 border border-[#0EA5E9]/50 rounded-lg text-sm font-bold text-navy transition-colors active:scale-[0.98] flex items-center gap-2"
-                    >
-                      <Plane size={14} className="text-[#0EA5E9]" />
-                      Flight briefing…
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <p className="font-roboto text-sm text-gray-700 mb-4">
-                    Where and when? I'll pull weather, hazards, and flag anything on {tail}'s side worth noting.
-                  </p>
-                  <div className="flex flex-col gap-3">
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="text-[10px] font-bold uppercase tracking-widest text-gray-500 block mb-1">
-                          Departure
-                        </label>
-                        <input
-                          type="text"
-                          value={dep}
-                          onChange={e => setDep(e.target.value)}
-                          placeholder="KDAL"
-                          maxLength={4}
-                          autoCapitalize="characters"
-                          className="w-full px-3 py-2 border border-gray-300 rounded text-sm uppercase"
-                          style={{ backgroundColor: '#ffffff' }}
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[10px] font-bold uppercase tracking-widest text-gray-500 block mb-1">
-                          Destination
-                        </label>
-                        <input
-                          type="text"
-                          value={dest}
-                          onChange={e => setDest(e.target.value)}
-                          placeholder="KAUS"
-                          maxLength={4}
-                          autoCapitalize="characters"
-                          className="w-full px-3 py-2 border border-gray-300 rounded text-sm uppercase"
-                          style={{ backgroundColor: '#ffffff' }}
-                        />
-                      </div>
-                    </div>
+            {/* Body */}
+            {mode === 'menu' && (
+              <div className="p-4 flex flex-col gap-2">
+                <p className="font-roboto text-sm text-gray-700 mb-1">
+                  Howard here — old pilot, decades around the ramp. What do you want to know about {tail}?
+                </p>
+                {quickPrompts.map(p => (
+                  <button
+                    key={p.label}
+                    onClick={() => sendPrompt(p.prompt)}
+                    className="text-left px-4 py-3 bg-gray-50 hover:bg-[#0EA5E9]/10 hover:border-[#0EA5E9] border border-gray-200 rounded-lg text-sm font-bold text-navy transition-colors active:scale-[0.98]"
+                  >
+                    {p.label}
+                  </button>
+                ))}
+                <button
+                  onClick={() => setMode('flight-briefing')}
+                  className="text-left px-4 py-3 bg-[#0EA5E9]/5 hover:bg-[#0EA5E9]/15 border border-[#0EA5E9]/50 rounded-lg text-sm font-bold text-navy transition-colors active:scale-[0.98] flex items-center gap-2"
+                >
+                  <Plane size={14} className="text-[#0EA5E9]" />
+                  Flight briefing…
+                </button>
+              </div>
+            )}
+
+            {mode === 'flight-briefing' && (
+              <div className="p-4">
+                <p className="font-roboto text-sm text-gray-700 mb-4">
+                  Where and when? I'll pull weather, hazards, and flag anything on {tail}'s side worth noting.
+                </p>
+                <div className="flex flex-col gap-3">
+                  <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="text-[10px] font-bold uppercase tracking-widest text-gray-500 block mb-1">
-                        Departure time (optional)
+                        Departure
                       </label>
                       <input
-                        type="datetime-local"
-                        value={time}
-                        onChange={e => setTime(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded text-sm"
+                        type="text"
+                        value={dep}
+                        onChange={e => setDep(e.target.value)}
+                        placeholder="KDAL"
+                        maxLength={4}
+                        autoCapitalize="characters"
+                        className="w-full px-3 py-2 border border-gray-300 rounded text-sm uppercase"
                         style={{ backgroundColor: '#ffffff' }}
                       />
                     </div>
                     <div>
                       <label className="text-[10px] font-bold uppercase tracking-widest text-gray-500 block mb-1">
-                        Alternate (optional)
+                        Destination
                       </label>
                       <input
                         type="text"
-                        value={alt}
-                        onChange={e => setAlt(e.target.value)}
-                        placeholder="KADS"
+                        value={dest}
+                        onChange={e => setDest(e.target.value)}
+                        placeholder="KAUS"
                         maxLength={4}
                         autoCapitalize="characters"
                         className="w-full px-3 py-2 border border-gray-300 rounded text-sm uppercase"
@@ -247,16 +250,49 @@ export default function HowardLauncher({ aircraft }: Props) {
                       />
                     </div>
                   </div>
-                  <button
-                    onClick={() => sendPrompt(buildBriefingPrompt())}
-                    disabled={!canSubmitBriefing}
-                    className="mt-5 w-full bg-[#0EA5E9] text-white font-oswald font-bold uppercase tracking-widest text-sm py-3 rounded-lg disabled:opacity-40 active:scale-95 transition-transform"
-                  >
-                    Get briefing
-                  </button>
-                </>
-              )}
-            </div>
+                  <div>
+                    <label className="text-[10px] font-bold uppercase tracking-widest text-gray-500 block mb-1">
+                      Departure time (optional)
+                    </label>
+                    <input
+                      type="datetime-local"
+                      value={time}
+                      onChange={e => setTime(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded text-sm"
+                      style={{ backgroundColor: '#ffffff' }}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold uppercase tracking-widest text-gray-500 block mb-1">
+                      Alternate (optional)
+                    </label>
+                    <input
+                      type="text"
+                      value={alt}
+                      onChange={e => setAlt(e.target.value)}
+                      placeholder="KADS"
+                      maxLength={4}
+                      autoCapitalize="characters"
+                      className="w-full px-3 py-2 border border-gray-300 rounded text-sm uppercase"
+                      style={{ backgroundColor: '#ffffff' }}
+                    />
+                  </div>
+                </div>
+                <button
+                  onClick={() => sendPrompt(buildBriefingPrompt())}
+                  disabled={!canSubmitBriefing}
+                  className="mt-5 w-full bg-[#0EA5E9] text-white font-oswald font-bold uppercase tracking-widest text-sm py-3 rounded-lg disabled:opacity-40 active:scale-95 transition-transform"
+                >
+                  Get briefing
+                </button>
+              </div>
+            )}
+
+            {mode === 'chat' && (
+              <div className="flex-1 min-h-0 p-4 pt-3">
+                <HowardTab aircraft={aircraft} session={session} compact />
+              </div>
+            )}
           </div>
         </div>
       )}
