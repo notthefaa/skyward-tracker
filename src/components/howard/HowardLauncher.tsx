@@ -191,7 +191,7 @@ export default function HowardLauncher({ aircraft, session }: Props) {
             {mode === 'menu' && (
               <div className="p-4 flex flex-col gap-2">
                 <p className="font-roboto text-sm text-gray-700 mb-1">
-                  Howard here — old pilot, decades around the ramp. What do you want to know about {tail}?
+                  Hey, I&apos;m Howard, your hangar helper and advisor. I&apos;ve got plenty of aviation stories to share, but before we get into that, what can I help you with?
                 </p>
                 {quickPrompts.map(p => (
                   <button
