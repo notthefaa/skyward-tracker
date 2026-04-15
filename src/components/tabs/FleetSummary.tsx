@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { processMxItem } from "@/lib/math";
+import { computeAirworthinessStatus } from "@/lib/airworthiness";
 import type { AircraftWithMetrics } from "@/lib/types";
 import useSWR from "swr";
 import dynamic from "next/dynamic";
@@ -54,28 +55,44 @@ export default function FleetSummary({
     async () => {
       const aircraftIds = aircraftList.map(a => a.id);
 
-      const [mxRes, sqRes, logRes] = await Promise.all([
+      const [mxRes, sqRes, logRes, eqRes, adRes] = await Promise.all([
         supabase.from('aft_maintenance_items')
           .select('aircraft_id, item_name, tracking_type, is_required, due_time, due_date, time_interval')
-          .in('aircraft_id', aircraftIds),
-        supabase.from('aft_squawks')
-          .select('aircraft_id, affects_airworthiness')
           .in('aircraft_id', aircraftIds)
-          .eq('status', 'open'),
+          .is('deleted_at', null),
+        supabase.from('aft_squawks')
+          .select('aircraft_id, affects_airworthiness, location, status')
+          .in('aircraft_id', aircraftIds)
+          .eq('status', 'open')
+          .is('deleted_at', null),
         supabase.from('aft_flight_logs')
           .select('aircraft_id, created_at, initials')
           .in('aircraft_id', aircraftIds)
           .order('created_at', { ascending: false }),
+        supabase.from('aft_aircraft_equipment')
+          .select('*')
+          .in('aircraft_id', aircraftIds)
+          .is('deleted_at', null)
+          .is('removed_at', null),
+        supabase.from('aft_airworthiness_directives')
+          .select('*')
+          .in('aircraft_id', aircraftIds)
+          .is('deleted_at', null)
+          .eq('is_superseded', false),
       ]);
       const mxData = mxRes.data || [];
       const sqData = sqRes.data || [];
       const logData = logRes.data || [];
+      const eqData = eqRes.data || [];
+      const adData = adRes.data || [];
 
       // Pre-index by aircraft_id
       const mxByAircraft: Record<string, any[]> = {};
       const sqByAircraft: Record<string, any[]> = {};
+      const eqByAircraft: Record<string, any[]> = {};
+      const adByAircraft: Record<string, any[]> = {};
       const lastFlightByAircraft: Record<string, { created_at: string; initials: string | null }> = {};
-      
+
       for (const m of mxData) {
         if (!mxByAircraft[m.aircraft_id]) mxByAircraft[m.aircraft_id] = [];
         mxByAircraft[m.aircraft_id].push(m);
@@ -83,6 +100,14 @@ export default function FleetSummary({
       for (const s of sqData) {
         if (!sqByAircraft[s.aircraft_id]) sqByAircraft[s.aircraft_id] = [];
         sqByAircraft[s.aircraft_id].push(s);
+      }
+      for (const e of eqData) {
+        if (!eqByAircraft[e.aircraft_id]) eqByAircraft[e.aircraft_id] = [];
+        eqByAircraft[e.aircraft_id].push(e);
+      }
+      for (const a of adData) {
+        if (!adByAircraft[a.aircraft_id]) adByAircraft[a.aircraft_id] = [];
+        adByAircraft[a.aircraft_id].push(a);
       }
       // Logs are sorted descending — first occurrence per aircraft_id is the latest
       for (const log of logData) {
@@ -94,19 +119,35 @@ export default function FleetSummary({
       return aircraftList.map(ac => {
         const acMx = mxByAircraft[ac.id] || [];
         const acSq = sqByAircraft[ac.id] || [];
+        const acEq = eqByAircraft[ac.id] || [];
+        const acAd = adByAircraft[ac.id] || [];
         const lastFlight = lastFlightByAircraft[ac.id] || null;
-        let isGrounded = false;
-        let hasIssues = acSq.length > 0;
 
         // Only check items that have been set up (non-null due values)
         const activeItems = acMx.filter(isItemSetUp);
 
-        for (const item of activeItems) {
-          if (!item.is_required) continue;
-          if (item.tracking_type === 'time' && (item.due_time ?? 0) <= (ac.total_engine_time || 0)) { isGrounded = true; break; }
-          if (item.tracking_type === 'date' && new Date((item.due_date ?? '') + 'T00:00:00') < new Date(new Date().setHours(0,0,0,0))) { isGrounded = true; break; }
-        }
-        if (acSq.some((sq: any) => sq.affects_airworthiness)) isGrounded = true;
+        // Delegate the airworthiness verdict to the shared regulatory
+        // check so this card agrees with Howard's `check_airworthiness`
+        // and the top-nav grounded banner. Open squawks that don't
+        // affect airworthiness keep showing the "issues" (orange) color
+        // as a UX hint even when the verdict is otherwise airworthy.
+        const verdict = computeAirworthinessStatus({
+          aircraft: {
+            id: ac.id,
+            tail_number: ac.tail_number,
+            total_engine_time: ac.total_engine_time,
+            is_ifr_equipped: (ac as any).is_ifr_equipped,
+            is_for_hire: (ac as any).is_for_hire,
+          },
+          equipment: acEq as any,
+          mxItems: activeItems,
+          squawks: acSq as any,
+          ads: acAd as any,
+        });
+        const status: 'grounded' | 'issues' | 'airworthy' =
+          verdict.status === 'grounded' ? 'grounded'
+          : verdict.status === 'issues' ? 'issues'
+          : acSq.length > 0 ? 'issues' : 'airworthy';
 
         // Find next MX due — only from active (set up) items
         const processedMx = activeItems.map(item => processMxItem(item, ac.total_engine_time || 0, ac.burnRate, ac.burnRateLow, ac.burnRateHigh));
@@ -118,7 +159,7 @@ export default function FleetSummary({
 
         return {
           ...ac,
-          status: isGrounded ? 'grounded' as const : (hasIssues ? 'issues' as const : 'airworthy' as const),
+          status,
           squawkCount: acSq.length,
           nextMxName: nextMx ? nextMx.item_name : (needsSetupCount > 0 ? `${needsSetupCount} Need Setup` : 'No MX Tracked'),
           nextMxDueLabel: nextMx ? formatNextMxDue(nextMx) : null,

@@ -26,9 +26,11 @@ export async function GET(req: Request) {
   try {
     const { user, supabaseAdmin } = await requireAuth(req);
 
+    // Howard is per-user now (migration 017). One thread per user;
+    // aircraft_id is no longer on the threads table.
     const { data: threads, error: tErr } = await supabaseAdmin
       .from('aft_howard_threads')
-      .select('id, aircraft_id')
+      .select('id')
       .eq('user_id', user.id);
     if (tErr) throw tErr;
 
@@ -36,14 +38,11 @@ export async function GET(req: Request) {
       return NextResponse.json({
         totals: { input: 0, output: 0, cache_read: 0, cache_create: 0, messages: 0, cost_usd: 0 },
         perDay: [],
-        perAircraft: [],
         range_days: 30,
       });
     }
 
     const threadIds = threads.map(t => t.id);
-    const threadToAircraft = new Map<string, string>(threads.map(t => [t.id, t.aircraft_id]));
-
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
 
     const { data: messages, error: mErr } = await supabaseAdmin
@@ -54,17 +53,8 @@ export async function GET(req: Request) {
       .gte('created_at', thirtyDaysAgo);
     if (mErr) throw mErr;
 
-    // Fetch aircraft tail numbers for labeling
-    const aircraftIds = Array.from(new Set(threads.map(t => t.aircraft_id)));
-    const { data: aircraft } = await supabaseAdmin
-      .from('aft_aircraft')
-      .select('id, tail_number')
-      .in('id', aircraftIds);
-    const tailById = new Map<string, string>((aircraft || []).map(a => [a.id, a.tail_number]));
-
     const totals = { input: 0, output: 0, cache_read: 0, cache_create: 0, messages: 0, cost_usd: 0 };
     const perDay = new Map<string, { input: number; output: number; cache_read: number; cache_create: number; messages: number }>();
-    const perAircraft = new Map<string, { aircraft_id: string; tail_number: string; input: number; output: number; cache_read: number; cache_create: number; messages: number }>();
 
     for (const m of messages || []) {
       const input = m.input_tokens || 0;
@@ -86,21 +76,6 @@ export async function GET(req: Request) {
       dayBucket.cache_create += cacheCreate;
       dayBucket.messages += 1;
       perDay.set(d, dayBucket);
-
-      const aId = threadToAircraft.get(m.thread_id);
-      if (aId) {
-        const acBucket = perAircraft.get(aId) || {
-          aircraft_id: aId,
-          tail_number: tailById.get(aId) || aId,
-          input: 0, output: 0, cache_read: 0, cache_create: 0, messages: 0,
-        };
-        acBucket.input += input;
-        acBucket.output += output;
-        acBucket.cache_read += cacheRead;
-        acBucket.cache_create += cacheCreate;
-        acBucket.messages += 1;
-        perAircraft.set(aId, acBucket);
-      }
     }
 
     totals.cost_usd = costUsd(totals);
@@ -109,14 +84,9 @@ export async function GET(req: Request) {
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([day, v]) => ({ day, ...v, cost_usd: costUsd(v) }));
 
-    const perAircraftArr = Array.from(perAircraft.values())
-      .map(v => ({ ...v, cost_usd: costUsd(v) }))
-      .sort((a, b) => b.cost_usd - a.cost_usd);
-
     return NextResponse.json({
       totals,
       perDay: perDayArr,
-      perAircraft: perAircraftArr,
       range_days: 30,
     });
   } catch (error) {

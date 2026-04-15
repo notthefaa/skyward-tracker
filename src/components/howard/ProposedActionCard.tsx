@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { authFetch } from "@/lib/authFetch";
-import { CheckCircle, X, Loader2, Sparkles, Calendar, FileText, Wrench, Plane, AlertTriangle } from "lucide-react";
+import { CheckCircle, X, Loader2, Sparkles, Calendar, FileText, Wrench, Plane, AlertTriangle, RefreshCw } from "lucide-react";
 import type { ProposedAction } from "@/lib/howard/proposedActions";
 
 interface Props {
@@ -71,18 +71,18 @@ function describePayload(action: ProposedAction): React.ReactNode {
 }
 
 export default function ProposedActionCard({ action, onChange }: Props) {
-  const [isPending, setIsPending] = useState<'confirm' | 'cancel' | null>(null);
+  const [isPending, setIsPending] = useState<'confirm' | 'cancel' | 'retry' | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const Icon = actionIcon(action.action_type);
 
-  const handleConfirm = async () => {
-    setIsPending('confirm'); setError(null);
+  const handleConfirm = async (mode: 'confirm' | 'retry' = 'confirm') => {
+    setIsPending(mode); setError(null);
     try {
       const res = await authFetch(`/api/howard/actions/${action.id}`, { method: 'POST' });
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
-        throw new Error(d.error || 'Failed to confirm');
+        throw new Error(d.error || (mode === 'retry' ? 'Retry failed' : 'Failed to confirm'));
       }
       onChange();
     } catch (err: any) {
@@ -140,7 +140,7 @@ export default function ProposedActionCard({ action, onChange }: Props) {
           {action.status === 'pending' && (
             <div className="flex gap-2 mt-3">
               <button
-                onClick={handleConfirm}
+                onClick={() => handleConfirm('confirm')}
                 disabled={isPending !== null}
                 className="flex-1 bg-[#56B94A] text-white font-oswald font-bold uppercase tracking-widest text-[10px] py-2 rounded active:scale-95 transition-transform disabled:opacity-50 flex items-center justify-center gap-1.5"
               >
@@ -154,6 +154,19 @@ export default function ProposedActionCard({ action, onChange }: Props) {
               >
                 {isPending === 'cancel' ? <Loader2 size={12} className="animate-spin" /> : <X size={12} />}
                 Cancel
+              </button>
+            </div>
+          )}
+
+          {action.status === 'failed' && (
+            <div className="flex gap-2 mt-3">
+              <button
+                onClick={() => handleConfirm('retry')}
+                disabled={isPending !== null}
+                className="flex-1 bg-[#CE3732] text-white font-oswald font-bold uppercase tracking-widest text-[10px] py-2 rounded active:scale-95 transition-transform disabled:opacity-50 flex items-center justify-center gap-1.5"
+              >
+                {isPending === 'retry' ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+                Retry
               </button>
             </div>
           )}

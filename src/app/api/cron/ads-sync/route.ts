@@ -27,10 +27,22 @@ export async function GET(req: Request) {
   const results: Array<{ tail: string; inserted: number; updated: number; skipped: number; error?: string }> = [];
 
   // Sequential — keeps the load on the FAA feed gentle and avoids
-  // running out of Vercel cron execution time.
+  // running out of Vercel cron execution time. Wrapped in try/catch so
+  // a single aircraft blowing up (e.g. DRS endpoint HTML-ing out) can't
+  // kill the run for the rest of the fleet.
   for (const ac of aircraft) {
-    const r = await syncAdsForAircraft(supabaseAdmin, ac);
-    results.push({ tail: (ac as any).tail_number || ac.id, ...r });
+    try {
+      const r = await syncAdsForAircraft(supabaseAdmin, ac);
+      results.push({ tail: (ac as any).tail_number || ac.id, ...r });
+    } catch (err: any) {
+      results.push({
+        tail: (ac as any).tail_number || ac.id,
+        inserted: 0,
+        updated: 0,
+        skipped: 0,
+        error: err?.message || 'Sync threw an uncaught exception',
+      });
+    }
   }
 
   const totals = results.reduce(
@@ -42,6 +54,14 @@ export async function GET(req: Request) {
     }),
     { inserted: 0, updated: 0, skipped: 0, errors: 0 }
   );
+
+  // Errors went to results[] but would otherwise be invisible until the
+  // next operator reads the response. Log them so Vercel captures them
+  // in the cron run output / log drain.
+  if (totals.errors > 0) {
+    const failures = results.filter(r => r.error).map(r => `${r.tail}: ${r.error}`);
+    console.error(`[cron/ads-sync] ${totals.errors} aircraft failed to sync:`, failures);
+  }
 
   return NextResponse.json({ success: true, totals, results });
 }

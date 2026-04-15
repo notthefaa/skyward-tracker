@@ -2,7 +2,7 @@
 
 import { authFetch } from "@/lib/authFetch";
 import useSWR from "swr";
-import { BarChart3, Coins, MessageSquare, Plane, ArrowRight } from "lucide-react";
+import { BarChart3, Coins, MessageSquare, ArrowRight } from "lucide-react";
 import { HowardIcon } from "@/components/shell/TrayIcons";
 
 interface UsageResponse {
@@ -16,16 +16,6 @@ interface UsageResponse {
   };
   perDay: Array<{
     day: string;
-    input: number;
-    output: number;
-    cache_read: number;
-    cache_create: number;
-    messages: number;
-    cost_usd: number;
-  }>;
-  perAircraft: Array<{
-    aircraft_id: string;
-    tail_number: string;
     input: number;
     output: number;
     cache_read: number;
@@ -94,7 +84,7 @@ export default function HowardUsageTab() {
     );
   }
 
-  const { totals, perAircraft, perDay } = data;
+  const { totals, perDay } = data;
   const daySeries = buildDaySeries(perDay, 30);
   const maxMessages = Math.max(...daySeries.map(d => d.messages), 1);
   const isEmpty = totals.messages === 0;
@@ -183,31 +173,6 @@ export default function HowardUsageTab() {
           <div className="flex justify-between mt-2 text-[9px] font-bold uppercase tracking-widest text-gray-400">
             <span>{daySeries[0].label}</span>
             <span>{daySeries[daySeries.length - 1].label}</span>
-          </div>
-        )}
-      </div>
-
-      {/* Per-aircraft breakdown */}
-      <div className="bg-cream shadow-lg rounded-sm p-4 md:p-6 border-t-4 border-[#56B94A]">
-        <h3 className="font-oswald text-lg font-bold uppercase text-navy mb-4">Per aircraft</h3>
-        {perAircraft.length === 0 ? (
-          <p className="text-sm text-gray-400 italic text-center py-4">No data.</p>
-        ) : (
-          <div className="space-y-2">
-            {perAircraft.map(a => (
-              <div key={a.aircraft_id} className="flex items-center gap-3 p-3 bg-white rounded border border-gray-200">
-                <Plane size={16} className="text-[#3AB0FF] shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="font-oswald font-bold text-sm uppercase text-navy leading-none">{a.tail_number}</p>
-                  <p className="text-[10px] text-gray-500 mt-1 font-bold uppercase tracking-widest">
-                    {a.messages} msg · {formatTokens(a.input + a.cache_read + a.cache_create)} in · {formatTokens(a.output)} out
-                  </p>
-                </div>
-                <div className="text-right shrink-0">
-                  <p className="font-roboto font-bold text-sm text-navy">{formatCost(a.cost_usd)}</p>
-                </div>
-              </div>
-            ))}
           </div>
         )}
       </div>

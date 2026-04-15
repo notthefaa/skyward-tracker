@@ -10,8 +10,17 @@
 // regulatory citation.
 // =============================================================
 
-import type { Aircraft, AircraftEquipment, AirworthinessDirective } from './types';
+import type { Aircraft, AircraftEquipment, AirworthinessDirective, EquipmentCategory } from './types';
 import { isMxExpired } from './math';
+
+// Named constants for the equipment categories the regulatory checks
+// look up. Keeping them here (typed as `EquipmentCategory`) means a
+// typo becomes a TypeScript error rather than a silent bypass, and the
+// next reader can see which regulations reference which category.
+const CATEGORY_ELT: EquipmentCategory = 'elt';
+const CATEGORY_TRANSPONDER: EquipmentCategory = 'transponder';
+const CATEGORY_ALTIMETER: EquipmentCategory = 'altimeter';
+const CATEGORY_PITOT_STATIC: EquipmentCategory = 'pitot_static';
 
 export type AirworthinessStatus = 'airworthy' | 'issues' | 'grounded';
 
@@ -63,7 +72,7 @@ export function computeAirworthinessStatus(input: Inputs): AirworthinessVerdict 
 
   // ─── 91.207 ELT ─────────────────────────────────────────────
   if (equipmentTracked) {
-    const elt = activeEquipment.find(e => e.is_elt || e.category === 'elt');
+    const elt = activeEquipment.find(e => e.is_elt || e.category === CATEGORY_ELT);
     if (!elt) {
       findings.push({ severity: 'warning', citation: '91.207', message: 'No ELT tracked in equipment. 91.207 requires one.' });
     } else {
@@ -81,7 +90,7 @@ export function computeAirworthinessStatus(input: Inputs): AirworthinessVerdict 
   }
 
   // ─── 91.413 Transponder (24 months) ─────────────────────────
-  const transponder = activeEquipment.find(e => e.category === 'transponder');
+  const transponder = activeEquipment.find(e => e.category === CATEGORY_TRANSPONDER);
   if (transponder && isDateExpired(transponder.transponder_due_date)) {
     findings.push({
       severity: 'grounded',
@@ -93,7 +102,7 @@ export function computeAirworthinessStatus(input: Inputs): AirworthinessVerdict 
   // ─── 91.411 Altimeter + Pitot-Static (24 months) ────────────
   const ifrRelevant = input.aircraft.is_ifr_equipped === true;
   if (ifrRelevant) {
-    const altimeter = activeEquipment.find(e => e.category === 'altimeter');
+    const altimeter = activeEquipment.find(e => e.category === CATEGORY_ALTIMETER);
     if (altimeter && isDateExpired(altimeter.altimeter_due_date)) {
       findings.push({
         severity: 'grounded',
@@ -101,7 +110,7 @@ export function computeAirworthinessStatus(input: Inputs): AirworthinessVerdict 
         message: 'Altimeter 24-month check expired.',
       });
     }
-    const pitot = activeEquipment.find(e => e.category === 'pitot_static');
+    const pitot = activeEquipment.find(e => e.category === CATEGORY_PITOT_STATIC);
     if (pitot && isDateExpired(pitot.pitot_static_due_date)) {
       findings.push({
         severity: 'grounded',

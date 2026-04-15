@@ -20,7 +20,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (action.user_id !== user.id) {
       return NextResponse.json({ error: 'Not your proposed action.' }, { status: 403 });
     }
-    if (action.status !== 'pending') {
+    // Retry path: failed actions can be re-attempted from the same endpoint.
+    // Pending → new confirm. Failed → retry. Anything else → 409.
+    if (action.status !== 'pending' && action.status !== 'failed') {
       return NextResponse.json({ error: `Action already ${action.status}.` }, { status: 409 });
     }
 
@@ -35,9 +37,16 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     await setAppUser(supabaseAdmin, user.id);
 
     // Mark confirmed before execution so audit captures the intent.
+    // On retry we also clear the stale error so the card reads cleanly
+    // if the next attempt fails in a different way.
     await supabaseAdmin
       .from('aft_proposed_actions')
-      .update({ status: 'confirmed', confirmed_at: new Date().toISOString(), confirmed_by: user.id })
+      .update({
+        status: 'confirmed',
+        confirmed_at: new Date().toISOString(),
+        confirmed_by: user.id,
+        error_message: null,
+      })
       .eq('id', id);
 
     try {

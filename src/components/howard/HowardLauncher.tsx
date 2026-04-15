@@ -157,7 +157,14 @@ export default function HowardLauncher({ currentAircraft, userFleet = [], sessio
     return parts.join(' ');
   };
 
-  const canSubmitBriefing = dep.trim().length >= 3 && dest.trim().length >= 3 && dep.trim().length <= 5 && dest.trim().length <= 5;
+  // Strict alpha check — "ABC" / "KDAL" / "KORD" / "KJFK" ok, digits
+  // and punctuation rejected so we don't fire a briefing call on
+  // obviously junk input and then explain to the user it failed.
+  const isValidAirport = (s: string) => /^[A-Za-z]{3,5}$/.test(s.trim());
+  const canSubmitBriefing = isValidAirport(dep) && isValidAirport(dest) && (!alt || isValidAirport(alt));
+  const depError = dep.trim().length > 0 && !isValidAirport(dep);
+  const destError = dest.trim().length > 0 && !isValidAirport(dest);
+  const altError = alt.trim().length > 0 && !isValidAirport(alt);
 
   return (
     <>
@@ -166,7 +173,14 @@ export default function HowardLauncher({ currentAircraft, userFleet = [], sessio
           onClick={() => setOpen(true)}
           aria-label="Ask Howard"
           title="Ask Howard"
-          className="fixed bottom-20 right-4 z-[9998] w-14 h-14 rounded-full bg-[#0EA5E9] text-white shadow-xl flex items-center justify-center hover:bg-[#0284C7] active:scale-95 transition-all border-2 border-white"
+          className="fixed right-4 z-[9998] w-14 h-14 rounded-full bg-[#0EA5E9] text-white shadow-xl flex items-center justify-center hover:bg-[#0284C7] active:scale-95 transition-all border-2 border-white"
+          style={{
+            // 5rem clears the bottom nav bar; add the iOS home-indicator
+            // inset on notch devices so the FAB isn't half-hidden behind
+            // the safe area. Fallback to 5rem when the env var is
+            // unavailable.
+            bottom: 'max(5rem, calc(env(safe-area-inset-bottom) + 5rem))',
+          }}
         >
           <HowardIcon size={28} style={{ color: 'white' }} />
         </button>
@@ -281,9 +295,11 @@ export default function HowardLauncher({ currentAircraft, userFleet = [], sessio
                         placeholder="KDAL or DAL"
                         maxLength={5}
                         autoCapitalize="characters"
-                        className="w-full px-3 py-2 border border-gray-300 rounded text-sm uppercase"
+                        aria-invalid={depError}
+                        className={`w-full px-3 py-2 border rounded text-sm uppercase ${depError ? 'border-[#CE3732]' : 'border-gray-300'}`}
                         style={{ backgroundColor: '#ffffff' }}
                       />
+                      {depError && <p className="text-[10px] text-[#CE3732] mt-1">Letters only, 3–5 characters.</p>}
                     </div>
                     <div>
                       <label className="text-[10px] font-bold uppercase tracking-widest text-gray-500 block mb-1">
@@ -296,9 +312,11 @@ export default function HowardLauncher({ currentAircraft, userFleet = [], sessio
                         placeholder="KAUS or AUS"
                         maxLength={5}
                         autoCapitalize="characters"
-                        className="w-full px-3 py-2 border border-gray-300 rounded text-sm uppercase"
+                        aria-invalid={destError}
+                        className={`w-full px-3 py-2 border rounded text-sm uppercase ${destError ? 'border-[#CE3732]' : 'border-gray-300'}`}
                         style={{ backgroundColor: '#ffffff' }}
                       />
+                      {destError && <p className="text-[10px] text-[#CE3732] mt-1">Letters only, 3–5 characters.</p>}
                     </div>
                   </div>
                   <div>
@@ -324,9 +342,11 @@ export default function HowardLauncher({ currentAircraft, userFleet = [], sessio
                       placeholder="KADS or ADS"
                       maxLength={5}
                       autoCapitalize="characters"
-                      className="w-full px-3 py-2 border border-gray-300 rounded text-sm uppercase"
+                      aria-invalid={altError}
+                      className={`w-full px-3 py-2 border rounded text-sm uppercase ${altError ? 'border-[#CE3732]' : 'border-gray-300'}`}
                       style={{ backgroundColor: '#ffffff' }}
                     />
+                    {altError && <p className="text-[10px] text-[#CE3732] mt-1">Letters only, 3–5 characters.</p>}
                   </div>
                 </div>
                 <button

@@ -33,6 +33,11 @@ async function loadUserFleet(supabaseAdmin: any, userId: string) {
 }
 
 // DELETE — clear the current user's Howard thread
+// Only the messages are deleted; the thread row is kept so proposed
+// actions (which have ON DELETE CASCADE on thread_id) survive as an
+// audit trail of what Howard proposed vs. what the user accepted.
+// message_id on each proposed_action goes NULL via its FK's ON DELETE
+// SET NULL, which is fine — the payload and summary are self-contained.
 export async function DELETE(req: Request) {
   try {
     const { user, supabaseAdmin } = await requireAuth(req);
@@ -46,7 +51,10 @@ export async function DELETE(req: Request) {
     if (!thread) return NextResponse.json({ success: true, cleared: 0 });
 
     await supabaseAdmin.from('aft_howard_messages').delete().eq('thread_id', thread.id);
-    await supabaseAdmin.from('aft_howard_threads').delete().eq('id', thread.id);
+    await supabaseAdmin
+      .from('aft_howard_threads')
+      .update({ updated_at: new Date().toISOString() })
+      .eq('id', thread.id);
 
     return NextResponse.json({ success: true, cleared: 1 });
   } catch (error) { return handleApiError(error); }
@@ -93,7 +101,7 @@ export async function POST(req: Request) {
     const { allowed, retryAfterMs } = checkRateLimit(user.id);
     if (!allowed) {
       return NextResponse.json(
-        { error: `Rate limit exceeded. Try again in ${Math.ceil(retryAfterMs / 1000)}s.` },
+        { error: `You've hit the Howard rate limit. Try again in ${Math.ceil(retryAfterMs / 1000)}s — this protects the shared API budget from runaway loops.` },
         { status: 429 }
       );
     }
@@ -171,6 +179,20 @@ export async function POST(req: Request) {
           controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
         };
 
+        // SSE comment lines keep the TCP/HTTP pipe warm through long
+        // tool rounds (FAA NOTAM, aviationweather, embeddings). Without
+        // these, Vercel's edge proxy and some browsers close an idle
+        // connection even while the serverless function is still
+        // running — the client then reports a premature disconnect.
+        // Client ignores lines that don't start with `data: `.
+        const heartbeat = setInterval(() => {
+          try {
+            controller.enqueue(encoder.encode(': hb\n\n'));
+          } catch {
+            // Controller may already be closed — nothing to do.
+          }
+        }, 15000);
+
         // Hoisted so the catch block can recover partial text from
         // events that already streamed before the failure.
         let streamedSoFar = '';
@@ -228,8 +250,10 @@ export async function POST(req: Request) {
             .eq('id', threadId);
 
           send({ type: 'done', assistantMessage: assistantMsg, threadId });
+          clearInterval(heartbeat);
           controller.close();
         } catch (err: any) {
+          clearInterval(heartbeat);
           const reason = err?.message || 'Stream failed';
           const partial = streamedSoFar.trim();
           const content = partial

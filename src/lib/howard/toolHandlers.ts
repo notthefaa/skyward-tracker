@@ -596,6 +596,50 @@ const GLOBAL_TOOLS = new Set([
   'get_system_settings',
 ]);
 
+/** Upper bound on the JSON size of a single tool result sent back to
+ * Claude. Aircraft with hundreds of logs, squawks, or ADs can otherwise
+ * blow the context window and run up per-request cost. ~40 KB is
+ * comfortably larger than any normal reply but still leaves room for
+ * the rest of the conversation. */
+const MAX_TOOL_RESULT_CHARS = 40000;
+
+/** If a tool result serializes larger than MAX_TOOL_RESULT_CHARS, find
+ * the largest array inside and halve it until we fit. Adds a
+ * `_truncated` marker so Howard can tell the user to narrow the
+ * filter instead of silently showing partial data. */
+function capResultSize(result: any): any {
+  if (!result || typeof result !== 'object') return result;
+  let current: any = result;
+  let serialized = JSON.stringify(current);
+  // Bounded loop in case a result has many same-size arrays that each
+  // need trimming. 6 iterations is enough to shave an order of
+  // magnitude off even a huge response.
+  for (let i = 0; i < 6 && serialized.length > MAX_TOOL_RESULT_CHARS; i++) {
+    let largestKey: string | null = null;
+    let largestLen = 0;
+    for (const [k, v] of Object.entries(current)) {
+      if (Array.isArray(v) && v.length > largestLen) {
+        largestKey = k;
+        largestLen = v.length;
+      }
+    }
+    if (!largestKey || largestLen <= 3) break;
+    const keep = Math.max(3, Math.floor(largestLen / 2));
+    const prevTrunc = current._truncated || {};
+    current = {
+      ...current,
+      [largestKey]: (current[largestKey] as any[]).slice(0, keep),
+      _truncated: {
+        ...prevTrunc,
+        [largestKey]: { original_count: largestLen, returned_count: keep },
+        note: 'Result was too large for context — trimmed. Ask for a tighter filter (limit, date range, status) if you need more.',
+      },
+    };
+    serialized = JSON.stringify(current);
+  }
+  return current;
+}
+
 async function makeProposal(
   sb: SupabaseClient,
   ctx: ToolContext,
@@ -630,7 +674,7 @@ export async function executeTool(
   // Global tools don't need a specific aircraft; invoke directly.
   if (GLOBAL_TOOLS.has(name)) {
     const result = await handler(params, supabaseAdmin, '', ctx);
-    return JSON.stringify(result);
+    return JSON.stringify(capResultSize(result));
   }
 
   // Aircraft-scoped tool: resolve `tail` param to an aircraft_id the
@@ -644,5 +688,5 @@ export async function executeTool(
     aircraftTail: resolved.tail,
   };
   const result = await handler(params, supabaseAdmin, resolved.aircraftId, enrichedCtx);
-  return JSON.stringify(result);
+  return JSON.stringify(capResultSize(result));
 }

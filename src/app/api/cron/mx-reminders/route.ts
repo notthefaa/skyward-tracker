@@ -215,7 +215,11 @@ export async function GET(req: Request) {
             message: `Draft created automatically with ${lineItemDescriptions.length} item${lineItemDescriptions.length > 1 ? 's' : ''} approaching:\n${itemList}`,
           } as any);
 
-          // Email the PRIMARY CONTACT to review and send
+          // Email the PRIMARY CONTACT to review and send. If the email
+          // fails we still keep the draft (it's the authoritative record
+          // the user acts on in-app) but we do NOT mark items as
+          // "schedule sent", so the next cron run can retry.
+          let emailOk = true;
           if (aircraft.main_contact_email) {
             const safeTail = escapeHtml(aircraft.tail_number);
             const safeMainContact = escapeHtml(aircraft.main_contact || 'Operations');
@@ -225,41 +229,50 @@ export async function GET(req: Request) {
               `<li style="margin-bottom: 8px;"><strong>${escapeHtml(mx.item_name)}</strong><br/><span style="color: #525659; font-size: 13px;">Due ${escapeHtml(dueString)}</span></li>`
             ).join('');
 
-            await resend.emails.send({
-              from: `Skyward Aircraft Manager <${FROM_EMAIL}>`,
-              replyTo: aircraft.main_contact_email,
-              to: [aircraft.main_contact_email],
-              subject: `Action Required: Review & Send Work Package for ${safeTail}`,
-              html: `
-                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; border-radius: 8px;">
-                  <h2 style="color: #091F3C; text-transform: uppercase; letter-spacing: 2px; border-bottom: 2px solid #091F3C; padding-bottom: 10px;">Maintenance Coming Due</h2>
-                  
-                  <p style="color: #525659; font-size: 16px;">Hello ${safeMainContact},</p>
-                  <p style="color: #525659; font-size: 16px;">The following maintenance item${lineItemDescriptions.length > 1 ? 's are' : ' is'} approaching for <strong>${safeTail}</strong>:</p>
-                  
-                  <div style="background-color: #FFF7ED; padding: 20px; border-left: 4px solid #F08B46; margin: 25px 0; border-radius: 4px;">
-                    <ul style="margin: 0; padding-left: 16px; list-style: none;">${itemListHtml}</ul>
-                  </div>
+            try {
+              await resend.emails.send({
+                from: `Skyward Aircraft Manager <${FROM_EMAIL}>`,
+                replyTo: aircraft.main_contact_email,
+                to: [aircraft.main_contact_email],
+                subject: `Action Required: Review & Send Work Package for ${safeTail}`,
+                html: `
+                  <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; border-radius: 8px;">
+                    <h2 style="color: #091F3C; text-transform: uppercase; letter-spacing: 2px; border-bottom: 2px solid #091F3C; padding-bottom: 10px;">Maintenance Coming Due</h2>
 
-                  <p style="color: #525659; font-size: 16px;">We've prepared a <strong>draft work package</strong> for you. Open the app to:</p>
-                  <ul style="color: #525659; font-size: 14px; line-height: 2;">
-                    <li>Add any open squawks you'd like addressed</li>
-                    <li>Request additional services (wash, fluid top-off, nav update, etc.)</li>
-                    <li>Propose a preferred service date</li>
-                    <li>Send the complete package to ${safeMxContact}</li>
-                  </ul>
+                    <p style="color: #525659; font-size: 16px;">Hello ${safeMainContact},</p>
+                    <p style="color: #525659; font-size: 16px;">The following maintenance item${lineItemDescriptions.length > 1 ? 's are' : ' is'} approaching for <strong>${safeTail}</strong>:</p>
 
-                  <div style="margin-top: 25px; text-align: center;">
-                    <a href="${appUrl}" style="display: inline-block; background-color: #091F3C; color: white; text-decoration: none; padding: 12px 28px; border-radius: 6px; font-weight: bold; font-size: 14px; letter-spacing: 1px;">OPEN AIRCRAFT MANAGER</a>
+                    <div style="background-color: #FFF7ED; padding: 20px; border-left: 4px solid #F08B46; margin: 25px 0; border-radius: 4px;">
+                      <ul style="margin: 0; padding-left: 16px; list-style: none;">${itemListHtml}</ul>
+                    </div>
+
+                    <p style="color: #525659; font-size: 16px;">We've prepared a <strong>draft work package</strong> for you. Open the app to:</p>
+                    <ul style="color: #525659; font-size: 14px; line-height: 2;">
+                      <li>Add any open squawks you'd like addressed</li>
+                      <li>Request additional services (wash, fluid top-off, nav update, etc.)</li>
+                      <li>Propose a preferred service date</li>
+                      <li>Send the complete package to ${safeMxContact}</li>
+                    </ul>
+
+                    <div style="margin-top: 25px; text-align: center;">
+                      <a href="${appUrl}" style="display: inline-block; background-color: #091F3C; color: white; text-decoration: none; padding: 12px 28px; border-radius: 6px; font-weight: bold; font-size: 14px; letter-spacing: 1px;">OPEN AIRCRAFT MANAGER</a>
+                    </div>
                   </div>
-                </div>
-              `
-            });
+                `
+              });
+            } catch (err: any) {
+              emailOk = false;
+              console.error(`[cron/mx-reminders] scheduling email failed for ${aircraft.tail_number}:`, err?.message || err);
+            }
           }
 
-          // Queue flag updates for all included items (batched below)
-          for (const { mx } of lineItemDescriptions) {
-            flagUpdates.push({ id: mx.id, flags: { mx_schedule_sent: true } });
+          // Queue flag updates only if the email went through (or there
+          // was no recipient configured — in that case the draft is the
+          // only notification channel and we shouldn't re-loop).
+          if (emailOk) {
+            for (const { mx } of lineItemDescriptions) {
+              flagUpdates.push({ id: mx.id, flags: { mx_schedule_sent: true } });
+            }
           }
         }
       }
@@ -276,28 +289,33 @@ export async function GET(req: Request) {
           `<li style="margin-bottom: 8px;"><strong>${escapeHtml(e.mx.item_name)}</strong> — projected ~${Math.ceil(e.projectedDays)} days</li>`
         ).join('');
 
-        await resend.emails.send({
-          from: `Skyward Aircraft Manager <${FROM_EMAIL}>`,
-          replyTo: aircraft.main_contact_email,
-          to: [aircraft.main_contact_email],
-          subject: `Heads Up: ${safeTail} MX Approaching (Low Confidence)`,
-          html: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-              <h2 style="color: #091F3C;">Predictive Maintenance Alert</h2>
-              <p>Hello ${safeMainContact},</p>
-              <p>Based on recent flight activity, we estimate the following item${headsUpItems.length > 1 ? 's' : ''} for ${safeTail} may be coming due:</p>
-              <ul style="margin: 15px 0; padding-left: 16px;">${itemListHtml}</ul>
-              <p>However, flight logs have been irregular (System Confidence: <strong>${confidenceScore}%</strong>), so ${headsUpItems.length > 1 ? 'these estimates' : 'this estimate'} may shift significantly.</p>
-              <p style="margin-top: 20px;">No action is needed yet. We'll create a draft work package automatically when ${headsUpItems.length > 1 ? 'items get' : 'the item gets'} closer to ${headsUpItems.length > 1 ? 'their thresholds' : 'its threshold'}. You can also schedule service proactively from the Maintenance tab at any time.</p>
-              <div style="margin-top: 25px; text-align: center;">
-                <a href="${appUrl}" style="display: inline-block; background-color: #091F3C; color: white; text-decoration: none; padding: 12px 28px; border-radius: 6px; font-weight: bold; font-size: 14px; letter-spacing: 1px;">OPEN AIRCRAFT MANAGER</a>
+        try {
+          await resend.emails.send({
+            from: `Skyward Aircraft Manager <${FROM_EMAIL}>`,
+            replyTo: aircraft.main_contact_email,
+            to: [aircraft.main_contact_email],
+            subject: `Heads Up: ${safeTail} MX Approaching (Low Confidence)`,
+            html: `
+              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+                <h2 style="color: #091F3C;">Predictive Maintenance Alert</h2>
+                <p>Hello ${safeMainContact},</p>
+                <p>Based on recent flight activity, we estimate the following item${headsUpItems.length > 1 ? 's' : ''} for ${safeTail} may be coming due:</p>
+                <ul style="margin: 15px 0; padding-left: 16px;">${itemListHtml}</ul>
+                <p>However, flight logs have been irregular (System Confidence: <strong>${confidenceScore}%</strong>), so ${headsUpItems.length > 1 ? 'these estimates' : 'this estimate'} may shift significantly.</p>
+                <p style="margin-top: 20px;">No action is needed yet. We'll create a draft work package automatically when ${headsUpItems.length > 1 ? 'items get' : 'the item gets'} closer to ${headsUpItems.length > 1 ? 'their thresholds' : 'its threshold'}. You can also schedule service proactively from the Maintenance tab at any time.</p>
+                <div style="margin-top: 25px; text-align: center;">
+                  <a href="${appUrl}" style="display: inline-block; background-color: #091F3C; color: white; text-decoration: none; padding: 12px 28px; border-radius: 6px; font-weight: bold; font-size: 14px; letter-spacing: 1px;">OPEN AIRCRAFT MANAGER</a>
+                </div>
               </div>
-            </div>
-          `
-        });
+            `
+          });
 
-        for (const e of headsUpItems) {
-          flagUpdates.push({ id: e.mx.id, flags: { primary_heads_up_sent: true } });
+          // Only mark heads-up as sent if the email actually went.
+          for (const e of headsUpItems) {
+            flagUpdates.push({ id: e.mx.id, flags: { primary_heads_up_sent: true } });
+          }
+        } catch (err: any) {
+          console.error(`[cron/mx-reminders] heads-up email failed for ${aircraft.tail_number}:`, err?.message || err);
         }
       }
 
@@ -334,25 +352,33 @@ export async function GET(req: Request) {
           flagToUpdate.reminder_30_sent = true;
         }
 
+        let reminderEmailOk = true;
         if (internalTriggerTemplate && aircraft.main_contact_email) {
           const safeTail = escapeHtml(aircraft.tail_number);
           const safeItemName = escapeHtml(mx.item_name);
 
-          await resend.emails.send({
-            from: `Skyward Alerts <${FROM_EMAIL}>`,
-            to: [aircraft.main_contact_email],
-            subject: `Maintenance Alert: ${safeTail} Due Soon`,
-            html: `<div style="font-family: Arial, sans-serif; font-size: 14px; color: #333333; line-height: 1.6;">
-                    <p>This is an automated reminder that required maintenance is coming due for ${safeTail}.</p>
-                    <p style="margin-top: 20px;"><strong>Item:</strong> ${safeItemName}<br/><strong>Status:</strong> ${escapeHtml(internalTriggerTemplate)}</p>
-                    <div style="margin-top: 25px; text-align: center;">
-                      <a href="${appUrl}" style="display: inline-block; background-color: #091F3C; color: white; text-decoration: none; padding: 12px 28px; border-radius: 6px; font-weight: bold; font-size: 14px; letter-spacing: 1px;">OPEN AIRCRAFT MANAGER</a>
-                    </div>
-                  </div>`
-          });
+          try {
+            await resend.emails.send({
+              from: `Skyward Alerts <${FROM_EMAIL}>`,
+              to: [aircraft.main_contact_email],
+              subject: `Maintenance Alert: ${safeTail} Due Soon`,
+              html: `<div style="font-family: Arial, sans-serif; font-size: 14px; color: #333333; line-height: 1.6;">
+                      <p>This is an automated reminder that required maintenance is coming due for ${safeTail}.</p>
+                      <p style="margin-top: 20px;"><strong>Item:</strong> ${safeItemName}<br/><strong>Status:</strong> ${escapeHtml(internalTriggerTemplate)}</p>
+                      <div style="margin-top: 25px; text-align: center;">
+                        <a href="${appUrl}" style="display: inline-block; background-color: #091F3C; color: white; text-decoration: none; padding: 12px 28px; border-radius: 6px; font-weight: bold; font-size: 14px; letter-spacing: 1px;">OPEN AIRCRAFT MANAGER</a>
+                      </div>
+                    </div>`
+            });
+          } catch (err: any) {
+            reminderEmailOk = false;
+            console.error(`[cron/mx-reminders] internal reminder email failed for ${aircraft.tail_number} / ${mx.item_name}:`, err?.message || err);
+          }
         }
 
-        if (Object.keys(flagToUpdate).length > 0) {
+        // Don't flip the "sent" flag if the email bounced — the next
+        // cron tick will retry the same reminder stage.
+        if (reminderEmailOk && Object.keys(flagToUpdate).length > 0) {
           flagUpdates.push({ id: mx.id, flags: flagToUpdate });
         }
       }
@@ -412,28 +438,34 @@ export async function GET(req: Request) {
           if (!aircraft) continue;
           const safeTail = escapeHtml(aircraft.tail_number);
 
-          await resend.emails.send({
-            from: `Skyward Aircraft Manager <${FROM_EMAIL}>`,
-            to: [ev.primary_contact_email],
-            subject: `Reminder: ${safeTail} Awaiting Logbook Entry`,
-            html: `
-              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-                <h2 style="color: #F08B46;">Service Event Still Open</h2>
-                <p>Your mechanic marked <strong>${safeTail}</strong> as ready for pickup more than ${READY_PICKUP_NUDGE_DAYS} days ago, but the service event has not yet been closed.</p>
-                <p style="color: #525659;">Until you enter the logbook data, maintenance tracking won't reset and the aircraft may remain blocked on the calendar. Open the app to complete the event when you get a moment.</p>
-                <div style="margin-top: 25px; text-align: center;">
-                  <a href="${appUrl}" style="display: inline-block; background-color: #091F3C; color: white; text-decoration: none; padding: 12px 28px; border-radius: 6px; font-weight: bold; font-size: 14px; letter-spacing: 1px;">OPEN AIRCRAFT MANAGER</a>
+          try {
+            await resend.emails.send({
+              from: `Skyward Aircraft Manager <${FROM_EMAIL}>`,
+              to: [ev.primary_contact_email],
+              subject: `Reminder: ${safeTail} Awaiting Logbook Entry`,
+              html: `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+                  <h2 style="color: #F08B46;">Service Event Still Open</h2>
+                  <p>Your mechanic marked <strong>${safeTail}</strong> as ready for pickup more than ${READY_PICKUP_NUDGE_DAYS} days ago, but the service event has not yet been closed.</p>
+                  <p style="color: #525659;">Until you enter the logbook data, maintenance tracking won't reset and the aircraft may remain blocked on the calendar. Open the app to complete the event when you get a moment.</p>
+                  <div style="margin-top: 25px; text-align: center;">
+                    <a href="${appUrl}" style="display: inline-block; background-color: #091F3C; color: white; text-decoration: none; padding: 12px 28px; border-radius: 6px; font-weight: bold; font-size: 14px; letter-spacing: 1px;">OPEN AIRCRAFT MANAGER</a>
+                  </div>
                 </div>
-              </div>
-            `,
-          });
+              `,
+            });
 
-          await supabaseAdmin.from('aft_event_messages').insert({
-            event_id: ev.id,
-            sender: 'system',
-            message_type: 'status_update',
-            message: `${READY_PICKUP_NUDGE_MARKER} Reminder sent to primary contact — aircraft awaiting logbook entry.`,
-          } as any);
+            // Only insert the nudge marker if the email actually went
+            // out — otherwise we'd suppress the retry on the next tick.
+            await supabaseAdmin.from('aft_event_messages').insert({
+              event_id: ev.id,
+              sender: 'system',
+              message_type: 'status_update',
+              message: `${READY_PICKUP_NUDGE_MARKER} Reminder sent to primary contact — aircraft awaiting logbook entry.`,
+            } as any);
+          } catch (err: any) {
+            console.error(`[cron/mx-reminders] pickup nudge email failed for event ${ev.id}:`, err?.message || err);
+          }
         }
       }
     }

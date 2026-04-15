@@ -55,6 +55,12 @@ const SUGGESTIONS = [
   "When is my VOR check due?",
 ];
 
+const EMPTY_FLEET_SUGGESTIONS = [
+  "How do I add my first aircraft?",
+  "What's a good pre-buy inspection checklist?",
+  "Explain 91.205 VFR equipment requirements",
+];
+
 // Friendly label for tool-use indicator
 function toolLabel(name: string): { label: string; Icon: any } {
   if (name === 'web_search') return { label: 'Searching the web', Icon: Globe };
@@ -94,8 +100,13 @@ export default function HowardTab({
   // a tool (he needed aircraft context to answer) or the user types
   // manually (they've moved on to something else).
   const [awaitingAircraftChoice, setAwaitingAircraftChoice] = useState(false);
+  // Free-text tail input used when the fleet is big enough that chips
+  // alone aren't enough (typeahead fallback for the picker).
+  const [pickerFilter, setPickerFilter] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  // Prevents the single-aircraft auto-confirm effect from firing twice.
+  const autoConfirmedTailRef = useRef<string | null>(null);
 
   const userId = session?.user?.id;
   const { data, mutate } = useSWR(
@@ -345,6 +356,29 @@ export default function HowardTab({
     }
   }, [isSending, confirm, mutate, showSuccess, showError]);
 
+  // Single-aircraft auto-confirm — if Howard asks "which aircraft?" and
+  // the user only has one, there's no real choice to make. Send the
+  // confirmation automatically instead of rendering a one-button picker.
+  useEffect(() => {
+    if (isSending) return;
+    if (!awaitingAircraftChoice) return;
+    if (userFleet.length !== 1) return;
+    const last = messages[messages.length - 1];
+    if (!last || last.role !== 'assistant') return;
+    const lastHasTools = Array.isArray(last.tool_calls) && last.tool_calls.length > 0;
+    if (lastHasTools) return;
+    const onlyTail = userFleet[0].tail_number;
+    if (autoConfirmedTailRef.current === onlyTail) return;
+    autoConfirmedTailRef.current = onlyTail;
+    handleSend(`Yes, ${onlyTail}.`);
+  }, [awaitingAircraftChoice, userFleet, messages, isSending, handleSend]);
+
+  // Reset the guard when we leave the awaiting state so a later
+  // conversation can trigger the auto-confirm again.
+  useEffect(() => {
+    if (!awaitingAircraftChoice) autoConfirmedTailRef.current = null;
+  }, [awaitingAircraftChoice]);
+
   // Prefill handoff from the floating HowardLauncher (or any caller).
   // sessionStorage key "aft_howard_prefill" (JSON: {prompt, autoSend, followUps?})
   useEffect(() => {
@@ -419,10 +453,12 @@ export default function HowardTab({
             <HowardIcon size={40} style={{ color: '#0EA5E9' }} />
             <p className="font-roboto text-sm text-navy mt-3 mb-1 font-bold">Hey, I&apos;m Howard.</p>
             <p className="font-roboto text-xs text-gray-500 mb-4 max-w-xs">
-              Ask me about any aircraft in your fleet — maintenance, squawks, airworthiness, flight briefings. I&apos;ll pull real data, never guess.
+              {userFleet.length === 0
+                ? "You haven't added an aircraft yet. Once you do, I can dig into maintenance, squawks, airworthiness, and flight briefings. For now I can answer general aviation questions."
+                : 'Ask me about any aircraft in your fleet — maintenance, squawks, airworthiness, flight briefings. I\u2019ll pull real data, never guess.'}
             </p>
             <div className="flex flex-wrap gap-2 justify-center">
-              {SUGGESTIONS.map(s => (
+              {(userFleet.length === 0 ? EMPTY_FLEET_SUGGESTIONS : SUGGESTIONS).map(s => (
                 <button
                   key={s}
                   onClick={() => handleSend(s)}
@@ -530,19 +566,40 @@ export default function HowardTab({
               // Aircraft picker — render while Howard is waiting on a tail
               // confirmation (launcher sent an aircraft-specific prompt and
               // Howard hasn't called any tools yet). Clicking a button
-              // sends "Yes, <tail>" style confirmation.
-              if (awaitingAircraftChoice && !lastHasTools && userFleet.length > 0) {
-                const pickerOptions = userFleet.slice(0, 6);
+              // sends "Yes, <tail>" style confirmation. Skip for
+              // single-aircraft users (the auto-confirm effect handles
+              // them) and for empty fleets (nothing to pick).
+              if (awaitingAircraftChoice && !lastHasTools && userFleet.length > 1) {
+                const normalizedFilter = pickerFilter.trim().toUpperCase();
+                const filteredFleet = normalizedFilter
+                  ? userFleet.filter(a => a.tail_number.toUpperCase().includes(normalizedFilter))
+                  : userFleet;
+                const needsScroll = userFleet.length > 6;
+                const listWrapperCls = needsScroll
+                  ? 'flex flex-wrap gap-1.5 max-h-28 overflow-y-auto pr-1'
+                  : 'flex flex-wrap gap-1.5';
                 return (
                   <div className="flex flex-col gap-1.5 pt-1">
                     <span className="text-[9px] font-bold uppercase tracking-widest text-gray-400 pl-1">Which aircraft?</span>
-                    <div className="flex flex-wrap gap-1.5">
-                      {pickerOptions.map(a => {
+                    {needsScroll && (
+                      <input
+                        type="text"
+                        value={pickerFilter}
+                        onChange={e => setPickerFilter(e.target.value)}
+                        placeholder="Type to filter by tail…"
+                        autoCapitalize="characters"
+                        maxLength={10}
+                        className="text-xs font-roboto uppercase px-2.5 py-1.5 rounded border border-gray-300 focus:border-[#0EA5E9] outline-none"
+                        style={{ backgroundColor: '#ffffff' }}
+                      />
+                    )}
+                    <div className={listWrapperCls}>
+                      {filteredFleet.map(a => {
                         const isCurrent = currentAircraft?.id === a.id;
                         return (
                           <button
                             key={a.id}
-                            onClick={() => handleSend(`Yes, ${a.tail_number}.`)}
+                            onClick={() => { setPickerFilter(''); handleSend(`Yes, ${a.tail_number}.`); }}
                             className={`text-[11px] font-roboto font-medium rounded-full px-3 py-1.5 border active:scale-95 transition-all ${
                               isCurrent
                                 ? 'text-white bg-[#0EA5E9] border-[#0EA5E9] hover:bg-[#0284C7]'
@@ -553,6 +610,9 @@ export default function HowardTab({
                           </button>
                         );
                       })}
+                      {filteredFleet.length === 0 && (
+                        <span className="text-[11px] font-roboto text-gray-400 px-1 py-1.5">No tails match &quot;{pickerFilter}&quot;.</span>
+                      )}
                     </div>
                   </div>
                 );
