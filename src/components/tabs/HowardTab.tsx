@@ -54,12 +54,15 @@ function toolLabel(name: string): { label: string; Icon: any } {
 }
 
 export default function HowardTab({
-  currentAircraft, session, compact = false,
+  currentAircraft, userFleet = [], session, compact = false,
 }: {
   /** Aircraft currently selected in the surrounding UI — purely a hint
    * for Howard. Conversations are user-scoped; each aircraft-specific
    * tool call carries a `tail` resolved from the conversation. */
   currentAircraft: AircraftWithMetrics | null;
+  /** The full fleet the user has access to. Used to render an aircraft
+   * picker when Howard is waiting for tail confirmation. */
+  userFleet?: AircraftWithMetrics[];
   session: any;
   /** Render without the "Howard" logo header (used when embedded in the
    * launcher popup, which has its own header). */
@@ -75,6 +78,11 @@ export default function HowardTab({
   // the latest assistant reply so the user can drill into depth without
   // retyping. Cleared when the user sends a manual (typed) message.
   const [followUps, setFollowUps] = useState<{ label: string; prompt: string }[]>([]);
+  // The launcher flags aircraft-specific prompts with kind='aircraft'.
+  // We stay in "awaiting tail confirmation" until Howard actually calls
+  // a tool (he needed aircraft context to answer) or the user types
+  // manually (they've moved on to something else).
+  const [awaitingAircraftChoice, setAwaitingAircraftChoice] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -202,6 +210,9 @@ export default function HowardTab({
             setActiveToolName(null);
           } else if (ev.type === 'tool_use_start') {
             setActiveToolName(ev.name);
+            // A tool call means Howard has the aircraft context he
+            // needed — we can drop the pending-confirmation state.
+            setAwaitingAircraftChoice(false);
           } else if (ev.type === 'tool_use_end') {
             setActiveToolName(null);
           } else if (ev.type === 'done') {
@@ -295,8 +306,10 @@ export default function HowardTab({
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      // Manual (typed) send ends the launcher's follow-up context.
+      // Manual (typed) send ends the launcher's follow-up / tail-
+      // confirmation context — user has moved on on their own.
       setFollowUps([]);
+      setAwaitingAircraftChoice(false);
       handleSend();
     }
   }, [handleSend]);
@@ -329,10 +342,11 @@ export default function HowardTab({
       const raw = sessionStorage.getItem('aft_howard_prefill');
       if (!raw) return;
       sessionStorage.removeItem('aft_howard_prefill');
-      const { prompt, autoSend, followUps: fu } = JSON.parse(raw);
+      const { prompt, autoSend, followUps: fu, kind } = JSON.parse(raw);
       if (Array.isArray(fu)) {
         setFollowUps(fu.filter((x: any) => typeof x?.label === 'string' && typeof x?.prompt === 'string'));
       }
+      if (kind === 'aircraft') setAwaitingAircraftChoice(true);
       if (typeof prompt !== 'string' || !prompt.trim()) return;
       if (autoSend) {
         handleSend(prompt);
@@ -496,24 +510,67 @@ export default function HowardTab({
               </div>
             )}
 
-            {/* Follow-up chips — surfaced after a launcher-prefilled reply so
-                the user can drill into depth without retyping. */}
-            {!isSending && followUps.length > 0 && messages.length > 0 && messages[messages.length - 1]?.role === 'assistant' && (
-              <div className="flex flex-col gap-1.5 pt-1">
-                <span className="text-[9px] font-bold uppercase tracking-widest text-gray-400 pl-1">Dig in?</span>
-                <div className="flex flex-wrap gap-1.5">
-                  {followUps.map(f => (
-                    <button
-                      key={f.label}
-                      onClick={() => handleSend(f.prompt)}
-                      className="text-[11px] font-roboto font-medium text-[#0EA5E9] bg-white border border-[#0EA5E9]/40 rounded-full px-3 py-1.5 hover:bg-[#0EA5E9]/10 active:scale-95 transition-all"
-                    >
-                      {f.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
+            {(() => {
+              if (isSending) return null;
+              const last = messages[messages.length - 1];
+              if (!last || last.role !== 'assistant') return null;
+              const lastHasTools = Array.isArray(last.tool_calls) && last.tool_calls.length > 0;
+
+              // Aircraft picker — render while Howard is waiting on a tail
+              // confirmation (launcher sent an aircraft-specific prompt and
+              // Howard hasn't called any tools yet). Clicking a button
+              // sends "Yes, <tail>" style confirmation.
+              if (awaitingAircraftChoice && !lastHasTools && userFleet.length > 0) {
+                const pickerOptions = userFleet.slice(0, 6);
+                return (
+                  <div className="flex flex-col gap-1.5 pt-1">
+                    <span className="text-[9px] font-bold uppercase tracking-widest text-gray-400 pl-1">Which aircraft?</span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {pickerOptions.map(a => {
+                        const isCurrent = currentAircraft?.id === a.id;
+                        return (
+                          <button
+                            key={a.id}
+                            onClick={() => handleSend(`Yes, ${a.tail_number}.`)}
+                            className={`text-[11px] font-roboto font-medium rounded-full px-3 py-1.5 border active:scale-95 transition-all ${
+                              isCurrent
+                                ? 'text-white bg-[#0EA5E9] border-[#0EA5E9] hover:bg-[#0284C7]'
+                                : 'text-[#0EA5E9] bg-white border-[#0EA5E9]/40 hover:bg-[#0EA5E9]/10'
+                            }`}
+                          >
+                            {a.tail_number}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              }
+
+              // Follow-up depth chips — only after Howard actually pulled
+              // data (tool_calls on the latest reply). Prevents chips
+              // showing beneath a bare confirmation question.
+              if (followUps.length > 0 && lastHasTools) {
+                return (
+                  <div className="flex flex-col gap-1.5 pt-1">
+                    <span className="text-[9px] font-bold uppercase tracking-widest text-gray-400 pl-1">Dig in?</span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {followUps.map(f => (
+                        <button
+                          key={f.label}
+                          onClick={() => handleSend(f.prompt)}
+                          className="text-[11px] font-roboto font-medium text-[#0EA5E9] bg-white border border-[#0EA5E9]/40 rounded-full px-3 py-1.5 hover:bg-[#0EA5E9]/10 active:scale-95 transition-all"
+                        >
+                          {f.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                );
+              }
+
+              return null;
+            })()}
 
             <div ref={messagesEndRef} />
           </div>
@@ -535,7 +592,7 @@ export default function HowardTab({
           style={{ backgroundColor: '#ffffff' }}
         />
         <button
-          onClick={() => { setFollowUps([]); handleSend(); }}
+          onClick={() => { setFollowUps([]); setAwaitingAircraftChoice(false); handleSend(); }}
           disabled={!input.trim() || isSending}
           className="bg-[#0EA5E9] text-white p-3 rounded-lg active:scale-95 transition-transform disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
         >

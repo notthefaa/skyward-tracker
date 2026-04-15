@@ -14,6 +14,8 @@ const HowardTab = dynamic(() => import("@/components/tabs/HowardTab"), { ssr: fa
 interface Props {
   /** Aircraft currently selected in the surrounding UI — optional hint. */
   currentAircraft: AircraftWithMetrics | null;
+  /** The user's accessible fleet, used for the tail-confirmation picker. */
+  userFleet?: AircraftWithMetrics[];
   session?: any;
 }
 
@@ -29,6 +31,9 @@ interface QuickPrompt {
   label: string;
   prompt: string;
   followUps?: FollowUp[];
+  /** 'aircraft' means the prompt needs a tail before Howard can answer;
+   * HowardTab renders an aircraft picker until Howard calls a tool. */
+  kind?: 'aircraft';
 }
 
 /**
@@ -37,7 +42,7 @@ interface QuickPrompt {
  * are aircraft-agnostic; if a tail is needed for the question, Howard
  * confirms against the currently-selected aircraft or asks.
  */
-export default function HowardLauncher({ currentAircraft, session }: Props) {
+export default function HowardLauncher({ currentAircraft, userFleet = [], session }: Props) {
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<Mode>('menu');
   const [dep, setDep] = useState('');
@@ -61,11 +66,11 @@ export default function HowardLauncher({ currentAircraft, session }: Props) {
 
   const currentTail = currentAircraft?.tail_number || null;
 
-  const sendPrompt = (prompt: string, followUps?: FollowUp[]) => {
+  const sendPrompt = (prompt: string, followUps?: FollowUp[], kind?: 'aircraft') => {
     try {
       sessionStorage.setItem(
         'aft_howard_prefill',
-        JSON.stringify({ prompt, autoSend: true, followUps: followUps || null })
+        JSON.stringify({ prompt, autoSend: true, followUps: followUps || null, kind: kind || null })
       );
     } catch {}
     setMode('chat');
@@ -87,6 +92,7 @@ export default function HowardLauncher({ currentAircraft, session }: Props) {
     {
       icon: Shield,
       label: 'Airworthiness check',
+      kind: 'aircraft',
       prompt: `Is my aircraft airworthy right now? Walk me through it.`,
       followUps: [
         { label: 'Blockers vs warnings', prompt: 'Which of those are blockers and which are just warnings?' },
@@ -97,6 +103,7 @@ export default function HowardLauncher({ currentAircraft, session }: Props) {
     {
       icon: Wrench,
       label: 'Maintenance overview',
+      kind: 'aircraft',
       prompt: `Give me the maintenance picture: anything overdue or due now, upcoming inspections in the next 30–90 days, open squawks, and any ADs to act on. Order by urgency.`,
       followUps: [
         { label: 'Required vs optional', prompt: 'Split those by required vs optional so I know what I can defer.' },
@@ -109,11 +116,13 @@ export default function HowardLauncher({ currentAircraft, session }: Props) {
     {
       icon: CalendarPlus,
       label: 'Book some time',
+      kind: 'aircraft',
       prompt: `I'd like to book some time. Ask me for the details you need.`,
     },
     {
       icon: Activity,
       label: 'Recent activity',
+      kind: 'aircraft',
       prompt: `What's been happening the last 30 days — flights, squawks, MX work?`,
       followUps: [
         { label: "Who's flying it", prompt: "Who's been flying it? Any patterns?" },
@@ -229,7 +238,7 @@ export default function HowardLauncher({ currentAircraft, session }: Props) {
                   return (
                     <button
                       key={p.label}
-                      onClick={() => sendPrompt(p.prompt, p.followUps)}
+                      onClick={() => sendPrompt(p.prompt, p.followUps, p.kind)}
                       className="text-left px-4 py-3 bg-gray-50 hover:bg-[#0EA5E9]/10 hover:border-[#0EA5E9] border border-gray-200 rounded-lg text-sm font-bold text-navy transition-colors active:scale-[0.98] flex items-center gap-3"
                     >
                       <Icon size={16} className="text-[#0EA5E9] shrink-0" />
@@ -321,7 +330,7 @@ export default function HowardLauncher({ currentAircraft, session }: Props) {
                   </div>
                 </div>
                 <button
-                  onClick={() => sendPrompt(buildBriefingPrompt(), briefingFollowUps)}
+                  onClick={() => sendPrompt(buildBriefingPrompt(), briefingFollowUps, 'aircraft')}
                   disabled={!canSubmitBriefing}
                   className="mt-5 w-full bg-[#0EA5E9] text-white font-oswald font-bold uppercase tracking-widest text-sm py-3 rounded-lg disabled:opacity-40 active:scale-95 transition-transform"
                 >
@@ -332,7 +341,7 @@ export default function HowardLauncher({ currentAircraft, session }: Props) {
 
             {mode === 'chat' && (
               <div className="flex-1 min-h-0 p-4 pt-3">
-                <HowardTab currentAircraft={currentAircraft} session={session} compact />
+                <HowardTab currentAircraft={currentAircraft} userFleet={userFleet} session={session} compact />
               </div>
             )}
           </div>

@@ -10,26 +10,13 @@ export const dynamic = 'force-dynamic';
 // which is why replies appeared to vanish. Vercel Hobby caps at 60s.
 export const maxDuration = 60;
 
-/** Load the user's fleet for Howard's per-request context. */
+/** Load the user's personal fleet for Howard's per-request context.
+ * Always scoped to aft_user_aircraft_access — we do NOT apply the
+ * global-admin bypass here, because "the user's fleet" from Howard's
+ * perspective means the aircraft they personally operate, not every
+ * aircraft in the DB. Per-tool-call access (resolveAircraftFromTail)
+ * still honors global admin so admins can query any aircraft by name. */
 async function loadUserFleet(supabaseAdmin: any, userId: string) {
-  // Global admins see every aircraft; regular users see the ones they
-  // have access to via aft_user_aircraft_access.
-  const { data: role } = await supabaseAdmin
-    .from('aft_user_roles')
-    .select('role')
-    .eq('user_id', userId)
-    .maybeSingle();
-  const isAdmin = (role as any)?.role === 'admin';
-
-  if (isAdmin) {
-    const { data } = await supabaseAdmin
-      .from('aft_aircraft')
-      .select('*')
-      .is('deleted_at', null)
-      .order('tail_number');
-    return data || [];
-  }
-
   const { data: access } = await supabaseAdmin
     .from('aft_user_aircraft_access')
     .select('aircraft_id')
