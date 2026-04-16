@@ -115,46 +115,55 @@ export default function NotesTab({ aircraft, session, role, aircraftRole, userIn
   const submitNote = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
+    // Try/catch/finally — bare throws used to leave the button frozen
+    // in "Saving…" forever on API error.
+    try {
+      const uploadedUrls = await uploadImages();
+      const allPictures = [...existingImages, ...uploadedUrls];
 
-    const uploadedUrls = await uploadImages();
-    const allPictures = [...existingImages, ...uploadedUrls];
+      const noteData: any = {
+        aircraft_id: aircraft.id,
+        content,
+        pictures: allPictures
+      };
 
-    const noteData: any = {
-      aircraft_id: aircraft.id,
-      content,
-      pictures: allPictures
-    };
-
-    if (editingId) {
-      noteData.edited_at = new Date().toISOString();
-      const res = await authFetch('/api/notes', {
-        method: 'PUT',
-        body: JSON.stringify({ noteId: editingId, aircraftId: aircraft.id, noteData })
-      });
-      if (!res.ok) throw new Error('Failed to update note');
-    } else {
-      noteData.author_email = session.user.email;
-      noteData.author_initials = userInitials;
-      const res = await authFetch('/api/notes', {
-        method: 'POST',
-        body: JSON.stringify({ aircraftId: aircraft.id, noteData })
-      });
-      if (!res.ok) throw new Error('Failed to create note');
-
-      try {
-        await authFetch('/api/emails/note-notify', {
-          method: 'POST',
-          body: JSON.stringify({ note: { ...noteData, author_initials: userInitials }, aircraft })
+      if (editingId) {
+        noteData.edited_at = new Date().toISOString();
+        const res = await authFetch('/api/notes', {
+          method: 'PUT',
+          body: JSON.stringify({ noteId: editingId, aircraftId: aircraft.id, noteData })
         });
-      } catch (err) {
-        console.error("Failed to send note notification", err);
-      }
-    }
+        if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || 'Failed to update note'); }
+      } else {
+        noteData.author_email = session.user.email;
+        noteData.author_initials = userInitials;
+        const res = await authFetch('/api/notes', {
+          method: 'POST',
+          body: JSON.stringify({ aircraftId: aircraft.id, noteData })
+        });
+        if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || 'Failed to create note'); }
 
-    await mutate();
-    setShowModal(false);
-    setIsSubmitting(false);
-    showSuccess(editingId ? "Note updated" : "Note posted");
+        try {
+          await authFetch('/api/emails/note-notify', {
+            method: 'POST',
+            body: JSON.stringify({ note: { ...noteData, author_initials: userInitials }, aircraft })
+          });
+        } catch (err) {
+          // Notification failure is non-blocking — the note saved. Log
+          // for ops but don't surface a toast that implies the note
+          // write itself failed.
+          console.error("Failed to send note notification", err);
+        }
+      }
+
+      await mutate();
+      setShowModal(false);
+      showSuccess(editingId ? "Note updated" : "Note posted");
+    } catch (err: any) {
+      showError(err?.message || 'Failed to save note.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const deleteNote = async (id: string) => {
@@ -165,12 +174,17 @@ export default function NotesTab({ aircraft, session, role, aircraftRole, userIn
       variant: "danger",
     });
     if (!ok) return;
-    const res = await authFetch('/api/notes', {
-      method: 'DELETE',
-      body: JSON.stringify({ noteId: id, aircraftId: aircraft.id })
-    });
-    if (!res.ok) throw new Error('Failed to delete note');
-    await mutate();
+    try {
+      const res = await authFetch('/api/notes', {
+        method: 'DELETE',
+        body: JSON.stringify({ noteId: id, aircraftId: aircraft.id })
+      });
+      if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || 'Failed to delete note'); }
+      await mutate();
+      showSuccess('Note deleted.');
+    } catch (err: any) {
+      showError(err?.message || 'Failed to delete note.');
+    }
   };
 
   if (!aircraft) return null;

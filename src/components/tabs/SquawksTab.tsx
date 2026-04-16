@@ -230,37 +230,48 @@ export default function SquawksTab({
       variant: "danger",
     });
     if (!ok) return;
-    const res = await authFetch('/api/squawks', {
-      method: 'DELETE',
-      body: JSON.stringify({ squawkId: id, aircraftId: aircraft!.id })
-    });
-    if (!res.ok) throw new Error('Failed to delete squawk');
-    await mutate(); onGroundedStatusChange();
-    closeDetailModal();
-    showSuccess("Squawk deleted");
+    try {
+      const res = await authFetch('/api/squawks', {
+        method: 'DELETE',
+        body: JSON.stringify({ squawkId: id, aircraftId: aircraft!.id })
+      });
+      if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || 'Failed to delete squawk'); }
+      await mutate(); onGroundedStatusChange();
+      closeDetailModal();
+      showSuccess("Squawk deleted");
+    } catch (err: any) {
+      showError(err?.message || 'Failed to delete squawk.');
+    }
   };
 
   const resolveSquawk = async (sq: any) => {
     setIsSubmitting(true);
-    const res = await authFetch('/api/squawks', {
-      method: 'PUT',
-      body: JSON.stringify({
-        squawkId: sq.id,
-        aircraftId: aircraft!.id,
-        squawkData: {
-          status: 'resolved',
-          affects_airworthiness: false,
-          resolved_note: resolveNote.trim() || null,
-          edited_at: new Date().toISOString(),
-          edited_by_initials: userInitials,
-        }
-      })
-    });
-    if (!res.ok) throw new Error('Failed to resolve squawk');
-    await mutate(); onGroundedStatusChange();
-    closeDetailModal();
-    showSuccess("Squawk resolved");
-    setIsSubmitting(false);
+    // Try/catch/finally — before this, a failed PUT left isSubmitting
+    // stuck true and the detail modal open with a frozen button.
+    try {
+      const res = await authFetch('/api/squawks', {
+        method: 'PUT',
+        body: JSON.stringify({
+          squawkId: sq.id,
+          aircraftId: aircraft!.id,
+          squawkData: {
+            status: 'resolved',
+            affects_airworthiness: false,
+            resolved_note: resolveNote.trim() || null,
+            edited_at: new Date().toISOString(),
+            edited_by_initials: userInitials,
+          }
+        })
+      });
+      if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || 'Failed to resolve squawk'); }
+      await mutate(); onGroundedStatusChange();
+      closeDetailModal();
+      showSuccess("Squawk resolved");
+    } catch (err: any) {
+      showError(err?.message || 'Failed to resolve squawk.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleShareMx = (sq: any) => { 

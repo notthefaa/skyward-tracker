@@ -185,10 +185,15 @@ export default function MaintenanceTab({
     if (!ok) return;
     setIsSubmitting(true);
     try {
-      await authFetch('/api/mx-events/manual-trigger', { method: 'POST', body: JSON.stringify({ mxItemId: item.id, aircraftId: aircraft!.id }) });
+      const res = await authFetch('/api/mx-events/manual-trigger', { method: 'POST', body: JSON.stringify({ mxItemId: item.id, aircraftId: aircraft!.id }) });
+      if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || 'Failed to create draft work package.'); }
       await mutate(); await mutateEvents();
-    } catch (err) { console.error(err); }
-    setIsSubmitting(false);
+      showSuccess('Draft work package created.');
+    } catch (err: any) {
+      showError(err?.message || 'Failed to create draft work package.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleResendWorkpackage = async (eventId: string) => {
@@ -202,34 +207,43 @@ export default function MaintenanceTab({
 
   const submitMxItem = async (e: React.FormEvent) => {
     e.preventDefault(); setIsSubmitting(true);
-    const payload: Record<string, any> = { aircraft_id: aircraft!.id, item_name: mxName, tracking_type: mxTrackingType, is_required: mxIsRequired, automate_scheduling: automateScheduling };
+    // Wrap in try/catch/finally — a bare throw after setIsSubmitting(true)
+    // would leave the submit button frozen in "Saving…" forever.
+    try {
+      const payload: Record<string, any> = { aircraft_id: aircraft!.id, item_name: mxName, tracking_type: mxTrackingType, is_required: mxIsRequired, automate_scheduling: automateScheduling };
 
-    const wantTime = mxTrackingType === 'time' || mxTrackingType === 'both';
-    const wantDate = mxTrackingType === 'date' || mxTrackingType === 'both';
+      const wantTime = mxTrackingType === 'time' || mxTrackingType === 'both';
+      const wantDate = mxTrackingType === 'date' || mxTrackingType === 'both';
 
-    if (wantTime) {
-      payload.last_completed_time = parseFloat(mxLastTime) || 0;
-      payload.time_interval = mxIntervalTime ? parseFloat(mxIntervalTime) : null;
-      payload.due_time = mxDueTime ? parseFloat(mxDueTime) : (parseFloat(mxLastTime) + parseFloat(mxIntervalTime || '0'));
-    } else {
-      payload.last_completed_time = null; payload.time_interval = null; payload.due_time = null;
-    }
+      if (wantTime) {
+        payload.last_completed_time = parseFloat(mxLastTime) || 0;
+        payload.time_interval = mxIntervalTime ? parseFloat(mxIntervalTime) : null;
+        payload.due_time = mxDueTime ? parseFloat(mxDueTime) : (parseFloat(mxLastTime) + parseFloat(mxIntervalTime || '0'));
+      } else {
+        payload.last_completed_time = null; payload.time_interval = null; payload.due_time = null;
+      }
 
-    if (wantDate) {
-      payload.last_completed_date = mxLastDate || null;
-      payload.date_interval_days = mxIntervalDays ? parseInt(mxIntervalDays) : null;
-      payload.due_date = mxDueDate || (mxLastDate && mxIntervalDays ? new Date(new Date(mxLastDate).getTime() + parseInt(mxIntervalDays) * 86400000).toISOString().split('T')[0] : null);
-    } else {
-      payload.last_completed_date = null; payload.date_interval_days = null; payload.due_date = null;
+      if (wantDate) {
+        payload.last_completed_date = mxLastDate || null;
+        payload.date_interval_days = mxIntervalDays ? parseInt(mxIntervalDays) : null;
+        payload.due_date = mxDueDate || (mxLastDate && mxIntervalDays ? new Date(new Date(mxLastDate).getTime() + parseInt(mxIntervalDays) * 86400000).toISOString().split('T')[0] : null);
+      } else {
+        payload.last_completed_date = null; payload.date_interval_days = null; payload.due_date = null;
+      }
+      if (editingId) {
+        const res = await authFetch('/api/maintenance-items', { method: 'PUT', body: JSON.stringify({ itemId: editingId, aircraftId: aircraft!.id, itemData: payload }) });
+        if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || 'Failed to update maintenance item'); }
+      } else {
+        const res = await authFetch('/api/maintenance-items', { method: 'POST', body: JSON.stringify({ aircraftId: aircraft!.id, itemData: payload }) });
+        if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || 'Failed to create maintenance item'); }
+      }
+      await mutate(); onGroundedStatusChange(); setShowMxModal(false);
+      showSuccess(editingId ? 'Maintenance item updated.' : 'Maintenance item added.');
+    } catch (err: any) {
+      showError(err?.message || 'Failed to save maintenance item.');
+    } finally {
+      setIsSubmitting(false);
     }
-    if (editingId) {
-      const res = await authFetch('/api/maintenance-items', { method: 'PUT', body: JSON.stringify({ itemId: editingId, aircraftId: aircraft!.id, itemData: payload }) });
-      if (!res.ok) throw new Error('Failed to update maintenance item');
-    } else {
-      const res = await authFetch('/api/maintenance-items', { method: 'POST', body: JSON.stringify({ aircraftId: aircraft!.id, itemData: payload }) });
-      if (!res.ok) throw new Error('Failed to create maintenance item');
-    }
-    await mutate(); onGroundedStatusChange(); setShowMxModal(false); setIsSubmitting(false);
   };
 
   const deleteMxItem = async (id: string) => {
@@ -240,9 +254,14 @@ export default function MaintenanceTab({
       variant: "danger",
     });
     if (!ok) return;
-    const res = await authFetch('/api/maintenance-items', { method: 'DELETE', body: JSON.stringify({ itemId: id, aircraftId: aircraft!.id }) });
-    if (!res.ok) throw new Error('Failed to delete maintenance item');
-    await mutate(); onGroundedStatusChange();
+    try {
+      const res = await authFetch('/api/maintenance-items', { method: 'DELETE', body: JSON.stringify({ itemId: id, aircraftId: aircraft!.id }) });
+      if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || 'Failed to delete maintenance item'); }
+      await mutate(); onGroundedStatusChange();
+      showSuccess('Maintenance item deleted.');
+    } catch (err: any) {
+      showError(err?.message || 'Failed to delete maintenance item.');
+    }
   };
 
   if (!aircraft) return null;
