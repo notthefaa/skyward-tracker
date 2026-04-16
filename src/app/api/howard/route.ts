@@ -141,14 +141,16 @@ export async function POST(req: Request) {
       currentAircraft = userAircraft.find((a: any) => a.tail_number === normalized) || null;
     }
 
-    // User role — global first, else fall back to per-aircraft role for
-    // the currently-selected aircraft (or 'pilot' if none).
-    const { data: globalRole } = await supabaseAdmin
+    // User role + FAA ratings — global first, else fall back to per-
+    // aircraft role for the currently-selected aircraft (or 'pilot'
+    // if none). Ratings come straight from the profile.
+    const { data: profile } = await supabaseAdmin
       .from('aft_user_roles')
-      .select('role')
+      .select('role, faa_ratings')
       .eq('user_id', user.id)
       .maybeSingle();
-    let userRole: string = (globalRole as any)?.role || 'pilot';
+    let userRole: string = (profile as any)?.role || 'pilot';
+    const faaRatings: string[] = ((profile as any)?.faa_ratings as string[] | null) || [];
     if (userRole !== 'admin' && currentAircraft) {
       const { data: acAccess } = await supabaseAdmin
         .from('aft_user_aircraft_access')
@@ -211,6 +213,7 @@ export async function POST(req: Request) {
             userAircraft,
             currentAircraft,
             userRole,
+            faaRatings,
             user.id,
             threadId,
             supabaseAdmin,

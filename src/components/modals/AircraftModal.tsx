@@ -37,9 +37,10 @@ export default function AircraftModal({
   const [newMainContact, setNewMainContact] = useState("");
   const [newMainContactPhone, setNewMainContactPhone] = useState(""); 
   const [newMainContactEmail, setNewMainContactEmail] = useState(""); 
-  const [newMxContact, setNewMxContact] = useState(""); 
-  const [newMxContactPhone, setNewMxContactPhone] = useState(""); 
-  const [newMxContactEmail, setNewMxContactEmail] = useState(""); 
+  const [newMxContact, setNewMxContact] = useState("");
+  const [newMxContactPhone, setNewMxContactPhone] = useState("");
+  const [newMxContactEmail, setNewMxContactEmail] = useState("");
+  const [newIsIfrEquipped, setNewIsIfrEquipped] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [avatarSrc, setAvatarSrc] = useState<string>("");
@@ -70,9 +71,10 @@ export default function AircraftModal({
       setNewMainContact(existingAircraft.main_contact || ""); 
       setNewMainContactPhone(existingAircraft.main_contact_phone || ""); 
       setNewMainContactEmail(existingAircraft.main_contact_email || ""); 
-      setNewMxContact(existingAircraft.mx_contact || ""); 
-      setNewMxContactPhone(existingAircraft.mx_contact_phone || ""); 
-      setNewMxContactEmail(existingAircraft.mx_contact_email || ""); 
+      setNewMxContact(existingAircraft.mx_contact || "");
+      setNewMxContactPhone(existingAircraft.mx_contact_phone || "");
+      setNewMxContactEmail(existingAircraft.mx_contact_email || "");
+      setNewIsIfrEquipped(!!existingAircraft.is_ifr_equipped);
 
       // Check if flight logs exist for this aircraft
       checkForFlightLogs(existingAircraft.id);
@@ -172,18 +174,19 @@ export default function AircraftModal({
       }
     }
 
-    const basePayload: Record<string, any> = { 
-      tail_number: newTail.toUpperCase(), 
-      serial_number: newSerial, 
-      aircraft_type: newModel, 
-      engine_type: newType, 
-      home_airport: newHomeAirport, 
-      main_contact: newMainContact, 
-      main_contact_phone: newMainContactPhone, 
-      main_contact_email: newMainContactEmail, 
-      mx_contact: newMxContact, 
-      mx_contact_phone: newMxContactPhone, 
-      mx_contact_email: newMxContactEmail, 
+    const basePayload: Record<string, any> = {
+      tail_number: newTail.toUpperCase(),
+      serial_number: newSerial,
+      aircraft_type: newModel,
+      engine_type: newType,
+      home_airport: newHomeAirport,
+      main_contact: newMainContact,
+      main_contact_phone: newMainContactPhone,
+      main_contact_email: newMainContactEmail,
+      mx_contact: newMxContact,
+      mx_contact_phone: newMxContactPhone,
+      mx_contact_email: newMxContactEmail,
+      is_ifr_equipped: newIsIfrEquipped,
       avatar_url: avatarUrl
     };
     
@@ -365,6 +368,23 @@ export default function AircraftModal({
             <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">Home Airport</label>
             <input type="text" value={newHomeAirport} onChange={e => setNewHomeAirport(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 uppercase focus:border-[#F08B46] outline-none" placeholder="ICAO" />
           </div>
+
+          <label className="flex items-start gap-3 cursor-pointer group bg-gray-50 border border-gray-200 rounded p-3">
+            <input
+              type="checkbox"
+              checked={newIsIfrEquipped}
+              onChange={e => setNewIsIfrEquipped(e.target.checked)}
+              className="w-5 h-5 rounded border-gray-300 text-[#F08B46] focus:ring-[#F08B46] cursor-pointer mt-0.5 shrink-0"
+            />
+            <div>
+              <span className="text-xs font-bold text-navy block group-hover:text-[#F08B46] transition-colors">
+                IFR-equipped
+              </span>
+              <span className="text-[10px] text-gray-500 leading-tight">
+                Certified for instrument flight (pitot-static + transponder + altimeter current, IFR GPS/nav installed). Howard uses this to shape briefings.
+              </span>
+            </div>
+          </label>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>

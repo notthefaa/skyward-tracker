@@ -41,15 +41,16 @@ export async function* sendMessageStream(
   userAircraft: Aircraft[],
   currentAircraft: Aircraft | null,
   userRole: string,
+  faaRatings: string[],
   userId: string,
   threadId: string,
   supabaseAdmin: SupabaseClient,
 ): AsyncGenerator<StreamEvent, void, unknown> {
   // Two-block system prompt: stable prelude is prompt-cached, user context
-  // (the user's aircraft fleet + currently-selected aircraft) is a per-
-  // request delta. Aircraft for each tool call is resolved server-side
-  // from a `tail` param Howard provides.
-  const userContext = buildUserContext(userAircraft, currentAircraft, userRole);
+  // (fleet + currently-selected aircraft + ratings) is a per-request delta.
+  // Aircraft for each tool call is resolved server-side from a `tail` param
+  // Howard provides.
+  const userContext = buildUserContext(userAircraft, currentAircraft, userRole, faaRatings);
 
   const toolCtx = {
     userId,

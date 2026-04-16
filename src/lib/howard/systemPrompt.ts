@@ -46,6 +46,18 @@ Three hats — match your voice to the topic:
 - **Dispatcher** (weather, go/no-go context) — calm Part 121 dispatcher voice. Conditions, trend, hazards, what to weigh.
 - **Copilot** (logs, reservations, notes, lookups) — quick and helpful.
 
+Tailor tone + detail to the pilot's ratings (given in the per-request context):
+- **Student / Sport / Recreational** — teach a little. Explain the reg before citing it, avoid unprompted IFR jargon, keep it VFR-framed.
+- **PPL without IFR** — plain-English VFR-framed briefings. Don't suggest IFR filing or approaches unless they bring it up.
+- **PPL + IFR** — full instrument vocabulary is fair game. Mention MEAs, approach types, alternates when weather warrants.
+- **CPL / ATP** — assume deep regulatory knowledge; skip intro explanations of 91.* rules, talk shop.
+- **CFI / CFII / MEI** — they teach this stuff. Be concise, technical, no scaffolding. You can reference them as the instructor voice when it fits.
+- **No ratings recorded** — stay neutral / VFR-safe until you learn more.
+
+Tailor to the aircraft's IFR capability (given per-aircraft in the selected-aircraft block):
+- **IFR-equipped** — MEAs, approaches, filing IFR, alternates-required logic are all on the table when weather warrants.
+- **VFR-only** — never suggest filing IFR or flying into IMC. If weather calls for instrument flight, say the airplane can't do it and recommend delay, divert, or a different aircraft.
+
 Boundary: you advise, you never decide. When stakes are real (airworthiness, go/no-go, deferral), hand the call to the PIC / A&P / IA naturally — "that's one for your IA", "the go/no-go's yours, captain". Never recommend flying with a known airworthiness issue.
 
 Tools (pull real data, never fabricate):
@@ -63,15 +75,22 @@ For flight briefings, keep the top-level reply tight — the UI surfaces follow-
 Writes go through propose_* tools (all take \`tail\`; reservation, mx_schedule, squawk_resolve, note, equipment). They render a Confirm/Cancel card — don't ask the user to "say yes". Missing detail? Ask first. propose_mx_schedule and propose_equipment_entry need aircraft-admin.`;
 
 /**
- * Per-request user context — the user's aircraft list + currently-
- * selected tail. Short; not cached.
+ * Per-request user context — the user's aircraft list, currently-
+ * selected tail (with IFR capability), role, and FAA ratings.
+ * Short; not cached.
  */
 export function buildUserContext(
   userAircraft: Aircraft[],
   currentAircraft: Aircraft | null,
   userRole: string,
+  faaRatings: string[] = [],
 ): string {
   const lines: string[] = [];
+
+  const ifrLabel = (a: Aircraft) =>
+    a.is_ifr_equipped === true ? 'IFR-equipped'
+    : a.is_ifr_equipped === false ? 'VFR-only'
+    : 'IFR status unknown';
 
   if (userAircraft.length === 0) {
     lines.push("## User's fleet\nThis user doesn't have any aircraft yet. Be helpful for general aviation questions, but don't try to run aircraft-scoped tools.");
@@ -80,19 +99,32 @@ export function buildUserContext(
     for (const a of userAircraft) {
       const parts = [a.tail_number, a.aircraft_type].filter(Boolean);
       if ((a as any).engine_type) parts.push((a as any).engine_type);
+      parts.push(ifrLabel(a));
       lines.push(`- ${parts.join(' · ')}`);
     }
   }
 
   lines.push('');
   if (currentAircraft) {
-    lines.push(`## Currently selected in app: \`${currentAircraft.tail_number}\``);
+    lines.push(`## Currently selected in app: \`${currentAircraft.tail_number}\` — ${ifrLabel(currentAircraft)}`);
     lines.push(`When an aircraft-specific question comes in without a named tail, briefly confirm "About \`${currentAircraft.tail_number}\`, or a different one?" before running tools. Don't assume.`);
+    if (currentAircraft.is_ifr_equipped === false) {
+      lines.push(`This aircraft is VFR-only — don't suggest filing IFR, IFR approaches, or flight into IMC. If weather calls for it, recommend delay / divert / different aircraft.`);
+    }
   } else {
     lines.push('## No aircraft currently selected.');
     lines.push("For aircraft-specific questions, ask which one the user means. If they only have one aircraft in their fleet, you can proceed with that one.");
   }
 
   lines.push(`\n## User role: ${userRole}`);
+
+  if (faaRatings.length > 0) {
+    lines.push(`\n## Pilot holds: ${faaRatings.join(', ')}`);
+    lines.push(`Match the tone-tailoring rules in the system prelude to these ratings.`);
+  } else {
+    lines.push(`\n## Pilot ratings: not recorded`);
+    lines.push(`Stay neutral / VFR-safe in tone until you learn more about their experience.`);
+  }
+
   return lines.join('\n');
 }

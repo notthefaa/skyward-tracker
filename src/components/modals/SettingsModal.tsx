@@ -5,9 +5,9 @@ import { supabase } from "@/lib/supabase";
 import { authFetch } from "@/lib/authFetch";
 import { useToast } from "@/components/ToastProvider";
 import { useModalScrollLock } from "@/hooks/useModalScrollLock";
-import { NOTIFICATION_TYPES } from "@/lib/types";
+import { NOTIFICATION_TYPES, FAA_RATINGS } from "@/lib/types";
 import type { NotificationType } from "@/lib/types";
-import { Settings, Bell, Trash2, Key, X, Loader2, AlertTriangle, User, Check } from "lucide-react";
+import { Settings, Bell, Trash2, Key, X, Loader2, AlertTriangle, User, Check, Award } from "lucide-react";
 
 export default function SettingsModal({ 
   show, onClose, session 
@@ -28,6 +28,10 @@ export default function SettingsModal({
   const [originalInitials, setOriginalInitials] = useState("");
   const [isLoadingProfile, setIsLoadingProfile] = useState(true);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
+
+  // Pilot FAA ratings — feeds Howard's context to tailor tone/detail
+  const [ratings, setRatings] = useState<Set<string>>(new Set());
+  const [savingRating, setSavingRating] = useState<string | null>(null);
 
   // Delete account
   const [showDeleteSection, setShowDeleteSection] = useState(false);
@@ -52,7 +56,7 @@ export default function SettingsModal({
     setIsLoadingProfile(true);
     const { data } = await supabase
       .from('aft_user_roles')
-      .select('full_name, initials')
+      .select('full_name, initials, faa_ratings')
       .eq('user_id', session.user.id)
       .maybeSingle();
     const name = data?.full_name || "";
@@ -61,7 +65,26 @@ export default function SettingsModal({
     setInitials(inits);
     setOriginalFullName(name);
     setOriginalInitials(inits);
+    setRatings(new Set((data?.faa_ratings as string[] | null) || []));
     setIsLoadingProfile(false);
+  };
+
+  const toggleRating = async (code: string) => {
+    const next = new Set(ratings);
+    if (next.has(code)) next.delete(code);
+    else next.add(code);
+    setRatings(next);
+    setSavingRating(code);
+    const { error } = await supabase
+      .from('aft_user_roles')
+      .update({ faa_ratings: Array.from(next) })
+      .eq('user_id', session.user.id);
+    if (error) {
+      showError("Couldn't save rating: " + error.message);
+      // Revert on failure
+      setRatings(ratings);
+    }
+    setSavingRating(null);
   };
 
   const handleSaveProfile = async () => {
@@ -262,6 +285,44 @@ export default function SettingsModal({
                     ? <><Loader2 size={14} className="animate-spin" /> Saving...</>
                     : <><Check size={14} /> Save Profile</>}
                 </button>
+              </div>
+            )}
+          </div>
+
+          {/* ─── PILOT RATINGS ─── */}
+          <div className="border-t border-gray-200 pt-6">
+            <h3 className="font-oswald text-lg font-bold uppercase text-navy mb-1 flex items-center gap-2">
+              <Award size={18} className="text-[#F08B46]" /> Pilot Ratings
+            </h3>
+            <p className="text-[10px] text-gray-500 uppercase tracking-widest mb-4">
+              Howard uses these to tailor briefings and tone — pick everything you hold
+            </p>
+
+            {isLoadingProfile ? (
+              <div className="flex items-center justify-center py-6">
+                <Loader2 size={20} className="text-gray-400 animate-spin" />
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-2">
+                {FAA_RATINGS.map(r => {
+                  const checked = ratings.has(r.code);
+                  const saving = savingRating === r.code;
+                  return (
+                    <label key={r.code} className="flex items-center gap-2 cursor-pointer group">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggleRating(r.code)}
+                        disabled={saving}
+                        className="w-4 h-4 rounded border-gray-300 text-[#F08B46] focus:ring-[#F08B46] cursor-pointer shrink-0"
+                      />
+                      <span className="text-xs text-navy group-hover:text-[#F08B46] transition-colors leading-tight">
+                        {r.label}
+                      </span>
+                      {saving && <Loader2 size={10} className="text-gray-400 animate-spin" />}
+                    </label>
+                  );
+                })}
               </div>
             )}
           </div>

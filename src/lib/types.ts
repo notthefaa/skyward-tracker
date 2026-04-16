@@ -199,7 +199,27 @@ export interface UserRole {
   role: 'admin' | 'pilot';
   email?: string | null;
   initials?: string | null;
+  faa_ratings?: string[] | null;
 }
+
+// Pilot FAA certificates and ratings the user can self-identify in their
+// profile. Order here drives the order they render in SettingsModal.
+// Howard consumes this via buildUserContext to tailor tone / jargon.
+export const FAA_RATINGS = [
+  { code: 'Student',      label: 'Student Pilot' },
+  { code: 'Sport',        label: 'Sport Pilot' },
+  { code: 'Recreational', label: 'Recreational Pilot' },
+  { code: 'PPL',          label: 'Private Pilot (PPL)' },
+  { code: 'IFR',          label: 'Instrument Rating (IFR)' },
+  { code: 'ME',           label: 'Multi-Engine (ME)' },
+  { code: 'CPL',          label: 'Commercial Pilot (CPL)' },
+  { code: 'ATP',          label: 'Airline Transport Pilot (ATP)' },
+  { code: 'CFI',          label: 'Flight Instructor (CFI)' },
+  { code: 'CFII',         label: 'Instrument Instructor (CFII)' },
+  { code: 'MEI',          label: 'Multi-Engine Instructor (MEI)' },
+] as const;
+
+export type FaaRatingCode = typeof FAA_RATINGS[number]['code'];
 
 export interface Reservation {
   id: string;
