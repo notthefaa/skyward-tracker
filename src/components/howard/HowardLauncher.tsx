@@ -2,6 +2,9 @@
 
 import { useState, useEffect } from "react";
 import dynamic from "next/dynamic";
+import useSWR from "swr";
+import { authFetch } from "@/lib/authFetch";
+import { swrKeys } from "@/lib/swrKeys";
 import { HowardIcon } from "@/components/shell/TrayIcons";
 import type { AircraftWithMetrics } from "@/lib/types";
 import {
@@ -50,11 +53,41 @@ export default function HowardLauncher({ currentAircraft, userFleet = [], sessio
   const [time, setTime] = useState('');
   const [alt, setAlt] = useState('');
 
+  // Subscribe to the same SWR key HowardTab uses so we share the thread
+  // cache — this dedupes to one request and lets us know whether the
+  // pilot has an active conversation before they tap the launcher.
+  const userId = session?.user?.id;
+  const { data: howardData } = useSWR(
+    userId ? swrKeys.howardUser(userId) : null,
+    async () => {
+      const res = await authFetch(`/api/howard`);
+      if (!res.ok) return { thread: null, messages: [] };
+      return await res.json() as { thread: any; messages: any[] };
+    },
+    { revalidateOnFocus: false, revalidateOnReconnect: false, revalidateIfStale: false }
+  );
+  const hasConversation = (howardData?.messages?.length || 0) > 0;
+
+  // After close, reset to menu 250ms later (masks the close animation).
+  // On next open, the open-effect below takes precedence and jumps to
+  // chat if a conversation exists.
   useEffect(() => {
     if (!open) {
       const t = setTimeout(() => setMode('menu'), 250);
       return () => clearTimeout(t);
     }
+  }, [open]);
+
+  // When the launcher opens AND the pilot already has an active
+  // conversation, land on the chat surface directly instead of making
+  // them click through the quick-prompt menu again. Only fires on the
+  // open transition — if they explicitly hit Back to menu mid-session,
+  // hasConversation changes don't yank them back to chat.
+  useEffect(() => {
+    if (open && hasConversation) {
+      setMode('chat');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   useEffect(() => {
