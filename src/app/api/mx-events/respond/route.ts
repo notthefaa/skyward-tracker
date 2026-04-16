@@ -43,9 +43,13 @@ export async function POST(req: Request) {
       .from('aft_maintenance_events')
       .select('*')
       .eq('access_token', accessToken)
-      .single();
+      .is('deleted_at', null)
+      .maybeSingle();
 
     if (evErr || !event) {
+      // If the event was soft-deleted after a mechanic already had the
+      // portal link, fall through to the same 404 — the owner cancelled
+      // the service and the mechanic shouldn't keep responding on it.
       return NextResponse.json({ error: 'Service event not found.' }, { status: 404 });
     }
 
