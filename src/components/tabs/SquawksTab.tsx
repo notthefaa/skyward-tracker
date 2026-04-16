@@ -136,18 +136,40 @@ export default function SquawksTab({
     setSelectedImages(files);
   };
 
-  const uploadImages = async (): Promise<string[]> => {
-    let uploadedPaths: string[] = [];
+  // Returns both the public URL (for storing in the squawk row) AND the
+  // storage path (for undoing the upload if the squawk insert later
+  // fails). Tracking the path separately avoids fragile URL parsing in
+  // the cleanup path.
+  const uploadImages = async (): Promise<{ url: string; path: string }[]> => {
+    const uploaded: { url: string; path: string }[] = [];
     const options = { maxSizeMB: 1, maxWidthOrHeight: 1920, useWebWorker: true };
     for (const file of selectedImages) {
       try {
         const compressedFile = await imageCompression(file, options);
         const fileName = `${aircraft!.tail_number}_${Date.now()}_${compressedFile.name}`;
         const { data } = await supabase.storage.from('aft_squawk_images').upload(fileName, compressedFile);
-        if (data) { const { data: publicUrlData } = supabase.storage.from('aft_squawk_images').getPublicUrl(data.path); uploadedPaths.push(publicUrlData.publicUrl); }
-      } catch (error) { console.error("Image compression/upload failed:", error); }
+        if (data) {
+          const { data: publicUrlData } = supabase.storage.from('aft_squawk_images').getPublicUrl(data.path);
+          uploaded.push({ url: publicUrlData.publicUrl, path: data.path });
+        }
+      } catch (error) {
+        console.error("Image compression/upload failed:", error);
+      }
     }
-    return uploadedPaths;
+    return uploaded;
+  };
+
+  // Fire-and-forget orphan cleanup. Used when the squawk insert fails
+  // after images already landed in storage — without this, the blobs
+  // would stay forever with no row referencing them.
+  const cleanupUploadedImages = async (paths: string[]) => {
+    if (paths.length === 0) return;
+    try {
+      await supabase.storage.from('aft_squawk_images').remove(paths);
+    } catch (err) {
+      // Non-blocking — a future orphan-sweep could still catch these.
+      console.error("Failed to clean up orphaned squawk images:", err);
+    }
   };
 
   const submitSquawk = async (e: React.FormEvent) => {
@@ -155,9 +177,12 @@ export default function SquawksTab({
     // Wrap the whole write in try/catch/finally — prior to this, a
     // failed save left the submit button stuck in "Saving…" forever
     // because the throw skipped over setIsSubmitting(false).
+    // Track the freshly-uploaded storage paths so the catch branch
+    // can clean them up if the squawk insert fails.
+    const uploadedThisSubmit = await uploadImages();
+    const uploadedPathsToRollback = uploadedThisSubmit.map(u => u.path);
     try {
-      const uploadedUrls = await uploadImages();
-      const allPictures = [...existingImages, ...uploadedUrls];
+      const allPictures = [...existingImages, ...uploadedThisSubmit.map(u => u.url)];
       let signatureData = null; let sigDate = null;
       if (isDeferred && sigCanvas.current && !sigCanvas.current.isEmpty()) {
         signatureData = sigCanvas.current.getTrimmedCanvas().toDataURL('image/png');
@@ -216,6 +241,9 @@ export default function SquawksTab({
         showSuccess(editingId ? "Squawk updated" : "Squawk reported");
       }
     } catch (err: any) {
+      // Squawk row never landed — remove the images we just uploaded
+      // so they don't sit in storage forever with no referencing row.
+      await cleanupUploadedImages(uploadedPathsToRollback);
       showError(err?.message || 'Failed to save squawk.');
     } finally {
       setIsSubmitting(false);

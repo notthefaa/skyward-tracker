@@ -90,26 +90,40 @@ export default function NotesTab({ aircraft, session, role, aircraftRole, userIn
     setSelectedImages(files);
   };
 
-  const uploadImages = async (): Promise<string[]> => {
-    let uploadedPaths: string[] = [];
+  // Returns both the public URL (for storing in the note row) AND the
+  // storage path (for rollback if the note insert fails). Same shape
+  // as SquawksTab — see there for the rationale.
+  const uploadImages = async (): Promise<{ url: string; path: string }[]> => {
+    const uploaded: { url: string; path: string }[] = [];
     const options = { maxSizeMB: 1, maxWidthOrHeight: 1920, useWebWorker: true };
-    
+
     for (const file of selectedImages) {
       try {
         const compressedFile = await imageCompression(file, options);
         const fileName = `${aircraft.tail_number}_${Date.now()}_${compressedFile.name}`;
-        
+
         const { data } = await supabase.storage.from('aft_note_images').upload(fileName, compressedFile);
-        
+
         if (data) {
           const { data: urlData } = supabase.storage.from('aft_note_images').getPublicUrl(data.path);
-          uploadedPaths.push(urlData.publicUrl);
+          uploaded.push({ url: urlData.publicUrl, path: data.path });
         }
-      } catch (error) { 
-        console.error("Error compressing/uploading image:", error); 
+      } catch (error) {
+        console.error("Error compressing/uploading image:", error);
       }
     }
-    return uploadedPaths;
+    return uploaded;
+  };
+
+  // Fire-and-forget rollback when the note insert fails after images
+  // have already landed in storage.
+  const cleanupUploadedImages = async (paths: string[]) => {
+    if (paths.length === 0) return;
+    try {
+      await supabase.storage.from('aft_note_images').remove(paths);
+    } catch (err) {
+      console.error("Failed to clean up orphaned note images:", err);
+    }
   };
 
   const submitNote = async (e: React.FormEvent) => {
@@ -117,9 +131,12 @@ export default function NotesTab({ aircraft, session, role, aircraftRole, userIn
     setIsSubmitting(true);
     // Try/catch/finally — bare throws used to leave the button frozen
     // in "Saving…" forever on API error.
+    // Upload images first so we can roll them back if the note insert
+    // fails. uploadedPathsToRollback is used by the catch branch.
+    const uploadedThisSubmit = await uploadImages();
+    const uploadedPathsToRollback = uploadedThisSubmit.map(u => u.path);
     try {
-      const uploadedUrls = await uploadImages();
-      const allPictures = [...existingImages, ...uploadedUrls];
+      const allPictures = [...existingImages, ...uploadedThisSubmit.map(u => u.url)];
 
       const noteData: any = {
         aircraft_id: aircraft.id,
@@ -160,6 +177,9 @@ export default function NotesTab({ aircraft, session, role, aircraftRole, userIn
       setShowModal(false);
       showSuccess(editingId ? "Note updated" : "Note posted");
     } catch (err: any) {
+      // Note row never landed — remove the images we just uploaded
+      // so they don't sit in storage forever with no referencing row.
+      await cleanupUploadedImages(uploadedPathsToRollback);
       showError(err?.message || 'Failed to save note.');
     } finally {
       setIsSubmitting(false);
