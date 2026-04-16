@@ -74,6 +74,31 @@ main {
   animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
+/* ─── MODAL SAFE-AREA INSETS ───
+   Every popup/modal in the app uses the pattern
+     <div className="fixed inset-0 ... animate-fade-in">
+   on its outer wrapper. `fixed inset-0` covers the full viewport
+   including the iOS dynamic-island / notch at the top and the
+   home-indicator bar at the bottom, so without safe-area padding
+   the sticky header (X close button) and the bottom of the scroll
+   region fall behind system UI and become untappable.
+
+   The attribute selector below auto-applies safe-area padding to
+   every wrapper carrying both classes. `background-color` still
+   fills the full viewport (it paints the padded area too), so the
+   dimmed backdrop stays edge-to-edge while the scroll content is
+   inset inside the reachable area. Sticky `top: 0` children stick
+   to the top of the padding box — which is just below the notch.
+
+   `.modal-overlay` is the manual escape hatch for wrappers that
+   don't use `animate-fade-in` (e.g. HowardLauncher's custom
+   animation). Attach it explicitly on those. */
+[class~="animate-fade-in"][class*="fixed inset-0"],
+.modal-overlay {
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
 /* Hide scrollbar for nav tray */
 .scrollbar-hide::-webkit-scrollbar { display: none; }
 .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
