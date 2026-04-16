@@ -18,8 +18,10 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Event ID and action are required.' }, { status: 400 });
     }
 
+    // Reject actions on soft-deleted events so an owner can't "confirm" or
+    // "counter" an event they already cancelled via a stale tab.
     const { data: event, error: evErr } = await supabaseAdmin
-      .from('aft_maintenance_events').select('*').eq('id', eventId).single();
+      .from('aft_maintenance_events').select('*').eq('id', eventId).is('deleted_at', null).maybeSingle();
 
     if (evErr || !event) {
       return NextResponse.json({ error: 'Event not found.' }, { status: 404 });

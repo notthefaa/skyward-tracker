@@ -19,9 +19,9 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Event ID is required.' }, { status: 400 });
     }
 
-    // Fetch the event
+    // Fetch the event — reject if the owner already soft-deleted it.
     const { data: event, error: evErr } = await supabaseAdmin
-      .from('aft_maintenance_events').select('*').eq('id', eventId).single();
+      .from('aft_maintenance_events').select('*').eq('id', eventId).is('deleted_at', null).maybeSingle();
 
     if (evErr || !event) {
       return NextResponse.json({ error: 'Event not found.' }, { status: 404 });

@@ -76,12 +76,14 @@ export async function POST(req: Request) {
     const supabaseAdmin = createAdminClient();
     const baseUrl = new URL(req.url).origin;
 
-    // Validate the access token
+    // Validate the access token — reject if the owner already soft-deleted
+    // the event (matches the respond route).
     const { data: event, error: evErr } = await supabaseAdmin
       .from('aft_maintenance_events')
       .select('*')
       .eq('access_token', accessToken)
-      .single();
+      .is('deleted_at', null)
+      .maybeSingle();
 
     if (evErr || !event) {
       return NextResponse.json({ error: 'Service event not found.' }, { status: 404 });
