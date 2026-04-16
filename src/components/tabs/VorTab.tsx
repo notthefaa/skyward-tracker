@@ -4,8 +4,7 @@ import { authFetch } from "@/lib/authFetch";
 import { swrKeys } from "@/lib/swrKeys";
 import type { AircraftWithMetrics, VorCheck, VorCheckType } from "@/lib/types";
 import useSWR from "swr";
-import { Plus, X, Trash2, Check, AlertTriangle, ChevronLeft, ChevronRight } from "lucide-react";
-import { PrimaryButton } from "@/components/AppButtons";
+import { X, Trash2, Check, AlertTriangle, ChevronLeft, ChevronRight } from "lucide-react";
 import { useToast } from "@/components/ToastProvider";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { useModalScrollLock } from "@/hooks/useModalScrollLock";
@@ -143,10 +142,6 @@ export default function VorTab({
 
   return (
     <>
-      <div className="mb-2">
-        <PrimaryButton onClick={openForm}><Plus size={18} /> Log VOR Check</PrimaryButton>
-      </div>
-
       <div className="bg-cream shadow-lg rounded-sm p-4 md:p-6 border-t-4 border-[#F08B46] flex flex-col mb-6">
         {/* Header */}
         <div className="flex justify-between items-end mb-6">

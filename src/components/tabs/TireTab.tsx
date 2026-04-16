@@ -4,8 +4,7 @@ import { authFetch } from "@/lib/authFetch";
 import { swrKeys } from "@/lib/swrKeys";
 import type { AircraftWithMetrics, TireCheck } from "@/lib/types";
 import useSWR from "swr";
-import { Plus, X, Trash2, ChevronLeft, ChevronRight } from "lucide-react";
-import { PrimaryButton } from "@/components/AppButtons";
+import { X, Trash2, ChevronLeft, ChevronRight } from "lucide-react";
 import { useToast } from "@/components/ToastProvider";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { useModalScrollLock } from "@/hooks/useModalScrollLock";
@@ -122,10 +121,6 @@ export default function TireTab({
 
   return (
     <>
-      <div className="mb-2">
-        <PrimaryButton onClick={openForm}><Plus size={18} /> Log Tire Check</PrimaryButton>
-      </div>
-
       <div className="bg-cream shadow-lg rounded-sm p-4 md:p-6 border-t-4 border-[#525659] flex flex-col mb-6">
         {/* Header */}
         <div className="flex justify-between items-end mb-6">

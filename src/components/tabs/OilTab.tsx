@@ -4,8 +4,7 @@ import { authFetch } from "@/lib/authFetch";
 import { swrKeys } from "@/lib/swrKeys";
 import type { AircraftWithMetrics, OilLog } from "@/lib/types";
 import useSWR, { useSWRConfig } from "swr";
-import { Plus, X, Trash2, ChevronLeft, ChevronRight } from "lucide-react";
-import { PrimaryButton } from "@/components/AppButtons";
+import { X, Trash2, ChevronLeft, ChevronRight } from "lucide-react";
 import { useToast } from "@/components/ToastProvider";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { useModalScrollLock } from "@/hooks/useModalScrollLock";
@@ -215,10 +214,6 @@ export default function OilTab({
 
   return (
     <>
-      <div className="mb-2">
-        <PrimaryButton onClick={openForm}><Plus size={18} /> Log Oil</PrimaryButton>
-      </div>
-
       <div className="bg-cream shadow-lg rounded-sm p-4 md:p-6 border-t-4 border-[#CE3732] flex flex-col mb-6">
         {/* Oil consumption chart */}
         <div className="mb-6">

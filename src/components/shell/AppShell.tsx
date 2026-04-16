@@ -43,7 +43,7 @@ import NavTray, { type TrayItem } from "@/components/shell/NavTray";
  * dials at the top, so three nav entries collapsed into one. */
 const logTrayItems = [
   { key: 'flights', label: 'Flights', icon: Plane, color: '#3AB0FF', soon: false },
-  { key: 'checks', label: 'Checks', icon: Gauge, color: '#3AB0FF', soon: false },
+  { key: 'checks', label: 'Ops Checks', icon: Gauge, color: '#3AB0FF', soon: false },
 ] as const;
 
 /** MX secondary toolbar items */

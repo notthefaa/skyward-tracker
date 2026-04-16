@@ -287,16 +287,16 @@ export default function ChecksTab({ aircraft, session, role, userInitials }: Pro
     ref.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
-  // Compact button that sits under each dial. Taps scroll to the
-  // matching section AND signal the sub-tab to open its log-entry
-  // modal. stopPropagation so the dial's onClick doesn't double-fire.
-  // Padding sized for mobile tap targets — smaller than this becomes
-  // fiddly to hit on a phone.
+  // Compact "Log X" button under each dial. Styling mirrors
+  // PrimaryButton from AppButtons (bg-navy / white text / font-oswald /
+  // uppercase / tracking-widest / rounded / active:scale-95) so the
+  // dial buttons sit in the same visual family as every other Log
+  // button in the app — just smaller to fit under a 90px gauge.
   const DialAction = ({ label, onPress }: { label: string; onPress: () => void }) => (
     <button
       type="button"
       onClick={(e) => { e.stopPropagation(); onPress(); }}
-      className="mt-2 text-[10px] font-bold uppercase tracking-widest text-navy hover:bg-navy hover:text-white active:scale-95 transition-all px-3 py-1.5 rounded border border-navy/30 bg-white shadow-sm"
+      className="bg-navy text-white font-oswald font-bold tracking-widest uppercase py-2 px-3 rounded hover:bg-opacity-90 active:scale-95 transition-all duration-150 ease-out flex items-center justify-center text-[11px] whitespace-nowrap"
     >
       {label}
     </button>
@@ -304,19 +304,18 @@ export default function ChecksTab({ aircraft, session, role, userInitials }: Pro
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Dashboard dials — styled to match the Calendar dashboard: no
-       * container card, just the floating gauges on the page with a
-       * lightweight header row above. */}
+      {/* Dashboard: centered hint, three dials in a 3-column grid,
+       * and a parallel 3-column grid of Log buttons below. Using
+       * grid-cols-3 on both rows keeps the buttons vertically
+       * aligned with one another regardless of how much warning
+       * text each dial renders. */}
       <div className="mt-1">
-        <div className="flex items-baseline justify-between px-1 mb-3">
-          <h2 className="font-oswald text-xl md:text-2xl font-bold uppercase text-navy m-0 leading-none">
-            Operational Checks
-          </h2>
+        <div className="text-center mb-3">
           <span className="text-[9px] font-bold uppercase tracking-widest text-gray-400">
             Tap a dial to jump
           </span>
         </div>
-        <div className="flex items-start justify-around gap-3 px-1">
+        <div className="grid grid-cols-3 gap-3 px-1 items-start">
           <RingGauge
             value={vor.value}
             progress={vor.progress}
@@ -326,9 +325,7 @@ export default function ChecksTab({ aircraft, session, role, userInitials }: Pro
             warning={vor.warning}
             suffix={vor.suffix}
             onClick={() => scrollTo(vorRef)}
-          >
-            <DialAction label="Log VOR" onPress={() => { scrollTo(vorRef); setVorOpenSignal(n => n + 1); }} />
-          </RingGauge>
+          />
           <RingGauge
             value={oil.value}
             progress={oil.progress}
@@ -338,9 +335,7 @@ export default function ChecksTab({ aircraft, session, role, userInitials }: Pro
             warning={oil.warning}
             suffix={oil.suffix}
             onClick={() => scrollTo(oilRef)}
-          >
-            <DialAction label="Log Oil" onPress={() => { scrollTo(oilRef); setOilOpenSignal(n => n + 1); }} />
-          </RingGauge>
+          />
           <RingGauge
             value={tire.value}
             progress={tire.progress}
@@ -350,9 +345,18 @@ export default function ChecksTab({ aircraft, session, role, userInitials }: Pro
             warning={tire.warning}
             suffix={tire.suffix}
             onClick={() => scrollTo(tireRef)}
-          >
+          />
+        </div>
+        <div className="grid grid-cols-3 gap-3 px-1 mt-4">
+          <div className="flex justify-center">
+            <DialAction label="Log VOR" onPress={() => { scrollTo(vorRef); setVorOpenSignal(n => n + 1); }} />
+          </div>
+          <div className="flex justify-center">
+            <DialAction label="Log Oil" onPress={() => { scrollTo(oilRef); setOilOpenSignal(n => n + 1); }} />
+          </div>
+          <div className="flex justify-center">
             <DialAction label="Log Tires" onPress={() => { scrollTo(tireRef); setTireOpenSignal(n => n + 1); }} />
-          </RingGauge>
+          </div>
         </div>
       </div>
 
