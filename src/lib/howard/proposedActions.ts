@@ -218,24 +218,36 @@ export async function executeAction(
 
     case 'squawk_resolve': {
       const p = action.payload as SquawkResolvePayload;
-      // Verify the squawk belongs to the current aircraft.
+      // Re-verify at execution time — the squawk may have been resolved,
+      // deleted, or reassigned between proposal and confirmation.
       const { data: sq } = await sb
         .from('aft_squawks')
-        .select('id, aircraft_id, deleted_at')
+        .select('id, aircraft_id, deleted_at, status')
         .eq('id', p.squawk_id)
         .maybeSingle();
       if (!sq || sq.aircraft_id !== action.aircraft_id || sq.deleted_at) {
         throw new Error('Squawk not found for this aircraft.');
       }
-      const { error } = await sb
+      if (sq.status === 'resolved') {
+        throw new Error('Squawk was already resolved by someone else.');
+      }
+      // Scope the UPDATE with a WHERE status='open' guard so even if a
+      // concurrent writer slipped in between the SELECT above and this
+      // UPDATE, we won't clobber an already-resolved row.
+      const { error, data: updated } = await sb
         .from('aft_squawks')
         .update({
           status: 'resolved',
           affects_airworthiness: false,
           resolved_note: p.resolution_note,
         })
-        .eq('id', p.squawk_id);
+        .eq('id', p.squawk_id)
+        .eq('status', 'open')
+        .select('id');
       if (error) throw error;
+      if (!updated || updated.length === 0) {
+        throw new Error('Squawk was already resolved by someone else.');
+      }
       return { recordId: p.squawk_id, recordTable: 'aft_squawks' };
     }
 

@@ -540,8 +540,29 @@ const handlers: Record<string, ToolHandler> = {
           results[icao] = { error: `FAA NOTAM API returned ${res.status}` };
           return;
         }
-        const data = await res.json();
-        const rawItems: any[] = Array.isArray(data?.items) ? data.items : [];
+        let data: any;
+        try {
+          data = await res.json();
+        } catch {
+          logEvent('howard_notam_parse_failed', { icao, reason: 'json' });
+          results[icao] = { error: 'FAA NOTAM API returned a non-JSON response.' };
+          return;
+        }
+
+        // The FAA NOTAM API nests payload at data.items[].properties.coreNOTAMData.notam.
+        // We've seen undocumented shape changes before — if the expected
+        // path is missing, emit a telemetry breadcrumb so we can diagnose
+        // rather than silently returning an empty list.
+        if (!data || typeof data !== 'object' || !Array.isArray(data.items)) {
+          logEvent('howard_notam_parse_failed', {
+            icao,
+            reason: 'shape',
+            top_keys: data && typeof data === 'object' ? Object.keys(data).slice(0, 10).join(',') : 'none',
+          });
+          results[icao] = { error: 'FAA NOTAM API response was not in the expected shape.' };
+          return;
+        }
+        const rawItems: any[] = data.items;
 
         // Flatten and keep only currently-effective or imminent NOTAMs
         // (effectiveStart <= now+24h AND effectiveEnd >= now OR null).
@@ -556,20 +577,20 @@ const handlers: Record<string, ToolHandler> = {
               || core.text
               || '';
             return {
-              number: core.number,
-              type: core.type,
-              classification: core.classification,
-              issued: core.issued,
-              effective_start: core.effectiveStart,
-              effective_end: core.effectiveEnd,
-              icao: core.icaoLocation,
+              number: typeof core.number === 'string' ? core.number : null,
+              type: typeof core.type === 'string' ? core.type : null,
+              classification: typeof core.classification === 'string' ? core.classification : null,
+              issued: typeof core.issued === 'string' ? core.issued : null,
+              effective_start: typeof core.effectiveStart === 'string' ? core.effectiveStart : null,
+              effective_end: typeof core.effectiveEnd === 'string' ? core.effectiveEnd : null,
+              icao: typeof core.icaoLocation === 'string' ? core.icaoLocation : null,
               text: typeof formatted === 'string' ? formatted.trim() : '',
             };
           })
           .filter(n => {
             const start = n.effective_start ? new Date(n.effective_start).getTime() : 0;
             const end = n.effective_end ? new Date(n.effective_end).getTime() : Infinity;
-            return start <= now + 24 * 3600 * 1000 && end >= now;
+            return Number.isFinite(start) && start <= now + 24 * 3600 * 1000 && end >= now;
           })
           .slice(0, 30);
 

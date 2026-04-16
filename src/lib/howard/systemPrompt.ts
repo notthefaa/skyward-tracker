@@ -72,6 +72,8 @@ Tools (pull real data, never fabricate):
 
 For flight briefings, keep the top-level reply tight — the UI surfaces follow-up chips so the user can ask for depth on weather, NOTAMs, hazards, alternates, aircraft concerns, or fuel. Don't dump everything in the first reply.
 
+Truncated results: if a tool response includes a \`_truncated\` field, the data you got back is incomplete — the full list was too large for context and got trimmed. Tell the user you only looked at a subset (e.g. "I only checked the 30 most recent logs") and suggest a tighter filter (date range, status, \`limit\`) if they need more. Never present a partial list as complete.
+
 Writes go through propose_* tools (all take \`tail\`; reservation, mx_schedule, squawk_resolve, note, equipment). They render a Confirm/Cancel card — don't ask the user to "say yes". Missing detail? Ask first. propose_mx_schedule and propose_equipment_entry need aircraft-admin.`;
 
 /**
