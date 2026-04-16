@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { authFetch } from "@/lib/authFetch";
 import { swrKeys } from "@/lib/swrKeys";
@@ -20,27 +20,16 @@ const VOR_CHECK_TYPES: { value: VorCheckType; label: string; tolerance: number }
   { value: 'Dual VOR', label: 'Dual VOR Cross-Check', tolerance: 4 },
 ];
 
-function getDueStatus(latestCheck: VorCheck | null): { label: string; days: number; color: string; bgColor: string } {
-  if (!latestCheck) return { label: 'NO VOR CHECK ON FILE', days: -1, color: 'text-[#CE3732]', bgColor: 'bg-red-50 border-[#CE3732]' };
-  const checkDate = new Date(latestCheck.created_at);
-  const dueDate = new Date(checkDate);
-  dueDate.setDate(dueDate.getDate() + 30);
-  const now = new Date();
-  const diffMs = dueDate.getTime() - now.getTime();
-  const days = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-
-  if (days <= 0) return { label: 'VOR CHECK EXPIRED', days, color: 'text-[#CE3732]', bgColor: 'bg-red-50 border-[#CE3732]' };
-  if (days <= 7) return { label: `VOR CHECK DUE IN ${days} DAY${days === 1 ? '' : 'S'}`, days, color: 'text-[#F08B46]', bgColor: 'bg-orange-50 border-[#F08B46]' };
-  return { label: `VOR CHECK DUE IN ${days} DAYS`, days, color: 'text-[#56B94A]', bgColor: 'bg-green-50 border-[#56B94A]' };
-}
-
 export default function VorTab({
-  aircraft, session, role, userInitials
+  aircraft, session, role, userInitials, openFormSignal
 }: {
   aircraft: AircraftWithMetrics | null;
   session: any;
   role: string;
   userInitials: string;
+  /** Optional external open trigger — incremented by a parent (ChecksTab)
+   * to signal "open the log-entry modal now." Ignored when undefined. */
+  openFormSignal?: number;
 }) {
   const { showSuccess, showError } = useToast();
   const confirm = useConfirm();
@@ -89,8 +78,6 @@ export default function VorTab({
 
   const vorChecks = data?.checks || [];
   const hasMore = data?.hasMore || false;
-  const latestCheck = latestData ?? null;
-  const due = getDueStatus(latestCheck);
 
   const openForm = useCallback(() => {
     setCheckType('VOT');
@@ -99,6 +86,14 @@ export default function VorTab({
     setInitials(userInitials);
     setShowModal(true);
   }, [userInitials]);
+
+  // When the parent bumps openFormSignal, open the log-entry modal.
+  // Skips the initial 0-value mount so the form doesn't pop open on
+  // first render.
+  useEffect(() => {
+    if (openFormSignal && openFormSignal > 0) openForm();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openFormSignal]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -150,19 +145,6 @@ export default function VorTab({
     <>
       <div className="mb-2">
         <PrimaryButton onClick={openForm}><Plus size={18} /> Log VOR Check</PrimaryButton>
-      </div>
-
-      {/* Due status banner — outside the card */}
-      <div className={`rounded-sm border-2 ${due.bgColor} px-4 py-3 mb-3 flex items-center justify-between`}>
-        <div>
-          <span className={`font-oswald text-sm font-bold uppercase tracking-widest ${due.color}`}>{due.label}</span>
-          {latestCheck && (
-            <span className="block text-[10px] text-gray-500 mt-0.5">
-              Last: {new Date(latestCheck.created_at).toLocaleDateString()} — {latestCheck.check_type} at {latestCheck.station}
-            </span>
-          )}
-        </div>
-        {due.days <= 0 ? <AlertTriangle size={20} className="text-[#CE3732]" /> : null}
       </div>
 
       <div className="bg-cream shadow-lg rounded-sm p-4 md:p-6 border-t-4 border-[#F08B46] flex flex-col mb-6">

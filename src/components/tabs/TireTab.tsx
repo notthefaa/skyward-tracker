@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { authFetch } from "@/lib/authFetch";
 import { swrKeys } from "@/lib/swrKeys";
@@ -14,12 +14,15 @@ const whiteBg = { backgroundColor: '#ffffff' } as const;
 const PAGE_SIZE = 10;
 
 export default function TireTab({
-  aircraft, session, role, userInitials
+  aircraft, session, role, userInitials, openFormSignal
 }: {
   aircraft: AircraftWithMetrics | null;
   session: any;
   role: string;
   userInitials: string;
+  /** Optional external open trigger — incremented by a parent (ChecksTab)
+   * to signal "open the log-entry modal now." Ignored when undefined. */
+  openFormSignal?: number;
 }) {
   const { showSuccess, showError } = useToast();
   const confirm = useConfirm();
@@ -54,7 +57,6 @@ export default function TireTab({
 
   const tireChecks = data?.checks || [];
   const hasMore = data?.hasMore || false;
-  const latestCheck = page === 1 && tireChecks.length > 0 ? tireChecks[0] : null;
 
   const openForm = useCallback(() => {
     setNosePsi('');
@@ -64,6 +66,11 @@ export default function TireTab({
     setNotes('');
     setShowModal(true);
   }, [userInitials]);
+
+  useEffect(() => {
+    if (openFormSignal && openFormSignal > 0) openForm();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openFormSignal]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -117,23 +124,6 @@ export default function TireTab({
     <>
       <div className="mb-2">
         <PrimaryButton onClick={openForm}><Plus size={18} /> Log Tire Check</PrimaryButton>
-      </div>
-
-      {/* Last checked banner — outside the card */}
-      <div className="rounded-sm border-2 border-gray-300 bg-gray-50 px-4 py-3 mb-3">
-        {latestCheck ? (
-          <>
-            <span className="font-oswald text-sm font-bold uppercase tracking-widest text-navy">
-              Tire Pressures Checked Last By {latestCheck.initials}
-            </span>
-            <span className="block text-[10px] text-gray-500 mt-0.5">
-              {new Date(latestCheck.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
-              {' — '}Nose: {latestCheck.nose_psi} PSI | L Main: {latestCheck.left_main_psi} PSI | R Main: {latestCheck.right_main_psi} PSI
-            </span>
-          </>
-        ) : (
-          <span className="font-oswald text-sm font-bold uppercase tracking-widest text-gray-400">No Tire Checks Logged</span>
-        )}
       </div>
 
       <div className="bg-cream shadow-lg rounded-sm p-4 md:p-6 border-t-4 border-[#525659] flex flex-col mb-6">

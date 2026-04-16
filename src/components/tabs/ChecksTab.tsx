@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { swrKeys } from "@/lib/swrKeys";
 import type { AircraftWithMetrics, VorCheck, TireCheck, OilLog } from "@/lib/types";
@@ -30,11 +30,15 @@ interface RingGaugeProps {
   size?: number;
   strokeWidth?: number;
   suffix?: string;
+  /** Optional content rendered below the warning (e.g., a compact
+   * action button). Clicks inside should stopPropagation so the
+   * dial's onClick doesn't re-fire. */
+  children?: React.ReactNode;
 }
 
 function RingGauge({
   value, progress, label, sublabel, color, warning, onClick,
-  size = 90, strokeWidth = 8, suffix,
+  size = 90, strokeWidth = 8, suffix, children,
 }: RingGaugeProps) {
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
@@ -84,6 +88,7 @@ function RingGauge({
           {warning}
         </span>
       )}
+      {children}
     </div>
   );
 }
@@ -222,6 +227,14 @@ export default function ChecksTab({ aircraft, session, role, userInitials }: Pro
   const oilRef = useRef<HTMLDivElement>(null);
   const tireRef = useRef<HTMLDivElement>(null);
 
+  // Incrementing counters used to signal the embedded sub-tabs to open
+  // their own log-entry form. Using a counter (not a boolean) so
+  // repeated taps fire repeatedly even if the state value doesn't
+  // change shape. Each sub-tab watches its prop via useEffect.
+  const [vorOpenSignal, setVorOpenSignal] = useState(0);
+  const [oilOpenSignal, setOilOpenSignal] = useState(0);
+  const [tireOpenSignal, setTireOpenSignal] = useState(0);
+
   // Reuse the SWR keys the embedded tabs already populate. When any
   // sub-tab submits a new log, it calls mutate() on these same keys,
   // so the dashboard refreshes automatically without any cross-tab
@@ -274,13 +287,28 @@ export default function ChecksTab({ aircraft, session, role, userInitials }: Pro
     ref.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
+  // Compact button that sits under each dial. Taps scroll to the
+  // matching section AND signal the sub-tab to open its log-entry
+  // modal. stopPropagation so the dial's onClick doesn't double-fire.
+  const DialAction = ({ label, onPress }: { label: string; onPress: () => void }) => (
+    <button
+      type="button"
+      onClick={(e) => { e.stopPropagation(); onPress(); }}
+      className="mt-2 text-[9px] font-bold uppercase tracking-widest text-navy/70 hover:text-navy active:scale-95 transition-all px-2 py-0.5 rounded border border-gray-300 bg-white shadow-sm"
+    >
+      {label}
+    </button>
+  );
+
   return (
     <div className="flex flex-col gap-4">
-      {/* Dashboard dials */}
-      <div className="bg-cream shadow-lg rounded-sm p-4 md:p-5 border-t-4 border-navy">
-        <div className="flex items-baseline justify-between mb-4">
+      {/* Dashboard dials — styled to match the Calendar dashboard: no
+       * container card, just the floating gauges on the page with a
+       * lightweight header row above. */}
+      <div className="mt-1">
+        <div className="flex items-baseline justify-between px-1 mb-3">
           <h2 className="font-oswald text-xl md:text-2xl font-bold uppercase text-navy m-0 leading-none">
-            Pre-Flight Checks
+            Operational Checks
           </h2>
           <span className="text-[9px] font-bold uppercase tracking-widest text-gray-400">
             Tap a dial to jump
@@ -296,7 +324,9 @@ export default function ChecksTab({ aircraft, session, role, userInitials }: Pro
             warning={vor.warning}
             suffix={vor.suffix}
             onClick={() => scrollTo(vorRef)}
-          />
+          >
+            <DialAction label="Log VOR" onPress={() => { scrollTo(vorRef); setVorOpenSignal(n => n + 1); }} />
+          </RingGauge>
           <RingGauge
             value={oil.value}
             progress={oil.progress}
@@ -306,7 +336,9 @@ export default function ChecksTab({ aircraft, session, role, userInitials }: Pro
             warning={oil.warning}
             suffix={oil.suffix}
             onClick={() => scrollTo(oilRef)}
-          />
+          >
+            <DialAction label="Log Oil" onPress={() => { scrollTo(oilRef); setOilOpenSignal(n => n + 1); }} />
+          </RingGauge>
           <RingGauge
             value={tire.value}
             progress={tire.progress}
@@ -316,7 +348,9 @@ export default function ChecksTab({ aircraft, session, role, userInitials }: Pro
             warning={tire.warning}
             suffix={tire.suffix}
             onClick={() => scrollTo(tireRef)}
-          />
+          >
+            <DialAction label="Log Tires" onPress={() => { scrollTo(tireRef); setTireOpenSignal(n => n + 1); }} />
+          </RingGauge>
         </div>
       </div>
 
@@ -336,7 +370,7 @@ export default function ChecksTab({ aircraft, session, role, userInitials }: Pro
             </span>
           )}
         </div>
-        <VorTab aircraft={aircraft} session={session} role={role} userInitials={userInitials} />
+        <VorTab aircraft={aircraft} session={session} role={role} userInitials={userInitials} openFormSignal={vorOpenSignal} />
       </section>
 
       {/* Oil section (includes the consumption graph already baked into OilTab) */}
@@ -355,7 +389,7 @@ export default function ChecksTab({ aircraft, session, role, userInitials }: Pro
             </span>
           )}
         </div>
-        <OilTab aircraft={aircraft} session={session} role={role} userInitials={userInitials} />
+        <OilTab aircraft={aircraft} session={session} role={role} userInitials={userInitials} openFormSignal={oilOpenSignal} />
       </section>
 
       {/* Tire section */}
@@ -374,7 +408,7 @@ export default function ChecksTab({ aircraft, session, role, userInitials }: Pro
             </span>
           )}
         </div>
-        <TireTab aircraft={aircraft} session={session} role={role} userInitials={userInitials} />
+        <TireTab aircraft={aircraft} session={session} role={role} userInitials={userInitials} openFormSignal={tireOpenSignal} />
       </section>
     </div>
   );

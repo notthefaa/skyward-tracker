@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { authFetch } from "@/lib/authFetch";
 import { swrKeys } from "@/lib/swrKeys";
@@ -83,12 +83,15 @@ function OilChart({ entries }: { entries: OilLog[] }) {
 // ─── Main Component ───
 
 export default function OilTab({
-  aircraft, session, role, userInitials
+  aircraft, session, role, userInitials, openFormSignal
 }: {
   aircraft: AircraftWithMetrics | null;
   session: any;
   role: string;
   userInitials: string;
+  /** Optional external open trigger — incremented by a parent (ChecksTab)
+   * to signal "open the log-entry modal now." Ignored when undefined. */
+  openFormSignal?: number;
 }) {
   const { showSuccess, showError } = useToast();
   const confirm = useConfirm();
@@ -149,6 +152,11 @@ export default function OilTab({
     setNotes('');
     setShowModal(true);
   }, [userInitials, aircraft]);
+
+  useEffect(() => {
+    if (openFormSignal && openFormSignal > 0) openForm();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openFormSignal]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
