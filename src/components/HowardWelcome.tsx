@@ -76,7 +76,7 @@ export default function HowardWelcome({
 
           <div className="mt-6 pt-5 border-t border-gray-200">
             <p className="font-roboto text-sm text-navy text-center mb-4">
-              Let&apos;s get your profile and first aircraft set up. Pick whichever feels right — you can change your mind any time.
+              Let&apos;s get your profile and first aircraft set up. Pick the path that feels right.
             </p>
 
             <div className="flex flex-col gap-2.5">

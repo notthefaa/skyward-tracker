@@ -10,7 +10,7 @@
  */
 
 /** One-sentence who-is-Howard for headers + card subtitles. */
-export const HOWARD_TAGLINE = "Your hangar helper and advisor.";
+export const HOWARD_TAGLINE = "Your hangar helper. Real data, sharp eyes.";
 
 /**
  * Two-sentence bio for the welcome modal and any "about Howard" card.
@@ -19,7 +19,7 @@ export const HOWARD_TAGLINE = "Your hangar helper and advisor.";
  * digitally.
  */
 export const HOWARD_BIO =
-  "Howard is a seasoned, old-school aviator — weathered, sharp-eyed, and rich with thousands of hours of experience. Reimagined as an AI advisor, he hangs around your hangar digitally, offering calm guidance, practical advice, and hard-earned wisdom when you need a steady voice.";
+  "Howard is a seasoned, old-school aviator — weathered, sharp-eyed, and rich with thousands of hours of experience. Now reimagined as an AI advisor, he hangs around your hangar digitally, offering calm guidance, practical advice, and hard-earned wisdom when you need a steady voice.";
 
 /**
  * Short intro line Howard uses when he's "speaking" in first person in
@@ -28,7 +28,7 @@ export const HOWARD_BIO =
  * description when space allows.
  */
 export const HOWARD_FIRST_PERSON_INTRO =
-  "Hey, I'm Howard — your hangar helper and advisor. Plenty of aviation stories in me, but first: what can I help you with?";
+  "Hey, I'm Howard — your hangar helper. I've got real data at my fingertips: flight logs, maintenance, NOTAMs, weather, your documents. What can I help with?";
 
 /**
  * First line Howard says on the onboarding surface. Warmer + more
