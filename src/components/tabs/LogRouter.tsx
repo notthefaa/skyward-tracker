@@ -3,9 +3,7 @@ import type { AircraftWithMetrics, LogSubTab } from "@/lib/types";
 import { TabSkeleton } from "@/components/Skeletons";
 
 const TimesTab = dynamic(() => import("@/components/tabs/TimesTab"), { loading: () => <TabSkeleton /> });
-const VorTab = dynamic(() => import("@/components/tabs/VorTab"), { loading: () => <TabSkeleton /> });
-const TireTab = dynamic(() => import("@/components/tabs/TireTab"), { loading: () => <TabSkeleton /> });
-const OilTab = dynamic(() => import("@/components/tabs/OilTab"), { loading: () => <TabSkeleton /> });
+const ChecksTab = dynamic(() => import("@/components/tabs/ChecksTab"), { loading: () => <TabSkeleton /> });
 
 interface LogRouterProps {
   logSubTab: LogSubTab;
@@ -20,12 +18,8 @@ export default function LogRouter({ logSubTab, aircraft, session, role, userInit
   switch (logSubTab) {
     case 'flights':
       return <TimesTab aircraft={aircraft} session={session} role={role} userInitials={userInitials} onUpdate={onUpdate} />;
-    case 'vor':
-      return <VorTab aircraft={aircraft} session={session} role={role} userInitials={userInitials} />;
-    case 'tire':
-      return <TireTab aircraft={aircraft} session={session} role={role} userInitials={userInitials} />;
-    case 'oil':
-      return <OilTab aircraft={aircraft} session={session} role={role} userInitials={userInitials} />;
+    case 'checks':
+      return <ChecksTab aircraft={aircraft} session={session} role={role} userInitials={userInitials} />;
     default:
       return <TimesTab aircraft={aircraft} session={session} role={role} userInitials={userInitials} onUpdate={onUpdate} />;
   }

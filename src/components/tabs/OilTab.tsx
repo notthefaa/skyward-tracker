@@ -3,7 +3,7 @@ import { supabase } from "@/lib/supabase";
 import { authFetch } from "@/lib/authFetch";
 import { swrKeys } from "@/lib/swrKeys";
 import type { AircraftWithMetrics, OilLog } from "@/lib/types";
-import useSWR from "swr";
+import useSWR, { useSWRConfig } from "swr";
 import { Plus, X, Trash2, ChevronLeft, ChevronRight } from "lucide-react";
 import { PrimaryButton } from "@/components/AppButtons";
 import { useToast } from "@/components/ToastProvider";
@@ -92,6 +92,7 @@ export default function OilTab({
 }) {
   const { showSuccess, showError } = useToast();
   const confirm = useConfirm();
+  const { mutate: globalMutate } = useSWRConfig();
   const [page, setPage] = useState(1);
   const [showModal, setShowModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -178,6 +179,11 @@ export default function OilTab({
       showSuccess('Oil log saved.');
       setShowModal(false);
       mutate();
+      // Keep the chart + the ChecksTab oil dial in sync. The
+      // paginated page-key mutate() above only refreshes this tab's
+      // own table view.
+      globalMutate(swrKeys.oilChart(aircraft.id));
+      globalMutate(swrKeys.oilLastAdded(aircraft.id));
     } catch (err: any) { showError(err.message); }
     finally { setIsSubmitting(false); }
   };
@@ -191,6 +197,8 @@ export default function OilTab({
       if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Failed to delete.'); }
       showSuccess('Oil log deleted.');
       mutate();
+      globalMutate(swrKeys.oilChart(aircraft.id));
+      globalMutate(swrKeys.oilLastAdded(aircraft.id));
     } catch (err: any) { showError(err.message); }
   };
 

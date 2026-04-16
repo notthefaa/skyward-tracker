@@ -38,6 +38,9 @@ export const swrKeys = {
   tire:                  (id: string, page: number) => `tire-${id}-${page}`,
   oil:                   (id: string, page: number) => `oil-${id}-${page}`,
   oilChart:              (id: string) => `oil-chart-${id}`,
+  // Latest oil log where oil_added > 0. Feeds the Checks-tab oil dial
+  // ("hours since last add"). OilTab invalidates this on every write.
+  oilLastAdded:          (id: string) => `oil-last-added-${id}`,
   docs:                  (id: string) => `docs-${id}`,
   crew:                  (id: string) => `crew-${id}`,
 

@@ -12,10 +12,10 @@ import type { AircraftWithMetrics, AppTab, LogSubTab } from "@/lib/types";
 import {
   Wrench, AlertTriangle, FileText, LogOut,
   ChevronDown, Home, LayoutGrid, Send, ShieldCheck, X, Share, Copy, WifiOff, Loader2, Calendar, Settings,
-  MoreHorizontal, FolderOpen, ShieldAlert, Compass,
-  ListChecks, PenLine, Droplets, Plane, BarChart3
+  MoreHorizontal, FolderOpen, ShieldAlert,
+  ListChecks, PenLine, Plane, BarChart3, Gauge,
 } from "lucide-react";
-import { TireIcon, HowardIcon } from "@/components/shell/TrayIcons";
+import { HowardIcon } from "@/components/shell/TrayIcons";
 
 const PilotOnboarding = dynamic(() => import("@/components/PilotOnboarding"));
 const AircraftModal = dynamic(() => import("@/components/modals/AircraftModal"));
@@ -38,12 +38,12 @@ const EquipmentTab = dynamic(() => import("@/components/tabs/EquipmentTab"), { l
 const ADsTab = dynamic(() => import("@/components/tabs/ADsTab"), { loading: () => <TabSkeleton /> });
 import NavTray, { type TrayItem } from "@/components/shell/NavTray";
 
-/** Log secondary toolbar items */
+/** Log secondary toolbar items. VOR / Oil / Tire live behind a single
+ * "Checks" entry now — the ChecksTab surfaces all three with dashboard
+ * dials at the top, so three nav entries collapsed into one. */
 const logTrayItems = [
   { key: 'flights', label: 'Flights', icon: Plane, color: '#3AB0FF', soon: false },
-  { key: 'vor', label: 'VOR', icon: Compass, color: '#F08B46', soon: false },
-  { key: 'tire', label: 'Tire', icon: TireIcon, color: '#525659', soon: false },
-  { key: 'oil', label: 'Oil', icon: Droplets, color: '#CE3732', soon: false },
+  { key: 'checks', label: 'Checks', icon: Gauge, color: '#3AB0FF', soon: false },
 ] as const;
 
 /** MX secondary toolbar items */
@@ -516,9 +516,7 @@ export default function AppShell({ session }: AppShellProps) {
         storageKey="log"
         onSelect={(key) => {
           if (key === 'flights') setLogSubTab('flights');
-          else if (key === 'vor') setLogSubTab('vor');
-          else if (key === 'tire') setLogSubTab('tire');
-          else if (key === 'oil') setLogSubTab('oil');
+          else if (key === 'checks') setLogSubTab('checks');
           navigateTab('times');
           setExpandedNav(null);
         }}
