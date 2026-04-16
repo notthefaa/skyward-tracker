@@ -18,20 +18,31 @@ export async function POST(req: Request) {
   } catch (error) { return handleApiError(error); }
 }
 
-// PUT — edit note (author or aircraft admin)
+// PUT — edit note (author or aircraft admin).
+// SECURITY: must verify the note's aircraft_id matches the caller-
+// supplied aircraftId before the admin check. See the matching squawks
+// route for the full rationale.
 export async function PUT(req: Request) {
   try {
     const { user, supabaseAdmin } = await requireAuth(req);
     const { noteId, aircraftId, noteData } = await req.json();
     if (!noteId || !aircraftId) return NextResponse.json({ error: 'Note ID and Aircraft ID required.' }, { status: 400 });
 
-    // Check: must be author or admin
-    const { data: note } = await supabaseAdmin.from('aft_notes').select('author_id').eq('id', noteId).single();
-    if (!note) return NextResponse.json({ error: 'Note not found.' }, { status: 404 });
+    const { data: note } = await supabaseAdmin
+      .from('aft_notes')
+      .select('author_id, aircraft_id, deleted_at')
+      .eq('id', noteId)
+      .maybeSingle();
+    if (!note || note.deleted_at) return NextResponse.json({ error: 'Note not found.' }, { status: 404 });
+    if (note.aircraft_id !== aircraftId) {
+      return NextResponse.json({ error: 'Note does not belong to the given aircraft.' }, { status: 403 });
+    }
 
     const isAuthor = note.author_id === user.id;
     if (!isAuthor) {
       await requireAircraftAdmin(supabaseAdmin, user.id, aircraftId);
+    } else {
+      await requireAircraftAccess(supabaseAdmin, user.id, aircraftId);
     }
 
     await setAppUser(supabaseAdmin, user.id);
@@ -42,19 +53,28 @@ export async function PUT(req: Request) {
   } catch (error) { return handleApiError(error); }
 }
 
-// DELETE — soft-delete note (author or aircraft admin)
+// DELETE — soft-delete note (author or aircraft admin).
 export async function DELETE(req: Request) {
   try {
     const { user, supabaseAdmin } = await requireAuth(req);
     const { noteId, aircraftId } = await req.json();
     if (!noteId || !aircraftId) return NextResponse.json({ error: 'Note ID and Aircraft ID required.' }, { status: 400 });
 
-    const { data: note } = await supabaseAdmin.from('aft_notes').select('author_id').eq('id', noteId).single();
-    if (!note) return NextResponse.json({ error: 'Note not found.' }, { status: 404 });
+    const { data: note } = await supabaseAdmin
+      .from('aft_notes')
+      .select('author_id, aircraft_id, deleted_at')
+      .eq('id', noteId)
+      .maybeSingle();
+    if (!note || note.deleted_at) return NextResponse.json({ error: 'Note not found.' }, { status: 404 });
+    if (note.aircraft_id !== aircraftId) {
+      return NextResponse.json({ error: 'Note does not belong to the given aircraft.' }, { status: 403 });
+    }
 
     const isAuthor = note.author_id === user.id;
     if (!isAuthor) {
       await requireAircraftAdmin(supabaseAdmin, user.id, aircraftId);
+    } else {
+      await requireAircraftAccess(supabaseAdmin, user.id, aircraftId);
     }
 
     await setAppUser(supabaseAdmin, user.id);
