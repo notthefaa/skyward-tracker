@@ -607,7 +607,7 @@ const MAX_TOOL_RESULT_CHARS = 40000;
  * the largest array inside and halve it until we fit. Adds a
  * `_truncated` marker so Howard can tell the user to narrow the
  * filter instead of silently showing partial data. */
-function capResultSize(result: any): any {
+export function capResultSize(result: any): any {
   if (!result || typeof result !== 'object') return result;
   let current: any = result;
   let serialized = JSON.stringify(current);
