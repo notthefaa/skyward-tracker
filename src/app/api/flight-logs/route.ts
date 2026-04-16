@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireAuth, requireAircraftAccess, requireAircraftAdmin, handleApiError } from '@/lib/auth';
 import { setAppUser } from '@/lib/audit';
+import { friendlyPgError } from '@/lib/pgErrors';
 
 // Ensure numeric fields on a log payload are non-negative. Returns an error
 // message on the first violation, or null if the payload is clean.
@@ -54,7 +55,9 @@ export async function POST(req: Request) {
   } catch (error) { return handleApiError(error); }
 }
 
-// PUT — edit flight log (admin only)
+// PUT — edit flight log (admin only). Uses edit_flight_log_atomic RPC so
+// the log and aircraft-totals updates land in a single transaction; a
+// failure on either rolls back both.
 export async function PUT(req: Request) {
   try {
     const { user, supabaseAdmin } = await requireAuth(req);
@@ -64,10 +67,16 @@ export async function PUT(req: Request) {
     if (validationError) return NextResponse.json({ error: validationError }, { status: 400 });
     await requireAircraftAdmin(supabaseAdmin, user.id, aircraftId);
 
-    await setAppUser(supabaseAdmin, user.id);
-    await supabaseAdmin.from('aft_flight_logs').update(logData).eq('id', logId);
-    if (aircraftUpdate && Object.keys(aircraftUpdate).length > 0) {
-      await supabaseAdmin.from('aft_aircraft').update(aircraftUpdate).eq('id', aircraftId);
+    const { error: rpcErr } = await supabaseAdmin.rpc('edit_flight_log_atomic', {
+      p_log_id: logId,
+      p_aircraft_id: aircraftId,
+      p_user_id: user.id,
+      p_log_data: logData ?? {},
+      p_aircraft_update: aircraftUpdate ?? {},
+    });
+    if (rpcErr) {
+      const status = rpcErr.code === 'P0002' ? 404 : rpcErr.code === 'P0001' ? 400 : 500;
+      return NextResponse.json({ error: friendlyPgError(rpcErr) }, { status });
     }
 
     return NextResponse.json({ success: true });
