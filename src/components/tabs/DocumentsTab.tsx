@@ -9,6 +9,8 @@ import { Upload, Trash2, FileText, Loader2, CheckCircle, AlertCircle } from "luc
 import { PrimaryButton } from "@/components/AppButtons";
 import { useToast } from "@/components/ToastProvider";
 import { useConfirm } from "@/components/ConfirmProvider";
+import SectionSelector from "@/components/shell/SectionSelector";
+import { MORE_SELECTOR_ITEMS, emitMoreNavigate } from "@/components/shell/moreNav";
 
 const DOC_TYPES: { value: DocType; label: string }[] = [
   { value: 'POH', label: "Pilot's Operating Handbook" },
@@ -113,6 +115,12 @@ export default function DocumentsTab({
 
   return (
     <>
+      <SectionSelector
+        items={MORE_SELECTOR_ITEMS}
+        selectedKey="documents"
+        onSelect={(key) => emitMoreNavigate(key)}
+        compact
+      />
       {/* Upload section */}
       <div className="bg-cream shadow-lg rounded-sm p-4 md:p-6 border-t-4 border-[#56B94A] flex flex-col mb-6">
         <div className="flex justify-between items-end mb-6">

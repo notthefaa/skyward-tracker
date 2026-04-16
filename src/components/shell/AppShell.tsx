@@ -63,7 +63,7 @@ const ADS_LABEL = (
 const mxTrayItems = [
   { key: 'due-items', label: 'Due Items', icon: ListChecks, color: '#F08B46', soon: false },
   { key: 'squawks', label: 'Squawks', icon: AlertTriangle, color: '#CE3732', soon: false },
-  { key: 'service', label: 'Service', icon: Wrench, color: '#56B94A', soon: true },
+  { key: 'service', label: 'Service', icon: Wrench, color: '#56B94A', soon: false },
   { key: 'ads', label: ADS_LABEL, icon: ShieldAlert, color: '#7C3AED', soon: false },
 ] as const;
 
@@ -184,14 +184,24 @@ export default function AppShell({ session }: AppShellProps) {
     // Any surface (Howard's closer, tour footer CTA, future in-app
     // links) can fire this to pop the Features Guide.
     const handleOpenFeaturesGuide = () => setShowFeaturesGuide(true);
+    const handleMoreNav = (e: Event) => {
+      const key = (e as CustomEvent).detail as string;
+      setExpandedNav(null);
+      if (key === 'notes') navigateTab('notes');
+      else if (key === 'documents') navigateTab('documents');
+      else if (key === 'equipment') navigateTab('equipment');
+      else if (key === 'howard') navigateTab('howard');
+    };
     window.addEventListener('aft:navigate-howard', handleNavigateHoward);
     window.addEventListener('aft:navigate-howard-usage', handleNavigateHowardUsage);
     window.addEventListener('aft:mx-ads-nav', handleMxAdsNav);
+    window.addEventListener('aft:more-nav', handleMoreNav);
     window.addEventListener('aft:open-features-guide', handleOpenFeaturesGuide);
     return () => {
       window.removeEventListener('aft:navigate-howard', handleNavigateHoward);
       window.removeEventListener('aft:navigate-howard-usage', handleNavigateHowardUsage);
       window.removeEventListener('aft:mx-ads-nav', handleMxAdsNav);
+      window.removeEventListener('aft:more-nav', handleMoreNav);
       window.removeEventListener('aft:open-features-guide', handleOpenFeaturesGuide);
     };
   }, [navigateTab]);
@@ -716,11 +726,13 @@ export default function AppShell({ session }: AppShellProps) {
           activeTab === 'ads' ? 'ads'
           : activeTab === 'mx' && mxSubTab === 'maintenance' ? 'due-items'
           : activeTab === 'mx' && mxSubTab === 'squawks' ? 'squawks'
+          : activeTab === 'mx' && mxSubTab === 'service' ? 'service'
           : null
         }
         onSelect={(key) => {
           if (key === 'due-items') { setMxSubTab('maintenance'); navigateTab('mx'); }
           else if (key === 'squawks') { setMxSubTab('squawks'); navigateTab('mx'); }
+          else if (key === 'service') { setMxSubTab('service'); navigateTab('mx'); }
           else if (key === 'ads') { navigateTab('ads'); }
           setExpandedNav(null);
         }}

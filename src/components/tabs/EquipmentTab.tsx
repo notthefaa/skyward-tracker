@@ -11,6 +11,8 @@ import { useModalScrollLock } from "@/hooks/useModalScrollLock";
 import { INPUT_WHITE_BG } from "@/lib/styles";
 import { swrKeys } from "@/lib/swrKeys";
 import type { AircraftWithMetrics, AircraftEquipment, EquipmentCategory, AircraftRole } from "@/lib/types";
+import SectionSelector from "@/components/shell/SectionSelector";
+import { MORE_SELECTOR_ITEMS, emitMoreNavigate } from "@/components/shell/moreNav";
 
 const CATEGORIES: Array<{ value: EquipmentCategory; label: string }> = [
   { value: 'engine', label: 'Engine' },
@@ -211,8 +213,14 @@ export default function EquipmentTab({ aircraft, role, aircraftRole }: Props) {
 
   return (
     <div className="flex flex-col gap-6">
+      <SectionSelector
+        items={MORE_SELECTOR_ITEMS}
+        selectedKey="equipment"
+        onSelect={(key) => emitMoreNavigate(key)}
+        compact
+      />
       {/* Header */}
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex items-start justify-between gap-3 -mt-2">
         <div>
           <h2 className="font-oswald text-2xl md:text-3xl font-bold uppercase text-navy m-0 leading-none">Equipment</h2>
           <span className="text-[10px] font-bold uppercase tracking-widest text-[#525659]">{active.length} installed on {aircraft.tail_number}</span>

@@ -11,6 +11,8 @@ import imageCompression from "browser-image-compression";
 import { useToast } from "@/components/ToastProvider";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { useModalScrollLock } from "@/hooks/useModalScrollLock";
+import SectionSelector from "@/components/shell/SectionSelector";
+import { MORE_SELECTOR_ITEMS, emitMoreNavigate } from "@/components/shell/moreNav";
 
 const whiteBg = { backgroundColor: '#ffffff' } as const;
 
@@ -211,6 +213,12 @@ export default function NotesTab({ aircraft, session, role, aircraftRole, userIn
 
   return (
     <>
+      <SectionSelector
+        items={MORE_SELECTOR_ITEMS}
+        selectedKey="notes"
+        onSelect={(key) => emitMoreNavigate(key)}
+        compact
+      />
       <div className="mb-2">
         <PrimaryButton onClick={() => openForm()}>
           <Plus size={18} /> Add New Note

@@ -15,6 +15,8 @@ import ProposedActionCard from "@/components/howard/ProposedActionCard";
 import type { ProposedAction } from "@/lib/howard/proposedActions";
 import { HOWARD_QUICK_PROMPTS } from "@/lib/howard/quickPrompts";
 import { HOWARD_PIC_DISCLAIMER } from "@/lib/howard/persona";
+import SectionSelector from "@/components/shell/SectionSelector";
+import { MORE_SELECTOR_ITEMS, emitMoreNavigate } from "@/components/shell/moreNav";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -532,6 +534,14 @@ export default function HowardTab({
        * own). Uses the brand logo to match the floating FAB. The PIC-
        * authority disclaimer below the header lives on the full-page
        * surface only; the popup has its own copy in HowardLauncher. */}
+      {!compact && !onboardingMode && (
+        <SectionSelector
+          items={MORE_SELECTOR_ITEMS}
+          selectedKey="howard"
+          onSelect={(key) => emitMoreNavigate(key)}
+          compact
+        />
+      )}
       {!compact && (
         <>
           <div className="flex items-center justify-between gap-3 mb-3">
