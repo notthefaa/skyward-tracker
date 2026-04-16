@@ -49,3 +49,23 @@ export function logError(message: string, error: unknown, ctx?: ErrorContext): v
     });
   }).catch(() => { /* Sentry offline — already logged via console.error */ });
 }
+
+/**
+ * Lightweight non-error telemetry — things like "Howard tool result
+ * truncated" or "rate limit hit" where you want signal but no pager.
+ * Emits a greppable console line and (when Sentry is wired) a
+ * breadcrumb tagged with the event name.
+ */
+export function logEvent(event: string, data?: Record<string, string | number | boolean>): void {
+  console.log(`[event] ${event}`, data || {});
+
+  if (!process.env.SENTRY_DSN) return;
+  import('@sentry/nextjs').then(Sentry => {
+    Sentry.addBreadcrumb({
+      category: 'event',
+      message: event,
+      level: 'info',
+      data,
+    });
+  }).catch(() => { /* Sentry offline */ });
+}

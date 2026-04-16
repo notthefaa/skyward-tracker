@@ -3,6 +3,7 @@ import { tavily } from '@tavily/core';
 import OpenAI from 'openai';
 import { computeAirworthinessStatus } from '@/lib/airworthiness';
 import { syncAdsForAircraft } from '@/lib/drs';
+import { logEvent } from '@/lib/requestId';
 import { proposeAction, type ActionType } from './proposedActions';
 
 export interface ToolContext {
@@ -607,10 +608,11 @@ const MAX_TOOL_RESULT_CHARS = 40000;
  * the largest array inside and halve it until we fit. Adds a
  * `_truncated` marker so Howard can tell the user to narrow the
  * filter instead of silently showing partial data. */
-export function capResultSize(result: any): any {
+export function capResultSize(result: any, toolName?: string): any {
   if (!result || typeof result !== 'object') return result;
   let current: any = result;
   let serialized = JSON.stringify(current);
+  const originalSize = serialized.length;
   // Bounded loop in case a result has many same-size arrays that each
   // need trimming. 6 iterations is enough to shave an order of
   // magnitude off even a huge response.
@@ -636,6 +638,15 @@ export function capResultSize(result: any): any {
       },
     };
     serialized = JSON.stringify(current);
+  }
+  // Emit a breadcrumb only when trimming actually fired, so the signal
+  // in telemetry reflects real truncation events.
+  if (current !== result) {
+    logEvent('howard_tool_truncated', {
+      tool: toolName || 'unknown',
+      original_size: originalSize,
+      trimmed_size: serialized.length,
+    });
   }
   return current;
 }
@@ -674,7 +685,7 @@ export async function executeTool(
   // Global tools don't need a specific aircraft; invoke directly.
   if (GLOBAL_TOOLS.has(name)) {
     const result = await handler(params, supabaseAdmin, '', ctx);
-    return JSON.stringify(capResultSize(result));
+    return JSON.stringify(capResultSize(result, name));
   }
 
   // Aircraft-scoped tool: resolve `tail` param to an aircraft_id the
@@ -688,5 +699,5 @@ export async function executeTool(
     aircraftTail: resolved.tail,
   };
   const result = await handler(params, supabaseAdmin, resolved.aircraftId, enrichedCtx);
-  return JSON.stringify(capResultSize(result));
+  return JSON.stringify(capResultSize(result, name));
 }
