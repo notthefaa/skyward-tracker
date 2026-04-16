@@ -98,7 +98,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Message too long (max 2000 characters).' }, { status: 400 });
     }
 
-    const { allowed, retryAfterMs } = checkRateLimit(user.id);
+    const { allowed, retryAfterMs } = await checkRateLimit(supabaseAdmin, user.id);
     if (!allowed) {
       return NextResponse.json(
         { error: `You've hit the Howard rate limit. Try again in ${Math.ceil(retryAfterMs / 1000)}s — this protects the shared API budget from runaway loops.` },
