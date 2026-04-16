@@ -54,8 +54,21 @@ export const tools: Anthropic.Tool[] = [
     },
   },
   {
+    name: 'get_event_messages',
+    description: 'Retrieve the message thread for a specific service event — the back-and-forth between the owner, mechanic, and system (status updates, date proposals, confirmations, comments). Use when the user asks what the shop said, what was discussed on a work order, whether the mechanic responded, or for any maintenance-coordination question. Attachments are surfaced as `attachments` metadata (filename + url + type + size) on each message.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        tail: { type: 'string', description: 'Aircraft tail number the event belongs to.' },
+        event_id: { type: 'string', description: 'UUID of the service event.' },
+        limit: { type: 'number', description: 'Max messages (default 30, max 100). Messages are returned oldest-first so you read the thread in order.' },
+      },
+      required: ['tail', 'event_id'],
+    },
+  },
+  {
     name: 'get_squawks',
-    description: 'Retrieve squawk (discrepancy) reports for the named aircraft. Returns location, description, airworthiness impact, status, deferral info, and reporter details.',
+    description: 'Retrieve squawk (discrepancy) reports for the named aircraft. Returns location, description, airworthiness impact, status, deferral info, reporter details, and any attached photo URLs (`pictures` array) uploaded by the reporter.',
     input_schema: {
       type: 'object' as const,
       properties: {
@@ -67,7 +80,7 @@ export const tools: Anthropic.Tool[] = [
   },
   {
     name: 'get_notes',
-    description: 'Retrieve pilot notes for the named aircraft. Returns author, content, and timestamps.',
+    description: 'Retrieve pilot notes for the named aircraft. Returns author, content, timestamps, and any attached photo URLs (`pictures` array).',
     input_schema: {
       type: 'object' as const,
       properties: {
@@ -112,6 +125,33 @@ export const tools: Anthropic.Tool[] = [
         tail: { type: 'string', description: 'Aircraft tail number.' },
         type: { type: 'string', enum: ['tire', 'oil', 'both'], description: 'Which logs to retrieve (default: both)' },
         limit: { type: 'number', description: 'Max rows per type (default 10, max 50)' },
+      },
+      required: ['tail'],
+    },
+  },
+  {
+    name: 'get_fuel_state',
+    description: 'Retrieve the named aircraft\'s current fuel state: latest `current_fuel_gallons` on file, when it was last updated (`fuel_last_updated`), and the fuel-gallons figure recorded on the most recent flight logs (for a quick burn trend). Use for "how much fuel is on board?", "when was she last fueled?", or fuel-planning questions. Note: fuel is manually tracked — if `fuel_last_updated` is stale, say so.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        tail: { type: 'string', description: 'Aircraft tail number.' },
+      },
+      required: ['tail'],
+    },
+  },
+  {
+    name: 'list_documents',
+    description: 'List the documents uploaded for the named aircraft — filename, type (POH/AFM/MEL/SOP/Registration/Airworthiness Certificate/Weight and Balance/Supplement/Other), processing status, and page count. Use when the user asks what documents are on file. For content lookups inside a document, use `search_documents` instead.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        tail: { type: 'string', description: 'Aircraft tail number.' },
+        doc_type: {
+          type: 'string',
+          enum: ['POH', 'AFM', 'Supplement', 'MEL', 'SOP', 'Registration', 'Airworthiness Certificate', 'Weight and Balance', 'Other'],
+          description: 'Optional filter by document type.',
+        },
       },
       required: ['tail'],
     },

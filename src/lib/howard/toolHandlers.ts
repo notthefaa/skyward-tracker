@@ -156,6 +156,72 @@ const handlers: Record<string, ToolHandler> = {
     return { count: (data || []).length, line_items: data };
   },
 
+  get_event_messages: async (params, sb, aircraftId) => {
+    if (!params.event_id) return { error: 'event_id is required' };
+
+    const { data: ev } = await sb
+      .from('aft_maintenance_events')
+      .select('id, aircraft_id, deleted_at')
+      .eq('id', params.event_id)
+      .maybeSingle();
+    if (!ev || ev.aircraft_id !== aircraftId || ev.deleted_at) {
+      return { error: 'Event not found for this aircraft.' };
+    }
+
+    const limit = clampLimit(params.limit, 30, 100);
+    const { data, error } = await sb.from('aft_event_messages')
+      .select('id, sender, message_type, message, proposed_date, attachments, created_at')
+      .eq('event_id', params.event_id)
+      .is('deleted_at', null)
+      .order('created_at', { ascending: true })
+      .limit(limit);
+    if (error) return { error: error.message };
+    return { count: (data || []).length, messages: data };
+  },
+
+  get_fuel_state: async (_params, sb, aircraftId) => {
+    const { data: ac, error: acErr } = await sb.from('aft_aircraft')
+      .select('tail_number, current_fuel_gallons, fuel_last_updated')
+      .eq('id', aircraftId)
+      .maybeSingle();
+    if (acErr) return { error: acErr.message };
+    if (!ac) return { error: 'Aircraft not found.' };
+
+    const { data: recentLogs } = await sb.from('aft_flight_logs')
+      .select('created_at, pod, poa, initials, fuel_gallons, hobbs, tach')
+      .eq('aircraft_id', aircraftId)
+      .is('deleted_at', null)
+      .order('created_at', { ascending: false })
+      .limit(5);
+
+    const lastUpdated = (ac as any).fuel_last_updated;
+    const staleDays = lastUpdated
+      ? Math.floor((Date.now() - new Date(lastUpdated).getTime()) / 86400000)
+      : null;
+
+    return {
+      tail_number: (ac as any).tail_number,
+      current_fuel_gallons: (ac as any).current_fuel_gallons,
+      fuel_last_updated: lastUpdated,
+      stale_days: staleDays,
+      note: 'Fuel is manually tracked. If stale_days is high, the current reading may not reflect the aircraft\'s actual state.',
+      recent_flight_fuel: recentLogs || [],
+    };
+  },
+
+  list_documents: async (params, sb, aircraftId) => {
+    let query = sb.from('aft_documents')
+      .select('id, filename, doc_type, status, page_count, created_at')
+      .eq('aircraft_id', aircraftId)
+      .is('deleted_at', null)
+      .order('doc_type', { ascending: true })
+      .order('created_at', { ascending: false });
+    if (params.doc_type) query = query.eq('doc_type', params.doc_type);
+    const { data, error } = await query;
+    if (error) return { error: error.message };
+    return { count: (data || []).length, documents: data };
+  },
+
   get_squawks: async (params, sb, aircraftId) => {
     let query = sb.from('aft_squawks')
       .select('*')
