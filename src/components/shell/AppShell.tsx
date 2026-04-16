@@ -7,6 +7,8 @@ import { useFleetData, useRealtimeSync, useGroundedStatus, useAircraftRole, useP
 import { useModalScrollLock } from "@/hooks/useModalScrollLock";
 import { NETWORK_TIMEOUT_MS } from "@/lib/constants";
 import { swrKeys } from "@/lib/swrKeys";
+import useSWR from "swr";
+import { HOWARD_STALE_MS } from "@/lib/howard/quickPrompts";
 import { useToast } from "@/components/ToastProvider";
 import dynamic from "next/dynamic";
 import type { AircraftWithMetrics, AppTab, LogSubTab } from "@/lib/types";
@@ -179,7 +181,9 @@ export default function AppShell({ session }: AppShellProps) {
   // which fires on page reload with an existing token) clears the
   // user's Howard thread so a fresh login starts with a blank
   // conversation. Delete happens server-side; the SWR cache is
-  // optimistically reset so the UI flips to empty immediately.
+  // optimistically reset so the UI flips to empty immediately, then
+  // revalidate so client state converges with server truth if the
+  // DELETE happened to fail (offline, auth hiccup).
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, sess) => {
       if (event !== 'SIGNED_IN' || !sess?.user?.id) return;
@@ -188,10 +192,63 @@ export default function AppShell({ session }: AppShellProps) {
       } catch {
         // Non-blocking — the client-side cache flush below still happens.
       }
-      globalMutate(swrKeys.howardUser(sess.user.id), { thread: null, messages: [] }, false);
+      globalMutate(swrKeys.howardUser(sess.user.id), { thread: null, messages: [] }, { revalidate: true });
     });
     return () => subscription.unsubscribe();
   }, [globalMutate]);
+
+  // ─── Howard stale-session reset (30 min idle) ───
+  // Subscribe to Howard's thread cache (SWR dedupes with the launcher
+  // and tab subscriptions — one request across all surfaces). When the
+  // last interaction is older than HOWARD_STALE_MS, wipe the thread so
+  // the pilot doesn't pick up a cold conversation they've forgotten.
+  // On return-from-idle, force a revalidation so the check runs against
+  // fresh server state rather than whatever was cached.
+  const howardUserId = session?.user?.id;
+  const { data: howardData, mutate: mutateHoward } = useSWR(
+    howardUserId ? swrKeys.howardUser(howardUserId) : null,
+    async () => {
+      const res = await authFetch('/api/howard');
+      if (!res.ok) return { thread: null, messages: [] };
+      return await res.json() as { thread: any; messages: any[] };
+    },
+    { revalidateOnFocus: false, revalidateOnReconnect: false }
+  );
+
+  useEffect(() => {
+    if (!howardUserId || !howardData?.messages?.length) return;
+    const msgs = howardData.messages;
+    const lastMs = new Date(msgs[msgs.length - 1].created_at).getTime();
+    const updatedMs = howardData.thread?.updated_at
+      ? new Date(howardData.thread.updated_at).getTime()
+      : 0;
+    const lastActive = Math.max(lastMs, updatedMs);
+    if (!Number.isFinite(lastActive) || lastActive === 0) return;
+    if (Date.now() - lastActive <= HOWARD_STALE_MS) return;
+
+    (async () => {
+      try { await authFetch('/api/howard', { method: 'DELETE' }); } catch {}
+      globalMutate(swrKeys.howardUser(howardUserId), { thread: null, messages: [] }, false);
+    })();
+  }, [howardData, howardUserId, globalMutate]);
+
+  useEffect(() => {
+    if (!howardUserId) return;
+    let hiddenAt = 0;
+    const onVis = () => {
+      if (document.hidden) { hiddenAt = Date.now(); return; }
+      // Only bother re-syncing if the tab was hidden long enough that
+      // staleness could plausibly have crossed the threshold. The
+      // threshold is 30 min; poll after 5 min of hidden to give the
+      // boundary cases a chance.
+      if (hiddenAt && Date.now() - hiddenAt > 5 * 60 * 1000) {
+        mutateHoward();
+      }
+      hiddenAt = 0;
+    };
+    document.addEventListener('visibilitychange', onVis);
+    return () => document.removeEventListener('visibilitychange', onVis);
+  }, [howardUserId, mutateHoward]);
 
   // ─── Pull to Refresh ───
   const handlePullRefresh = useCallback(async () => {

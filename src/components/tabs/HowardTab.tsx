@@ -13,6 +13,7 @@ import { useToast } from "@/components/ToastProvider";
 import { useConfirm } from "@/components/ConfirmProvider";
 import ProposedActionCard from "@/components/howard/ProposedActionCard";
 import type { ProposedAction } from "@/lib/howard/proposedActions";
+import { HOWARD_QUICK_PROMPTS } from "@/lib/howard/quickPrompts";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -431,16 +432,6 @@ export default function HowardTab({
     messages.length > 0 &&
     !isSending;
 
-  // Quick prompts offered when the pilot switches aircraft mid-
-  // conversation. Keeps parity with the HowardLauncher menu so the
-  // pilot gets the same four angles they'd get from the FAB.
-  const aircraftSwitchPrompts: { label: string; prompt: string }[] = [
-    { label: 'Airworthiness', prompt: `Is my aircraft airworthy right now? Walk me through it.` },
-    { label: 'Maintenance', prompt: `What's the maintenance picture — anything overdue, due soon, open squawks, ADs to act on? Order by urgency.` },
-    { label: 'Recent activity', prompt: `What's been happening the last 30 days — flights, squawks, MX work?` },
-    { label: 'Book time', prompt: `I'd like to book some time. Ask me for the details you need.` },
-  ];
-
   return (
     <div className="flex flex-col h-full">
       {/* Header — hidden in compact mode (the launcher popup has its
@@ -697,16 +688,22 @@ export default function HowardTab({
         )}
       </div>
 
-      {/* Aircraft-switch banner — appears above the input when the
-       * pilot changes tail mid-conversation. Re-offers the same
-       * angles the FAB quick-prompts present. */}
+      {/* Aircraft-switch panel — the pilot changed tail mid-conversation.
+       * Uses the same icon-bearing quick-prompt rows as the FAB menu so
+       * it feels like a soft restart for the new aircraft. The past
+       * conversation stays visible above; X dismisses this panel and
+       * hands control back to free chat. */}
       {showSwitchBanner && (
         <div className="mb-2 bg-[#e6651b]/5 border border-[#e6651b]/30 rounded-lg p-3 animate-fade-in">
-          <div className="flex items-center justify-between gap-2 mb-2">
-            <span className="text-[10px] font-bold uppercase tracking-widest text-navy">
-              Switched to <code className="font-mono text-[#e6651b] normal-case">{currentTail}</code>
-              {' — '}want me to check?
-            </span>
+          <div className="flex items-start justify-between gap-2 mb-2">
+            <div className="min-w-0">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-[#e6651b] leading-tight">
+                Switched to <code className="font-mono normal-case">{currentTail}</code>
+              </p>
+              <p className="font-roboto text-sm text-navy mt-1">
+                Got questions about <code className="font-mono text-[0.9em] bg-[#e6651b]/10 text-[#c35617] px-1.5 py-0.5 rounded border border-[#e6651b]/20">{currentTail}</code>? Pick a starting point or keep typing.
+              </p>
+            </div>
             <button
               onClick={() => setAcknowledgedTail(currentTail)}
               className="text-gray-400 hover:text-navy p-1 -m-1 shrink-0"
@@ -715,21 +712,26 @@ export default function HowardTab({
               <X size={14} />
             </button>
           </div>
-          <div className="flex flex-wrap gap-1.5">
-            {aircraftSwitchPrompts.map(p => (
-              <button
-                key={p.label}
-                onClick={() => {
-                  setAcknowledgedTail(currentTail);
-                  setFollowUps([]);
-                  setAwaitingAircraftChoice(false);
-                  handleSend(p.prompt);
-                }}
-                className="text-[11px] font-roboto font-medium text-[#e6651b] bg-white border border-[#e6651b]/40 rounded-full px-3 py-1.5 hover:bg-[#e6651b]/10 active:scale-95 transition-all"
-              >
-                {p.label}
-              </button>
-            ))}
+          <div className="flex flex-col gap-1.5 mt-2">
+            {HOWARD_QUICK_PROMPTS.map(p => {
+              const Icon = p.icon;
+              return (
+                <button
+                  key={p.label}
+                  onClick={() => {
+                    setAcknowledgedTail(currentTail);
+                    if (p.followUps) setFollowUps(p.followUps);
+                    else setFollowUps([]);
+                    setAwaitingAircraftChoice(p.kind === 'aircraft');
+                    handleSend(p.prompt);
+                  }}
+                  className="text-left px-3 py-2.5 bg-white hover:bg-[#e6651b]/10 hover:border-[#e6651b] border border-gray-200 rounded-lg text-sm font-bold text-navy transition-colors active:scale-[0.98] flex items-center gap-2.5"
+                >
+                  <Icon size={14} className="text-[#e6651b] shrink-0" />
+                  <span>{p.label}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
       )}

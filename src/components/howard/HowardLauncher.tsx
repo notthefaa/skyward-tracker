@@ -6,9 +6,9 @@ import useSWR from "swr";
 import { authFetch } from "@/lib/authFetch";
 import { swrKeys } from "@/lib/swrKeys";
 import type { AircraftWithMetrics } from "@/lib/types";
+import { HOWARD_QUICK_PROMPTS, type FollowUp } from "@/lib/howard/quickPrompts";
 import {
-  X, ArrowLeft, Plane, Maximize2, Shield, Wrench, CalendarPlus,
-  Activity, MessageSquare,
+  X, ArrowLeft, Plane, Maximize2, MessageSquare,
 } from "lucide-react";
 
 const HowardTab = dynamic(() => import("@/components/tabs/HowardTab"), { ssr: false });
@@ -22,21 +22,6 @@ interface Props {
 }
 
 type Mode = 'menu' | 'flight-briefing' | 'chat';
-
-interface FollowUp {
-  label: string;
-  prompt: string;
-}
-
-interface QuickPrompt {
-  icon: React.ComponentType<{ size?: number; className?: string }>;
-  label: string;
-  prompt: string;
-  followUps?: FollowUp[];
-  /** 'aircraft' means the prompt needs a tail before Howard can answer;
-   * HowardTab renders an aircraft picker until Howard calls a tool. */
-  kind?: 'aircraft';
-}
 
 /**
  * Floating entry point to Howard. Always available (Howard is a per-user
@@ -117,52 +102,6 @@ export default function HowardLauncher({ currentAircraft, userFleet = [], sessio
     window.dispatchEvent(new CustomEvent('aft:navigate-howard'));
     setOpen(false);
   };
-
-  // Prompts stay aircraft-agnostic; Howard confirms which aircraft based
-  // on the system-prompt rules (uses currentTail hint, asks if unknown).
-  const quickPrompts: QuickPrompt[] = [
-    {
-      icon: Shield,
-      label: 'Airworthiness check',
-      kind: 'aircraft',
-      prompt: `Is my aircraft airworthy right now? Walk me through it.`,
-      followUps: [
-        { label: 'Blockers vs warnings', prompt: 'Which of those are blockers and which are just warnings?' },
-        { label: 'How to clear each', prompt: 'What does it take to clear each finding?' },
-        { label: 'Regulatory basis', prompt: 'What regs back up those findings?' },
-      ],
-    },
-    {
-      icon: Wrench,
-      label: 'Maintenance overview',
-      kind: 'aircraft',
-      prompt: `Give me the maintenance picture: anything overdue or due now, upcoming inspections in the next 30–90 days, open squawks, and any ADs to act on. Order by urgency.`,
-      followUps: [
-        { label: 'Required vs optional', prompt: 'Split those by required vs optional so I know what I can defer.' },
-        { label: 'Bundle for one visit', prompt: "Help me group these into a single shop visit to minimize downtime." },
-        { label: "What's grounding me", prompt: 'Which of those actually affect airworthiness right now?' },
-        { label: 'Open squawks detail', prompt: 'Dig into the open squawks — causes and what it takes to clear them.' },
-        { label: 'AD detail', prompt: 'More on the ADs — overdue, due soon, and what each requires.' },
-      ],
-    },
-    {
-      icon: CalendarPlus,
-      label: 'Book some time',
-      kind: 'aircraft',
-      prompt: `I'd like to book some time. Ask me for the details you need.`,
-    },
-    {
-      icon: Activity,
-      label: 'Recent activity',
-      kind: 'aircraft',
-      prompt: `What's been happening the last 30 days — flights, squawks, MX work?`,
-      followUps: [
-        { label: "Who's flying it", prompt: "Who's been flying it? Any patterns?" },
-        { label: 'Fuel burn trends', prompt: "How's the fuel burn looking across those flights?" },
-        { label: 'Anything unusual', prompt: 'Anything unusual in the last month I should know about?' },
-      ],
-    },
-  ];
 
   const briefingFollowUps: FollowUp[] = [
     { label: 'More on weather', prompt: "Dig deeper on the weather — what's trending, and what should I be watching?" },
@@ -300,7 +239,7 @@ export default function HowardLauncher({ currentAircraft, userFleet = [], sessio
                 <p className="font-roboto text-sm text-gray-700 mb-1">
                   Hey, I&apos;m Howard, your hangar helper and advisor. I&apos;ve got plenty of aviation stories to share, but before we get into that, what can I help you with?
                 </p>
-                {quickPrompts.map(p => {
+                {HOWARD_QUICK_PROMPTS.map(p => {
                   const Icon = p.icon;
                   return (
                     <button
