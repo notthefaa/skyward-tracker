@@ -348,6 +348,7 @@ const handlers: Record<string, ToolHandler> = {
           document: docMap.get(c.document_id)?.filename || 'Unknown',
           doc_type: docMap.get(c.document_id)?.doc_type || 'Unknown',
           file_url: docMap.get(c.document_id)?.file_url || null,
+          page_number: c.page_number || null,
           chunk_index: c.chunk_index,
           content: c.content,
           relevance: (c.similarity * 100).toFixed(0) + '%',

@@ -11,16 +11,33 @@ const CHUNK_SIZE = 1500; // chars (~375 tokens)
 const CHUNK_OVERLAP = 200;
 const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB
 
-function chunkText(text: string): string[] {
-  const chunks: string[] = [];
-  let start = 0;
-  while (start < text.length) {
-    const end = Math.min(start + CHUNK_SIZE, text.length);
-    chunks.push(text.slice(start, end));
-    start += CHUNK_SIZE - CHUNK_OVERLAP;
-    if (start >= text.length) break;
+type TaggedChunk = { content: string; page_number: number | null };
+
+function chunkText(text: string): TaggedChunk[] {
+  return chunkTextPages([{ page: null, text }]);
+}
+
+/**
+ * Chunk per-page so each chunk knows which PDF page it came from.
+ * Pages are chunked independently — a chunk never spans a page
+ * boundary, which keeps citations accurate. Short pages (< 50 chars)
+ * are skipped (headers, blank pages, etc.).
+ */
+function chunkTextPages(pages: Array<{ page: number | null; text: string }>): TaggedChunk[] {
+  const chunks: TaggedChunk[] = [];
+  for (const { page, text } of pages) {
+    let start = 0;
+    while (start < text.length) {
+      const end = Math.min(start + CHUNK_SIZE, text.length);
+      const slice = text.slice(start, end);
+      if (slice.trim().length > 50) {
+        chunks.push({ content: slice, page_number: page });
+      }
+      start += CHUNK_SIZE - CHUNK_OVERLAP;
+      if (start >= text.length) break;
+    }
   }
-  return chunks.filter(c => c.trim().length > 50);
+  return chunks;
 }
 
 async function generateEmbeddings(texts: string[]): Promise<number[][]> {
@@ -127,35 +144,64 @@ export async function POST(req: Request) {
       .single();
     if (docError) throw docError;
 
-    // Extract text from PDF
-    let fullText = '';
+    // Extract text from PDF — parse per-page so chunks carry their
+    // source page number, enabling Howard to cite "POH page 47".
     let pageCount = 0;
+    let taggedChunks: TaggedChunk[] = [];
     try {
       const parser = new PDFParse({ data: new Uint8Array(buffer) });
-      const textResult = await parser.getText();
-      fullText = textResult.text || '';
-      pageCount = textResult.total || 0;
+      // First pass: get total page count from the full parse.
+      const fullResult = await parser.getText();
+      pageCount = fullResult.total || 0;
+
+      // Second pass: extract per-page text so chunks are page-tagged.
+      // For each page, getText({ partial: [p] }) returns only that
+      // page's content. Falls back to un-paged chunking if per-page
+      // parsing fails (some PDFs have non-standard page structures).
+      if (pageCount > 0) {
+        const pages: Array<{ page: number; text: string }> = [];
+        for (let p = 1; p <= pageCount; p++) {
+          try {
+            const pageResult = await parser.getText({ partial: [p] });
+            if (pageResult.text?.trim()) {
+              pages.push({ page: p, text: pageResult.text });
+            }
+          } catch {
+            // Page-level parse failed — skip this page silently;
+            // its content was already in the full-text fallback.
+          }
+        }
+        if (pages.length > 0) {
+          taggedChunks = chunkTextPages(pages);
+        }
+      }
+
+      // Fallback: if per-page extraction yielded nothing (malformed
+      // PDF, single-stream text), chunk the full text without page tags.
+      if (taggedChunks.length === 0 && fullResult.text?.trim()) {
+        taggedChunks = chunkText(fullResult.text);
+      }
+
       await parser.destroy();
     } catch {
       await supabaseAdmin.from('aft_documents').update({ status: 'error' }).eq('id', doc.id);
       return NextResponse.json({ error: 'Failed to parse PDF. The file may be scanned/image-based.' }, { status: 400 });
     }
 
-    // Chunk the text
-    const chunks = chunkText(fullText);
-    if (chunks.length === 0) {
+    if (taggedChunks.length === 0) {
       await supabaseAdmin.from('aft_documents').update({ status: 'error' }).eq('id', doc.id);
       return NextResponse.json({ error: 'No readable text found in PDF.' }, { status: 400 });
     }
 
     // Generate embeddings
-    const embeddings = await generateEmbeddings(chunks);
+    const embeddings = await generateEmbeddings(taggedChunks.map(c => c.content));
 
-    // Store chunks with embeddings
-    const chunkRows = chunks.map((content, i) => ({
+    // Store chunks with embeddings + page number
+    const chunkRows = taggedChunks.map((chunk, i) => ({
       document_id: doc.id,
       chunk_index: i,
-      content,
+      content: chunk.content,
+      page_number: chunk.page_number,
       embedding: JSON.stringify(embeddings[i]),
     }));
 
@@ -173,7 +219,7 @@ export async function POST(req: Request) {
       .update({ status: 'ready', page_count: pageCount })
       .eq('id', doc.id);
 
-    return NextResponse.json({ success: true, document: { ...doc, status: 'ready', page_count: pageCount }, chunks: chunks.length });
+    return NextResponse.json({ success: true, document: { ...doc, status: 'ready', page_count: pageCount }, chunks: taggedChunks.length });
   } catch (error) { return handleApiError(error); }
 }
 

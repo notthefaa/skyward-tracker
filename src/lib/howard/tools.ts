@@ -167,7 +167,7 @@ export const tools: Anthropic.Tool[] = [
   },
   {
     name: 'search_documents',
-    description: 'Search uploaded documents (POH, AFM, supplements, MEL, SOPs, Registration, Airworthiness Certificate, Weight and Balance) for the named aircraft. Uses semantic search to find relevant sections. Results include `file_url` for each matched document — use it to link the user directly to the source PDF in your reply. Use for questions about aircraft performance, limitations, procedures, checklists, registration details, airworthiness documentation, W&B tables, or any aircraft-specific reference material.',
+    description: 'Search uploaded documents (POH, AFM, supplements, MEL, SOPs, Registration, Airworthiness Certificate, Weight and Balance) for the named aircraft. Uses semantic search to find relevant sections. Results include `file_url` and `page_number` (null for older uploads) — cite the source in your reply as a markdown link with the page when available: `[filename, p.47](url)`. Use for questions about aircraft performance, limitations, procedures, checklists, registration details, airworthiness documentation, W&B tables, or any aircraft-specific reference material.',
     input_schema: {
       type: 'object' as const,
       properties: {
