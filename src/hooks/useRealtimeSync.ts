@@ -49,8 +49,10 @@ export function useRealtimeSync(
       }
     };
 
+    // Namespace the channel per user so two mounted trees (devtools,
+    // tab duplication) don't collide on a single global channel name.
     const ch = supabase
-      .channel('fleet-updates')
+      .channel(`fleet-updates:${session.user.id}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'aft_flight_logs' }, handle)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'aft_squawks' }, handle)
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'aft_squawks' }, handle)
