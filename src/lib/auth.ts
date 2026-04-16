@@ -173,7 +173,9 @@ export function handleApiError(error: unknown, req?: Request): NextResponse {
   if (typeof error === 'object' && error !== null && 'status' in error && 'message' in error) {
     const authError = error as { status: number; message: string };
     return NextResponse.json(
-      { error: authError.message, ...(requestId ? { requestId } : {}) },
+      // `ok: false` is the new discriminator (src/lib/apiResponse.ts);
+      // `error` is kept for existing clients that read that field.
+      { ok: false, error: authError.message, ...(requestId ? { requestId } : {}) },
       { status: authError.status, headers: requestId ? { 'x-request-id': requestId } : undefined }
     );
   }
@@ -181,7 +183,7 @@ export function handleApiError(error: unknown, req?: Request): NextResponse {
   // Unexpected errors — log structured and forward to Sentry when wired.
   logError('[API Error]', error, { requestId, route: req?.url });
   return NextResponse.json(
-    { error: 'An unexpected error occurred. Please try again.', ...(requestId ? { requestId } : {}) },
+    { ok: false, error: 'An unexpected error occurred. Please try again.', ...(requestId ? { requestId } : {}) },
     { status: 500, headers: requestId ? { 'x-request-id': requestId } : undefined }
   );
 }
