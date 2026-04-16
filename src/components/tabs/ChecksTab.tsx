@@ -290,11 +290,13 @@ export default function ChecksTab({ aircraft, session, role, userInitials }: Pro
   // Compact button that sits under each dial. Taps scroll to the
   // matching section AND signal the sub-tab to open its log-entry
   // modal. stopPropagation so the dial's onClick doesn't double-fire.
+  // Padding sized for mobile tap targets — smaller than this becomes
+  // fiddly to hit on a phone.
   const DialAction = ({ label, onPress }: { label: string; onPress: () => void }) => (
     <button
       type="button"
       onClick={(e) => { e.stopPropagation(); onPress(); }}
-      className="mt-2 text-[9px] font-bold uppercase tracking-widest text-navy/70 hover:text-navy active:scale-95 transition-all px-2 py-0.5 rounded border border-gray-300 bg-white shadow-sm"
+      className="mt-2 text-[10px] font-bold uppercase tracking-widest text-navy hover:bg-navy hover:text-white active:scale-95 transition-all px-3 py-1.5 rounded border border-navy/30 bg-white shadow-sm"
     >
       {label}
     </button>
@@ -356,7 +358,7 @@ export default function ChecksTab({ aircraft, session, role, userInitials }: Pro
 
       {/* VOR section */}
       <section ref={vorRef} className="scroll-mt-20">
-        <div className="flex items-center gap-2 mb-2 pl-1">
+        <div className="flex items-center flex-wrap gap-2 mb-2 pl-1">
           <Compass size={16} className="text-[#F08B46]" />
           <h3 className="font-oswald text-lg font-bold uppercase tracking-widest text-navy m-0 leading-none">
             VOR
@@ -375,7 +377,7 @@ export default function ChecksTab({ aircraft, session, role, userInitials }: Pro
 
       {/* Oil section (includes the consumption graph already baked into OilTab) */}
       <section ref={oilRef} className="scroll-mt-20">
-        <div className="flex items-center gap-2 mb-2 pl-1">
+        <div className="flex items-center flex-wrap gap-2 mb-2 pl-1">
           <Droplets size={16} className="text-[#CE3732]" />
           <h3 className="font-oswald text-lg font-bold uppercase tracking-widest text-navy m-0 leading-none">
             Oil
@@ -394,7 +396,7 @@ export default function ChecksTab({ aircraft, session, role, userInitials }: Pro
 
       {/* Tire section */}
       <section ref={tireRef} className="scroll-mt-20">
-        <div className="flex items-center gap-2 mb-2 pl-1">
+        <div className="flex items-center flex-wrap gap-2 mb-2 pl-1">
           <TireIcon size={16} style={{ color: '#525659' }} />
           <h3 className="font-oswald text-lg font-bold uppercase tracking-widest text-navy m-0 leading-none">
             Tires
