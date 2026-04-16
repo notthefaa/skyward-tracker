@@ -6,8 +6,27 @@ import { authFetch } from "@/lib/authFetch";
 import { useToast } from "@/components/ToastProvider";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { useModalScrollLock } from "@/hooks/useModalScrollLock";
-import type { AircraftWithMetrics, SystemSettings, AppTab } from "@/lib/types";
+import type { AircraftWithMetrics, SystemSettings, AppTab, AppRole, AircraftRole } from "@/lib/types";
 import type { FleetIndexEntry } from "@/hooks/useFleetData";
+
+// Shape of the rows returned by /api/admin/users. Each user carries
+// their global role and a per-aircraft access list (aircraft_role is
+// undefined when the user has no row in aft_user_aircraft_access for
+// that aircraft — used in the toggle UI).
+interface AdminUserAircraftAccess {
+  aircraft_id: string;
+  aircraft_role?: AircraftRole;
+  tail_number?: string;
+}
+
+interface AdminUser {
+  user_id: string;
+  email: string;
+  initials: string | null;
+  full_name: string | null;
+  role: AppRole;
+  aircraft: AdminUserAircraftAccess[];
+}
 import { ShieldCheck, Settings, MailOpen, Database, Sliders, Globe, Users, PlaneTakeoff, X, ChevronRight, ChevronDown, Loader2, Mail, Trash2, KeyRound, Search } from "lucide-react";
 import { PrimaryButton } from "@/components/AppButtons";
 
@@ -51,7 +70,7 @@ export default function AdminModals({
   const [inviteRole, setInviteRole] = useState<'admin'|'pilot'>('pilot');
   const [inviteAircraftIds, setInviteAircraftIds] = useState<string[]>([]);
 
-  const [allUsers, setAllUsers] = useState<any[]>([]);
+  const [allUsers, setAllUsers] = useState<AdminUser[]>([]);
   const [selectedAccessUserId, setSelectedAccessUserId] = useState<string>("");
   const [userAccessList, setUserAccessList] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -59,7 +78,7 @@ export default function AdminModals({
   const { showSuccess, showError, showInfo } = useToast();
   const confirm = useConfirm();
 
-  const [globalUsers, setGlobalUsers] = useState<any[]>([]);
+  const [globalUsers, setGlobalUsers] = useState<AdminUser[]>([]);
   const [usersSearch, setUsersSearch] = useState("");
   const [expandedUserId, setExpandedUserId] = useState<string | null>(null);
   const [isLoadingUsers, setIsLoadingUsers] = useState(false);
@@ -297,7 +316,7 @@ export default function AdminModals({
         if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Failed'); }
       }
       // Demote all aircraft roles to pilot
-      const adminAircraft = u.aircraft.filter((a: any) => a.aircraft_role === 'admin');
+      const adminAircraft = u.aircraft.filter((a: AdminUserAircraftAccess) => a.aircraft_role === 'admin');
       for (const ac of adminAircraft) {
         const res = await authFetch('/api/aircraft-access', { method: 'PUT', body: JSON.stringify({ targetUserId: userId, aircraftId: ac.aircraft_id, newRole: 'pilot' }) });
         if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Failed'); }
@@ -443,7 +462,7 @@ export default function AdminModals({
             <div className="flex justify-between items-center mb-4"><h2 className="font-oswald text-xl font-bold uppercase text-navy flex items-center gap-2"><MailOpen size={20}/> Email Previewer</h2><button onClick={() => setShowEmailPreview(false)} className="text-gray-400 hover:text-red-500"><X size={24}/></button></div>
             <div className="mb-4">
               <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Select Template to Preview</label>
-              <select value={emailPreviewType} onChange={e=>setEmailPreviewType(e.target.value as any)} style={whiteBg} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 outline-none focus:border-navy">
+              <select value={emailPreviewType} onChange={e=>setEmailPreviewType(e.target.value as typeof emailPreviewType)} style={whiteBg} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 outline-none focus:border-navy">
                 <option value="squawk_mx">Squawk Alert (To MX)</option><option value="squawk_internal">Squawk Alert (Internal)</option><option value="mx_schedule">MX Schedule Request</option><option value="mx_reminder">MX Due Reminder</option>
               </select>
             </div>
@@ -508,7 +527,7 @@ export default function AdminModals({
               <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Email Address</label><input type="email" required value={inviteEmail} onChange={e=>setInviteEmail(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 outline-none focus:border-navy" /></div>
               <div>
                 <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Role</label>
-                <select value={inviteRole} onChange={e=>setInviteRole(e.target.value as any)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 outline-none focus:border-navy">
+                <select value={inviteRole} onChange={e=>setInviteRole(e.target.value as 'admin' | 'pilot')} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 outline-none focus:border-navy">
                   <option value="pilot">Pilot</option><option value="admin">Administrator</option>
                 </select>
               </div>
@@ -551,7 +570,7 @@ export default function AdminModals({
               {isLoadingUsers ? (
                 <div className="flex items-center justify-center py-8"><Loader2 size={24} className="text-navy animate-spin" /></div>
               ) : (() => {
-                const matchUser = (u: any) => {
+                const matchUser = (u: AdminUser) => {
                   if (!usersSearch) return true;
                   const q = usersSearch.toLowerCase();
                   return (u.email || '').toLowerCase().includes(q) || (u.initials || '').toLowerCase().includes(q) || (u.full_name || '').toLowerCase().includes(q);
@@ -565,12 +584,12 @@ export default function AdminModals({
                   return (
                     <div key={u.user_id} className={`border rounded transition-all ${isExpanded ? 'border-navy bg-blue-50/30' : 'border-gray-200 bg-gray-50'}`}>
                       <button onClick={() => setExpandedUserId(isExpanded ? null : u.user_id)} className="w-full text-left p-3 flex items-center gap-3 active:scale-[0.99] transition-transform">
-                        <div className={`w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-bold uppercase shrink-0 ${u.role === 'admin' ? 'bg-navy' : u.aircraft.some((a: any) => a.aircraft_role === 'admin') ? 'bg-[#3AB0FF]' : 'bg-gray-400'}`}>{u.initials || '?'}</div>
+                        <div className={`w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-bold uppercase shrink-0 ${u.role === 'admin' ? 'bg-navy' : u.aircraft.some((a: AdminUserAircraftAccess) => a.aircraft_role === 'admin') ? 'bg-[#3AB0FF]' : 'bg-gray-400'}`}>{u.initials || '?'}</div>
                         <div className="flex-1 min-w-0">
                           {u.full_name && <p className="text-sm font-bold text-navy truncate">{u.full_name}</p>}
                           <p className={`${u.full_name ? 'text-[11px] text-gray-500' : 'text-sm font-bold text-navy'} truncate`}>{u.email || 'No email'}</p>
                           <div className="flex items-center gap-2 mt-0.5">
-                            <span className={`text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded ${u.role === 'admin' ? 'bg-navy text-white' : u.aircraft.some((a: any) => a.aircraft_role === 'admin') ? 'bg-[#3AB0FF] text-white' : 'bg-gray-200 text-gray-600'}`}>{u.role === 'admin' ? 'Global Admin' : u.aircraft.some((a: any) => a.aircraft_role === 'admin') ? 'Aircraft Admin' : 'Pilot'}</span>
+                            <span className={`text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded ${u.role === 'admin' ? 'bg-navy text-white' : u.aircraft.some((a: AdminUserAircraftAccess) => a.aircraft_role === 'admin') ? 'bg-[#3AB0FF] text-white' : 'bg-gray-200 text-gray-600'}`}>{u.role === 'admin' ? 'Global Admin' : u.aircraft.some((a: AdminUserAircraftAccess) => a.aircraft_role === 'admin') ? 'Aircraft Admin' : 'Pilot'}</span>
                             {u.aircraft.length > 0 && <span className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">{u.aircraft.length} aircraft</span>}
                           </div>
                         </div>
@@ -589,9 +608,9 @@ export default function AdminModals({
                           <div className="border border-gray-200 rounded p-3 bg-white">
                             <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Role</p>
                             {(() => {
-                              const isAircraftAdmin = u.role === 'pilot' && u.aircraft.some((a: any) => a.aircraft_role === 'admin');
+                              const isAircraftAdmin = u.role === 'pilot' && u.aircraft.some((a: AdminUserAircraftAccess) => a.aircraft_role === 'admin');
                               const activeTier = u.role === 'admin' ? 'global' : isAircraftAdmin ? 'tail' : 'pilot';
-                              const assignedAircraft = u.aircraft.filter((a: any) => a.aircraft_role !== undefined);
+                              const assignedAircraft = u.aircraft.filter((a: AdminUserAircraftAccess) => a.aircraft_role !== undefined);
                               return (<>
                                 <div className="flex gap-2">
                                   <button onClick={() => { if (activeTier !== 'pilot') handleSetPilotAndDemoteAll(u.user_id); }} disabled={isSubmitting} className={`flex-1 text-[10px] font-bold uppercase tracking-widest py-2 rounded transition-colors active:scale-95 disabled:opacity-50 ${activeTier === 'pilot' ? 'bg-[#56B94A] text-white' : 'border border-gray-300 text-gray-500 hover:bg-gray-100'}`}>Pilot</button>
@@ -603,7 +622,7 @@ export default function AdminModals({
                                     <p className="text-[10px] font-bold uppercase tracking-widest text-[#3AB0FF] mb-2">Admin on</p>
                                     {assignedAircraft.length > 0 ? (
                                       <div className="space-y-1.5">
-                                        {assignedAircraft.map((a: any) => (
+                                        {assignedAircraft.map((a: AdminUserAircraftAccess) => (
                                           <label key={a.aircraft_id} className="flex items-center gap-2 cursor-pointer">
                                             <input type="checkbox" checked={a.aircraft_role === 'admin'} onChange={() => handleChangeAircraftRole(u.user_id, a.aircraft_id, a.aircraft_role === 'admin' ? 'pilot' : 'admin')} disabled={isSubmitting} className="w-4 h-4 text-[#3AB0FF] border-gray-300 rounded shrink-0" />
                                             <span className="font-bold text-sm text-navy uppercase">{a.tail_number}</span>
@@ -624,7 +643,7 @@ export default function AdminModals({
                             <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Aircraft Access</p>
                             <div className="space-y-2 max-h-[30vh] overflow-y-auto">
                               {allAircraftList.map(ac => {
-                                const access = u.aircraft.find((a: any) => a.aircraft_id === ac.id);
+                                const access = u.aircraft.find((a: AdminUserAircraftAccess) => a.aircraft_id === ac.id);
                                 const hasAccess = !!access;
                                 return (
                                   <div key={ac.id} className="flex items-center gap-2">
