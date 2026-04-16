@@ -817,7 +817,14 @@ export default function AppShell({ session }: AppShellProps) {
                 navigateTab(tab.id as AppTab);
               }
             }} aria-label={tab.label} aria-current={isActive ? 'page' : undefined}
-              data-tour={tab.id === 'summary' ? 'summary' : tab.id === 'log' ? 'log' : tab.id === 'mx' ? 'maintenance' : undefined}
+              data-tour={
+                tab.id === 'summary' ? 'summary'
+                : tab.id === 'log' ? 'log'
+                : tab.id === 'calendar' ? 'calendar'
+                : tab.id === 'mx' ? 'maintenance'
+                : tab.id === 'more' ? 'more'
+                : undefined
+              }
               className={`flex-1 pb-1 flex flex-col items-center justify-center transition-all relative active:scale-95 ${isActive || (tab.id === 'log' && expandedNav === 'log') || (tab.id === 'mx' && expandedNav === 'mx') || (tab.id === 'more' && expandedNav === 'more') ? (tab.id === 'summary' ? 'text-navy' : getTabColor(tab.id)) : 'text-gray-400 hover:bg-gray-50'}`}>
               <div className="relative mb-1"><tab.icon size={20} />{tab.badge > 0 && <span className="absolute -top-1 -right-2 flex h-3 w-3"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#CE3732] opacity-75"></span><span className="relative inline-flex rounded-full h-3 w-3 bg-[#CE3732] text-[8px] text-white font-bold items-center justify-center border border-white"></span></span>}</div>
               <span className="text-[10px] font-bold uppercase tracking-widest">{tab.label}</span>
