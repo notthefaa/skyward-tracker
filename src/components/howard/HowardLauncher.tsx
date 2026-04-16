@@ -206,7 +206,7 @@ export default function HowardLauncher({ currentAircraft, userFleet = [], sessio
           onClick={() => setOpen(true)}
           aria-label="Ask Howard"
           title="Ask Howard"
-          className="fixed right-4 z-[9998] w-14 h-14 rounded-full bg-[#0EA5E9] text-white shadow-xl flex items-center justify-center hover:bg-[#0284C7] active:scale-95 transition-all border-2 border-white"
+          className="fixed right-4 z-[9998] w-14 h-14 rounded-full overflow-hidden shadow-xl active:scale-95 transition-all border-2 border-white"
           style={{
             // 5rem clears the bottom nav bar; add the iOS home-indicator
             // inset on notch devices so the FAB isn't half-hidden behind
@@ -215,7 +215,18 @@ export default function HowardLauncher({ currentAircraft, userFleet = [], sessio
             bottom: 'max(5rem, calc(env(safe-area-inset-bottom) + 5rem))',
           }}
         >
-          <HowardIcon size={28} style={{ color: 'white' }} />
+          {/* Full-bleed brand logo — the icon carries its own sunset
+           * palette and figure, so no cyan button fill underneath.
+           * overflow-hidden on the parent + full-size img lets the
+           * rounded-full clip the square SVG into a circular badge. */}
+          <img
+            src="/howard-logo.svg"
+            alt=""
+            width={56}
+            height={56}
+            className="w-full h-full object-cover"
+            draggable={false}
+          />
         </button>
       )}
 
