@@ -46,12 +46,19 @@ const logTrayItems = [
   { key: 'checks', label: 'Ops Checks', icon: Gauge, color: '#3AB0FF', soon: false },
 ] as const;
 
-/** MX secondary toolbar items */
+/** MX secondary toolbar items. "ADs" renders with a smaller lowercase
+ * 's' (airworthiness-directives convention — A and D are the acronym,
+ * 's' is the plural). The tray's uppercase CSS would flatten it to
+ * "ADS", so the 's' gets its own span with normal-case + reduced
+ * em-sized text. */
+const ADS_LABEL = (
+  <>AD<span className="normal-case text-[0.78em]">s</span></>
+);
 const mxTrayItems = [
   { key: 'due-items', label: 'Due Items', icon: ListChecks, color: '#F08B46', soon: false },
   { key: 'squawks', label: 'Squawks', icon: AlertTriangle, color: '#CE3732', soon: false },
   { key: 'service', label: 'Service', icon: Wrench, color: '#56B94A', soon: true },
-  { key: 'ads', label: 'ADs', icon: ShieldAlert, color: '#7C3AED', soon: false },
+  { key: 'ads', label: ADS_LABEL, icon: ShieldAlert, color: '#7C3AED', soon: false },
 ] as const;
 
 /** More secondary toolbar items. Howard Usage is reachable from inside
@@ -348,8 +355,11 @@ export default function AppShell({ session }: AppShellProps) {
     setShowAircraftModal(true);
   };
 
+  // Color for the rendered tab when the caller has already decided it's
+  // active. Don't re-check activeTab here — tab.id and activeTab don't
+  // always match (e.g., tab.id='log' while activeTab='times'), so a
+  // check here would incorrectly return gray on valid active states.
   const getTabColor = (id: string) => {
-    if (activeTab !== id) return 'text-gray-400 hover:bg-gray-50';
     const m: Record<string, string> = { summary: 'text-navy', log: 'text-[#3AB0FF]', times: 'text-[#3AB0FF]', calendar: 'text-[#56B94A]', mx: 'text-[#F08B46]', notes: 'text-[#525659]', more: 'text-[#525659]' };
     return m[id] || 'text-brandOrange';
   };
@@ -514,6 +524,7 @@ export default function AppShell({ session }: AppShellProps) {
         visible={expandedNav === 'log'}
         userId={session?.user?.id ?? null}
         storageKey="log"
+        selectedKey={activeTab === 'times' ? logSubTab : null}
         onSelect={(key) => {
           if (key === 'flights') setLogSubTab('flights');
           else if (key === 'checks') setLogSubTab('checks');
@@ -529,6 +540,12 @@ export default function AppShell({ session }: AppShellProps) {
         visible={expandedNav === 'mx'}
         userId={session?.user?.id ?? null}
         storageKey="mx"
+        selectedKey={
+          activeTab === 'ads' ? 'ads'
+          : activeTab === 'mx' && mxSubTab === 'maintenance' ? 'due-items'
+          : activeTab === 'mx' && mxSubTab === 'squawks' ? 'squawks'
+          : null
+        }
         onSelect={(key) => {
           if (key === 'due-items') { setMxSubTab('maintenance'); navigateTab('mx'); }
           else if (key === 'squawks') { setMxSubTab('squawks'); navigateTab('mx'); }
@@ -546,6 +563,13 @@ export default function AppShell({ session }: AppShellProps) {
         storageKey="more"
         unreadBadgeKey="notes"
         unreadCount={unreadNotes}
+        selectedKey={
+          activeTab === 'notes' ? 'notes'
+          : activeTab === 'documents' ? 'documents'
+          : activeTab === 'equipment' ? 'equipment'
+          : activeTab === 'howard' ? 'howard'
+          : null
+        }
         onSelect={(key) => {
           if (key === 'notes') navigateTab('notes');
           else if (key === 'howard') navigateTab('howard');

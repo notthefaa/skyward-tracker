@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, type ReactNode } from "react";
 import {
   DndContext,
   closestCenter,
@@ -25,7 +25,7 @@ type IconComponent = React.ComponentType<{ size?: number; style?: React.CSSPrope
 
 export interface TrayItem {
   key: string;
-  label: string;
+  label: ReactNode;
   icon: IconComponent;
   color: string;
   soon: boolean;
@@ -38,6 +38,11 @@ interface NavTrayProps {
   storageKey: string; // e.g. "mx" or "more"
   unreadBadgeKey?: string; // item key that should show a badge
   unreadCount?: number;
+  /** Currently-active tray destination. Rendered in navy (vs. the
+   * default gray-400 for inactive items) so the tray mirrors the
+   * main nav's "highlight where you are" affordance. Null when no
+   * tray destination is current. */
+  selectedKey?: string | null;
   onSelect: (key: string) => void;
   onClose: () => void;
 }
@@ -96,12 +101,14 @@ function SortableItem({
   reordering,
   unreadBadgeKey,
   unreadCount,
+  isSelected,
   onSelect,
 }: {
   item: TrayItem;
   reordering: boolean;
   unreadBadgeKey?: string;
   unreadCount?: number;
+  isSelected: boolean;
   onSelect: (key: string) => void;
 }) {
   const {
@@ -122,11 +129,17 @@ function SortableItem({
 
   const Icon = item.icon;
 
-  // Icon + label both render in navy (disabled items in gray). Matches
-  // the main bottom nav's typography and color scheme so the two bars
-  // read as a pair; the tray is distinguished only by its background
-  // shade (bg-[#F0EDE8]) — no per-item color accents.
-  const iconColor = item.soon && !reordering ? '#9CA3AF' : '#091F3C';
+  // Active item renders in navy; inactive items in gray-400. Matches
+  // the main bottom nav's "highlight where you are" pattern. The tray
+  // is distinguished from the main nav only by its background shade
+  // (bg-[#F0EDE8]) — no per-item color accents. Disabled ("soon") items
+  // always render in gray regardless of selection.
+  const iconColor = item.soon && !reordering
+    ? '#9CA3AF'
+    : isSelected ? '#091F3C' : '#9CA3AF';
+  const labelTextClass = item.soon && !reordering
+    ? 'text-gray-400'
+    : isSelected ? 'text-navy' : 'text-gray-400';
 
   return (
     <div
@@ -156,7 +169,7 @@ function SortableItem({
           </span>
         )}
       </div>
-      <span className={`text-[10px] font-bold uppercase tracking-widest leading-tight text-center whitespace-nowrap ${item.soon && !reordering ? 'text-gray-400' : 'text-navy'}`}>
+      <span className={`text-[10px] font-bold uppercase tracking-widest leading-tight text-center whitespace-nowrap ${labelTextClass}`}>
         {item.label}
       </span>
     </div>
@@ -172,6 +185,7 @@ export default function NavTray({
   storageKey,
   unreadBadgeKey,
   unreadCount,
+  selectedKey,
   onSelect,
   onClose,
 }: NavTrayProps) {
@@ -324,6 +338,7 @@ export default function NavTray({
                       reordering={reordering}
                       unreadBadgeKey={unreadBadgeKey}
                       unreadCount={unreadCount}
+                      isSelected={item.key === selectedKey}
                       onSelect={onSelect}
                     />
                   ))}

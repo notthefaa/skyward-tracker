@@ -6,7 +6,7 @@ import { swrKeys } from "@/lib/swrKeys";
 import type { AircraftWithMetrics, VorCheck, TireCheck, OilLog } from "@/lib/types";
 import useSWR from "swr";
 import dynamic from "next/dynamic";
-import { AlertTriangle, Droplets, Compass } from "lucide-react";
+import { AlertTriangle, Droplets, Compass, Plus } from "lucide-react";
 import { TireIcon } from "@/components/shell/TrayIcons";
 import { TabSkeleton } from "@/components/Skeletons";
 
@@ -291,19 +291,21 @@ export default function ChecksTab({ aircraft, session, role, userInitials }: Pro
   // PrimaryButton from AppButtons (bg-navy / white text / font-oswald /
   // uppercase / tracking-widest / rounded / active:scale-95) so the
   // dial buttons sit in the same visual family as every other Log
-  // button in the app — just smaller to fit under a 90px gauge.
+  // button in the app — just smaller weight/size to fit under a
+  // 90px gauge. Uses the same Plus lead-icon PrimaryButton callers
+  // pass through so the affordance reads as "add a new entry".
   const DialAction = ({ label, onPress }: { label: string; onPress: () => void }) => (
     <button
       type="button"
       onClick={(e) => { e.stopPropagation(); onPress(); }}
-      className="bg-navy text-white font-oswald font-bold tracking-widest uppercase py-2 px-3 rounded hover:bg-opacity-90 active:scale-95 transition-all duration-150 ease-out flex items-center justify-center text-[11px] whitespace-nowrap"
+      className="bg-navy text-white font-oswald tracking-widest uppercase py-2 px-3 rounded hover:bg-opacity-90 active:scale-95 transition-all duration-150 ease-out flex items-center justify-center gap-1.5 text-[11px] whitespace-nowrap"
     >
-      {label}
+      <Plus size={12} /> {label}
     </button>
   );
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-6">
       {/* Dashboard: centered hint, three dials in a 3-column grid,
        * and a parallel 3-column grid of Log buttons below. Using
        * grid-cols-3 on both rows keeps the buttons vertically
