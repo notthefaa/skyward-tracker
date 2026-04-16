@@ -11,6 +11,7 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 import { env } from './env';
+import { getRequestId, logError } from './requestId';
 import type { AppRole } from './types';
 
 // Use a permissive generic so all .from() calls work without a generated schema
@@ -19,6 +20,7 @@ type AdminClient = SupabaseClient<any, any, any>;
 interface AuthResult {
   user: { id: string; email?: string };
   supabaseAdmin: AdminClient;
+  requestId: string;
 }
 
 /**
@@ -47,10 +49,11 @@ export function createAdminClient(): AdminClient {
  * @param requiredRole - If provided, the user must have this role in aft_user_roles
  */
 export async function requireAuth(req: Request, requiredRole?: AppRole): Promise<AuthResult> {
+  const requestId = getRequestId(req);
   const token = extractToken(req);
 
   if (!token) {
-    throw { status: 401, message: 'Authentication required. No token provided.' };
+    throw { status: 401, message: 'Authentication required. No token provided.', requestId };
   }
 
   const supabaseAdmin = createAdminClient();
@@ -59,7 +62,7 @@ export async function requireAuth(req: Request, requiredRole?: AppRole): Promise
   const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
 
   if (error || !user) {
-    throw { status: 401, message: 'Invalid or expired session. Please log in again.' };
+    throw { status: 401, message: 'Invalid or expired session. Please log in again.', requestId };
   }
 
   // If a specific role is required, check aft_user_roles
@@ -71,15 +74,15 @@ export async function requireAuth(req: Request, requiredRole?: AppRole): Promise
       .single();
 
     if (roleError || !roleData) {
-      throw { status: 403, message: 'User role not found.' };
+      throw { status: 403, message: 'User role not found.', requestId };
     }
 
     if (roleData.role !== requiredRole) {
-      throw { status: 403, message: `This action requires ${requiredRole} privileges.` };
+      throw { status: 403, message: `This action requires ${requiredRole} privileges.`, requestId };
     }
   }
 
-  return { user: { id: user.id, email: user.email }, supabaseAdmin };
+  return { user: { id: user.id, email: user.email }, supabaseAdmin, requestId };
 }
 
 /**
@@ -153,21 +156,32 @@ export async function requireAircraftAdmin(
 /**
  * Standard error response builder for API routes.
  * Handles both auth errors (thrown by requireAuth) and generic errors.
+ *
+ * Pass `req` when available — it lets the response body include a
+ * requestId the user can quote in a support report, and routes the
+ * error to Sentry with matching correlation tags. Backward-compatible
+ * when omitted (older call sites keep working).
  */
-export function handleApiError(error: unknown): NextResponse {
-  // Auth errors thrown by requireAuth
+export function handleApiError(error: unknown, req?: Request): NextResponse {
+  const requestId = (
+    typeof error === 'object' && error !== null && 'requestId' in error
+      ? (error as { requestId?: string }).requestId
+      : undefined
+  ) || (req ? getRequestId(req) : undefined);
+
+  // Auth errors thrown by requireAuth — these are expected, don't log.
   if (typeof error === 'object' && error !== null && 'status' in error && 'message' in error) {
     const authError = error as { status: number; message: string };
     return NextResponse.json(
-      { error: authError.message },
-      { status: authError.status }
+      { error: authError.message, ...(requestId ? { requestId } : {}) },
+      { status: authError.status, headers: requestId ? { 'x-request-id': requestId } : undefined }
     );
   }
 
-  // Generic errors — don't leak internals to the client
-  console.error('[API Error]', error);
+  // Unexpected errors — log structured and forward to Sentry when wired.
+  logError('[API Error]', error, { requestId, route: req?.url });
   return NextResponse.json(
-    { error: 'An unexpected error occurred. Please try again.' },
-    { status: 500 }
+    { error: 'An unexpected error occurred. Please try again.', ...(requestId ? { requestId } : {}) },
+    { status: 500, headers: requestId ? { 'x-request-id': requestId } : undefined }
   );
 }
