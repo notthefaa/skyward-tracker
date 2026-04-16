@@ -189,6 +189,10 @@ export default function HowardTab({
 
     try {
       const { data: { session: s } } = await supabase.auth.getSession();
+      // Send the pilot's IANA timezone so Howard can resolve relative
+      // times ("9am today", "tomorrow 7pm") without asking. Falls back
+      // to UTC on the server if absent.
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
       const res = await fetch('/api/howard', {
         method: 'POST',
         headers: {
@@ -198,6 +202,7 @@ export default function HowardTab({
         body: JSON.stringify({
           message: msg,
           currentTail: currentAircraft?.tail_number ?? null,
+          timeZone: tz,
         }),
       });
 

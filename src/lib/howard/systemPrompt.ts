@@ -82,18 +82,21 @@ For flight briefings, keep the top-level reply tight — the UI surfaces follow-
 
 Truncated results: if a tool response includes a \`_truncated\` field, the data you got back is incomplete — the full list was too large for context and got trimmed. Tell the user you only looked at a subset (e.g. "I only checked the 30 most recent logs") and suggest a tighter filter (date range, status, \`limit\`) if they need more. Never present a partial list as complete.
 
-Writes go through propose_* tools (all take \`tail\`; reservation, mx_schedule, squawk_resolve, note, equipment). They render a Confirm/Cancel card — don't ask the user to "say yes". Missing detail? Ask first. propose_mx_schedule and propose_equipment_entry need aircraft-admin.`;
+Writes go through propose_* tools (all take \`tail\`; reservation, mx_schedule, squawk_resolve, note, equipment). They render a Confirm/Cancel card — don't ask the user to "say yes". Pull from the per-request context silently where possible: **pilot initials** (on the "Pilot initials" line) and the **current date/time/timezone** (on the "Now" line) are given to you — never ask the pilot for their own initials or today's date. Only ask for things that aren't in context AND aren't inferable from the pilot's message (e.g., the specific start time if they say just "a reservation tomorrow"). propose_mx_schedule and propose_equipment_entry need aircraft-admin.`;
 
 /**
  * Per-request user context — the user's aircraft list, currently-
- * selected tail (with IFR capability), role, and FAA ratings.
- * Short; not cached.
+ * selected tail (with IFR capability), role, FAA ratings, pilot
+ * initials, and "now" in the pilot's local timezone. Short; not cached.
  */
 export function buildUserContext(
   userAircraft: Aircraft[],
   currentAircraft: Aircraft | null,
   userRole: string,
   faaRatings: string[] = [],
+  pilotInitials: string = '',
+  timeZone: string = 'UTC',
+  now: Date = new Date(),
 ): string {
   const lines: string[] = [];
 
@@ -102,6 +105,49 @@ export function buildUserContext(
     : a.is_ifr_equipped === false ? 'VFR-only'
     : 'IFR status unknown';
 
+  // Localized "now" so Howard can resolve relative times ("9am today",
+  // "tomorrow 7pm") without asking. Also provides the IANA zone so
+  // date math elsewhere in the reply lines up with what the pilot
+  // sees on their clock.
+  const localNow = (() => {
+    try {
+      return new Intl.DateTimeFormat('en-US', {
+        timeZone,
+        year: 'numeric', month: 'short', day: 'numeric',
+        hour: 'numeric', minute: '2-digit',
+        weekday: 'short',
+        timeZoneName: 'short',
+      }).format(now);
+    } catch {
+      return now.toISOString();
+    }
+  })();
+  const isoLocalDate = (() => {
+    try {
+      const parts = new Intl.DateTimeFormat('en-CA', {
+        timeZone, year: 'numeric', month: '2-digit', day: '2-digit',
+      }).formatToParts(now);
+      const y = parts.find(p => p.type === 'year')?.value;
+      const m = parts.find(p => p.type === 'month')?.value;
+      const d = parts.find(p => p.type === 'day')?.value;
+      return y && m && d ? `${y}-${m}-${d}` : now.toISOString().slice(0, 10);
+    } catch {
+      return now.toISOString().slice(0, 10);
+    }
+  })();
+
+  lines.push(`## Now: ${localNow} (ISO date in pilot's zone: ${isoLocalDate}; timezone: ${timeZone}; absolute: ${now.toISOString()})`);
+  lines.push(`Use this to resolve any relative time ("today", "tomorrow", "9am", "next Tuesday"). Don't ask the pilot for the date — you have it.`);
+
+  if (pilotInitials) {
+    lines.push(`\n## Pilot initials: ${pilotInitials}`);
+    lines.push(`When a propose_* tool asks for pilot_initials, use this value silently. Don't ask.`);
+  } else {
+    lines.push(`\n## Pilot initials: not recorded`);
+    lines.push(`If a propose_* tool needs pilot_initials, ask for them once — then they stay available for the rest of the conversation.`);
+  }
+
+  lines.push('');
   if (userAircraft.length === 0) {
     lines.push("## User's fleet\nThis user doesn't have any aircraft yet. Be helpful for general aviation questions, but don't try to run aircraft-scoped tools.");
   } else {

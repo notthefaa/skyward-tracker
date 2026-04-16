@@ -89,7 +89,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const { user, supabaseAdmin } = await requireAuth(req);
-    const { message, currentTail } = await req.json();
+    const { message, currentTail, timeZone } = await req.json();
 
     if (!message || typeof message !== 'string' || message.trim().length === 0) {
       return NextResponse.json({ error: 'Message is required.' }, { status: 400 });
@@ -141,16 +141,17 @@ export async function POST(req: Request) {
       currentAircraft = userAircraft.find((a: any) => a.tail_number === normalized) || null;
     }
 
-    // User role + FAA ratings — global first, else fall back to per-
-    // aircraft role for the currently-selected aircraft (or 'pilot'
-    // if none). Ratings come straight from the profile.
+    // User role + FAA ratings + initials — global first, else fall back
+    // to per-aircraft role for the currently-selected aircraft (or
+    // 'pilot' if none). Ratings + initials come straight from the profile.
     const { data: profile } = await supabaseAdmin
       .from('aft_user_roles')
-      .select('role, faa_ratings')
+      .select('role, faa_ratings, initials')
       .eq('user_id', user.id)
       .maybeSingle();
     let userRole: string = (profile as any)?.role || 'pilot';
     const faaRatings: string[] = ((profile as any)?.faa_ratings as string[] | null) || [];
+    const pilotInitials: string = (profile as any)?.initials || '';
     if (userRole !== 'admin' && currentAircraft) {
       const { data: acAccess } = await supabaseAdmin
         .from('aft_user_aircraft_access')
@@ -214,6 +215,8 @@ export async function POST(req: Request) {
             currentAircraft,
             userRole,
             faaRatings,
+            pilotInitials,
+            typeof timeZone === 'string' && timeZone ? timeZone : 'UTC',
             user.id,
             threadId,
             supabaseAdmin,
