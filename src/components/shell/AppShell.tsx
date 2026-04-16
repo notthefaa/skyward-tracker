@@ -6,6 +6,7 @@ import { authFetch } from "@/lib/authFetch";
 import { useFleetData, useRealtimeSync, useGroundedStatus, useAircraftRole, usePullToRefresh } from "@/hooks";
 import { useModalScrollLock } from "@/hooks/useModalScrollLock";
 import { NETWORK_TIMEOUT_MS } from "@/lib/constants";
+import { swrKeys } from "@/lib/swrKeys";
 import { useToast } from "@/components/ToastProvider";
 import dynamic from "next/dynamic";
 import type { AircraftWithMetrics, AppTab, LogSubTab } from "@/lib/types";
@@ -172,6 +173,25 @@ export default function AppShell({ session }: AppShellProps) {
     [session, refreshForAircraft]
   );
   useRealtimeSync(session, boundRefresh, globalMutate);
+
+  // ─── Howard resets on fresh sign-in ───
+  // Every new auth SIGNED_IN event (distinct from INITIAL_SESSION,
+  // which fires on page reload with an existing token) clears the
+  // user's Howard thread so a fresh login starts with a blank
+  // conversation. Delete happens server-side; the SWR cache is
+  // optimistically reset so the UI flips to empty immediately.
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, sess) => {
+      if (event !== 'SIGNED_IN' || !sess?.user?.id) return;
+      try {
+        await authFetch('/api/howard', { method: 'DELETE' });
+      } catch {
+        // Non-blocking — the client-side cache flush below still happens.
+      }
+      globalMutate(swrKeys.howardUser(sess.user.id), { thread: null, messages: [] }, false);
+    });
+    return () => subscription.unsubscribe();
+  }, [globalMutate]);
 
   // ─── Pull to Refresh ───
   const handlePullRefresh = useCallback(async () => {

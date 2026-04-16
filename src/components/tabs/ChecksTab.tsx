@@ -287,20 +287,21 @@ export default function ChecksTab({ aircraft, session, role, userInitials }: Pro
     ref.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
-  // Compact "Log X" button under each dial. Styling mirrors
-  // PrimaryButton from AppButtons (bg-navy / white text / font-oswald /
-  // uppercase / tracking-widest / rounded / active:scale-95) so the
-  // dial buttons sit in the same visual family as every other Log
-  // button in the app — just smaller weight/size to fit under a
-  // 90px gauge. Uses the same Plus lead-icon PrimaryButton callers
-  // pass through so the affordance reads as "add a new entry".
+  // "Log X" button under each dial. Styling mirrors PrimaryButton
+  // from AppButtons (bg-navy / white / font-oswald / uppercase /
+  // tracking-widest / rounded / py-3 / active:scale-95 / Plus lead
+  // icon) so the dial buttons sit in the same visual family as
+  // every other Log button in the app — same vertical height via
+  // py-3, slightly smaller text (text-xs vs text-sm) only because
+  // the column width under a 90px gauge can't accommodate the
+  // full-size label + icon without wrapping.
   const DialAction = ({ label, onPress }: { label: string; onPress: () => void }) => (
     <button
       type="button"
       onClick={(e) => { e.stopPropagation(); onPress(); }}
-      className="bg-navy text-white font-oswald tracking-widest uppercase py-2 px-3 rounded hover:bg-opacity-90 active:scale-95 transition-all duration-150 ease-out flex items-center justify-center gap-1.5 text-[11px] whitespace-nowrap"
+      className="bg-navy text-white font-oswald tracking-widest uppercase py-3 px-3 rounded hover:bg-opacity-90 active:scale-95 transition-all duration-150 ease-out flex items-center justify-center gap-2 text-xs whitespace-nowrap"
     >
-      <Plus size={12} /> {label}
+      <Plus size={14} /> {label}
     </button>
   );
 

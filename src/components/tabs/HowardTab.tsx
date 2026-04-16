@@ -8,7 +8,7 @@ import { swrKeys } from "@/lib/swrKeys";
 import type { AircraftWithMetrics } from "@/lib/types";
 import type { HowardMessage } from "@/lib/howard/types";
 import useSWR from "swr";
-import { Send, Wrench, Globe, CloudSun, FileSearch, Database, BarChart3, Trash2 } from "lucide-react";
+import { Send, Wrench, Globe, CloudSun, FileSearch, Database, BarChart3, Trash2, X } from "lucide-react";
 import { HowardIcon } from "@/components/shell/TrayIcons";
 import { useToast } from "@/components/ToastProvider";
 import { useConfirm } from "@/components/ConfirmProvider";
@@ -108,6 +108,12 @@ export default function HowardTab({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   // Prevents the single-aircraft auto-confirm effect from firing twice.
   const autoConfirmedTailRef = useRef<string | null>(null);
+  // Tracks the last aircraft tail we showed the "you switched to…"
+  // banner for. When currentAircraft.tail_number differs from this,
+  // and there are actual messages in the thread, the banner appears.
+  // Null until we've had at least one conversation with an aircraft
+  // in context.
+  const [acknowledgedTail, setAcknowledgedTail] = useState<string | null>(null);
 
   const userId = session?.user?.id;
   const { data, mutate } = useSWR(
@@ -410,6 +416,32 @@ export default function HowardTab({
 
   const toolInfo = activeToolName ? toolLabel(activeToolName) : null;
 
+  // Aircraft-switch detection. Initialize the baseline once we have
+  // both an aircraft context and a non-empty thread. When the selected
+  // tail diverges from that baseline, show the switch banner.
+  const currentTail = currentAircraft?.tail_number || null;
+  useEffect(() => {
+    if (acknowledgedTail === null && currentTail && messages.length > 0) {
+      setAcknowledgedTail(currentTail);
+    }
+  }, [currentTail, messages.length, acknowledgedTail]);
+  const showSwitchBanner =
+    currentTail != null &&
+    acknowledgedTail != null &&
+    currentTail !== acknowledgedTail &&
+    messages.length > 0 &&
+    !isSending;
+
+  // Quick prompts offered when the pilot switches aircraft mid-
+  // conversation. Keeps parity with the HowardLauncher menu so the
+  // pilot gets the same four angles they'd get from the FAB.
+  const aircraftSwitchPrompts: { label: string; prompt: string }[] = [
+    { label: 'Airworthiness', prompt: `Is my aircraft airworthy right now? Walk me through it.` },
+    { label: 'Maintenance', prompt: `What's the maintenance picture — anything overdue, due soon, open squawks, ADs to act on? Order by urgency.` },
+    { label: 'Recent activity', prompt: `What's been happening the last 30 days — flights, squawks, MX work?` },
+    { label: 'Book time', prompt: `I'd like to book some time. Ask me for the details you need.` },
+  ];
+
   return (
     <div className="flex flex-col h-full">
       {/* Header — hidden in compact mode (the launcher popup has its own) */}
@@ -653,6 +685,43 @@ export default function HowardTab({
           </div>
         )}
       </div>
+
+      {/* Aircraft-switch banner — appears above the input when the
+       * pilot changes tail mid-conversation. Re-offers the same
+       * angles the FAB quick-prompts present. */}
+      {showSwitchBanner && (
+        <div className="mb-2 bg-[#0EA5E9]/5 border border-[#0EA5E9]/30 rounded-lg p-3 animate-fade-in">
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <span className="text-[10px] font-bold uppercase tracking-widest text-navy">
+              Switched to <code className="font-mono text-[#0EA5E9] normal-case">{currentTail}</code>
+              {' — '}want me to check?
+            </span>
+            <button
+              onClick={() => setAcknowledgedTail(currentTail)}
+              className="text-gray-400 hover:text-navy p-1 -m-1 shrink-0"
+              aria-label="Dismiss"
+            >
+              <X size={14} />
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {aircraftSwitchPrompts.map(p => (
+              <button
+                key={p.label}
+                onClick={() => {
+                  setAcknowledgedTail(currentTail);
+                  setFollowUps([]);
+                  setAwaitingAircraftChoice(false);
+                  handleSend(p.prompt);
+                }}
+                className="text-[11px] font-roboto font-medium text-[#0EA5E9] bg-white border border-[#0EA5E9]/40 rounded-full px-3 py-1.5 hover:bg-[#0EA5E9]/10 active:scale-95 transition-all"
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Input */}
       <div className="flex gap-2 items-end">
