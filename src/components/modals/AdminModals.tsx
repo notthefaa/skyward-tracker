@@ -149,8 +149,26 @@ export default function AdminModals({
 
   const toggleAccess = async (aircraftId: string, hasAccess: boolean) => {
     if (!selectedAccessUserId) return;
-    if (hasAccess) { setUserAccessList(prev => prev.filter(id => id !== aircraftId)); await supabase.from('aft_user_aircraft_access').delete().match({ user_id: selectedAccessUserId, aircraft_id: aircraftId }); }
-    else { setUserAccessList(prev => [...prev, aircraftId]); await supabase.from('aft_user_aircraft_access').insert({ user_id: selectedAccessUserId, aircraft_id: aircraftId }); }
+    // Optimistic update, then reconcile with server. If the write fails
+    // the UI would otherwise drift from the DB — flip the local state
+    // back and surface a toast so the admin knows to retry.
+    if (hasAccess) {
+      setUserAccessList(prev => prev.filter(id => id !== aircraftId));
+      const { error } = await supabase.from('aft_user_aircraft_access')
+        .delete().match({ user_id: selectedAccessUserId, aircraft_id: aircraftId });
+      if (error) {
+        setUserAccessList(prev => prev.includes(aircraftId) ? prev : [...prev, aircraftId]);
+        showError("Failed to revoke access: " + error.message);
+      }
+    } else {
+      setUserAccessList(prev => [...prev, aircraftId]);
+      const { error } = await supabase.from('aft_user_aircraft_access')
+        .insert({ user_id: selectedAccessUserId, aircraft_id: aircraftId });
+      if (error) {
+        setUserAccessList(prev => prev.filter(id => id !== aircraftId));
+        showError("Failed to grant access: " + error.message);
+      }
+    }
   };
 
   const toggleInviteAircraft = (id: string) => { setInviteAircraftIds(prev => prev.includes(id) ? prev.filter(a => a !== id) : [...prev, id]); };
@@ -208,16 +226,25 @@ export default function AdminModals({
   const openUsersModal = async () => {
     setShowAdminMenu(false); setShowUsersModal(true); setIsLoadingUsers(true);
     try {
-      const res = await authFetch('/api/admin/users'); const data = await res.json();
+      const res = await authFetch('/api/admin/users');
+      const data = await res.json();
       if (res.ok) setGlobalUsers(data.users || []);
-    } catch {} setIsLoadingUsers(false);
+      else showError(data.error || 'Failed to load users.');
+    } catch (e: any) {
+      showError('Failed to load users: ' + (e?.message || 'unknown error'));
+    }
+    setIsLoadingUsers(false);
   };
 
   const refreshUsers = async () => {
     try {
-      const res = await authFetch('/api/admin/users'); const data = await res.json();
+      const res = await authFetch('/api/admin/users');
+      const data = await res.json();
       if (res.ok) setGlobalUsers(data.users || []);
-    } catch {}
+      else showError(data.error || 'Failed to refresh users.');
+    } catch (e: any) {
+      showError('Failed to refresh users: ' + (e?.message || 'unknown error'));
+    }
   };
 
   const handleChangeGlobalRole = async (userId: string, newRole: 'admin' | 'pilot') => {
@@ -281,7 +308,9 @@ export default function AdminModals({
         const res = await authFetch('/api/aircraft-access', { method: 'DELETE', body: JSON.stringify({ targetUserId: userId, aircraftId }) });
         if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Failed'); }
       } else {
-        await supabase.from('aft_user_aircraft_access').insert({ user_id: userId, aircraft_id: aircraftId });
+        const { error } = await supabase.from('aft_user_aircraft_access')
+          .insert({ user_id: userId, aircraft_id: aircraftId });
+        if (error) throw error;
       }
       await refreshUsers();
     } catch (e: any) { showError(e.message); }

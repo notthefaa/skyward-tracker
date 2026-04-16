@@ -195,8 +195,10 @@ const handlers: Record<string, ToolHandler> = {
       .limit(5);
 
     const lastUpdated = (ac as any).fuel_last_updated;
+    // Floor at 0 — a future timestamp (clock skew, manual edit) would
+    // otherwise surface as "-3 days stale" which misleads the pilot.
     const staleDays = lastUpdated
-      ? Math.floor((Date.now() - new Date(lastUpdated).getTime()) / 86400000)
+      ? Math.max(0, Math.floor((Date.now() - new Date(lastUpdated).getTime()) / 86400000))
       : null;
 
     return {
@@ -250,6 +252,7 @@ const handlers: Record<string, ToolHandler> = {
     let query = sb.from('aft_reservations')
       .select('*')
       .eq('aircraft_id', aircraftId)
+      .is('deleted_at', null)
       .order('start_time', { ascending: true });
     if (params.status) query = query.eq('status', params.status);
     else query = query.eq('status', 'confirmed');

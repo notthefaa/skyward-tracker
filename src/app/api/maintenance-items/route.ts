@@ -33,6 +33,18 @@ export async function PUT(req: Request) {
     if (!itemId || !aircraftId) return NextResponse.json({ error: 'Item ID and Aircraft ID required.' }, { status: 400 });
     await requireAircraftAdmin(supabaseAdmin, user.id, aircraftId);
 
+    // Verify the item actually belongs to the aircraft the caller is admin
+    // on — otherwise an admin of aircraft A could update any item across
+    // the whole fleet by supplying A's id + any itemId.
+    const { data: existing } = await supabaseAdmin
+      .from('aft_maintenance_items')
+      .select('aircraft_id, deleted_at')
+      .eq('id', itemId)
+      .maybeSingle();
+    if (!existing || existing.aircraft_id !== aircraftId || existing.deleted_at) {
+      return NextResponse.json({ error: 'Maintenance item not found for this aircraft.' }, { status: 404 });
+    }
+
     await setAppUser(supabaseAdmin, user.id);
     const { error } = await supabaseAdmin.from('aft_maintenance_items').update(itemData).eq('id', itemId);
     if (error) throw error;
@@ -48,6 +60,17 @@ export async function DELETE(req: Request) {
     const { itemId, aircraftId } = await req.json();
     if (!itemId || !aircraftId) return NextResponse.json({ error: 'Item ID and Aircraft ID required.' }, { status: 400 });
     await requireAircraftAdmin(supabaseAdmin, user.id, aircraftId);
+
+    // Same cross-aircraft guard as PUT — fetch the row and require its
+    // aircraft_id matches the aircraft the caller's admin on.
+    const { data: existing } = await supabaseAdmin
+      .from('aft_maintenance_items')
+      .select('aircraft_id, deleted_at')
+      .eq('id', itemId)
+      .maybeSingle();
+    if (!existing || existing.aircraft_id !== aircraftId || existing.deleted_at) {
+      return NextResponse.json({ error: 'Maintenance item not found for this aircraft.' }, { status: 404 });
+    }
 
     await setAppUser(supabaseAdmin, user.id);
     const { error } = await supabaseAdmin

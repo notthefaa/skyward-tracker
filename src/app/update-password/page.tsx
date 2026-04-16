@@ -68,31 +68,40 @@ export default function UpdatePassword() {
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
-    
+
     if (!session) {
       showError("Security session lost. Please close this window and click your invite link again.");
       setIsSubmitting(false);
       return;
     }
-    
-    // 1. Save the new password via Supabase Auth
-    const { error: pwdError } = await supabase.auth.updateUser({ password });
-    
-    if (pwdError) {
-      showError("Error updating password: " + pwdError.message);
+
+    try {
+      // 1. Save the new password via Supabase Auth
+      const { error: pwdError } = await supabase.auth.updateUser({ password });
+      if (pwdError) {
+        showError("Error updating password: " + pwdError.message);
+        return;
+      }
+
+      // 2. Save their profile fields to aft_user_roles. Bubble errors to
+      // the user instead of silently redirecting with half-saved state.
+      const { error: profileError } = await supabase.from('aft_user_roles').update({
+        initials: initials.toUpperCase(),
+        email: session.user.email,
+        full_name: fullName.trim(),
+      }).eq('user_id', session.user.id);
+      if (profileError) {
+        showError("Error saving profile: " + profileError.message);
+        return;
+      }
+
+      // 3. Send them to the main dashboard!
+      window.location.href = "/";
+    } catch (err: any) {
+      showError("Something went wrong: " + (err?.message || 'unknown error'));
+    } finally {
       setIsSubmitting(false);
-      return;
     }
-
-    // 2. Save their profile fields to aft_user_roles (the canonical user table).
-    await supabase.from('aft_user_roles').update({
-      initials: initials.toUpperCase(),
-      email: session.user.email,
-      full_name: fullName.trim(),
-    }).eq('user_id', session.user.id);
-
-    // 3. Send them to the main dashboard!
-    window.location.href = "/";
   };
 
   const handleRequestNewLink = async (e: React.FormEvent) => {
