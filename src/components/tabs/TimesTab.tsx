@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { authFetch } from "@/lib/authFetch";
+import { swrKeys } from "@/lib/swrKeys";
 import type { AircraftWithMetrics } from "@/lib/types";
 import useSWR from "swr";
 import { Download, ChevronLeft, ChevronRight, Plus, X, Edit2, Trash2, Info, MapPin } from "lucide-react";
@@ -23,7 +24,7 @@ export default function TimesTab({
   const [logPage, setLogPage] = useState(1);
   
   const { data, mutate } = useSWR(
-    aircraft ? `times-${aircraft.id}-${logPage}` : null,
+    aircraft ? swrKeys.times(aircraft.id, logPage) : null,
     async () => {
       const pageSize = 10;
       const from = (logPage - 1) * pageSize;

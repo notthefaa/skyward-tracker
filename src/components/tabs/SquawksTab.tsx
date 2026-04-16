@@ -2,6 +2,7 @@ import { useState, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import { authFetch } from "@/lib/authFetch";
 import { validateFileSizes, MAX_UPLOAD_SIZE_LABEL } from "@/lib/constants";
+import { swrKeys } from "@/lib/swrKeys";
 import type { AircraftWithMetrics, AircraftRole } from "@/lib/types";
 import useSWR from "swr";
 import { AlertTriangle, Plus, X, Upload, Mail, Edit2, ChevronLeft, ChevronRight, Download, CheckSquare, Trash2, CheckCircle, Link2, Clock, MapPin, User } from "lucide-react";
@@ -20,7 +21,7 @@ export default function SquawksTab({
   aircraft: AircraftWithMetrics | null, session: any, role: string, aircraftRole: AircraftRole | null, userInitials: string, onGroundedStatusChange: () => void 
 }) {
   const { data: squawks = [], mutate } = useSWR(
-    aircraft ? `squawks-${aircraft.id}` : null,
+    aircraft ? swrKeys.squawks(aircraft.id) : null,
     async () => {
       const { data } = await supabase
         .from('aft_squawks').select('*').eq('aircraft_id', aircraft!.id)

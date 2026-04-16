@@ -3,6 +3,7 @@ import { supabase } from "@/lib/supabase";
 import { processMxItem } from "@/lib/math";
 import { computeAirworthinessStatus } from "@/lib/airworthiness";
 import type { AircraftWithMetrics } from "@/lib/types";
+import { swrKeys } from "@/lib/swrKeys";
 import useSWR from "swr";
 import dynamic from "next/dynamic";
 import { PlaneTakeoff, Wrench, AlertTriangle, Droplet, Clock, LayoutGrid, Calendar } from "lucide-react";
@@ -51,7 +52,7 @@ export default function FleetSummary({
 }) {
   const [fleetView, setFleetView] = useState<FleetView>('fleet');
   const { data: fleetData = [], isLoading } = useSWR(
-    aircraftList.length > 0 ? `fleet-${aircraftList.length}-${aircraftList.map(a => a.id).join(',')}` : null,
+    aircraftList.length > 0 ? swrKeys.fleet(aircraftList.length, aircraftList.map(a => a.id).join(',')) : null,
     async () => {
       const aircraftIds = aircraftList.map(a => a.id);
 

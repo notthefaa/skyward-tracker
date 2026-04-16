@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { enrichAircraftWithMetrics } from "@/lib/math";
 import { useSWRConfig } from "swr";
 import { FLIGHT_DATA_LOOKBACK_DAYS } from "@/lib/constants";
+import { matchesAircraft } from "@/lib/swrKeys";
 import type { AircraftWithMetrics, SystemSettings, AppRole } from "@/lib/types";
 
 /**
@@ -199,11 +200,7 @@ export function useFleetData() {
       setAircraftList(prev => prev.map(a => a.id === aircraftId ? up : a));
     }
 
-    globalMutate(
-      (key: any) => typeof key === 'string' && key.includes(aircraftId),
-      undefined,
-      { revalidate: true }
-    );
+    globalMutate(matchesAircraft(aircraftId), undefined, { revalidate: true });
   }, [globalMutate]);
 
   return {

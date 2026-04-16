@@ -9,6 +9,7 @@ import { useToast } from "@/components/ToastProvider";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { useModalScrollLock } from "@/hooks/useModalScrollLock";
 import { INPUT_WHITE_BG } from "@/lib/styles";
+import { swrKeys } from "@/lib/swrKeys";
 import type { AircraftWithMetrics, AirworthinessDirective, AircraftRole } from "@/lib/types";
 
 interface Props {
@@ -31,7 +32,7 @@ export default function ADsTab({ aircraft, role, aircraftRole }: Props) {
   const [isSyncing, setIsSyncing] = useState(false);
 
   const { data, mutate } = useSWR(
-    aircraft ? `ads-${aircraft.id}` : null,
+    aircraft ? swrKeys.ads(aircraft.id) : null,
     async () => {
       const res = await authFetch(`/api/ads?aircraftId=${aircraft!.id}`);
       if (!res.ok) throw new Error('Failed to load ADs');

@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from "react";
 import { authFetch } from "@/lib/authFetch";
+import { swrKeys } from "@/lib/swrKeys";
 import type { AircraftWithMetrics, AircraftDocument, DocType } from "@/lib/types";
 import useSWR from "swr";
 import { Upload, Trash2, FileText, Loader2, CheckCircle, AlertCircle } from "lucide-react";
@@ -33,7 +34,7 @@ export default function DocumentsTab({
   const [docType, setDocType] = useState<DocType>('POH');
 
   const { data, mutate } = useSWR(
-    aircraft ? `docs-${aircraft.id}` : null,
+    aircraft ? swrKeys.docs(aircraft.id) : null,
     async () => {
       const res = await authFetch(`/api/documents?aircraftId=${aircraft!.id}`);
       if (!res.ok) throw new Error('Failed to load documents');

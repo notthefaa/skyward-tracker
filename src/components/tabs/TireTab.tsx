@@ -1,6 +1,7 @@
 import { useState, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { authFetch } from "@/lib/authFetch";
+import { swrKeys } from "@/lib/swrKeys";
 import type { AircraftWithMetrics, TireCheck } from "@/lib/types";
 import useSWR from "swr";
 import { Plus, X, Trash2, ChevronLeft, ChevronRight } from "lucide-react";
@@ -35,7 +36,7 @@ export default function TireTab({
   const [notes, setNotes] = useState('');
 
   const { data, mutate } = useSWR(
-    aircraft ? `tire-${aircraft.id}-${page}` : null,
+    aircraft ? swrKeys.tire(aircraft.id, page) : null,
     async () => {
       const from = (page - 1) * PAGE_SIZE;
       const to = from + PAGE_SIZE;

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { authFetch } from "@/lib/authFetch";
 import { validateFileSizes, MAX_UPLOAD_SIZE_LABEL } from "@/lib/constants";
+import { swrKeys } from "@/lib/swrKeys";
 import type { AircraftRole } from "@/lib/types";
 import useSWR from "swr";
 import { FileText, Plus, X, Upload, Edit2, ChevronLeft, ChevronRight, Trash2 } from "lucide-react";
@@ -16,7 +17,7 @@ const whiteBg = { backgroundColor: '#ffffff' } as const;
 export default function NotesTab({ aircraft, session, role, aircraftRole, userInitials, onNotesRead }: { aircraft: any, session: any, role: string, aircraftRole: AircraftRole | null, userInitials: string, onNotesRead: () => void }) {
   
   const { data: notes = [], mutate } = useSWR(
-    aircraft ? `notes-${aircraft.id}` : null,
+    aircraft ? swrKeys.notes(aircraft.id) : null,
     async () => {
       const { data: notesData } = await supabase
         .from('aft_notes')

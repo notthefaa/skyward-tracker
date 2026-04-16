@@ -6,6 +6,7 @@ import { authFetch } from "@/lib/authFetch";
 import { processMxItem, getMxTextColor } from "@/lib/math";
 import { getFuelWeightPerGallon } from "@/lib/constants";
 import { INPUT_WHITE_BG } from "@/lib/styles";
+import { swrKeys } from "@/lib/swrKeys";
 import type { AircraftWithMetrics, SystemSettings, AppTab, AppRole, AircraftRole } from "@/lib/types";
 import useSWR from "swr";
 import { PlaneTakeoff, MapPin, Droplet, Phone, Mail, Wrench, AlertTriangle, FileText, Clock, X, Trash2, Edit2, UserPlus, Loader2, Users, ChevronDown, Calendar, CheckCircle } from "lucide-react";
@@ -31,7 +32,7 @@ export default function SummaryTab({
 
   // ─── Split SWR hooks for granular cache invalidation ───
   const { data: mxData } = useSWR(
-    aircraft ? `summary-mx-${aircraft.id}` : null,
+    aircraft ? swrKeys.summaryMx(aircraft.id) : null,
     async () => {
       const { data } = await supabase.from('aft_maintenance_items')
         .select('*').eq('aircraft_id', aircraft!.id);
@@ -52,7 +53,7 @@ export default function SummaryTab({
   );
 
   const { data: squawkData } = useSWR(
-    aircraft ? `summary-squawks-${aircraft.id}` : null,
+    aircraft ? swrKeys.summarySquawks(aircraft.id) : null,
     async () => {
       const { data } = await supabase.from('aft_squawks')
         .select('id, affects_airworthiness').eq('aircraft_id', aircraft!.id).eq('status', 'open');
@@ -61,7 +62,7 @@ export default function SummaryTab({
   );
 
   const { data: latestNote } = useSWR(
-    aircraft ? `summary-note-${aircraft.id}` : null,
+    aircraft ? swrKeys.summaryNote(aircraft.id) : null,
     async () => {
       const { data } = await supabase.from('aft_notes')
         .select('*').eq('aircraft_id', aircraft!.id).is('deleted_at', null).order('created_at', { ascending: false }).limit(1);
@@ -70,7 +71,7 @@ export default function SummaryTab({
   );
 
   const { data: flightData } = useSWR(
-    aircraft ? `summary-flight-${aircraft.id}` : null,
+    aircraft ? swrKeys.summaryFlight(aircraft.id) : null,
     async () => {
       const { data } = await supabase.from('aft_flight_logs')
         .select('created_at, initials').eq('aircraft_id', aircraft!.id).order('created_at', { ascending: false }).limit(1);
@@ -79,7 +80,7 @@ export default function SummaryTab({
   );
 
   const { data: reservationData } = useSWR(
-    aircraft ? `summary-reservations-${aircraft.id}` : null,
+    aircraft ? swrKeys.summaryReservations(aircraft.id) : null,
     async () => {
       const { data } = await supabase.from('aft_reservations')
         .select('*').eq('aircraft_id', aircraft!.id).eq('status', 'confirmed')
@@ -89,7 +90,7 @@ export default function SummaryTab({
   );
 
   const { data: currentStatus } = useSWR(
-    aircraft ? `summary-current-status-${aircraft.id}` : null,
+    aircraft ? swrKeys.summaryCurrentStatus(aircraft.id) : null,
     async () => {
       const now = new Date().toISOString();
       // Active reservation (started but not ended)
@@ -119,7 +120,7 @@ export default function SummaryTab({
   );
 
   const { data: crewMembers = [], mutate: mutateCrew } = useSWR(
-    aircraft ? `summary-crew-${aircraft.id}` : null,
+    aircraft ? swrKeys.summaryCrew(aircraft.id) : null,
     async () => {
       const { data: accessData } = await supabase.from('aft_user_aircraft_access')
         .select('user_id, aircraft_role').eq('aircraft_id', aircraft!.id);

@@ -3,6 +3,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { authFetch } from "@/lib/authFetch";
+import { swrKeys } from "@/lib/swrKeys";
 import type { AircraftWithMetrics, Reservation, AircraftRole, AppRole } from "@/lib/types";
 import useSWR from "swr";
 import { Calendar, ChevronLeft, ChevronRight, Plus, X, Clock, MapPin, Plane, Wrench, Loader2, Users, Edit2 } from "lucide-react";
@@ -169,7 +170,7 @@ export default function CalendarTab({
   const { showSuccess, showError, showWarning } = useToast();
   const [cancellingId, setCancellingId] = useState<string | null>(null);
 
-  const fetchKey = aircraft ? `calendar-${aircraft.id}-${currentDate.getFullYear()}-${currentDate.getMonth()}` : null;
+  const fetchKey = aircraft ? swrKeys.calendar(aircraft.id, currentDate.getFullYear(), currentDate.getMonth()) : null;
 
   const { data: calendarData, mutate } = useSWR(fetchKey, async () => {
     const year = currentDate.getFullYear();
@@ -197,7 +198,7 @@ export default function CalendarTab({
   // they can book reservations on behalf of other pilots.
   const canBookForOthers = role === 'admin' || aircraftRole === 'admin';
   const { data: crew = [] } = useSWR(
-    canBookForOthers && aircraft ? `crew-${aircraft.id}` : null,
+    canBookForOthers && aircraft ? swrKeys.crew(aircraft.id) : null,
     async () => {
       const { data: accessData } = await supabase.from('aft_user_aircraft_access')
         .select('user_id, aircraft_role').eq('aircraft_id', aircraft!.id);

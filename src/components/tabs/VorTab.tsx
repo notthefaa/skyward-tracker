@@ -1,6 +1,7 @@
 import { useState, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { authFetch } from "@/lib/authFetch";
+import { swrKeys } from "@/lib/swrKeys";
 import type { AircraftWithMetrics, VorCheck, VorCheckType } from "@/lib/types";
 import useSWR from "swr";
 import { Plus, X, Trash2, Check, AlertTriangle, ChevronLeft, ChevronRight } from "lucide-react";
@@ -55,7 +56,7 @@ export default function VorTab({
   const [initials, setInitials] = useState(userInitials);
 
   const { data, mutate } = useSWR(
-    aircraft ? `vor-${aircraft.id}-${page}` : null,
+    aircraft ? swrKeys.vor(aircraft.id, page) : null,
     async () => {
       const from = (page - 1) * PAGE_SIZE;
       const to = from + PAGE_SIZE;
@@ -73,7 +74,7 @@ export default function VorTab({
 
   // Fetch latest check for due status (always page 1, limit 1)
   const { data: latestData } = useSWR(
-    aircraft ? `vor-latest-${aircraft.id}` : null,
+    aircraft ? swrKeys.vorLatest(aircraft.id) : null,
     async () => {
       const { data: checks } = await supabase
         .from('aft_vor_checks')

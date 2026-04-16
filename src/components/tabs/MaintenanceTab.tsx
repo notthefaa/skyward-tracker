@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { authFetch } from "@/lib/authFetch";
 import { processMxItem, getMxTextColor, isMxExpired } from "@/lib/math";
 import { INPUT_WHITE_BG } from "@/lib/styles";
+import { swrKeys } from "@/lib/swrKeys";
 import type { AircraftWithMetrics, SystemSettings, AircraftRole, MxSubTab } from "@/lib/types";
 import useSWR from "swr";
 import { Wrench, Trash2, Plus, X, Edit2, Calendar, Send, ExternalLink, ChevronRight, HelpCircle, AlertTriangle, Download, Layers, Settings } from "lucide-react";
@@ -40,7 +41,7 @@ export default function MaintenanceTab({
   const isTurbine = aircraft?.engine_type === 'Turbine';
 
   const { data: mxItems = [], mutate } = useSWR(
-    aircraft ? `mx-${aircraft.id}` : null,
+    aircraft ? swrKeys.mxItems(aircraft.id) : null,
     async () => {
       const { data } = await supabase.from('aft_maintenance_items').select('*').eq('aircraft_id', aircraft!.id).is('deleted_at', null).order('due_date').order('due_time');
       return (data || []) as any[];
@@ -48,7 +49,7 @@ export default function MaintenanceTab({
   );
 
   const { data: activeEvents = [], mutate: mutateEvents } = useSWR(
-    aircraft ? `mx-events-${aircraft.id}` : null,
+    aircraft ? swrKeys.mxEvents(aircraft.id) : null,
     async () => {
       const { data } = await supabase.from('aft_maintenance_events').select('*').eq('aircraft_id', aircraft!.id).is('deleted_at', null).in('status', ['draft', 'scheduling', 'confirmed', 'in_progress', 'ready_for_pickup']).order('created_at', { ascending: false });
       return data || [];

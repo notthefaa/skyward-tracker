@@ -1,6 +1,7 @@
 import { useState, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { authFetch } from "@/lib/authFetch";
+import { swrKeys } from "@/lib/swrKeys";
 import type { AircraftWithMetrics, OilLog } from "@/lib/types";
 import useSWR from "swr";
 import { Plus, X, Trash2, ChevronLeft, ChevronRight } from "lucide-react";
@@ -105,7 +106,7 @@ export default function OilTab({
 
   // Paginated table data
   const { data, mutate } = useSWR(
-    aircraft ? `oil-${aircraft.id}-${page}` : null,
+    aircraft ? swrKeys.oil(aircraft.id, page) : null,
     async () => {
       const from = (page - 1) * PAGE_SIZE;
       const to = from + PAGE_SIZE;
@@ -123,7 +124,7 @@ export default function OilTab({
 
   // Chart data — last 10 entries by engine hours ascending
   const { data: chartEntries } = useSWR(
-    aircraft ? `oil-chart-${aircraft.id}` : null,
+    aircraft ? swrKeys.oilChart(aircraft.id) : null,
     async () => {
       const { data: logs } = await supabase
         .from('aft_oil_logs')

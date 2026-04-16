@@ -9,6 +9,7 @@ import { useToast } from "@/components/ToastProvider";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { useModalScrollLock } from "@/hooks/useModalScrollLock";
 import { INPUT_WHITE_BG } from "@/lib/styles";
+import { swrKeys } from "@/lib/swrKeys";
 import type { AircraftWithMetrics, AircraftEquipment, EquipmentCategory, AircraftRole } from "@/lib/types";
 
 const CATEGORIES: Array<{ value: EquipmentCategory; label: string }> = [
@@ -57,7 +58,7 @@ export default function EquipmentTab({ aircraft, role, aircraftRole }: Props) {
   const [includeRemoved, setIncludeRemoved] = useState(false);
 
   const { data, mutate } = useSWR(
-    aircraft ? `equipment-${aircraft.id}-${includeRemoved}` : null,
+    aircraft ? swrKeys.equipment(aircraft.id, includeRemoved) : null,
     async () => {
       const res = await authFetch(`/api/equipment?aircraftId=${aircraft!.id}${includeRemoved ? '&includeRemoved=true' : ''}`);
       if (!res.ok) throw new Error('Failed to load equipment');

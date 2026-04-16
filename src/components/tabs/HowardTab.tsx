@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { flushSync } from "react-dom";
 import { authFetch } from "@/lib/authFetch";
 import { supabase } from "@/lib/supabase";
+import { swrKeys } from "@/lib/swrKeys";
 import type { AircraftWithMetrics } from "@/lib/types";
 import type { HowardMessage } from "@/lib/howard/types";
 import useSWR from "swr";
@@ -110,7 +111,7 @@ export default function HowardTab({
 
   const userId = session?.user?.id;
   const { data, mutate } = useSWR(
-    userId ? `howard-user-${userId}` : null,
+    userId ? swrKeys.howardUser(userId) : null,
     async () => {
       const res = await authFetch(`/api/howard`);
       if (!res.ok) throw new Error('Failed to load conversation');
@@ -126,7 +127,7 @@ export default function HowardTab({
 
   // Proposed actions for this thread, keyed by id.
   const { data: actionsData, mutate: mutateActions } = useSWR(
-    threadId ? `howard-actions-${threadId}` : null,
+    threadId ? swrKeys.howardActions(threadId) : null,
     async () => {
       const res = await authFetch(`/api/howard/actions?threadId=${threadId}`);
       if (!res.ok) throw new Error('Failed to load actions');

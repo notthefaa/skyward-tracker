@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
+import { swrKeys } from "@/lib/swrKeys";
 import type { AircraftWithMetrics, Reservation } from "@/lib/types";
 import useSWR from "swr";
 import { ChevronDown } from "lucide-react";
@@ -75,7 +76,7 @@ export default function CalendarDashboard({ aircraft, session }: CalendarDashboa
   const isTurbine = aircraft.engine_type === 'Turbine';
 
   const { data: dashData } = useSWR(
-    aircraft ? `cal-dash-${aircraft.id}` : null,
+    aircraft ? swrKeys.calDash(aircraft.id) : null,
     async () => {
       const now = new Date();
       const windowEnd = new Date(now.getTime() + WINDOW * 86400000);
@@ -100,7 +101,7 @@ export default function CalendarDashboard({ aircraft, session }: CalendarDashboa
   }, [hoursPeriod, customFrom, customTo, showCustom]);
 
   const { data: flightHours } = useSWR(
-    aircraft ? `cal-hours-${aircraft.id}-${hoursRange.from.getTime()}-${hoursRange.to.getTime()}` : null,
+    aircraft ? swrKeys.calHours(aircraft.id, hoursRange.from.getTime(), hoursRange.to.getTime()) : null,
     async () => {
       const { data: baseline } = await supabase.from('aft_flight_logs').select('aftt, ftt, hobbs, tach').eq('aircraft_id', aircraft.id).is('deleted_at', null).lt('created_at', hoursRange.from.toISOString()).order('created_at', { ascending: false }).limit(1);
       const { data: current } = await supabase.from('aft_flight_logs').select('aftt, ftt, hobbs, tach').eq('aircraft_id', aircraft.id).is('deleted_at', null).lte('created_at', hoursRange.to.toISOString()).order('created_at', { ascending: false }).limit(1);
