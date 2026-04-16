@@ -1,9 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import { useSWRConfig } from "swr";
 import { authFetch } from "@/lib/authFetch";
 import { CheckCircle, X, Loader2, Sparkles, Calendar, FileText, Wrench, Plane, AlertTriangle, RefreshCw } from "lucide-react";
 import type { ProposedAction } from "@/lib/howard/proposedActions";
+import { matchesAircraft } from "@/lib/swrKeys";
 
 interface Props {
   action: ProposedAction;
@@ -73,8 +75,20 @@ function describePayload(action: ProposedAction): React.ReactNode {
 export default function ProposedActionCard({ action, onChange }: Props) {
   const [isPending, setIsPending] = useState<'confirm' | 'cancel' | 'retry' | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const { mutate: globalMutate } = useSWRConfig();
 
   const Icon = actionIcon(action.action_type);
+
+  // When Howard's action lands (reservation, note, squawk_resolve,
+  // mx_schedule, equipment), the side-effects touch tabs scoped to
+  // action.aircraft_id. Without this, a user who confirmed "resolve
+  // squawk" via Howard would still see the squawk open on the
+  // Squawks tab / grounded banner until SWR's background revalidation
+  // caught up. Invalidate every aircraft-scoped key so the affected
+  // tab refreshes immediately on confirm.
+  const invalidateAircraftCache = () => {
+    globalMutate(matchesAircraft(action.aircraft_id), undefined, { revalidate: true });
+  };
 
   const handleConfirm = async (mode: 'confirm' | 'retry' = 'confirm') => {
     setIsPending(mode); setError(null);
@@ -84,6 +98,7 @@ export default function ProposedActionCard({ action, onChange }: Props) {
         const d = await res.json().catch(() => ({}));
         throw new Error(d.error || (mode === 'retry' ? 'Retry failed' : 'Failed to confirm'));
       }
+      invalidateAircraftCache();
       onChange();
     } catch (err: any) {
       setError(err.message);
@@ -100,6 +115,9 @@ export default function ProposedActionCard({ action, onChange }: Props) {
         const d = await res.json().catch(() => ({}));
         throw new Error(d.error || 'Failed to cancel');
       }
+      // Cancel has no side-effect on aircraft data, but flushing here
+      // is cheap and keeps behavior symmetric if this ever grows to
+      // touch aircraft state (e.g., future "propose_delete").
       onChange();
     } catch (err: any) {
       setError(err.message);
