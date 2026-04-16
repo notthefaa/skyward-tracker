@@ -26,8 +26,8 @@ const HowardTour = dynamic(() => import("@/components/HowardTour"), { ssr: false
 const HowardOnboardingChat = dynamic(() => import("@/components/howard/HowardOnboardingChat"), { ssr: false });
 const AircraftModal = dynamic(() => import("@/components/modals/AircraftModal"));
 const AdminModals = dynamic(() => import("@/components/modals/AdminModals"));
-const TutorialModal = dynamic(() => import("@/components/modals/TutorialModal"));
 const SettingsModal = dynamic(() => import("@/components/modals/SettingsModal"));
+const FeaturesOverviewModal = dynamic(() => import("@/components/modals/FeaturesOverviewModal"));
 const PullIndicator = dynamic(() => import("@/components/PullIndicator"));
 import { SummarySkeleton, FleetSkeleton, TabSkeleton } from "@/components/Skeletons";
 const SummaryTab = dynamic(() => import("@/components/tabs/SummaryTab"), { loading: () => <SummarySkeleton /> });
@@ -100,6 +100,10 @@ export default function AppShell({ session }: AppShellProps) {
   // Derived locally (not persisted) — the durable signal is
   // `completed_onboarding` on aft_user_roles.
   const [onboardingPath, setOnboardingPath] = useState<'guided' | 'form' | null>(null);
+  // Features Guide modal — reachable from Settings, from the tour's
+  // final step, and from a custom event any Howard surface can fire
+  // (his onboarding closer links to it).
+  const [showFeaturesGuide, setShowFeaturesGuide] = useState(false);
   // Optional target for the Calendar tab — set by Fleet Schedule when a user
   // taps a reservation there so CalendarTab opens on the right date/view.
   const [calendarInitialDate, setCalendarInitialDate] = useState<Date | null>(null);
@@ -177,13 +181,18 @@ export default function AppShell({ session }: AppShellProps) {
         navigateTab('ads');
       }
     };
+    // Any surface (Howard's closer, tour footer CTA, future in-app
+    // links) can fire this to pop the Features Guide.
+    const handleOpenFeaturesGuide = () => setShowFeaturesGuide(true);
     window.addEventListener('aft:navigate-howard', handleNavigateHoward);
     window.addEventListener('aft:navigate-howard-usage', handleNavigateHowardUsage);
     window.addEventListener('aft:mx-ads-nav', handleMxAdsNav);
+    window.addEventListener('aft:open-features-guide', handleOpenFeaturesGuide);
     return () => {
       window.removeEventListener('aft:navigate-howard', handleNavigateHoward);
       window.removeEventListener('aft:navigate-howard-usage', handleNavigateHowardUsage);
       window.removeEventListener('aft:mx-ads-nav', handleMxAdsNav);
+      window.removeEventListener('aft:open-features-guide', handleOpenFeaturesGuide);
     };
   }, [navigateTab]);
 
@@ -551,8 +560,7 @@ export default function AppShell({ session }: AppShellProps) {
 
   return (
     <div className="flex flex-col bg-neutral-100 w-full min-h-screen relative">
-      <TutorialModal session={session} role={role} />
-      <AdminModals 
+      <AdminModals
         showAdminMenu={showAdminMenu} 
         setShowAdminMenu={setShowAdminMenu} 
         allAircraftList={allAircraftList} 
@@ -759,8 +767,15 @@ export default function AppShell({ session }: AppShellProps) {
             // from inside HowardTour.onComplete → /api/user/tour-complete.
             setTourCompleted(true);
           }}
+          onOpenFeaturesGuide={() => setShowFeaturesGuide(true)}
         />
       )}
+
+      {/* ─── FEATURES GUIDE (on-demand reference) ─── */}
+      <FeaturesOverviewModal
+        show={showFeaturesGuide}
+        onClose={() => setShowFeaturesGuide(false)}
+      />
 
       <nav role="navigation" aria-label="Main navigation" className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-gray-200 z-[9999] pt-1 pb-[env(safe-area-inset-bottom)] shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
         <div className="flex justify-around items-center h-12 max-w-3xl mx-auto">

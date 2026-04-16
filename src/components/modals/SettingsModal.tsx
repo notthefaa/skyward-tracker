@@ -8,7 +8,7 @@ import { useModalScrollLock } from "@/hooks/useModalScrollLock";
 import { NOTIFICATION_TYPES, FAA_RATINGS } from "@/lib/types";
 import type { NotificationType } from "@/lib/types";
 import { friendlyPgError } from "@/lib/pgErrors";
-import { Settings, Bell, Trash2, Key, X, Loader2, AlertTriangle, User, Check, Award } from "lucide-react";
+import { Settings, Bell, Trash2, Key, X, Loader2, AlertTriangle, User, Check, Award, BookOpen } from "lucide-react";
 
 export default function SettingsModal({ 
   show, onClose, session 
@@ -391,6 +391,38 @@ export default function SettingsModal({
               <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Email</p>
               <p className="text-sm text-navy font-bold">{session.user.email}</p>
             </div>
+          </div>
+
+          {/* ─── FEATURES GUIDE ─── */}
+          <div className="border-t border-gray-200 pt-6">
+            <h3 className="font-oswald text-lg font-bold uppercase text-navy mb-3">Help & Reference</h3>
+            <button
+              onClick={() => {
+                // Close Settings so the full-screen guide gets focus,
+                // then dispatch the global open event. Small delay lets
+                // the scroll lock cleanup run before the next lock.
+                onClose();
+                setTimeout(() => {
+                  window.dispatchEvent(new CustomEvent('aft:open-features-guide'));
+                }, 50);
+              }}
+              className="w-full flex items-center justify-between gap-3 bg-[#e6651b]/5 hover:bg-[#e6651b]/10 border border-[#e6651b]/30 rounded-lg px-4 py-3 active:scale-[0.98] transition-colors"
+            >
+              <div className="flex items-center gap-3 min-w-0 text-left">
+                <div className="w-9 h-9 rounded-full bg-[#e6651b] text-white flex items-center justify-center shrink-0">
+                  <BookOpen size={16} />
+                </div>
+                <div className="min-w-0">
+                  <p className="font-oswald text-sm font-bold uppercase tracking-widest text-navy">
+                    Features Guide
+                  </p>
+                  <p className="text-[11px] font-roboto text-gray-500 leading-snug">
+                    What every part of the app does — organized by task.
+                  </p>
+                </div>
+              </div>
+              <span className="text-[10px] font-bold uppercase tracking-widest text-[#e6651b] shrink-0">Open</span>
+            </button>
           </div>
 
           {/* ─── DELETE ACCOUNT ─── */}
