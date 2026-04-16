@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { authFetch } from "@/lib/authFetch";
 import { supabase } from "@/lib/supabase";
-import { Wrench, AlertTriangle, ChevronDown } from "lucide-react";
+import { Wrench, AlertTriangle, ChevronDown, Camera, Loader2 } from "lucide-react";
 import { PrimaryButton } from "@/components/AppButtons";
 import { INPUT_WHITE_BG } from "./shared";
 import type { ServiceEventChildProps } from "./shared";
@@ -51,6 +51,52 @@ export default function ServiceEventComplete({
       updated[index] = { ...updated[index], [field]: value };
       return updated;
     });
+  };
+
+  const [scanningIdx, setScanningIdx] = useState<number | null>(null);
+  const scanInputRefs = useRef<Record<number, HTMLInputElement | null>>({});
+
+  const handleScanLogEntry = async (idx: number, file: File) => {
+    if (!aircraft) return;
+    setScanningIdx(idx);
+    try {
+      const formData = new FormData();
+      formData.append('image', file);
+      formData.append('aircraftId', aircraft.id);
+      const res = await authFetch('/api/mx-events/scan-logentry', {
+        method: 'POST',
+        body: formData,
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || 'Scan failed');
+      }
+      const { fields, warning } = await res.json();
+      if (warning) showWarning(warning);
+
+      // Pre-fill fields from the scan (don't overwrite fields user already filled)
+      setCompletionItems(prev => prev.map((item, i) => {
+        if (i !== idx) return item;
+        return {
+          ...item,
+          completionDate: fields.completion_date || item.completionDate,
+          completionTime: fields.completion_time != null ? String(fields.completion_time) : item.completionTime,
+          completedByName: fields.completed_by_name || item.completedByName,
+          certType: fields.cert_type || item.certType,
+          certNumber: fields.cert_number || item.certNumber,
+          certExpiry: fields.cert_expiry || item.certExpiry,
+          tachAtCompletion: fields.tach_at_completion != null ? String(fields.tach_at_completion) : item.tachAtCompletion,
+          hobbsAtCompletion: fields.hobbs_at_completion != null ? String(fields.hobbs_at_completion) : item.hobbsAtCompletion,
+          workDescription: fields.work_description || item.workDescription,
+          logbookRef: fields.logbook_ref || item.logbookRef,
+        };
+      }));
+      showSuccess('Logbook entry scanned — review the pre-filled fields below.');
+    } catch (err: any) {
+      showError('Scan failed: ' + (err?.message || 'unknown error'));
+    } finally {
+      setScanningIdx(null);
+    }
   };
 
   const handleCompleteItems = async () => {
@@ -123,6 +169,32 @@ export default function ServiceEventComplete({
           </div>
           {item.markComplete && (
             <div className="space-y-3 pl-8 animate-fade-in">
+              {/* Scan logbook entry — upload a photo of the mechanic's
+                  signoff and Claude extracts the fields. */}
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => scanInputRefs.current[idx]?.click()}
+                  disabled={scanningIdx !== null}
+                  className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-widest text-[#7C3AED] bg-purple-50 border border-purple-200 rounded px-3 py-2 hover:bg-purple-100 active:scale-95 disabled:opacity-50 transition-all"
+                >
+                  {scanningIdx === idx
+                    ? <><Loader2 size={12} className="animate-spin" /> Scanning...</>
+                    : <><Camera size={12} /> Scan logbook entry</>}
+                </button>
+                <span className="text-[9px] text-gray-400">Photo of the mechanic&apos;s signoff — AI reads and pre-fills</span>
+                <input
+                  ref={el => { scanInputRefs.current[idx] = el; }}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="hidden"
+                  onChange={e => {
+                    const f = e.target.files?.[0];
+                    if (f) handleScanLogEntry(idx, f);
+                    e.target.value = '';
+                  }}
+                />
+              </div>
               <div>
                 <label className="text-[10px] font-bold uppercase tracking-widest text-navy block">Completion Date</label>
                 <input type="date" value={item.completionDate} onChange={e => updateItem(idx, 'completionDate', e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-[#56B94A] outline-none" />

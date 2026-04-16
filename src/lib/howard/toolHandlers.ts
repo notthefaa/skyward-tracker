@@ -339,7 +339,7 @@ const handlers: Record<string, ToolHandler> = {
       // Enrich with document metadata
       const docIds = Array.from(new Set(chunks.map((c: any) => c.document_id)));
       const { data: docs } = await sb.from('aft_documents')
-        .select('id, filename, doc_type')
+        .select('id, filename, doc_type, file_url')
         .in('id', docIds);
       const docMap = new Map((docs || []).map((d: any) => [d.id, d]));
 
@@ -347,6 +347,7 @@ const handlers: Record<string, ToolHandler> = {
         results: chunks.map((c: any) => ({
           document: docMap.get(c.document_id)?.filename || 'Unknown',
           doc_type: docMap.get(c.document_id)?.doc_type || 'Unknown',
+          file_url: docMap.get(c.document_id)?.file_url || null,
           chunk_index: c.chunk_index,
           content: c.content,
           relevance: (c.similarity * 100).toFixed(0) + '%',
