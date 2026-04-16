@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabase";
 import { authFetch } from "@/lib/authFetch";
 import { useToast } from "@/components/ToastProvider";
 import { validateFileSize, MAX_UPLOAD_SIZE_LABEL } from "@/lib/constants";
+import { friendlyPgError } from "@/lib/pgErrors";
 import { INPUT_WHITE_BG } from "@/lib/styles";
 import type { AircraftWithMetrics } from "@/lib/types";
 import { X, Info, Camera, Upload } from "lucide-react";
@@ -235,7 +236,7 @@ export default function AircraftModal({
       const { error: updateError } = await supabase.from('aft_aircraft').update(basePayload).eq('id', existingAircraft.id);
       if (updateError) {
         console.error('[AircraftModal] Update failed:', updateError);
-        showError('Failed to update aircraft: ' + updateError.message);
+        showError('Failed to update aircraft: ' + friendlyPgError(updateError));
         setIsSubmitting(false);
         return;
       }

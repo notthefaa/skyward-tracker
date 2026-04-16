@@ -7,6 +7,7 @@ import { useToast } from "@/components/ToastProvider";
 import { useModalScrollLock } from "@/hooks/useModalScrollLock";
 import { NOTIFICATION_TYPES, FAA_RATINGS } from "@/lib/types";
 import type { NotificationType } from "@/lib/types";
+import { friendlyPgError } from "@/lib/pgErrors";
 import { Settings, Bell, Trash2, Key, X, Loader2, AlertTriangle, User, Check, Award } from "lucide-react";
 
 export default function SettingsModal({ 
@@ -80,7 +81,7 @@ export default function SettingsModal({
       .update({ faa_ratings: Array.from(next) })
       .eq('user_id', session.user.id);
     if (error) {
-      showError("Couldn't save rating: " + error.message);
+      showError("Couldn't save rating: " + friendlyPgError(error));
       // Revert on failure
       setRatings(ratings);
     }
@@ -98,7 +99,7 @@ export default function SettingsModal({
       .update({ full_name: trimmedName, initials: trimmedInitials })
       .eq('user_id', session.user.id);
     if (error) {
-      showError("Couldn't save profile: " + error.message);
+      showError("Couldn't save profile: " + friendlyPgError(error));
     } else {
       setFullName(trimmedName);
       setInitials(trimmedInitials);
