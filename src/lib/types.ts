@@ -336,7 +336,16 @@ export interface OilLog {
   created_at: string;
 }
 
-export type DocType = 'POH' | 'AFM' | 'Supplement' | 'MEL' | 'SOP' | 'Other';
+export type DocType =
+  | 'POH'
+  | 'AFM'
+  | 'Supplement'
+  | 'MEL'
+  | 'SOP'
+  | 'Registration'
+  | 'Airworthiness Certificate'
+  | 'Weight and Balance'
+  | 'Other';
 
 export interface AircraftDocument {
   id: string;

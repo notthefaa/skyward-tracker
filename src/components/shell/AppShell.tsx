@@ -54,13 +54,13 @@ const mxTrayItems = [
   { key: 'ads', label: 'ADs', icon: ShieldAlert, color: '#7C3AED', soon: false },
 ] as const;
 
-/** More secondary toolbar items */
+/** More secondary toolbar items. Howard Usage is reachable from inside
+ * the Howard tab itself, so we don't duplicate it here. */
 const moreTrayItems = [
   { key: 'notes', label: 'Notes', icon: FileText, color: '#525659', soon: false },
   { key: 'documents', label: 'Documents', icon: FolderOpen, color: '#56B94A', soon: false },
   { key: 'equipment', label: 'Equipment', icon: Plane, color: '#3AB0FF', soon: false },
   { key: 'howard', label: 'Howard', icon: HowardIcon, color: '#0EA5E9', soon: false },
-  { key: 'howard-usage', label: 'Usage', icon: BarChart3, color: '#7C3AED', soon: false },
 ] as const;
 
 interface AppShellProps {

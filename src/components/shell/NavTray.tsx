@@ -122,6 +122,12 @@ function SortableItem({
 
   const Icon = item.icon;
 
+  // Icon + label both render in navy (disabled items in gray). Matches
+  // the main bottom nav's typography and color scheme so the two bars
+  // read as a pair; the tray is distinguished only by its background
+  // shade (bg-[#F0EDE8]) — no per-item color accents.
+  const iconColor = item.soon && !reordering ? '#9CA3AF' : '#091F3C';
+
   return (
     <div
       ref={setNodeRef}
@@ -141,8 +147,8 @@ function SortableItem({
         onSelect(item.key);
       }}
     >
-      <div className="relative">
-        <Icon size={20} style={{ color: item.soon && !reordering ? '#9CA3AF' : item.color }} />
+      <div className="relative mb-1">
+        <Icon size={20} style={{ color: iconColor }} />
         {!reordering && item.key === unreadBadgeKey && (unreadCount ?? 0) > 0 && (
           <span className="absolute -top-1 -right-2 flex h-3 w-3">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#CE3732] opacity-75"></span>
@@ -150,7 +156,7 @@ function SortableItem({
           </span>
         )}
       </div>
-      <span className={`text-[9px] font-bold uppercase tracking-wider leading-tight text-center whitespace-nowrap ${item.soon && !reordering ? 'text-gray-400' : 'text-navy'}`}>
+      <span className={`text-[10px] font-bold uppercase tracking-widest leading-tight text-center whitespace-nowrap ${item.soon && !reordering ? 'text-gray-400' : 'text-navy'}`}>
         {item.label}
       </span>
     </div>

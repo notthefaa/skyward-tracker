@@ -7,7 +7,10 @@ interface IconProps {
   className?: string;
 }
 
-/** Tire icon — circle with tread pattern */
+/** Tire icon — side view of a wheel. The previous version had lines
+ * extending OUTWARD from the tire, which read as a lifesaver / flotation
+ * ring. This version uses a thick outer tire (filled donut), an inner
+ * rim with four lug bolts, reading unambiguously as an aircraft tire. */
 export function TireIcon({ size = 20, style, className }: IconProps) {
   const color = style?.color || 'currentColor';
   return (
@@ -23,18 +26,17 @@ export function TireIcon({ size = 20, style, className }: IconProps) {
       className={className}
       style={style}
     >
-      {/* Outer tire */}
+      {/* Outer tire edge */}
       <circle cx="12" cy="12" r="10" />
-      {/* Inner rim */}
-      <circle cx="12" cy="12" r="5" />
-      {/* Tread lines connecting rim to tire */}
-      <line x1="12" y1="2" x2="12" y2="7" />
-      <line x1="12" y1="17" x2="12" y2="22" />
-      <line x1="2" y1="12" x2="7" y2="12" />
-      <line x1="17" y1="12" x2="22" y2="12" />
-      {/* Diagonal treads */}
-      <line x1="5.05" y1="5.05" x2="8.46" y2="8.46" />
-      <line x1="15.54" y1="15.54" x2="18.95" y2="18.95" />
+      {/* Tread groove — a second ring inside the outer edge */}
+      <circle cx="12" cy="12" r="8" strokeWidth="1.2" />
+      {/* Rim (wheel hub) */}
+      <circle cx="12" cy="12" r="4" />
+      {/* Four lug bolts arranged at cardinal points of the rim */}
+      <circle cx="12" cy="8.5" r="0.7" fill={color} stroke="none" />
+      <circle cx="12" cy="15.5" r="0.7" fill={color} stroke="none" />
+      <circle cx="8.5" cy="12" r="0.7" fill={color} stroke="none" />
+      <circle cx="15.5" cy="12" r="0.7" fill={color} stroke="none" />
     </svg>
   );
 }

@@ -16,6 +16,9 @@ const DOC_TYPES: { value: DocType; label: string }[] = [
   { value: 'Supplement', label: 'Supplement' },
   { value: 'MEL', label: 'Minimum Equipment List' },
   { value: 'SOP', label: 'Standard Operating Procedures' },
+  { value: 'Registration', label: 'Registration' },
+  { value: 'Airworthiness Certificate', label: 'Airworthiness Certificate' },
+  { value: 'Weight and Balance', label: 'Weight and Balance' },
   { value: 'Other', label: 'Other' },
 ];
 
