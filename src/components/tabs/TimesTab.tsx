@@ -229,10 +229,15 @@ export default function TimesTab({
   const submitFlightLog = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const landingsNum = parseInt(logLandings);
-    const cyclesNum = isTurbine ? parseInt(logCycles) : 0;
-    if (Number.isNaN(landingsNum) || landingsNum < 0) return showError("Landings cannot be negative.");
-    if (isTurbine && (Number.isNaN(cyclesNum) || cyclesNum < 0)) return showError("Engine cycles cannot be negative.");
+    // Blank landings/cycles treated as 0 — a ferry or positioning leg
+    // may land zero times, and rejecting "" as "cannot be negative" is
+    // misleading. Explicit negative values still fail.
+    const landingsNum = logLandings.trim() === '' ? 0 : parseInt(logLandings);
+    const cyclesNum = !isTurbine
+      ? 0
+      : logCycles.trim() === '' ? 0 : parseInt(logCycles);
+    if (Number.isNaN(landingsNum) || landingsNum < 0) return showError("Landings must be zero or a positive whole number.");
+    if (isTurbine && (Number.isNaN(cyclesNum) || cyclesNum < 0)) return showError("Engine cycles must be zero or a positive whole number.");
     if (logFtt && parseFloat(logFtt) < 0) return showError("FTT cannot be negative.");
     if (logTach && parseFloat(logTach) < 0) return showError("Tach cannot be negative.");
     if (logAftt && parseFloat(logAftt) < 0) return showError("AFTT cannot be negative.");
@@ -303,8 +308,8 @@ export default function TimesTab({
     const payload: Record<string, any> = { 
       aircraft_id: aircraft!.id, user_id: session.user.id, 
       pod: logPod.toUpperCase() || null, poa: logPoa.toUpperCase() || null,
-      engine_cycles: isTurbine ? (parseInt(logCycles) || 0) : 0, 
-      landings: parseInt(logLandings), initials: logInitials.toUpperCase(), 
+      engine_cycles: isTurbine ? cyclesNum : 0,
+      landings: landingsNum, initials: logInitials.toUpperCase(),
       pax_info: logPax || null, trip_reason: logReason || null, fuel_gallons: fuelGallons
     };
     
@@ -335,25 +340,35 @@ export default function TimesTab({
       aircraftUpdate.fuel_last_updated = new Date().toISOString(); 
     }
 
-    if (editingId) {
-      // Only overwrite aircraft totals if we're editing the most recent log.
-      // Editing an older entry must not reach forward and clobber the current totals,
-      // which reflect the latest log.
-      const editAircraftUpdate = isLatestLog ? aircraftUpdate : {};
-      const res = await authFetch('/api/flight-logs', {
-        method: 'PUT',
-        body: JSON.stringify({ logId: editingId, aircraftId: aircraft!.id, logData: payload, aircraftUpdate: editAircraftUpdate })
-      });
-      if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Failed to update flight log'); }
-    } else {
-      const res = await authFetch('/api/flight-logs', {
-        method: 'POST',
-        body: JSON.stringify({ aircraftId: aircraft!.id, logData: payload, aircraftUpdate })
-      });
-      if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Failed to save flight log'); }
+    // Wrap the network write in try/catch so a failed save doesn't
+    // leave the submit button stuck in "Saving..." forever. The
+    // finally clears isSubmitting even on error; success path also
+    // closes the modal inside try so the side-effects stay ordered.
+    try {
+      if (editingId) {
+        // Only overwrite aircraft totals if we're editing the most recent log.
+        // Editing an older entry must not reach forward and clobber the current totals,
+        // which reflect the latest log.
+        const editAircraftUpdate = isLatestLog ? aircraftUpdate : {};
+        const res = await authFetch('/api/flight-logs', {
+          method: 'PUT',
+          body: JSON.stringify({ logId: editingId, aircraftId: aircraft!.id, logData: payload, aircraftUpdate: editAircraftUpdate })
+        });
+        if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || 'Failed to update flight log'); }
+      } else {
+        const res = await authFetch('/api/flight-logs', {
+          method: 'POST',
+          body: JSON.stringify({ aircraftId: aircraft!.id, logData: payload, aircraftUpdate })
+        });
+        if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || 'Failed to save flight log'); }
+      }
+      await mutate(); onUpdate(); setShowLogModal(false);
+      showSuccess(editingId ? "Flight log updated" : "Flight logged");
+    } catch (err: any) {
+      showError(err?.message || 'Failed to save flight log.');
+    } finally {
+      setIsSubmitting(false);
     }
-    await mutate(); onUpdate(); setShowLogModal(false); setIsSubmitting(false);
-    showSuccess(editingId ? "Flight log updated" : "Flight logged");
   };
 
   if (!aircraft) return null;

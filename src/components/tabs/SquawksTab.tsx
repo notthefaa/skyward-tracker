@@ -61,7 +61,7 @@ export default function SquawksTab({
   const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [visibleArchivedCount, setVisibleArchivedCount] = useState(10);
 
-  const { showSuccess, showError } = useToast();
+  const { showSuccess, showError, showWarning } = useToast();
   const confirm = useConfirm();
 
   // Detail modal state
@@ -152,45 +152,74 @@ export default function SquawksTab({
 
   const submitSquawk = async (e: React.FormEvent) => {
     e.preventDefault(); setIsSubmitting(true);
-    const uploadedUrls = await uploadImages(); 
-    const allPictures = [...existingImages, ...uploadedUrls];
-    let signatureData = null; let sigDate = null;
-    if (isDeferred && sigCanvas.current && !sigCanvas.current.isEmpty()) { 
-      signatureData = sigCanvas.current.getTrimmedCanvas().toDataURL('image/png'); 
-      sigDate = new Date().toISOString().split('T')[0]; 
-    }
-
-    const squawkData: any = {
-      aircraft_id: aircraft!.id, reported_by: session.user.id, reporter_initials: userInitials, 
-      location, description, affects_airworthiness: affectsAirworthiness, status, pictures: allPictures, 
-      is_deferred: isDeferred, mel_number: mel, cdl_number: cdl, nef_number: nef, mdl_number: mdl, 
-      mel_control_number: melControl, deferral_category: category || null, deferral_procedures_completed: procCompleted, 
-      full_name: fullName, certificate_number: certNum, 
-      ...(signatureData && { signature_data: signatureData, signature_date: sigDate })
-    };
-
-    if (editingId) {
-      squawkData.edited_at = new Date().toISOString();
-      squawkData.edited_by_initials = userInitials;
-      const res = await authFetch('/api/squawks', {
-        method: 'PUT',
-        body: JSON.stringify({ squawkId: editingId, aircraftId: aircraft!.id, squawkData })
-      });
-      if (!res.ok) throw new Error('Failed to update squawk');
-    } else {
-      const res = await authFetch('/api/squawks', {
-        method: 'POST',
-        body: JSON.stringify({ aircraftId: aircraft!.id, squawkData })
-      });
-      if (!res.ok) throw new Error('Failed to create squawk');
-      const { squawk: newSquawk } = await res.json();
-      if (newSquawk) {
-        try { await authFetch('/api/emails/squawk-notify', { method: 'POST', body: JSON.stringify({ squawk: newSquawk, aircraft, notifyMx }) }); } catch (err) { console.error("Failed to send squawk email", err); }
+    // Wrap the whole write in try/catch/finally — prior to this, a
+    // failed save left the submit button stuck in "Saving…" forever
+    // because the throw skipped over setIsSubmitting(false).
+    try {
+      const uploadedUrls = await uploadImages();
+      const allPictures = [...existingImages, ...uploadedUrls];
+      let signatureData = null; let sigDate = null;
+      if (isDeferred && sigCanvas.current && !sigCanvas.current.isEmpty()) {
+        signatureData = sigCanvas.current.getTrimmedCanvas().toDataURL('image/png');
+        sigDate = new Date().toISOString().split('T')[0];
       }
-    }
 
-    await mutate(); onGroundedStatusChange(); setShowModal(false); setIsSubmitting(false);
-    showSuccess(editingId ? "Squawk updated" : "Squawk reported");
+      const squawkData: any = {
+        aircraft_id: aircraft!.id, reported_by: session.user.id, reporter_initials: userInitials,
+        location, description, affects_airworthiness: affectsAirworthiness, status, pictures: allPictures,
+        is_deferred: isDeferred, mel_number: mel, cdl_number: cdl, nef_number: nef, mdl_number: mdl,
+        mel_control_number: melControl, deferral_category: category || null, deferral_procedures_completed: procCompleted,
+        full_name: fullName, certificate_number: certNum,
+        ...(signatureData && { signature_data: signatureData, signature_date: sigDate })
+      };
+
+      // notifyMxFailed tracks the email side-effect so we can warn the
+      // pilot that MX wasn't actually notified, instead of silently
+      // swallowing the error the way this used to.
+      let notifyMxFailed = false;
+
+      if (editingId) {
+        squawkData.edited_at = new Date().toISOString();
+        squawkData.edited_by_initials = userInitials;
+        const res = await authFetch('/api/squawks', {
+          method: 'PUT',
+          body: JSON.stringify({ squawkId: editingId, aircraftId: aircraft!.id, squawkData })
+        });
+        if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || 'Failed to update squawk'); }
+      } else {
+        const res = await authFetch('/api/squawks', {
+          method: 'POST',
+          body: JSON.stringify({ aircraftId: aircraft!.id, squawkData })
+        });
+        if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || 'Failed to create squawk'); }
+        const { squawk: newSquawk } = await res.json();
+        if (newSquawk && notifyMx) {
+          try {
+            const emailRes = await authFetch('/api/emails/squawk-notify', {
+              method: 'POST',
+              body: JSON.stringify({ squawk: newSquawk, aircraft, notifyMx }),
+            });
+            if (!emailRes.ok) notifyMxFailed = true;
+          } catch (err) {
+            console.error("Failed to send squawk email", err);
+            notifyMxFailed = true;
+          }
+        }
+      }
+
+      await mutate(); onGroundedStatusChange(); setShowModal(false);
+      if (notifyMxFailed) {
+        // Squawk saved but the mechanic notification didn't go out —
+        // tell the pilot so they can follow up manually.
+        showWarning("Squawk saved, but the MX notification email failed to send. Contact maintenance directly.");
+      } else {
+        showSuccess(editingId ? "Squawk updated" : "Squawk reported");
+      }
+    } catch (err: any) {
+      showError(err?.message || 'Failed to save squawk.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const deleteSquawk = async (id: string) => {
