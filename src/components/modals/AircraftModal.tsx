@@ -9,8 +9,9 @@ import { validateFileSize, MAX_UPLOAD_SIZE_LABEL } from "@/lib/constants";
 import { friendlyPgError } from "@/lib/pgErrors";
 import { INPUT_WHITE_BG } from "@/lib/styles";
 import type { AircraftWithMetrics } from "@/lib/types";
-import { X, Info, Camera, Upload } from "lucide-react";
+import { X, Info, Camera, Upload, Plus, Trash2, ChevronDown, ChevronUp, MessageSquare, FileText } from "lucide-react";
 import { PrimaryButton } from "@/components/AppButtons";
+import { HOWARD_LOGO_PATH } from "@/lib/howard/persona";
 import imageCompression from "browser-image-compression";
 import ReactCrop, { Crop } from "react-image-crop";
 import "react-image-crop/dist/ReactCrop.css";
@@ -52,6 +53,23 @@ export default function AircraftModal({
 
   // Track whether the aircraft has flight logs (affects time field editability)
   const [hasFlightLogs, setHasFlightLogs] = useState(false);
+
+  // ── Equipment rows (optional, only for new aircraft) ───
+  type EquipmentRow = { name: string; make: string; serial: string };
+  const [equipmentRows, setEquipmentRows] = useState<EquipmentRow[]>([]);
+  const [showEquipment, setShowEquipment] = useState(false);
+  const addEquipmentRow = () => setEquipmentRows(prev => [...prev, { name: '', make: '', serial: '' }]);
+  const removeEquipmentRow = (i: number) => setEquipmentRows(prev => prev.filter((_, idx) => idx !== i));
+  const updateEquipmentRow = (i: number, field: keyof EquipmentRow, value: string) => {
+    setEquipmentRows(prev => prev.map((r, idx) => idx === i ? { ...r, [field]: value } : r));
+  };
+
+  // ── Document uploads (optional, only for new aircraft) ───
+  const DOC_TYPES = ['POH', 'AFM', 'Supplement', 'MEL', 'SOP', 'Registration', 'Airworthiness Certificate', 'Weight and Balance', 'Other'] as const;
+  const [showDocuments, setShowDocuments] = useState(false);
+  const [docFiles, setDocFiles] = useState<Array<{ file: File; docType: string }>>([]);
+  const [isUploadingDocs, setIsUploadingDocs] = useState(false);
+  const docInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (existingAircraft) {
@@ -254,6 +272,7 @@ export default function AircraftModal({
         created_by: session.user.id
       });
 
+      let newAircraftId: string | null = null;
       try {
         const res = await authFetch('/api/aircraft/create', {
           method: 'POST',
@@ -263,13 +282,59 @@ export default function AircraftModal({
           const errData = await res.json();
           throw new Error(errData.error || 'Failed to create aircraft.');
         }
+        const result = await res.json();
+        newAircraftId = result.aircraft?.id || null;
       } catch (err: any) {
         showError(err.message);
         setIsSubmitting(false);
         return;
       }
+
+      // ── Save equipment rows (best-effort after aircraft create) ──
+      if (newAircraftId && equipmentRows.length > 0) {
+        const validRows = equipmentRows.filter(r => r.name.trim());
+        if (validRows.length > 0) {
+          try {
+            const res = await authFetch('/api/equipment', {
+              method: 'POST',
+              body: JSON.stringify({
+                aircraftId: newAircraftId,
+                bulk: validRows.map(r => ({
+                  name: r.name.trim(),
+                  category: 'avionics',
+                  make: r.make.trim() || null,
+                  serial: r.serial.trim() || null,
+                })),
+              }),
+            });
+            if (!res.ok) showWarning('Aircraft saved but some equipment failed to save.');
+          } catch {
+            showWarning('Aircraft saved but equipment entries could not be saved.');
+          }
+        }
+      }
+
+      // ── Upload documents (best-effort after aircraft create) ──
+      if (newAircraftId && docFiles.length > 0) {
+        setIsUploadingDocs(true);
+        let uploadFailed = 0;
+        for (const df of docFiles) {
+          try {
+            const formData = new FormData();
+            formData.append('file', df.file);
+            formData.append('aircraftId', newAircraftId);
+            formData.append('docType', df.docType);
+            const res = await authFetch('/api/documents', { method: 'POST', body: formData });
+            if (!res.ok) uploadFailed++;
+          } catch {
+            uploadFailed++;
+          }
+        }
+        setIsUploadingDocs(false);
+        if (uploadFailed > 0) showWarning(`Aircraft saved. ${uploadFailed} document(s) failed to upload — you can retry from the Documents tab.`);
+      }
     }
-    
+
     onSuccess(newTail.toUpperCase());
     setIsSubmitting(false);
   };
@@ -287,7 +352,7 @@ export default function AircraftModal({
       <div className="flex min-h-full items-center justify-center p-4">
       <div className="bg-white rounded shadow-2xl w-full max-w-md p-6 border-t-4 border-[#F08B46] animate-slide-up">
         
-        <div className="flex justify-between items-center mb-6">
+        <div className="flex justify-between items-center mb-4">
           <h2 className="font-oswald text-2xl font-bold uppercase text-[#1B4869]">
             {isEditing ? 'Edit Aircraft' : 'Add Aircraft'}
           </h2>
@@ -295,6 +360,45 @@ export default function AircraftModal({
             <X size={24}/>
           </button>
         </div>
+
+        {/* "Set up with Howard" — only on new aircraft, above the form.
+            Opens the launcher popup with a pre-seeded prompt for
+            aircraft setup. Howard can gather info conversationally. */}
+        {!isEditing && (
+          <button
+            type="button"
+            onClick={() => {
+              onClose();
+              try {
+                sessionStorage.setItem(
+                  'aft_howard_prefill',
+                  JSON.stringify({
+                    prompt: "I want to add a new aircraft to my fleet. Walk me through it.",
+                    autoSend: true,
+                    followUps: [
+                      { label: 'Equipment setup', prompt: "Help me add the installed equipment on this aircraft." },
+                      { label: 'Upload documents', prompt: "What documents should I upload for this aircraft?" },
+                    ],
+                    kind: null,
+                  })
+                );
+              } catch {}
+              setTimeout(() => {
+                window.dispatchEvent(new CustomEvent('aft:navigate-howard'));
+              }, 100);
+            }}
+            className="w-full mb-4 flex items-center gap-3 bg-[#e6651b]/5 hover:bg-[#e6651b]/10 border border-[#e6651b]/30 rounded-lg px-4 py-3 active:scale-[0.98] transition-colors"
+          >
+            <div className="w-9 h-9 rounded-full overflow-hidden border border-[#e6651b]/30 shrink-0">
+              <img src={HOWARD_LOGO_PATH} alt="" className="w-full h-full object-cover" draggable={false} />
+            </div>
+            <div className="text-left min-w-0 flex-1">
+              <p className="font-oswald text-sm font-bold uppercase tracking-widest text-navy">Set up with Howard</p>
+              <p className="text-[10px] font-roboto text-gray-500 leading-snug">Chat through it — Howard asks the right questions</p>
+            </div>
+            <MessageSquare size={16} className="text-[#e6651b] shrink-0" />
+          </button>
+        )}
         
         <form onSubmit={handleSaveAircraft} className="space-y-4">
           <div
@@ -460,9 +564,131 @@ export default function AircraftModal({
             )}
           </div>
 
+          {/* ── EQUIPMENT SECTION (new aircraft only) ─────────── */}
+          {!isEditing && (
+            <div className="border-t border-gray-200 pt-4 mt-2">
+              <button
+                type="button"
+                onClick={() => setShowEquipment(!showEquipment)}
+                className="w-full flex items-center justify-between text-left"
+              >
+                <div>
+                  <span className="font-oswald text-sm font-bold uppercase tracking-widest text-navy">Equipment & Avionics</span>
+                  <span className="text-[10px] text-gray-500 block">Optional — add installed equipment now or later</span>
+                </div>
+                {showEquipment ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
+              </button>
+
+              {showEquipment && (
+                <div className="mt-3 space-y-2">
+                  {equipmentRows.map((row, i) => (
+                    <div key={i} className="flex gap-2 items-start">
+                      <div className="flex-1 grid grid-cols-3 gap-2">
+                        <input
+                          type="text"
+                          placeholder="Name *"
+                          value={row.name}
+                          onChange={e => updateEquipmentRow(i, 'name', e.target.value)}
+                          style={INPUT_WHITE_BG}
+                          className="border border-gray-300 rounded p-2 text-xs focus:border-[#F08B46] outline-none"
+                        />
+                        <input
+                          type="text"
+                          placeholder="Manufacturer"
+                          value={row.make}
+                          onChange={e => updateEquipmentRow(i, 'make', e.target.value)}
+                          style={INPUT_WHITE_BG}
+                          className="border border-gray-300 rounded p-2 text-xs focus:border-[#F08B46] outline-none"
+                        />
+                        <input
+                          type="text"
+                          placeholder="Serial"
+                          value={row.serial}
+                          onChange={e => updateEquipmentRow(i, 'serial', e.target.value)}
+                          style={INPUT_WHITE_BG}
+                          className="border border-gray-300 rounded p-2 text-xs focus:border-[#F08B46] outline-none"
+                        />
+                      </div>
+                      <button type="button" onClick={() => removeEquipmentRow(i)} className="text-gray-400 hover:text-[#CE3732] p-1 mt-1 shrink-0">
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={addEquipmentRow}
+                    className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-widest text-[#3AB0FF] hover:text-[#0EA5E9] active:scale-95 py-1"
+                  >
+                    <Plus size={12} /> Add equipment
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── DOCUMENTS SECTION (new aircraft only) ─────────── */}
+          {!isEditing && (
+            <div className="border-t border-gray-200 pt-4 mt-2">
+              <button
+                type="button"
+                onClick={() => setShowDocuments(!showDocuments)}
+                className="w-full flex items-center justify-between text-left"
+              >
+                <div>
+                  <span className="font-oswald text-sm font-bold uppercase tracking-widest text-navy">Documents</span>
+                  <span className="text-[10px] text-gray-500 block">Optional — upload POH, registration, W&B, etc.</span>
+                </div>
+                {showDocuments ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
+              </button>
+
+              {showDocuments && (
+                <div className="mt-3 space-y-2">
+                  {docFiles.map((df, i) => (
+                    <div key={i} className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded p-2">
+                      <FileText size={14} className="text-[#56B94A] shrink-0" />
+                      <span className="text-xs text-navy truncate flex-1">{df.file.name}</span>
+                      <select
+                        value={df.docType}
+                        onChange={e => setDocFiles(prev => prev.map((d, idx) => idx === i ? { ...d, docType: e.target.value } : d))}
+                        className="text-[10px] border border-gray-300 rounded px-2 py-1 bg-white focus:border-[#F08B46] outline-none"
+                      >
+                        {DOC_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                      </select>
+                      <button type="button" onClick={() => setDocFiles(prev => prev.filter((_, idx) => idx !== i))} className="text-gray-400 hover:text-[#CE3732] p-0.5 shrink-0">
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  ))}
+                  <div
+                    className={`border-2 border-dashed rounded p-3 text-center cursor-pointer transition-colors ${docFiles.length > 0 ? 'border-gray-200' : 'border-gray-300'} hover:border-[#56B94A] hover:bg-green-50`}
+                    onClick={() => docInputRef.current?.click()}
+                  >
+                    <Upload size={16} className="mx-auto text-gray-400 mb-1" />
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-navy">Add PDF</p>
+                    <p className="text-[9px] text-gray-400">Max 20MB per file</p>
+                    <input
+                      ref={docInputRef}
+                      type="file"
+                      accept="application/pdf"
+                      multiple
+                      onChange={(e) => {
+                        const files = Array.from(e.target.files || []);
+                        const pdfs = files.filter(f => f.type === 'application/pdf' && f.size <= 20 * 1024 * 1024);
+                        if (pdfs.length < files.length) showWarning('Some files were skipped (only PDFs under 20MB accepted).');
+                        setDocFiles(prev => [...prev, ...pdfs.map(f => ({ file: f, docType: 'Other' as string }))]);
+                        e.target.value = '';
+                      }}
+                      className="hidden"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="pt-4">
-            <PrimaryButton disabled={isSubmitting}>
-              {isSubmitting ? "Saving..." : "Save Aircraft"}
+            <PrimaryButton disabled={isSubmitting || isUploadingDocs}>
+              {isUploadingDocs ? "Uploading documents..." : isSubmitting ? "Saving..." : "Save Aircraft"}
             </PrimaryButton>
           </div>
         </form>
