@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireAuth, requireAircraftAccess, requireAircraftAdmin, handleApiError } from '@/lib/auth';
 import { setAppUser } from '@/lib/audit';
+import { isIsoDate } from '@/lib/validation';
 
 export async function POST(req: Request) {
   try {
@@ -9,6 +10,9 @@ export async function POST(req: Request) {
 
     if (!aircraftId) {
       return NextResponse.json({ error: 'Aircraft ID is required.' }, { status: 400 });
+    }
+    if (proposedDate != null && proposedDate !== '' && !isIsoDate(proposedDate)) {
+      return NextResponse.json({ error: 'Proposed date must be a valid YYYY-MM-DD date.' }, { status: 400 });
     }
 
     // Verify the user is an admin for this aircraft

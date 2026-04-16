@@ -5,6 +5,7 @@ import { setAppUser } from '@/lib/audit';
 import { env } from '@/lib/env';
 import { escapeHtml } from '@/lib/sanitize';
 import { cancelConflictingReservations } from '@/lib/mxConflicts';
+import { isIsoDate } from '@/lib/validation';
 
 const resend = new Resend(env.RESEND_API_KEY);
 const FROM_EMAIL = 'notifications@skywardsociety.com';
@@ -99,8 +100,8 @@ export async function POST(req: Request) {
 
     } else if (action === 'counter') {
       // Owner proposes a different date
-      if (!proposedDate) {
-        return NextResponse.json({ error: 'Proposed date is required for counter.' }, { status: 400 });
+      if (!isIsoDate(proposedDate)) {
+        return NextResponse.json({ error: 'A valid YYYY-MM-DD date is required for counter.' }, { status: 400 });
       }
 
       await supabaseAdmin.from('aft_maintenance_events').update({

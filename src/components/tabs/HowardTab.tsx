@@ -108,6 +108,11 @@ export default function HowardTab({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   // Prevents the single-aircraft auto-confirm effect from firing twice.
   const autoConfirmedTailRef = useRef<string | null>(null);
+  // Holds the AbortController for the in-flight Howard stream so the
+  // unmount cleanup (or a fresh send from the same tab) can cancel an
+  // orphaned request instead of letting the server keep generating
+  // Claude tokens the user will never see.
+  const streamAbortRef = useRef<AbortController | null>(null);
   // Tracks the last aircraft tail we showed the "you switched to…"
   // banner for. When currentAircraft.tail_number differs from this,
   // and there are actual messages in the thread, the banner appears.
@@ -193,6 +198,13 @@ export default function HowardTab({
     let savedAssistantMsg: HowardMessage | null = null;
     let accumulated = '';
 
+    // Abort any prior in-flight stream (shouldn't happen given isSending
+    // gate, but belt-and-suspenders) and install a fresh controller so
+    // cleanup on unmount can cancel this request.
+    streamAbortRef.current?.abort();
+    const abortController = new AbortController();
+    streamAbortRef.current = abortController;
+
     try {
       const { data: { session: s } } = await supabase.auth.getSession();
       // Send the pilot's IANA timezone so Howard can resolve relative
@@ -210,6 +222,7 @@ export default function HowardTab({
           currentTail: currentAircraft?.tail_number ?? null,
           timeZone: tz,
         }),
+        signal: abortController.signal,
       });
 
       if (!res.ok || !res.body) {
@@ -301,6 +314,10 @@ export default function HowardTab({
       // If Howard created any proposed actions, pick them up for the cards.
       mutateActions();
     } catch (err: any) {
+      // Intentional abort (unmount / nav away) isn't a user-facing error.
+      if (err?.name === 'AbortError' || abortController.signal.aborted) {
+        return;
+      }
       showError(err.message);
       // Preserve whatever text already streamed so the user doesn't lose
       // the reply when the connection drops mid-response.
@@ -331,11 +348,27 @@ export default function HowardTab({
         }, false);
       });
     } finally {
+      // Only clear the ref if this is still the active controller — a
+      // later send may have overwritten it already.
+      if (streamAbortRef.current === abortController) {
+        streamAbortRef.current = null;
+      }
       setIsSending(false);
       setStreamingText('');
       setActiveToolName(null);
     }
   }, [input, userId, currentAircraft, isSending, mutate, mutateActions, showError]);
+
+  // Cancel an in-flight Howard stream if the component unmounts (tab
+  // switch, sign-out, route change). The server stops consuming Claude
+  // tokens as soon as the HTTP connection drops, so aborting here prevents
+  // runaway token spend the user will never see anyway.
+  useEffect(() => {
+    return () => {
+      streamAbortRef.current?.abort();
+      streamAbortRef.current = null;
+    };
+  }, []);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {

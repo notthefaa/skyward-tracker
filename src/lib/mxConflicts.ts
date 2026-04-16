@@ -115,7 +115,11 @@ export async function cancelConflictingReservations({
     ? mxStartLabel
     : `${mxStartLabel} — ${mxEndLabel}`;
 
-  // Send a cancellation email to each affected pilot
+  // Send a cancellation email to each affected pilot. Wrap each send so
+  // one pilot's email failure (bounce, Resend outage, malformed address)
+  // doesn't abort the loop — the reservations are already cancelled and
+  // we still want to notify the other affected pilots.
+  const emailFailures: string[] = [];
   for (const userId of userIds) {
     const pilot = pilotMap[userId];
     if (!pilot.email) continue;
@@ -132,7 +136,8 @@ export async function cancelConflictingReservations({
       return `<li style="margin-bottom: 8px;">${start} — ${end}${safeTitle}${safeRoute}</li>`;
     }).join('');
 
-    await resend.emails.send({
+    try {
+      await resend.emails.send({
       from: `Skyward Alerts <${FROM_EMAIL}>`,
       to: [pilot.email],
       subject: `Reservation Cancelled: ${safeTailNumber} — Maintenance Scheduled`,
@@ -159,7 +164,17 @@ export async function cancelConflictingReservations({
           </div>
         </div>
       `,
-    });
+      });
+    } catch (err: any) {
+      emailFailures.push(`${pilot.email}: ${err?.message || 'unknown'}`);
+    }
+  }
+
+  if (emailFailures.length > 0) {
+    console.warn(
+      `[mxConflicts] Cancelled ${overlapping.length} reservation(s) for ${tailNumber} but ${emailFailures.length} pilot email(s) failed:`,
+      emailFailures,
+    );
   }
 
   return overlapping.length;

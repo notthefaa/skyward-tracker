@@ -5,6 +5,7 @@ import { env } from '@/lib/env';
 import { escapeHtml } from '@/lib/sanitize';
 import { cancelConflictingReservations } from '@/lib/mxConflicts';
 import { PORTAL_EXPIRY_DAYS } from '@/lib/constants';
+import { isIsoDate } from '@/lib/validation';
 
 const resend = new Resend(env.RESEND_API_KEY);
 const FROM_EMAIL = 'notifications@skywardsociety.com';
@@ -76,6 +77,9 @@ export async function POST(req: Request) {
     if (action === 'propose_date') {
       if (!serviceDurationDays || serviceDurationDays < 1) {
         return NextResponse.json({ error: 'Estimated service duration in days is required.' }, { status: 400 });
+      }
+      if (!isIsoDate(proposedDate)) {
+        return NextResponse.json({ error: 'Proposed date must be a valid YYYY-MM-DD date.' }, { status: 400 });
       }
 
       const estCompletion = computeEstimatedCompletion(proposedDate, serviceDurationDays);
