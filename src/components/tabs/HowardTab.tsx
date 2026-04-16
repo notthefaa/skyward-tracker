@@ -9,7 +9,6 @@ import type { AircraftWithMetrics } from "@/lib/types";
 import type { HowardMessage } from "@/lib/howard/types";
 import useSWR from "swr";
 import { Send, Wrench, Globe, CloudSun, FileSearch, Database, BarChart3, Trash2, X } from "lucide-react";
-import { HowardIcon } from "@/components/shell/TrayIcons";
 import { useToast } from "@/components/ToastProvider";
 import { useConfirm } from "@/components/ConfirmProvider";
 import ProposedActionCard from "@/components/howard/ProposedActionCard";
@@ -26,11 +25,11 @@ const MARKDOWN_COMPONENTS = {
   p: (props: any) => <p className="font-roboto text-sm leading-relaxed mb-2 last:mb-0" {...props} />,
   strong: (props: any) => <strong className="font-bold text-navy" {...props} />,
   em: (props: any) => <em className="italic" {...props} />,
-  ul: (props: any) => <ul className="list-none pl-0 my-2 space-y-1 text-sm marker:text-[#0EA5E9] [&>li]:relative [&>li]:pl-4 [&>li]:before:content-['•'] [&>li]:before:absolute [&>li]:before:left-0 [&>li]:before:text-[#0EA5E9] [&>li]:before:font-bold" {...props} />,
-  ol: (props: any) => <ol className="list-decimal pl-5 my-2 space-y-1 text-sm marker:text-[#0EA5E9] marker:font-bold" {...props} />,
+  ul: (props: any) => <ul className="list-none pl-0 my-2 space-y-1 text-sm marker:text-[#e6651b] [&>li]:relative [&>li]:pl-4 [&>li]:before:content-['•'] [&>li]:before:absolute [&>li]:before:left-0 [&>li]:before:text-[#e6651b] [&>li]:before:font-bold" {...props} />,
+  ol: (props: any) => <ol className="list-decimal pl-5 my-2 space-y-1 text-sm marker:text-[#e6651b] marker:font-bold" {...props} />,
   li: (props: any) => <li className="leading-relaxed" {...props} />,
-  code: (props: any) => <code className="font-mono text-[0.85em] bg-[#0EA5E9]/10 text-[#0284C7] px-1.5 py-0.5 rounded border border-[#0EA5E9]/20" {...props} />,
-  a: (props: any) => <a className="text-[#0EA5E9] underline" target="_blank" rel="noopener noreferrer" {...props} />,
+  code: (props: any) => <code className="font-mono text-[0.85em] bg-[#e6651b]/10 text-[#c35617] px-1.5 py-0.5 rounded border border-[#e6651b]/20" {...props} />,
+  a: (props: any) => <a className="text-[#e6651b] underline" target="_blank" rel="noopener noreferrer" {...props} />,
   // Howard is told not to use headers, but if one slips through, render
   // as a bold lead-in rather than big heading chrome.
   h1: (props: any) => <p className="font-bold text-sm mt-2 mb-1" {...props} />,
@@ -40,13 +39,13 @@ const MARKDOWN_COMPONENTS = {
   // Callout block — good for a one-line caveat or advisory handoff.
   blockquote: (props: any) => (
     <blockquote
-      className="relative my-2 pl-3 pr-3 py-2 rounded-r bg-[#0EA5E9]/5 border-l-4 border-[#0EA5E9] text-sm text-navy italic [&>p]:mb-0"
+      className="relative my-2 pl-3 pr-3 py-2 rounded-r bg-[#e6651b]/5 border-l-4 border-[#e6651b] text-sm text-navy italic [&>p]:mb-0"
       {...props}
     />
   ),
   // Visible separator — Howard may use `---` to split a status header
   // from the detail beneath.
-  hr: () => <hr className="my-3 border-t border-dashed border-[#0EA5E9]/30" />,
+  hr: () => <hr className="my-3 border-t border-dashed border-[#e6651b]/30" />,
 };
 
 const SUGGESTIONS = [
@@ -444,51 +443,63 @@ export default function HowardTab({
 
   return (
     <div className="flex flex-col h-full">
-      {/* Header — hidden in compact mode (the launcher popup has its own) */}
+      {/* Header — hidden in compact mode (the launcher popup has its
+       * own). Uses the brand logo to match the floating FAB. The PIC-
+       * authority disclaimer below the header lives on the full-page
+       * surface only; the popup has its own copy in HowardLauncher. */}
       {!compact && (
-        <div className="flex items-center justify-between gap-3 mb-4">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="p-2 rounded-full bg-[#0EA5E9]/10 shrink-0">
-              <HowardIcon size={24} style={{ color: '#0EA5E9' }} />
+        <>
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-12 h-12 rounded-full overflow-hidden shrink-0 border border-[#e6651b]/20">
+                <img src="/howard-logo.svg" alt="" className="w-full h-full object-cover" draggable={false} />
+              </div>
+              <div className="min-w-0">
+                <h2 className="font-oswald text-2xl md:text-3xl font-bold uppercase text-navy m-0 leading-none">Howard</h2>
+                <span className="text-[10px] font-bold uppercase tracking-widest text-[#e6651b] truncate block">
+                  {currentAircraft ? `Hangar helper · ${currentAircraft.tail_number}` : 'Hangar helper'}
+                </span>
+              </div>
             </div>
-            <div className="min-w-0">
-              <h2 className="font-oswald text-2xl md:text-3xl font-bold uppercase text-navy m-0 leading-none">Howard</h2>
-              <span className="text-[10px] font-bold uppercase tracking-widest text-[#0EA5E9] truncate block">
-                {currentAircraft ? `Hangar helper · ${currentAircraft.tail_number}` : 'Hangar helper'}
-              </span>
-            </div>
-          </div>
-          <div className="flex items-center gap-3 shrink-0">
-            <button
-              onClick={() => window.dispatchEvent(new CustomEvent('aft:navigate-howard-usage'))}
-              title="View Howard usage"
-              aria-label="View Howard usage"
-              className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-gray-500 hover:text-[#0EA5E9] active:scale-95 transition-colors"
-            >
-              <BarChart3 size={14} />
-              <span className="hidden sm:inline">Usage</span>
-            </button>
-            {messages.length > 0 && (
+            <div className="flex items-center gap-3 shrink-0">
               <button
-                onClick={handleClearThread}
-                disabled={isSending}
-                title="Clear conversation"
-                aria-label="Clear conversation"
-                className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-gray-500 hover:text-[#CE3732] active:scale-95 transition-colors disabled:opacity-40"
+                onClick={() => window.dispatchEvent(new CustomEvent('aft:navigate-howard-usage'))}
+                title="View Howard usage"
+                aria-label="View Howard usage"
+                className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-gray-500 hover:text-[#e6651b] active:scale-95 transition-colors"
               >
-                <Trash2 size={14} />
-                <span className="hidden sm:inline">Clear</span>
+                <BarChart3 size={14} />
+                <span className="hidden sm:inline">Usage</span>
               </button>
-            )}
+              {messages.length > 0 && (
+                <button
+                  onClick={handleClearThread}
+                  disabled={isSending}
+                  title="Clear conversation"
+                  aria-label="Clear conversation"
+                  className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-gray-500 hover:text-[#CE3732] active:scale-95 transition-colors disabled:opacity-40"
+                >
+                  <Trash2 size={14} />
+                  <span className="hidden sm:inline">Clear</span>
+                </button>
+              )}
+            </div>
           </div>
-        </div>
+          <div className="mb-4 px-3 py-2 bg-[#e6651b]/5 border border-[#e6651b]/20 rounded">
+            <p className="text-[11px] font-roboto italic text-gray-600 leading-snug">
+              The PIC retains all legal authority over airworthiness and go/no-go decisions. Howard provides data and helps you think through it — not legal or operational advice.
+            </p>
+          </div>
+        </>
       )}
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto bg-cream shadow-lg rounded-sm p-4 mb-3 min-h-[300px]">
         {messages.length === 0 && !isSending ? (
           <div className="flex flex-col items-center justify-center h-full text-center py-8">
-            <HowardIcon size={40} style={{ color: '#0EA5E9' }} />
+            <div className="w-14 h-14 rounded-full overflow-hidden border border-[#e6651b]/20 mb-1">
+              <img src="/howard-logo.svg" alt="" className="w-full h-full object-cover" draggable={false} />
+            </div>
             <p className="font-roboto text-sm text-navy mt-3 mb-1 font-bold">Hey, I&apos;m Howard.</p>
             <p className="font-roboto text-xs text-gray-500 mb-4 max-w-xs">
               {userFleet.length === 0
@@ -500,7 +511,7 @@ export default function HowardTab({
                 <button
                   key={s}
                   onClick={() => handleSend(s)}
-                  className="text-[11px] font-roboto font-medium text-[#0EA5E9] bg-white border border-[#0EA5E9]/30 rounded-full px-3 py-1.5 hover:bg-[#0EA5E9]/5 active:scale-95 transition-all"
+                  className="text-[11px] font-roboto font-medium text-[#e6651b] bg-white border border-[#e6651b]/30 rounded-full px-3 py-1.5 hover:bg-[#e6651b]/5 active:scale-95 transition-all"
                 >
                   {s}
                 </button>
@@ -567,7 +578,7 @@ export default function HowardTab({
               <div className="flex justify-start">
                 <div className="max-w-[85%] bg-white border border-gray-200 rounded-2xl px-4 py-2.5 text-navy">
                   {toolInfo && (
-                    <div className="flex items-center gap-1.5 mb-1.5 text-[#0EA5E9]">
+                    <div className="flex items-center gap-1.5 mb-1.5 text-[#e6651b]">
                       <toolInfo.Icon size={12} className="animate-pulse" />
                       <span className="text-[10px] font-bold uppercase tracking-widest">{toolInfo.label}…</span>
                     </div>
@@ -577,7 +588,7 @@ export default function HowardTab({
                       <ReactMarkdown remarkPlugins={[remarkGfm]} components={MARKDOWN_COMPONENTS}>
                         {streamingText}
                       </ReactMarkdown>
-                      <span className="inline-block w-1.5 h-3.5 ml-0.5 bg-[#0EA5E9] align-middle animate-pulse" />
+                      <span className="inline-block w-1.5 h-3.5 ml-0.5 bg-[#e6651b] align-middle animate-pulse" />
                     </div>
                   )}
                 </div>
@@ -588,9 +599,9 @@ export default function HowardTab({
             {isSending && !streamingText && !toolInfo && (
               <div className="flex justify-start">
                 <div className="bg-white border border-gray-200 rounded-2xl px-4 py-3 flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#0EA5E9] animate-bounce" style={{ animationDelay: '0ms' }} />
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#0EA5E9] animate-bounce" style={{ animationDelay: '150ms' }} />
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#0EA5E9] animate-bounce" style={{ animationDelay: '300ms' }} />
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#e6651b] animate-bounce" style={{ animationDelay: '0ms' }} />
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#e6651b] animate-bounce" style={{ animationDelay: '150ms' }} />
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#e6651b] animate-bounce" style={{ animationDelay: '300ms' }} />
                 </div>
               </div>
             )}
@@ -627,7 +638,7 @@ export default function HowardTab({
                         placeholder="Type to filter by tail…"
                         autoCapitalize="characters"
                         maxLength={10}
-                        className="text-xs font-roboto uppercase px-2.5 py-1.5 rounded border border-gray-300 focus:border-[#0EA5E9] outline-none"
+                        className="text-xs font-roboto uppercase px-2.5 py-1.5 rounded border border-gray-300 focus:border-[#e6651b] outline-none"
                         style={{ backgroundColor: '#ffffff' }}
                       />
                     )}
@@ -640,8 +651,8 @@ export default function HowardTab({
                             onClick={() => { setPickerFilter(''); handleSend(`Yes, ${a.tail_number}.`); }}
                             className={`text-[11px] font-roboto font-medium rounded-full px-3 py-1.5 border active:scale-95 transition-all ${
                               isCurrent
-                                ? 'text-white bg-[#0EA5E9] border-[#0EA5E9] hover:bg-[#0284C7]'
-                                : 'text-[#0EA5E9] bg-white border-[#0EA5E9]/40 hover:bg-[#0EA5E9]/10'
+                                ? 'text-white bg-[#e6651b] border-[#e6651b] hover:bg-[#c35617]'
+                                : 'text-[#e6651b] bg-white border-[#e6651b]/40 hover:bg-[#e6651b]/10'
                             }`}
                           >
                             {a.tail_number}
@@ -668,7 +679,7 @@ export default function HowardTab({
                         <button
                           key={f.label}
                           onClick={() => handleSend(f.prompt)}
-                          className="text-[11px] font-roboto font-medium text-[#0EA5E9] bg-white border border-[#0EA5E9]/40 rounded-full px-3 py-1.5 hover:bg-[#0EA5E9]/10 active:scale-95 transition-all"
+                          className="text-[11px] font-roboto font-medium text-[#e6651b] bg-white border border-[#e6651b]/40 rounded-full px-3 py-1.5 hover:bg-[#e6651b]/10 active:scale-95 transition-all"
                         >
                           {f.label}
                         </button>
@@ -690,10 +701,10 @@ export default function HowardTab({
        * pilot changes tail mid-conversation. Re-offers the same
        * angles the FAB quick-prompts present. */}
       {showSwitchBanner && (
-        <div className="mb-2 bg-[#0EA5E9]/5 border border-[#0EA5E9]/30 rounded-lg p-3 animate-fade-in">
+        <div className="mb-2 bg-[#e6651b]/5 border border-[#e6651b]/30 rounded-lg p-3 animate-fade-in">
           <div className="flex items-center justify-between gap-2 mb-2">
             <span className="text-[10px] font-bold uppercase tracking-widest text-navy">
-              Switched to <code className="font-mono text-[#0EA5E9] normal-case">{currentTail}</code>
+              Switched to <code className="font-mono text-[#e6651b] normal-case">{currentTail}</code>
               {' — '}want me to check?
             </span>
             <button
@@ -714,7 +725,7 @@ export default function HowardTab({
                   setAwaitingAircraftChoice(false);
                   handleSend(p.prompt);
                 }}
-                className="text-[11px] font-roboto font-medium text-[#0EA5E9] bg-white border border-[#0EA5E9]/40 rounded-full px-3 py-1.5 hover:bg-[#0EA5E9]/10 active:scale-95 transition-all"
+                className="text-[11px] font-roboto font-medium text-[#e6651b] bg-white border border-[#e6651b]/40 rounded-full px-3 py-1.5 hover:bg-[#e6651b]/10 active:scale-95 transition-all"
               >
                 {p.label}
               </button>
@@ -734,13 +745,13 @@ export default function HowardTab({
           maxLength={2000}
           rows={1}
           disabled={isSending}
-          className="flex-1 rounded-lg border border-gray-300 px-4 py-3 text-sm font-roboto text-navy resize-none focus:border-[#0EA5E9] outline-none disabled:opacity-50"
+          className="flex-1 rounded-lg border border-gray-300 px-4 py-3 text-sm font-roboto text-navy resize-none focus:border-[#e6651b] outline-none disabled:opacity-50"
           style={{ backgroundColor: '#ffffff' }}
         />
         <button
           onClick={() => { setFollowUps([]); setAwaitingAircraftChoice(false); handleSend(); }}
           disabled={!input.trim() || isSending}
-          className="bg-[#0EA5E9] text-white p-3 rounded-lg active:scale-95 transition-transform disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+          className="bg-[#e6651b] text-white p-3 rounded-lg active:scale-95 transition-transform disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
         >
           <Send size={18} />
         </button>

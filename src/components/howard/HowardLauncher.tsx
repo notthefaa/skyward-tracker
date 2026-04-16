@@ -5,7 +5,6 @@ import dynamic from "next/dynamic";
 import useSWR from "swr";
 import { authFetch } from "@/lib/authFetch";
 import { swrKeys } from "@/lib/swrKeys";
-import { HowardIcon } from "@/components/shell/TrayIcons";
 import type { AircraftWithMetrics } from "@/lib/types";
 import {
   X, ArrowLeft, Plane, Maximize2, Shield, Wrench, CalendarPlus,
@@ -236,7 +235,7 @@ export default function HowardLauncher({ currentAircraft, userFleet = [], sessio
           onClick={() => setOpen(false)}
         >
           <div
-            className={`bg-white rounded-t-2xl md:rounded-xl shadow-2xl w-full md:max-w-md border-t-4 border-[#0EA5E9] flex flex-col ${
+            className={`bg-white rounded-t-2xl md:rounded-xl shadow-2xl w-full md:max-w-md border-t-4 border-[#e6651b] flex flex-col ${
               mode === 'chat' ? 'h-[85vh] md:h-[70vh]' : 'max-h-[85vh] overflow-y-auto'
             }`}
             onClick={e => e.stopPropagation()}
@@ -253,14 +252,16 @@ export default function HowardLauncher({ currentAircraft, userFleet = [], sessio
                     <ArrowLeft size={18} />
                   </button>
                 )}
-                <div className="p-2 rounded-full bg-[#0EA5E9]/10 shrink-0">
-                  <HowardIcon size={22} style={{ color: '#0EA5E9' }} />
+                {/* Brand logo — matches the floating FAB so the popup
+                 * feels like an extension of the same entry point. */}
+                <div className="w-10 h-10 rounded-full overflow-hidden shrink-0 border border-[#e6651b]/20">
+                  <img src="/howard-logo.svg" alt="" className="w-full h-full object-cover" draggable={false} />
                 </div>
                 <div className="min-w-0">
                   <h3 className="font-oswald text-lg font-bold uppercase text-navy leading-none">
                     {mode === 'flight-briefing' ? 'Flight Briefing' : 'Howard'}
                   </h3>
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-[#0EA5E9] truncate">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-[#e6651b] truncate">
                     {currentTail ? `Selected: ${currentTail}` : 'Hangar helper'}
                   </p>
                 </div>
@@ -286,6 +287,14 @@ export default function HowardLauncher({ currentAircraft, userFleet = [], sessio
               </div>
             </div>
 
+            {/* PIC-authority disclaimer — visible in every mode so the
+             * pilot sees it before any back-and-forth with Howard. */}
+            <div className="px-4 py-2.5 bg-[#e6651b]/5 border-b border-[#e6651b]/20 shrink-0">
+              <p className="text-[10px] font-roboto italic text-gray-600 leading-snug">
+                The PIC retains all legal authority over airworthiness and go/no-go decisions. Howard provides data and helps you think through it — not legal or operational advice.
+              </p>
+            </div>
+
             {mode === 'menu' && (
               <div className="p-4 flex flex-col gap-2">
                 <p className="font-roboto text-sm text-gray-700 mb-1">
@@ -297,18 +306,18 @@ export default function HowardLauncher({ currentAircraft, userFleet = [], sessio
                     <button
                       key={p.label}
                       onClick={() => sendPrompt(p.prompt, p.followUps, p.kind)}
-                      className="text-left px-4 py-3 bg-gray-50 hover:bg-[#0EA5E9]/10 hover:border-[#0EA5E9] border border-gray-200 rounded-lg text-sm font-bold text-navy transition-colors active:scale-[0.98] flex items-center gap-3"
+                      className="text-left px-4 py-3 bg-gray-50 hover:bg-[#e6651b]/10 hover:border-[#e6651b] border border-gray-200 rounded-lg text-sm font-bold text-navy transition-colors active:scale-[0.98] flex items-center gap-3"
                     >
-                      <Icon size={16} className="text-[#0EA5E9] shrink-0" />
+                      <Icon size={16} className="text-[#e6651b] shrink-0" />
                       <span>{p.label}</span>
                     </button>
                   );
                 })}
                 <button
                   onClick={() => setMode('flight-briefing')}
-                  className="text-left px-4 py-3 bg-[#0EA5E9]/5 hover:bg-[#0EA5E9]/15 border border-[#0EA5E9]/50 rounded-lg text-sm font-bold text-navy transition-colors active:scale-[0.98] flex items-center gap-3"
+                  className="text-left px-4 py-3 bg-[#e6651b]/5 hover:bg-[#e6651b]/15 border border-[#e6651b]/50 rounded-lg text-sm font-bold text-navy transition-colors active:scale-[0.98] flex items-center gap-3"
                 >
-                  <Plane size={16} className="text-[#0EA5E9] shrink-0" />
+                  <Plane size={16} className="text-[#e6651b] shrink-0" />
                   <span>Flight briefing…</span>
                 </button>
                 <button
@@ -396,7 +405,7 @@ export default function HowardLauncher({ currentAircraft, userFleet = [], sessio
                 <button
                   onClick={() => sendPrompt(buildBriefingPrompt(), briefingFollowUps, 'aircraft')}
                   disabled={!canSubmitBriefing}
-                  className="mt-5 w-full bg-[#0EA5E9] text-white font-oswald font-bold uppercase tracking-widest text-sm py-3 rounded-lg disabled:opacity-40 active:scale-95 transition-transform"
+                  className="mt-5 w-full bg-[#e6651b] text-white font-oswald font-bold uppercase tracking-widest text-sm py-3 rounded-lg disabled:opacity-40 active:scale-95 transition-transform"
                 >
                   Get briefing
                 </button>
