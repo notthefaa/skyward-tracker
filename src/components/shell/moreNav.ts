@@ -1,4 +1,4 @@
-import { FileText, FolderOpen, Plane, MessageSquare } from "lucide-react";
+import { FileText, FolderOpen, Gauge, MessageSquare } from "lucide-react";
 import type { SelectorItem } from "./SectionSelector";
 
 /** Unified top-selector for pages inside the "More" nav tray.
@@ -8,7 +8,7 @@ import type { SelectorItem } from "./SectionSelector";
 export const MORE_SELECTOR_ITEMS: SelectorItem[] = [
   { key: 'notes',      label: 'Notes',      icon: FileText, color: '#525659' },
   { key: 'documents',  label: 'Docs',       icon: FolderOpen, color: '#56B94A' },
-  { key: 'equipment',  label: 'Equipment',  icon: Plane, color: '#3AB0FF' },
+  { key: 'equipment',  label: 'Equipment',  icon: Gauge, color: '#3AB0FF' },
   { key: 'howard',     label: 'Howard',     icon: MessageSquare, color: '#e6651b' },
 ];
 

@@ -288,7 +288,7 @@ export default function MaintenanceTab({
   };
 
   return (
-    <>
+    <div className="flex flex-col">
       {/* ─── MX / SQUAWKS / SERVICE / ADS SELECTOR ─── */}
       <SectionSelector
         items={MX_ADS_SELECTOR_ITEMS}
@@ -530,7 +530,7 @@ export default function MaintenanceTab({
           onOpenModal={() => setShowServiceModal(true)}
         />
       )}
-    </>
+    </div>
   );
 }
 

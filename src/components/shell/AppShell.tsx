@@ -72,7 +72,7 @@ const mxTrayItems = [
 const moreTrayItems = [
   { key: 'notes', label: 'Notes', icon: FileText, color: '#525659', soon: false },
   { key: 'documents', label: 'Documents', icon: FolderOpen, color: '#56B94A', soon: false },
-  { key: 'equipment', label: 'Equipment', icon: Plane, color: '#3AB0FF', soon: false },
+  { key: 'equipment', label: 'Equipment', icon: Gauge, color: '#3AB0FF', soon: false },
   { key: 'howard', label: 'Howard', icon: HowardIcon, color: '#0EA5E9', soon: false },
 ] as const;
 

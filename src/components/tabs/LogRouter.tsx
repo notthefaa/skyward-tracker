@@ -14,7 +14,7 @@ const ChecksTab = dynamic(() => import("@/components/tabs/ChecksTab"), { loading
  * LogSubTab union so there's no mapping layer. */
 const LOG_SELECTOR_ITEMS = [
   { key: 'flights', label: 'Flight', icon: PenLine, color: '#3AB0FF' },
-  { key: 'checks',  label: 'Ops Checks', icon: CheckSquare, color: '#3AB0FF' },
+  { key: 'checks',  label: 'Ops Checks', icon: CheckSquare, color: '#56B94A' },
 ];
 
 interface LogRouterProps {
