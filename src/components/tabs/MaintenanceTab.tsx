@@ -8,13 +8,15 @@ import { INPUT_WHITE_BG } from "@/lib/styles";
 import { swrKeys } from "@/lib/swrKeys";
 import type { AircraftWithMetrics, SystemSettings, AircraftRole, MxSubTab } from "@/lib/types";
 import useSWR from "swr";
-import { Wrench, Trash2, Plus, X, Edit2, Calendar, Send, ExternalLink, ChevronRight, HelpCircle, AlertTriangle, Download, Layers, Settings } from "lucide-react";
+import { Wrench, Trash2, Plus, X, Edit2, Calendar, Send, ExternalLink, ChevronRight, HelpCircle, AlertTriangle, Download, Layers, Settings, ClipboardList, ShieldAlert } from "lucide-react";
 import { PrimaryButton } from "@/components/AppButtons";
 import { useModalScrollLock } from "@/hooks/useModalScrollLock";
 import ServiceEventModal from "@/components/modals/ServiceEventModal";
 import MxGuideModal from "@/components/modals/MxGuideModal";
 import MxTemplatePickerModal from "@/components/modals/MxTemplatePickerModal";
 import SquawksTab from "@/components/tabs/SquawksTab";
+import SectionSelector from "@/components/shell/SectionSelector";
+import { MX_ADS_SELECTOR_ITEMS, emitMxAdsNavigate } from "@/components/shell/mxAdsNav";
 
 export default function MaintenanceTab({ 
   aircraft, role, aircraftRole, onGroundedStatusChange, sysSettings, session, userInitials, initialSubTab
@@ -26,7 +28,7 @@ export default function MaintenanceTab({
   sysSettings: SystemSettings,
   session: any,
   userInitials: string,
-  initialSubTab?: 'maintenance' | 'squawks'
+  initialSubTab?: MxSubTab
 }) {
   const { showSuccess, showError, showWarning } = useToast();
   const confirm = useConfirm();
@@ -287,15 +289,21 @@ export default function MaintenanceTab({
 
   return (
     <>
-      {/* ─── MX / SQUAWKS TAB SELECTOR ─── */}
-      <div className="flex mb-4 border-b-2 border-gray-200">
-        <button onClick={() => setSubTab('maintenance')} className={`flex-1 py-3 text-xs font-oswald font-bold uppercase tracking-widest transition-colors active:scale-95 flex items-center justify-center gap-2 border-b-2 -mb-[2px] ${subTab === 'maintenance' ? 'border-[#F08B46] text-[#F08B46]' : 'border-transparent text-gray-400 hover:text-gray-600'}`}>
-          <Wrench size={16} /> Maintenance
-        </button>
-        <button onClick={() => setSubTab('squawks')} className={`flex-1 py-3 text-xs font-oswald font-bold uppercase tracking-widest transition-colors active:scale-95 flex items-center justify-center gap-2 border-b-2 -mb-[2px] ${subTab === 'squawks' ? 'border-[#CE3732] text-[#CE3732]' : 'border-transparent text-gray-400 hover:text-gray-600'}`}>
-          <AlertTriangle size={16} /> Squawks
-        </button>
-      </div>
+      {/* ─── MX / SQUAWKS / SERVICE / ADS SELECTOR ─── */}
+      <SectionSelector
+        items={MX_ADS_SELECTOR_ITEMS}
+        selectedKey={subTab}
+        onSelect={(key) => {
+          // Maintenance / squawks / service are local subtabs; ADs is
+          // a separate app tab so we hand off to AppShell via event.
+          if (key === 'maintenance' || key === 'squawks' || key === 'service') {
+            setSubTab(key);
+          } else {
+            emitMxAdsNavigate(key);
+          }
+        }}
+        compact
+      />
 
       {/* ─── MAINTENANCE SUB-VIEW ─── */}
       {subTab === 'maintenance' && (
@@ -512,6 +520,153 @@ export default function MaintenanceTab({
       {subTab === 'squawks' && (
         <SquawksTab aircraft={aircraft} session={session} role={role} aircraftRole={aircraftRole} userInitials={userInitials} onGroundedStatusChange={onGroundedStatusChange} />
       )}
+
+      {/* ─── SERVICE SUB-VIEW ─── */}
+      {subTab === 'service' && (
+        <ServiceEventsList
+          aircraft={aircraft}
+          activeEvents={activeEvents}
+          canEditMx={canEditMx}
+          onOpenModal={() => setShowServiceModal(true)}
+        />
+      )}
     </>
+  );
+}
+
+/**
+ * Service-events listing — summary cards for every work package the
+ * aircraft has. Tapping a card opens ServiceEventModal (which handles
+ * the detailed view + mechanic portal link). Admins see a "Schedule
+ * Service" CTA; non-admins get read-only.
+ *
+ * We split into "active" (work in flight) and "past" (complete /
+ * cancelled) because owners glance here to see what's queued far more
+ * often than they dig into history.
+ */
+function ServiceEventsList({
+  aircraft,
+  activeEvents,
+  canEditMx,
+  onOpenModal,
+}: {
+  aircraft: AircraftWithMetrics | null;
+  activeEvents: any[];
+  canEditMx: boolean;
+  onOpenModal: () => void;
+}) {
+  const { data: pastEvents = [] } = useSWR(
+    aircraft ? ['mx-events-past', aircraft.id] : null,
+    async () => {
+      const { data } = await supabase
+        .from('aft_maintenance_events')
+        .select('*')
+        .eq('aircraft_id', aircraft!.id)
+        .is('deleted_at', null)
+        .in('status', ['complete', 'cancelled'])
+        .order('created_at', { ascending: false })
+        .limit(20);
+      return data || [];
+    },
+  );
+
+  const renderCard = (ev: any) => {
+    const statusColor = ev.status === 'draft' ? '#F08B46'
+      : ev.status === 'confirmed' ? '#3AB0FF'
+      : ev.status === 'in_progress' || ev.status === 'ready_for_pickup' ? '#56B94A'
+      : ev.status === 'complete' ? '#56B94A'
+      : ev.status === 'cancelled' ? '#CE3732'
+      : '#9CA3AF';
+    const dateLabel = ev.confirmed_date
+      ? `Service: ${ev.confirmed_date}`
+      : ev.proposed_date
+      ? `Proposed: ${ev.proposed_date}`
+      : 'Awaiting date';
+    return (
+      <div
+        key={ev.id}
+        className="bg-white shadow rounded-sm p-4 border-l-4 flex items-start justify-between gap-3"
+        style={{ borderLeftColor: statusColor }}
+      >
+        <div className="min-w-0">
+          <span
+            className="text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded text-white inline-block"
+            style={{ backgroundColor: statusColor }}
+          >
+            {ev.status.replace(/_/g, ' ')}
+          </span>
+          <p className="font-oswald font-bold text-navy text-sm mt-2 truncate">{dateLabel}</p>
+          {ev.estimated_completion && (
+            <p className="text-[10px] text-gray-500 mt-0.5">Est. completion: {ev.estimated_completion}</p>
+          )}
+          <p className="text-[10px] text-gray-400 mt-0.5 truncate">
+            MX Contact: {ev.mx_contact_name || 'N/A'}
+          </p>
+        </div>
+        <div className="flex flex-col gap-1.5 shrink-0">
+          <button
+            onClick={onOpenModal}
+            className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-[#3AB0FF] bg-blue-50 border border-blue-200 px-2.5 py-1.5 rounded active:scale-95"
+          >
+            View <ChevronRight size={12} />
+          </button>
+          {ev.access_token && ev.status !== 'draft' && (
+            <a
+              href={`/service/${ev.access_token}`}
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-navy bg-gray-50 border border-gray-200 px-2.5 py-1.5 rounded active:scale-95"
+            >
+              <ExternalLink size={10} /> Portal
+            </a>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="space-y-4">
+      {canEditMx && (
+        <button
+          onClick={onOpenModal}
+          className="w-full bg-[#F08B46] text-white font-oswald tracking-widest uppercase py-3 px-4 rounded hover:bg-opacity-90 active:scale-95 transition-all flex justify-center items-center gap-2 text-sm"
+        >
+          <Calendar size={18} /> Schedule Service
+        </button>
+      )}
+
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="font-oswald text-sm font-bold uppercase tracking-widest text-navy">
+            Active work
+          </h3>
+          <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">
+            {activeEvents.length}
+          </span>
+        </div>
+        {activeEvents.length === 0 ? (
+          <p className="text-xs text-gray-500 italic bg-gray-50 rounded p-3 border border-gray-200">
+            No work packages in flight. {canEditMx ? 'Tap Schedule Service to bundle items into a trip to the shop.' : 'Your aircraft admin can schedule service when needed.'}
+          </p>
+        ) : (
+          <div className="space-y-2">{activeEvents.map(renderCard)}</div>
+        )}
+      </div>
+
+      {pastEvents.length > 0 && (
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="font-oswald text-sm font-bold uppercase tracking-widest text-gray-500">
+              Past
+            </h3>
+            <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">
+              {pastEvents.length}
+            </span>
+          </div>
+          <div className="space-y-2 opacity-80">{pastEvents.map(renderCard)}</div>
+        </div>
+      )}
+    </div>
   );
 }

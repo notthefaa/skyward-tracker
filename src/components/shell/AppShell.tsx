@@ -11,12 +11,12 @@ import useSWR from "swr";
 import { HOWARD_STALE_MS } from "@/lib/howard/quickPrompts";
 import { useToast } from "@/components/ToastProvider";
 import dynamic from "next/dynamic";
-import type { AircraftWithMetrics, AppTab, LogSubTab } from "@/lib/types";
+import type { AircraftWithMetrics, AppTab, LogSubTab, MxSubTab } from "@/lib/types";
 import {
   Wrench, AlertTriangle, FileText, LogOut,
   ChevronDown, Home, LayoutGrid, Send, ShieldCheck, X, Share, Copy, WifiOff, Loader2, Calendar, Settings,
   MoreHorizontal, FolderOpen, ShieldAlert,
-  ListChecks, PenLine, Plane, BarChart3, Gauge,
+  ListChecks, PenLine, Plane, BarChart3, Gauge, CheckSquare,
 } from "lucide-react";
 import { HowardIcon } from "@/components/shell/TrayIcons";
 
@@ -49,7 +49,7 @@ import NavTray, { type TrayItem } from "@/components/shell/NavTray";
  * dials at the top, so three nav entries collapsed into one. */
 const logTrayItems = [
   { key: 'flights', label: 'Flights', icon: Plane, color: '#3AB0FF', soon: false },
-  { key: 'checks', label: 'Ops Checks', icon: Gauge, color: '#3AB0FF', soon: false },
+  { key: 'checks', label: 'Ops Checks', icon: CheckSquare, color: '#3AB0FF', soon: false },
 ] as const;
 
 /** MX secondary toolbar items. "ADs" renders with a smaller lowercase
@@ -117,7 +117,7 @@ export default function AppShell({ session }: AppShellProps) {
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [expandedNav, setExpandedNav] = useState<'log' | 'mx' | 'more' | null>(null);
   useModalScrollLock(showLogItModal);
-  const [mxSubTab, setMxSubTab] = useState<'maintenance' | 'squawks'>('maintenance');
+  const [mxSubTab, setMxSubTab] = useState<MxSubTab>('maintenance');
   const [logSubTab, setLogSubTab] = useState<LogSubTab>('flights');
   const [showAircraftModal, setShowAircraftModal] = useState(false);
   const [editingAircraftId, setEditingAircraftId] = useState<string | null>(null);
@@ -164,11 +164,26 @@ export default function AppShell({ session }: AppShellProps) {
       setExpandedNav(null);
       navigateTab('howard-usage');
     };
+    // Selector on MX / ADs pages dispatches this — route to the right
+    // app tab + sub-tab based on the picked key. Keeps every call
+    // site of MX_ADS_SELECTOR_ITEMS wired through a single handler.
+    const handleMxAdsNav = (e: Event) => {
+      const key = (e as CustomEvent).detail as string;
+      setExpandedNav(null);
+      if (key === 'maintenance' || key === 'squawks' || key === 'service') {
+        setMxSubTab(key);
+        navigateTab('mx');
+      } else if (key === 'ads') {
+        navigateTab('ads');
+      }
+    };
     window.addEventListener('aft:navigate-howard', handleNavigateHoward);
     window.addEventListener('aft:navigate-howard-usage', handleNavigateHowardUsage);
+    window.addEventListener('aft:mx-ads-nav', handleMxAdsNav);
     return () => {
       window.removeEventListener('aft:navigate-howard', handleNavigateHoward);
       window.removeEventListener('aft:navigate-howard-usage', handleNavigateHowardUsage);
+      window.removeEventListener('aft:mx-ads-nav', handleMxAdsNav);
     };
   }, [navigateTab]);
 
@@ -468,8 +483,12 @@ export default function AppShell({ session }: AppShellProps) {
   // Global admins are pre-flagged in migration 024 so they never land
   // here. While flags are still loading (null), render nothing to
   // avoid a welcome flash.
+  // Admins skip the Howard-guided chat (they often set up aircraft via
+  // the admin modals or for other users), but they DO see the spotlight
+  // tour — it's a 30-second app orientation, not a pilot onboarding,
+  // and admins benefit from it just as much as pilots.
   const needsOnboarding = role !== 'admin' && completedOnboarding === false;
-  const needsTour = role !== 'admin' && completedOnboarding === true && tourCompleted === false;
+  const needsTour = completedOnboarding === true && tourCompleted === false;
 
   if (isDataLoaded && needsOnboarding) {
     if (onboardingPath === 'guided') {
@@ -642,7 +661,7 @@ export default function AppShell({ session }: AppShellProps) {
               }}
             />}
             {activeTab === 'summary' && <SummaryTab aircraft={selectedAircraftData} setActiveTab={(t: AppTab) => navigateTab(t)} onNavigateToSquawks={() => { setMxSubTab('squawks'); navigateTab('mx'); }} role={role} aircraftRole={currentAircraftRole} onDeleteAircraft={handleDeleteAircraft} sysSettings={sysSettings} onEditAircraft={() => openAircraftForm(selectedAircraftData)} refreshData={() => fetchAircraftData(session.user.id)} session={session} />}
-            {activeTab === 'times' && <LogRouter logSubTab={logSubTab} aircraft={selectedAircraftData} session={session} role={role} userInitials={userInitials} onUpdate={() => fetchAircraftData(session.user.id)} />}
+            {activeTab === 'times' && <LogRouter logSubTab={logSubTab} setLogSubTab={setLogSubTab} aircraft={selectedAircraftData} session={session} role={role} userInitials={userInitials} onUpdate={() => fetchAircraftData(session.user.id)} />}
             {activeTab === 'calendar' && <CalendarTab
               aircraft={selectedAircraftData}
               session={session}

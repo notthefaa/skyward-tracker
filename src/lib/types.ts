@@ -294,7 +294,7 @@ export type AppRole = 'admin' | 'pilot';
 export type AircraftRole = 'admin' | 'pilot';
 export type AircraftStatus = 'airworthy' | 'issues' | 'grounded';
 export type AppTab = 'fleet' | 'summary' | 'times' | 'calendar' | 'mx' | 'notes' | 'howard' | 'howard-usage' | 'documents' | 'equipment' | 'ads';
-export type MxSubTab = 'maintenance' | 'squawks';
+export type MxSubTab = 'maintenance' | 'squawks' | 'service';
 export type LogSubTab = 'flights' | 'checks';
 
 export type VorCheckType = 'VOT' | 'Ground Checkpoint' | 'Airborne Checkpoint' | 'Dual VOR';

@@ -11,6 +11,8 @@ import { useModalScrollLock } from "@/hooks/useModalScrollLock";
 import { INPUT_WHITE_BG } from "@/lib/styles";
 import { swrKeys } from "@/lib/swrKeys";
 import type { AircraftWithMetrics, AirworthinessDirective, AircraftRole } from "@/lib/types";
+import SectionSelector from "@/components/shell/SectionSelector";
+import { MX_ADS_SELECTOR_ITEMS, emitMxAdsNavigate } from "@/components/shell/mxAdsNav";
 
 interface Props {
   aircraft: AircraftWithMetrics | null;
@@ -192,6 +194,16 @@ export default function ADsTab({ aircraft, role, aircraftRole }: Props) {
 
   return (
     <div className="flex flex-col gap-6">
+      {/* ─── MX / SQUAWKS / SERVICE / ADS SELECTOR ─── */}
+      <div className="-mb-2">
+        <SectionSelector
+          items={MX_ADS_SELECTOR_ITEMS}
+          selectedKey="ads"
+          onSelect={(key) => emitMxAdsNavigate(key)}
+          compact
+        />
+      </div>
+
       {/* Header */}
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
