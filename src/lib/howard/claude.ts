@@ -1,7 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { tools } from './tools';
 import { executeTool } from './toolHandlers';
-import { HOWARD_STABLE_PRELUDE, buildUserContext } from './systemPrompt';
+import { HOWARD_STABLE_PRELUDE, HOWARD_ONBOARDING_APPENDIX, buildUserContext } from './systemPrompt';
 import type { Aircraft } from '@/lib/types';
 import type { HowardMessage } from './types';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -47,6 +47,7 @@ export async function* sendMessageStream(
   userId: string,
   threadId: string,
   supabaseAdmin: SupabaseClient,
+  onboardingMode = false,
 ): AsyncGenerator<StreamEvent, void, unknown> {
   // Two-block system prompt: stable prelude is prompt-cached, user context
   // (fleet + currently-selected aircraft + ratings + "now" + initials) is
@@ -92,6 +93,7 @@ export async function* sendMessageStream(
       max_tokens: MAX_OUTPUT_TOKENS,
       system: [
         { type: 'text', text: HOWARD_STABLE_PRELUDE, cache_control: { type: 'ephemeral' } },
+        ...(onboardingMode ? [{ type: 'text' as const, text: HOWARD_ONBOARDING_APPENDIX }] : []),
         { type: 'text', text: userContext },
       ],
       tools,

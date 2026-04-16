@@ -20,7 +20,8 @@ export type ActionType =
   | 'mx_schedule'
   | 'squawk_resolve'
   | 'note'
-  | 'equipment';
+  | 'equipment'
+  | 'onboarding_setup';
 
 export type RequiredRole = 'access' | 'admin';
 
@@ -29,7 +30,8 @@ export interface ProposedAction {
   thread_id: string;
   message_id: string | null;
   user_id: string;
-  aircraft_id: string;
+  /** Null only for onboarding_setup — no aircraft exists yet. */
+  aircraft_id: string | null;
   action_type: ActionType;
   payload: any;
   summary: string;
@@ -74,6 +76,33 @@ export interface NotePayload {
   content: string;
 }
 
+export interface OnboardingSetupPayload {
+  // Profile fields written to aft_user_roles
+  profile: {
+    full_name: string;
+    initials: string;
+    faa_ratings?: string[];
+  };
+  // Aircraft fields written to aft_aircraft. Tight minimum viable set —
+  // photo, contacts, serial, equipment list, and documents are left
+  // for the user to fill in later through AircraftModal / Equipment /
+  // Documents tabs. Howard explicitly mentions this in his closer.
+  aircraft: {
+    tail_number: string;
+    make?: string;
+    model?: string;
+    engine_type: 'Piston' | 'Turbine';
+    is_ifr_equipped: boolean;
+    home_airport?: string;
+    // Setup-time meters — airframe + engine baselines at the moment of
+    // onboarding. Distinct from the live `total_*_time` columns.
+    setup_aftt?: number;
+    setup_ftt?: number;
+    setup_hobbs?: number;
+    setup_tach?: number;
+  };
+}
+
 export interface EquipmentPayload {
   name: string;
   category: string;
@@ -99,6 +128,10 @@ const ROLE_BY_TYPE: Record<ActionType, RequiredRole> = {
   squawk_resolve: 'access',
   note: 'access',
   equipment: 'admin',
+  // Onboarding setup runs before the user has any aircraft access —
+  // the executor hard-codes the caller as the new aircraft's admin.
+  // `access` here means "don't try to resolve per-aircraft role."
+  onboarding_setup: 'access',
 };
 
 export function requiredRoleFor(type: ActionType): RequiredRole {
@@ -130,6 +163,11 @@ export function summarize(type: ActionType, payload: any, aircraftTail: string):
       const p = payload as EquipmentPayload;
       return `Add ${p.category}: ${p.name}${p.make || p.model ? ` (${[p.make, p.model].filter(Boolean).join(' ')})` : ''} to ${aircraftTail}`;
     }
+    case 'onboarding_setup': {
+      const p = payload as OnboardingSetupPayload;
+      const acLabel = [p.aircraft.make, p.aircraft.model].filter(Boolean).join(' ') || p.aircraft.tail_number;
+      return `Set up ${p.profile.full_name} (${p.profile.initials}) + register ${p.aircraft.tail_number} (${acLabel})`;
+    }
   }
 }
 
@@ -142,7 +180,9 @@ export async function proposeAction(
   params: {
     threadId: string;
     userId: string;
-    aircraftId: string;
+    /** Nullable only for onboarding_setup — the aircraft doesn't
+     * exist yet at proposal time; the executor creates it. */
+    aircraftId: string | null;
     aircraftTail: string;
     actionType: ActionType;
     payload: any;
@@ -279,6 +319,88 @@ export async function executeAction(
         .single();
       if (error) throw error;
       return { recordId: data.id, recordTable: 'aft_aircraft_equipment' };
+    }
+
+    case 'onboarding_setup': {
+      const p = action.payload as OnboardingSetupPayload;
+
+      // 1. Update user profile. The row always exists at this point —
+      // the signup flow creates it — but we fail loud if it's missing
+      // instead of silently orphaning the aircraft we're about to
+      // create.
+      const profileFields: Record<string, any> = {
+        full_name: p.profile.full_name.trim(),
+        initials: p.profile.initials.toUpperCase().slice(0, 3),
+        completed_onboarding: true,
+      };
+      if (p.profile.faa_ratings && p.profile.faa_ratings.length > 0) {
+        profileFields.faa_ratings = p.profile.faa_ratings;
+      }
+      const { error: profErr } = await sb
+        .from('aft_user_roles')
+        .update(profileFields)
+        .eq('user_id', userId);
+      if (profErr) throw profErr;
+
+      // 2. Insert the aircraft. Tail normalized to uppercase to match
+      // the rest of the app's lookup convention.
+      const tailNorm = p.aircraft.tail_number.toUpperCase().trim();
+      const aircraftRow: Record<string, any> = {
+        tail_number: tailNorm,
+        created_by: userId,
+        engine_type: p.aircraft.engine_type,
+        is_ifr_equipped: !!p.aircraft.is_ifr_equipped,
+      };
+      if (p.aircraft.make) aircraftRow.make = p.aircraft.make.trim();
+      if (p.aircraft.model) aircraftRow.model = p.aircraft.model.trim();
+      if (p.aircraft.home_airport) aircraftRow.home_airport = p.aircraft.home_airport.toUpperCase().trim();
+      // Setup meters — match AircraftModal's "setup_*" convention.
+      // total_* columns seed from setup_* so live totals start accurate
+      // before the first flight log lands.
+      if (p.aircraft.setup_aftt != null) {
+        aircraftRow.setup_aftt = p.aircraft.setup_aftt;
+        aircraftRow.total_airframe_time = p.aircraft.setup_aftt;
+      }
+      if (p.aircraft.setup_ftt != null) {
+        aircraftRow.setup_ftt = p.aircraft.setup_ftt;
+        aircraftRow.total_engine_time = p.aircraft.setup_ftt;
+      }
+      if (p.aircraft.setup_hobbs != null) {
+        aircraftRow.setup_hobbs = p.aircraft.setup_hobbs;
+        if (aircraftRow.total_airframe_time == null) aircraftRow.total_airframe_time = p.aircraft.setup_hobbs;
+      }
+      if (p.aircraft.setup_tach != null) {
+        aircraftRow.setup_tach = p.aircraft.setup_tach;
+        if (aircraftRow.total_engine_time == null) aircraftRow.total_engine_time = p.aircraft.setup_tach;
+      }
+
+      const { data: created, error: acErr } = await sb
+        .from('aft_aircraft')
+        .insert(aircraftRow)
+        .select('id, tail_number')
+        .single();
+      if (acErr) {
+        if ((acErr as any).code === '23505') {
+          throw new Error(`An aircraft with tail number ${tailNorm} already exists.`);
+        }
+        throw acErr;
+      }
+
+      // 3. Grant the user admin on the aircraft they just registered.
+      const { error: accessErr } = await sb
+        .from('aft_user_aircraft_access')
+        .insert({
+          user_id: userId,
+          aircraft_id: created.id,
+          aircraft_role: 'admin',
+        });
+      if (accessErr) {
+        // Roll back the aircraft insert so we don't leave an orphan.
+        await sb.from('aft_aircraft').delete().eq('id', created.id);
+        throw accessErr;
+      }
+
+      return { recordId: created.id, recordTable: 'aft_aircraft' };
     }
 
     case 'mx_schedule': {

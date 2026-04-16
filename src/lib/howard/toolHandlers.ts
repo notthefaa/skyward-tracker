@@ -554,6 +554,61 @@ const handlers: Record<string, ToolHandler> = {
     return makeProposal(sb, ctx, 'equipment', params);
   },
 
+  propose_onboarding_setup: async (params, sb, _aircraftId, ctx) => {
+    const profile = params?.profile;
+    const aircraft = params?.aircraft;
+    if (!profile?.full_name || !profile?.initials) {
+      return { error: 'profile.full_name and profile.initials are required.' };
+    }
+    if (!aircraft?.tail_number || !aircraft?.engine_type) {
+      return { error: 'aircraft.tail_number and aircraft.engine_type are required.' };
+    }
+    if (typeof aircraft.is_ifr_equipped !== 'boolean') {
+      return { error: 'aircraft.is_ifr_equipped must be true or false — ask if unknown.' };
+    }
+    // Normalize into the payload shape the executor expects.
+    const payload = {
+      profile: {
+        full_name: String(profile.full_name).trim(),
+        initials: String(profile.initials).toUpperCase().trim().slice(0, 3),
+        faa_ratings: Array.isArray(profile.faa_ratings)
+          ? profile.faa_ratings.filter((r: any) => typeof r === 'string')
+          : [],
+      },
+      aircraft: {
+        tail_number: String(aircraft.tail_number).toUpperCase().trim(),
+        make: aircraft.make ? String(aircraft.make).trim() : undefined,
+        model: aircraft.model ? String(aircraft.model).trim() : undefined,
+        engine_type: aircraft.engine_type === 'Turbine' ? 'Turbine' : 'Piston',
+        is_ifr_equipped: !!aircraft.is_ifr_equipped,
+        home_airport: aircraft.home_airport ? String(aircraft.home_airport).toUpperCase().trim() : undefined,
+        setup_aftt: aircraft.setup_aftt != null ? Number(aircraft.setup_aftt) : undefined,
+        setup_ftt: aircraft.setup_ftt != null ? Number(aircraft.setup_ftt) : undefined,
+        setup_hobbs: aircraft.setup_hobbs != null ? Number(aircraft.setup_hobbs) : undefined,
+        setup_tach: aircraft.setup_tach != null ? Number(aircraft.setup_tach) : undefined,
+      },
+    };
+
+    // Onboarding runs before any aircraft exists — makeProposal wants an
+    // aircraftId for the standard tools. Inline the proposeAction call
+    // here with aircraftId=null and the new aircraft's tail as the
+    // summary label.
+    const proposal = await proposeAction(sb, {
+      threadId: ctx.threadId,
+      userId: ctx.userId,
+      aircraftId: null,
+      aircraftTail: payload.aircraft.tail_number,
+      actionType: 'onboarding_setup',
+      payload,
+    });
+    return {
+      proposed_action_id: proposal.id,
+      summary: proposal.summary,
+      requires_confirmation: true,
+      note: "Setup card ready. User needs to tap Confirm to finalize their profile and register the aircraft.",
+    };
+  },
+
   get_aviation_hazards: async (params) => {
     if (!params.airports || !Array.isArray(params.airports) || params.airports.length === 0) {
       return { error: 'At least one airport ICAO code is required.' };

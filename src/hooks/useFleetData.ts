@@ -30,6 +30,11 @@ export interface FleetIndexEntry {
 export function useFleetData() {
   const [role, setRole] = useState<AppRole>('pilot');
   const [userInitials, setUserInitials] = useState("");
+  // Onboarding gate — flipped true after either onboarding path (Howard-
+  // guided or classic form) finishes. Starts undefined so the shell can
+  // distinguish "still loading" from "new user."
+  const [completedOnboarding, setCompletedOnboarding] = useState<boolean | null>(null);
+  const [tourCompleted, setTourCompleted] = useState<boolean | null>(null);
   const [allAircraftList, setAllAircraftList] = useState<AircraftWithMetrics[]>([]);
   const [aircraftList, setAircraftList] = useState<AircraftWithMetrics[]>([]);
   const [allAccessRecords, setAllAccessRecords] = useState<any[]>([]);
@@ -54,7 +59,7 @@ export function useFleetData() {
     // and WHICH aircraft they can see.
     const [sR, rR, aR] = await Promise.all([
       supabase.from('aft_system_settings').select('*').eq('id', 1).single(),
-      supabase.from('aft_user_roles').select('role, initials').eq('user_id', userId).single(),
+      supabase.from('aft_user_roles').select('role, initials, completed_onboarding, tour_completed').eq('user_id', userId).single(),
       supabase.from('aft_user_aircraft_access').select('aircraft_id, aircraft_role, user_id').eq('user_id', userId),
     ]);
 
@@ -63,6 +68,8 @@ export function useFleetData() {
     const userRole = (rR.data?.role || 'pilot') as AppRole;
     setRole(userRole);
     setUserInitials(rR.data?.initials || "");
+    setCompletedOnboarding(!!rR.data?.completed_onboarding);
+    setTourCompleted(!!rR.data?.tour_completed);
 
     const accessData = aR.data || [];
     setAllAccessRecords(accessData);
@@ -206,6 +213,10 @@ export function useFleetData() {
   return {
     role,
     userInitials,
+    completedOnboarding,
+    tourCompleted,
+    setCompletedOnboarding,
+    setTourCompleted,
     allAircraftList,
     aircraftList,
     allAccessRecords,

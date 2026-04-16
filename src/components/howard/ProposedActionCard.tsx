@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useSWRConfig } from "swr";
 import { authFetch } from "@/lib/authFetch";
-import { CheckCircle, X, Loader2, Sparkles, Calendar, FileText, Wrench, Plane, AlertTriangle, RefreshCw } from "lucide-react";
+import { CheckCircle, X, Loader2, Sparkles, Calendar, FileText, Wrench, Plane, AlertTriangle, RefreshCw, UserPlus } from "lucide-react";
 import type { ProposedAction } from "@/lib/howard/proposedActions";
 import { matchesAircraft } from "@/lib/swrKeys";
 
@@ -18,6 +18,7 @@ function actionIcon(type: string) {
   if (type === 'mx_schedule') return Wrench;
   if (type === 'squawk_resolve') return AlertTriangle;
   if (type === 'equipment') return Plane;
+  if (type === 'onboarding_setup') return UserPlus;
   return Sparkles;
 }
 
@@ -69,6 +70,48 @@ function describePayload(action: ProposedAction): React.ReactNode {
           {p.notes && <div><span className="font-bold uppercase tracking-widest text-[9px] text-gray-500">Notes: </span>{p.notes}</div>}
         </div>
       );
+    case 'onboarding_setup': {
+      const profile = p.profile || {};
+      const ac = p.aircraft || {};
+      const ratings: string[] = Array.isArray(profile.faa_ratings) ? profile.faa_ratings : [];
+      const meterPairs: [string, any][] = [
+        ['AFTT', ac.setup_aftt],
+        ['FTT', ac.setup_ftt],
+        ['Hobbs', ac.setup_hobbs],
+        ['Tach', ac.setup_tach],
+      ];
+      const meters = meterPairs.filter(([, v]) => v != null).map(([k, v]) => `${k} ${v}`).join(' · ');
+      return (
+        <div className="text-xs text-gray-700 space-y-2">
+          <div>
+            <div className="text-[9px] font-bold uppercase tracking-widest text-[#e6651b] mb-0.5">Your profile</div>
+            <div>{profile.full_name} <span className="text-gray-500">({profile.initials})</span></div>
+            {ratings.length > 0 && (
+              <div className="flex flex-wrap gap-1 mt-1">
+                {ratings.map((r: string) => (
+                  <span key={r} className="text-[8.5px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-[#e6651b]/10 text-[#c35617] border border-[#e6651b]/20">{r}</span>
+                ))}
+              </div>
+            )}
+          </div>
+          <div>
+            <div className="text-[9px] font-bold uppercase tracking-widest text-[#e6651b] mb-0.5">Your first aircraft</div>
+            <div>
+              <span className="font-mono font-bold">{ac.tail_number}</span>
+              {(ac.make || ac.model) && <span className="text-gray-600"> — {[ac.make, ac.model].filter(Boolean).join(' ')}</span>}
+            </div>
+            <div className="text-gray-600">
+              {ac.engine_type}{ac.is_ifr_equipped ? ' · IFR-equipped' : ' · VFR-only'}
+              {ac.home_airport ? ` · home ${ac.home_airport}` : ''}
+            </div>
+            {meters && <div className="text-gray-500">{meters}</div>}
+          </div>
+          <p className="text-[10px] italic text-gray-500 pt-1 border-t border-gray-200">
+            On confirm: saves your profile, registers the aircraft, makes you admin on it, and marks onboarding complete.
+          </p>
+        </div>
+      );
+    }
   }
 }
 
@@ -87,6 +130,10 @@ export default function ProposedActionCard({ action, onChange }: Props) {
   // caught up. Invalidate every aircraft-scoped key so the affected
   // tab refreshes immediately on confirm.
   const invalidateAircraftCache = () => {
+    // Onboarding proposals carry no aircraft_id (aircraft is created by
+    // the executor). Fleet-wide revalidation is handled by AppShell's
+    // post-onboarding refetch; skip the per-aircraft flush here.
+    if (!action.aircraft_id) return;
     globalMutate(matchesAircraft(action.aircraft_id), undefined, { revalidate: true });
   };
 

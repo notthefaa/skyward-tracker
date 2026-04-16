@@ -21,6 +21,9 @@ import {
 import { HowardIcon } from "@/components/shell/TrayIcons";
 
 const PilotOnboarding = dynamic(() => import("@/components/PilotOnboarding"));
+const HowardWelcome = dynamic(() => import("@/components/HowardWelcome"), { ssr: false });
+const HowardTour = dynamic(() => import("@/components/HowardTour"), { ssr: false });
+const HowardOnboardingChat = dynamic(() => import("@/components/howard/HowardOnboardingChat"), { ssr: false });
 const AircraftModal = dynamic(() => import("@/components/modals/AircraftModal"));
 const AdminModals = dynamic(() => import("@/components/modals/AdminModals"));
 const TutorialModal = dynamic(() => import("@/components/modals/TutorialModal"));
@@ -82,7 +85,8 @@ export default function AppShell({ session }: AppShellProps) {
 
   // ─── Fleet Data (extracted hook) ───
   const {
-    role, userInitials, allAircraftList, aircraftList, allAccessRecords,
+    role, userInitials, completedOnboarding, tourCompleted, setCompletedOnboarding, setTourCompleted,
+    allAircraftList, aircraftList, allAccessRecords,
     isDataLoaded, sysSettings, setSysSettings, dataFetchTriggeredRef,
     fetchAircraftData, enrichSingleAircraft, refreshForAircraft, globalMutate,
     globalFleetIndex, fetchGlobalFleetIndex, fetchSingleAircraft,
@@ -91,6 +95,11 @@ export default function AppShell({ session }: AppShellProps) {
   // ─── Navigation State ───
   const companionUrl = process.env.NEXT_PUBLIC_COMPANION_URL || "https://skyward-logit.vercel.app/";
   const [activeTail, setActiveTail] = useState<string>("");
+  // First-time onboarding path selection. null = show welcome modal;
+  // 'guided' = Howard chat flow; 'form' = classic PilotOnboarding.
+  // Derived locally (not persisted) — the durable signal is
+  // `completed_onboarding` on aft_user_roles.
+  const [onboardingPath, setOnboardingPath] = useState<'guided' | 'form' | null>(null);
   // Optional target for the Calendar tab — set by Fleet Schedule when a user
   // taps a reservation there so CalendarTab opens on the right date/view.
   const [calendarInitialDate, setCalendarInitialDate] = useState<Date | null>(null);
@@ -448,9 +457,68 @@ export default function AppShell({ session }: AppShellProps) {
 
   const canEditAircraft = role === 'admin' || currentAircraftRole === 'admin';
 
-  // ─── Pilot onboarding ───
-  if (role === 'pilot' && aircraftList.length === 0 && isDataLoaded) {
-    return <PilotOnboarding session={session} handleLogout={handleLogout} onSuccess={() => handleInitialFetch(session.user.id)} />;
+  // ─── First-time onboarding state machine ───────────────────────
+  // States derive from the aft_user_roles flags (completedOnboarding +
+  // tourCompleted) plus a local "welcome path pick":
+  //   completedOnboarding=false  → welcome modal (choose guided/form)
+  //     onboardingPath='guided'  → Howard-guided chat takes over
+  //     onboardingPath='form'    → classic PilotOnboarding form
+  //   completedOnboarding=true && tourCompleted=false → spotlight tour
+  //   both true → normal app
+  // Global admins are pre-flagged in migration 024 so they never land
+  // here. While flags are still loading (null), render nothing to
+  // avoid a welcome flash.
+  const needsOnboarding = role !== 'admin' && completedOnboarding === false;
+  const needsTour = role !== 'admin' && completedOnboarding === true && tourCompleted === false;
+
+  if (isDataLoaded && needsOnboarding) {
+    if (onboardingPath === 'guided') {
+      return (
+        <HowardOnboardingChat
+          session={session}
+          onLogout={handleLogout}
+          onSwitchToForm={() => setOnboardingPath('form')}
+          onComplete={() => {
+            // The executor flipped completed_onboarding=true server-side
+            // and created the aircraft; refetch fleet so the rest of the
+            // shell renders normally. The spotlight tour will kick in
+            // once tourCompleted is still false.
+            setOnboardingPath(null);
+            setCompletedOnboarding(true);
+            handleInitialFetch(session.user.id);
+          }}
+        />
+      );
+    }
+    if (onboardingPath === 'form') {
+      return (
+        <PilotOnboarding
+          session={session}
+          handleLogout={handleLogout}
+          onSuccess={async () => {
+            // Mark onboarding done server-side so we don't bounce back
+            // to the welcome modal after the fleet refetch completes.
+            try {
+              await authFetch('/api/user/onboarding-complete', { method: 'POST' });
+            } catch {
+              // Non-blocking — if the flag write fails, the user still
+              // has an aircraft and the next reload's fetch will pick
+              // that up via the row.
+            }
+            setOnboardingPath(null);
+            setCompletedOnboarding(true);
+            handleInitialFetch(session.user.id);
+          }}
+        />
+      );
+    }
+    return (
+      <HowardWelcome
+        onStartGuided={() => setOnboardingPath('guided')}
+        onStartForm={() => setOnboardingPath('form')}
+        onLogout={handleLogout}
+      />
+    );
   }
 
   // ─── Derived UI values ───
@@ -663,6 +731,18 @@ export default function AppShell({ session }: AppShellProps) {
         <HowardLauncher currentAircraft={selectedAircraftData} userFleet={aircraftList} session={session} />
       )}
 
+      {/* ─── POST-ONBOARDING SPOTLIGHT TOUR ─── */}
+      {needsTour && (
+        <HowardTour
+          onComplete={() => {
+            // Optimistically flip the client flag so the tour stops
+            // rendering immediately; the server write already fired
+            // from inside HowardTour.onComplete → /api/user/tour-complete.
+            setTourCompleted(true);
+          }}
+        />
+      )}
+
       <nav role="navigation" aria-label="Main navigation" className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-gray-200 z-[9999] pt-1 pb-[env(safe-area-inset-bottom)] shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
         <div className="flex justify-around items-center h-12 max-w-3xl mx-auto">
           {[
@@ -702,7 +782,9 @@ export default function AppShell({ session }: AppShellProps) {
                 setExpandedNav(null);
                 navigateTab(tab.id as AppTab);
               }
-            }} aria-label={tab.label} aria-current={isActive ? 'page' : undefined} className={`flex-1 pb-1 flex flex-col items-center justify-center transition-all relative active:scale-95 ${isActive || (tab.id === 'log' && expandedNav === 'log') || (tab.id === 'mx' && expandedNav === 'mx') || (tab.id === 'more' && expandedNav === 'more') ? (tab.id === 'summary' ? 'text-navy' : getTabColor(tab.id)) : 'text-gray-400 hover:bg-gray-50'}`}>
+            }} aria-label={tab.label} aria-current={isActive ? 'page' : undefined}
+              data-tour={tab.id === 'summary' ? 'summary' : tab.id === 'log' ? 'log' : tab.id === 'mx' ? 'maintenance' : undefined}
+              className={`flex-1 pb-1 flex flex-col items-center justify-center transition-all relative active:scale-95 ${isActive || (tab.id === 'log' && expandedNav === 'log') || (tab.id === 'mx' && expandedNav === 'mx') || (tab.id === 'more' && expandedNav === 'more') ? (tab.id === 'summary' ? 'text-navy' : getTabColor(tab.id)) : 'text-gray-400 hover:bg-gray-50'}`}>
               <div className="relative mb-1"><tab.icon size={20} />{tab.badge > 0 && <span className="absolute -top-1 -right-2 flex h-3 w-3"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#CE3732] opacity-75"></span><span className="relative inline-flex rounded-full h-3 w-3 bg-[#CE3732] text-[8px] text-white font-bold items-center justify-center border border-white"></span></span>}</div>
               <span className="text-[10px] font-bold uppercase tracking-widest">{tab.label}</span>
               {isActive && <div className={`absolute bottom-0 w-12 h-1 rounded-t-full ${getIndicatorColor(tab.id)}`}></div>}

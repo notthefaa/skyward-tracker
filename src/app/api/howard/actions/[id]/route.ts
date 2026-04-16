@@ -26,11 +26,16 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       return NextResponse.json({ error: `Action already ${action.status}.` }, { status: 409 });
     }
 
-    // Role gate — confirm matches required_role.
-    if (action.required_role === 'admin') {
-      await requireAircraftAdmin(supabaseAdmin, user.id, action.aircraft_id);
-    } else {
-      await requireAircraftAccess(supabaseAdmin, user.id, action.aircraft_id);
+    // Role gate — confirm matches required_role. Onboarding runs before
+    // any aircraft access exists for the caller, so it skips the
+    // aircraft-scoped check entirely; the executor hard-codes the
+    // caller as the new aircraft's admin after the insert.
+    if (action.action_type !== 'onboarding_setup') {
+      if (action.required_role === 'admin') {
+        await requireAircraftAdmin(supabaseAdmin, user.id, action.aircraft_id);
+      } else {
+        await requireAircraftAccess(supabaseAdmin, user.id, action.aircraft_id);
+      }
     }
 
     // Attribute subsequent writes to the user via the audit trigger.

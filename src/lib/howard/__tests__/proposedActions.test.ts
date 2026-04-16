@@ -354,3 +354,104 @@ describe('executeAction — note + reservation', () => {
     });
   });
 });
+
+describe('executeAction — onboarding_setup', () => {
+  it('updates profile, inserts aircraft, grants admin access, and flips onboarding flag', async () => {
+    let insertedAircraftId: string | null = null;
+    const { sb, calls } = makeSb({
+      aft_user_roles: (op) => {
+        if (op === 'update') return { data: null, error: null };
+        return { data: null, error: null };
+      },
+      aft_aircraft: (op, ctx) => {
+        if (op === 'insert') {
+          insertedAircraftId = 'ac-new';
+          return { data: { id: 'ac-new', tail_number: ctx.payload.tail_number }, error: null };
+        }
+        return { data: null, error: null };
+      },
+      aft_user_aircraft_access: () => ({ data: null, error: null }),
+    });
+    const action = baseAction({
+      action_type: 'onboarding_setup',
+      aircraft_id: null,
+      payload: {
+        profile: {
+          full_name: 'Jane Smith',
+          initials: 'js',
+          faa_ratings: ['PPL', 'IFR'],
+        },
+        aircraft: {
+          tail_number: 'n12345',
+          make: 'Cessna',
+          model: '172N',
+          engine_type: 'Piston',
+          is_ifr_equipped: true,
+          home_airport: 'kdal',
+          setup_hobbs: 2450.3,
+          setup_tach: 2350.1,
+        },
+      },
+    });
+
+    const result = await executeAction(sb, action, 'user-new');
+
+    expect(result.recordTable).toBe('aft_aircraft');
+    expect(result.recordId).toBe('ac-new');
+    expect(insertedAircraftId).toBe('ac-new');
+
+    // Profile update flipped the onboarding flag and normalized initials.
+    const profileUpdate = calls.find(c => c.table === 'aft_user_roles' && c.op === 'update');
+    expect(profileUpdate!.payload).toMatchObject({
+      full_name: 'Jane Smith',
+      initials: 'JS',
+      completed_onboarding: true,
+      faa_ratings: ['PPL', 'IFR'],
+    });
+
+    // Aircraft insert normalized tail + home airport to uppercase and
+    // seeded total_* from setup_*.
+    const aircraftInsert = calls.find(c => c.table === 'aft_aircraft' && c.op === 'insert');
+    expect(aircraftInsert!.payload).toMatchObject({
+      tail_number: 'N12345',
+      created_by: 'user-new',
+      engine_type: 'Piston',
+      is_ifr_equipped: true,
+      home_airport: 'KDAL',
+      setup_hobbs: 2450.3,
+      setup_tach: 2350.1,
+      total_airframe_time: 2450.3,
+      total_engine_time: 2350.1,
+    });
+
+    // Admin access granted for the new aircraft.
+    const accessInsert = calls.find(c => c.table === 'aft_user_aircraft_access' && c.op === 'insert');
+    expect(accessInsert!.payload).toMatchObject({
+      user_id: 'user-new',
+      aircraft_id: 'ac-new',
+      aircraft_role: 'admin',
+    });
+  });
+
+  it('surfaces a friendly error on duplicate tail number', async () => {
+    const { sb } = makeSb({
+      aft_user_roles: () => ({ data: null, error: null }),
+      aft_aircraft: (op) => {
+        if (op === 'insert') {
+          return { data: null, error: { code: '23505', message: 'duplicate' } };
+        }
+        return { data: null, error: null };
+      },
+    });
+    const action = baseAction({
+      action_type: 'onboarding_setup',
+      aircraft_id: null,
+      payload: {
+        profile: { full_name: 'Jane', initials: 'J' },
+        aircraft: { tail_number: 'N12345', engine_type: 'Piston', is_ifr_equipped: false },
+      },
+    });
+    await expect(executeAction(sb, action, 'user-new'))
+      .rejects.toThrow(/already exists/i);
+  });
+});

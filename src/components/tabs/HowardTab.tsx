@@ -14,6 +14,7 @@ import { useConfirm } from "@/components/ConfirmProvider";
 import ProposedActionCard from "@/components/howard/ProposedActionCard";
 import type { ProposedAction } from "@/lib/howard/proposedActions";
 import { HOWARD_QUICK_PROMPTS } from "@/lib/howard/quickPrompts";
+import { HOWARD_PIC_DISCLAIMER } from "@/lib/howard/persona";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -62,6 +63,11 @@ const EMPTY_FLEET_SUGGESTIONS = [
   "Explain 91.205 VFR equipment requirements",
 ];
 
+/** Hidden user message sent on onboarding mount to trigger Howard's
+ * scripted greeting. Filtered from the visible transcript so the user
+ * sees Howard speak first without seeing a prompt they didn't type. */
+export const ONBOARDING_KICKOFF_MARKER = "Start the setup conversation.";
+
 // Friendly label for tool-use indicator
 function toolLabel(name: string): { label: string; Icon: any } {
   if (name === 'web_search') return { label: 'Searching the web', Icon: Globe };
@@ -73,6 +79,7 @@ function toolLabel(name: string): { label: string; Icon: any } {
 
 export default function HowardTab({
   currentAircraft, userFleet = [], session, compact = false,
+  onboardingMode = false, onOnboardingComplete,
 }: {
   /** Aircraft currently selected in the surrounding UI — purely a hint
    * for Howard. Conversations are user-scoped; each aircraft-specific
@@ -85,6 +92,13 @@ export default function HowardTab({
   /** Render without the "Howard" logo header (used when embedded in the
    * launcher popup, which has its own header). */
   compact?: boolean;
+  /** When true, the server injects a setup-mode appendix and Howard
+   * drives the conversation toward finalizing the user's profile +
+   * first aircraft. Also hides the aircraft-picker and clear button. */
+  onboardingMode?: boolean;
+  /** Called after the onboarding_setup proposed action is executed,
+   * so AppShell can transition out of onboarding state. */
+  onOnboardingComplete?: () => void;
 }) {
   const { showError, showSuccess } = useToast();
   const confirm = useConfirm();
@@ -133,7 +147,14 @@ export default function HowardTab({
     { revalidateOnFocus: false, revalidateOnReconnect: false, revalidateIfStale: false }
   );
 
-  const messages = data?.messages || [];
+  // Filter the onboarding kickoff marker ("Start the setup conversation.")
+  // out of the rendered transcript. Howard needs it in his context to
+  // trigger the scripted greeting, but the user didn't actually type it
+  // and it'd read weird as the first visible bubble.
+  const rawMessages = data?.messages || [];
+  const messages = rawMessages.filter(
+    (m: any) => !(m.role === 'user' && m.content === ONBOARDING_KICKOFF_MARKER),
+  );
   const threadId = data?.thread?.id;
 
   // Proposed actions for this thread, keyed by id.
@@ -221,6 +242,7 @@ export default function HowardTab({
           message: msg,
           currentTail: currentAircraft?.tail_number ?? null,
           timeZone: tz,
+          onboardingMode: onboardingMode || undefined,
         }),
         signal: abortController.signal,
       });
@@ -418,6 +440,44 @@ export default function HowardTab({
     handleSend(`Yes, ${onlyTail}.`);
   }, [awaitingAircraftChoice, userFleet, messages, isSending, handleSend]);
 
+  // Kickoff in onboarding mode — Howard speaks first. Send a hidden
+  // system-style prompt ("Start the setup conversation.") to trigger
+  // his scripted opening from the HOWARD_ONBOARDING_APPENDIX. The
+  // ref guard ensures we fire exactly once per mount even if the
+  // SWR data flips through intermediate states.
+  const onboardingKickedOffRef = useRef(false);
+  useEffect(() => {
+    if (!onboardingMode) return;
+    if (onboardingKickedOffRef.current) return;
+    if (!userId) return;
+    // Wait for data to resolve; only kick off if the thread is empty
+    // (don't re-introduce if they bounced and came back).
+    if (data === undefined) return;
+    if (rawMessages.length > 0) { onboardingKickedOffRef.current = true; return; }
+    onboardingKickedOffRef.current = true;
+    handleSend(ONBOARDING_KICKOFF_MARKER);
+  }, [onboardingMode, userId, data, rawMessages.length, handleSend]);
+
+  // Watch for an executed onboarding_setup action — that's the signal
+  // AppShell needs to exit onboarding state and refetch the fleet. Fire
+  // onOnboardingComplete exactly once when we first see it land.
+  const onboardingCompleteFiredRef = useRef(false);
+  useEffect(() => {
+    if (!onboardingMode || !onOnboardingComplete) return;
+    if (onboardingCompleteFiredRef.current) return;
+    const executed = (actionsData?.actions || []).find(
+      (a: any) => a.action_type === 'onboarding_setup' && a.status === 'executed',
+    );
+    if (executed) {
+      onboardingCompleteFiredRef.current = true;
+      // Small delay lets Howard's closing message render first before
+      // AppShell tears down the onboarding surface.
+      setTimeout(() => {
+        onOnboardingComplete();
+      }, 500);
+    }
+  }, [onboardingMode, onOnboardingComplete, actionsData]);
+
   // Reset the guard when we leave the awaiting state so a later
   // conversation can trigger the auto-confirm again.
   useEffect(() => {
@@ -459,6 +519,7 @@ export default function HowardTab({
     }
   }, [currentTail, messages.length, acknowledgedTail]);
   const showSwitchBanner =
+    !onboardingMode &&
     currentTail != null &&
     acknowledgedTail != null &&
     currentTail !== acknowledgedTail &&
@@ -495,7 +556,7 @@ export default function HowardTab({
                 <BarChart3 size={14} />
                 <span className="hidden sm:inline">Usage</span>
               </button>
-              {messages.length > 0 && (
+              {messages.length > 0 && !onboardingMode && (
                 <button
                   onClick={handleClearThread}
                   disabled={isSending}
@@ -511,7 +572,7 @@ export default function HowardTab({
           </div>
           <div className="mb-4 px-3 py-2 bg-[#e6651b]/5 border border-[#e6651b]/20 rounded">
             <p className="text-[11px] font-roboto italic text-gray-600 leading-snug">
-              The PIC retains all legal authority over airworthiness and go/no-go decisions. Howard provides data and helps you think through it — not legal or operational advice.
+              {HOWARD_PIC_DISCLAIMER}
             </p>
           </div>
         </>

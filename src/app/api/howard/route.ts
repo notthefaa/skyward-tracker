@@ -89,7 +89,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const { user, supabaseAdmin } = await requireAuth(req);
-    const { message, currentTail, timeZone } = await req.json();
+    const { message, currentTail, timeZone, onboardingMode } = await req.json();
 
     if (!message || typeof message !== 'string' || message.trim().length === 0) {
       return NextResponse.json({ error: 'Message is required.' }, { status: 400 });
@@ -220,6 +220,7 @@ export async function POST(req: Request) {
             user.id,
             threadId,
             supabaseAdmin,
+            onboardingMode === true,
           )) {
             if (ev.type === 'complete') {
               assistantText = ev.assistantText;

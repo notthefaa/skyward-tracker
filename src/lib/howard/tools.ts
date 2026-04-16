@@ -367,6 +367,51 @@ export const tools: Anthropic.Tool[] = [
     },
   },
   {
+    name: 'propose_onboarding_setup',
+    description: 'Finalize the user\'s first-time setup. Call ONLY when you are in onboarding mode and have collected the required profile + aircraft fields from conversation. The user taps Confirm to atomically (1) save their name / initials / FAA ratings, (2) register their first aircraft, (3) grant themselves admin on it, and (4) mark onboarding complete. Call this once — on Confirm the app transitions out of onboarding mode. Never use outside onboarding.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        profile: {
+          type: 'object' as const,
+          description: "User's profile fields.",
+          properties: {
+            full_name: { type: 'string', description: 'Full name as they want it displayed.' },
+            initials: { type: 'string', description: '2–3 character pilot initials (uppercased automatically).' },
+            faa_ratings: {
+              type: 'array',
+              items: { type: 'string' },
+              description: "Array of FAA certificates/ratings the pilot holds. Empty array is fine if they haven't earned any yet. Examples: Student, Sport, Recreational, PPL, IFR, CPL, ATP, CFI, CFII, MEI, ME.",
+            },
+          },
+          required: ['full_name', 'initials'],
+        },
+        aircraft: {
+          type: 'object' as const,
+          description: "First-aircraft fields. Minimum viable: tail, engine type, IFR flag. Other fields optional on this tool — the user can fill them later in AircraftModal.",
+          properties: {
+            tail_number: { type: 'string', description: 'FAA tail number (e.g. N205WH).' },
+            make: { type: 'string', description: 'Manufacturer (e.g. Cessna, Piper, Cirrus). Optional.' },
+            model: { type: 'string', description: 'Model (e.g. 172N, PA-28-181, SR22). Optional.' },
+            engine_type: {
+              type: 'string',
+              enum: ['Piston', 'Turbine'],
+              description: 'Piston or Turbine. Required.',
+            },
+            is_ifr_equipped: { type: 'boolean', description: 'Is the aircraft IFR-equipped?' },
+            home_airport: { type: 'string', description: 'ICAO identifier (e.g. KDAL). Optional.' },
+            setup_aftt: { type: 'number', description: 'Turbine only — current Airframe Total Time.' },
+            setup_ftt: { type: 'number', description: 'Turbine only — current Engine Time (Flight Time Total).' },
+            setup_hobbs: { type: 'number', description: 'Piston only — current Hobbs meter reading.' },
+            setup_tach: { type: 'number', description: 'Piston only — current Tach meter reading.' },
+          },
+          required: ['tail_number', 'engine_type', 'is_ifr_equipped'],
+        },
+      },
+      required: ['profile', 'aircraft'],
+    },
+  },
+  {
     name: 'propose_equipment_entry',
     description: 'Propose adding an equipment record for the named aircraft. User confirms before the record is inserted. Admin-only. Use during initial aircraft setup or when the user describes a newly-installed piece of equipment.',
     input_schema: {

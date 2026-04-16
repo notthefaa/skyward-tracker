@@ -7,6 +7,7 @@ import { authFetch } from "@/lib/authFetch";
 import { swrKeys } from "@/lib/swrKeys";
 import type { AircraftWithMetrics } from "@/lib/types";
 import { HOWARD_QUICK_PROMPTS, type FollowUp } from "@/lib/howard/quickPrompts";
+import { HOWARD_FIRST_PERSON_INTRO, HOWARD_PIC_DISCLAIMER } from "@/lib/howard/persona";
 import {
   X, ArrowLeft, Plane, Maximize2, MessageSquare,
 } from "lucide-react";
@@ -144,6 +145,7 @@ export default function HowardLauncher({ currentAircraft, userFleet = [], sessio
           onClick={() => setOpen(true)}
           aria-label="Ask Howard"
           title="Ask Howard"
+          data-tour="howard-fab"
           className="fixed right-4 z-[9998] w-14 h-14 rounded-full overflow-hidden shadow-xl active:scale-95 transition-all border-2 border-white"
           style={{
             // 5rem clears the bottom nav bar; add the iOS home-indicator
@@ -230,14 +232,14 @@ export default function HowardLauncher({ currentAircraft, userFleet = [], sessio
              * pilot sees it before any back-and-forth with Howard. */}
             <div className="px-4 py-2.5 bg-[#e6651b]/5 border-b border-[#e6651b]/20 shrink-0">
               <p className="text-[10px] font-roboto italic text-gray-600 leading-snug">
-                The PIC retains all legal authority over airworthiness and go/no-go decisions. Howard provides data and helps you think through it — not legal or operational advice.
+                {HOWARD_PIC_DISCLAIMER}
               </p>
             </div>
 
             {mode === 'menu' && (
               <div className="p-4 flex flex-col gap-2">
                 <p className="font-roboto text-sm text-gray-700 mb-1">
-                  Hey, I&apos;m Howard, your hangar helper and advisor. I&apos;ve got plenty of aviation stories to share, but before we get into that, what can I help you with?
+                  {HOWARD_FIRST_PERSON_INTRO}
                 </p>
                 {HOWARD_QUICK_PROMPTS.map(p => {
                   const Icon = p.icon;
