@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { Resend } from 'resend';
 import { requireAuth, requireAircraftAdmin, handleApiError } from '@/lib/auth';
+import { setAppUser } from '@/lib/audit';
 import { env } from '@/lib/env';
 import { escapeHtml } from '@/lib/sanitize';
 
@@ -37,6 +38,8 @@ export async function POST(req: Request) {
     if (isResend && (event.status === 'complete' || event.status === 'cancelled')) {
       return NextResponse.json({ error: 'Cannot resend completed or cancelled events.' }, { status: 400 });
     }
+
+    await setAppUser(supabaseAdmin, user.id);
 
     // Fetch aircraft for email content
     const { data: aircraft } = await supabaseAdmin

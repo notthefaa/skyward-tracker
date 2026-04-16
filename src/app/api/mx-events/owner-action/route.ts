@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { Resend } from 'resend';
 import { requireAuth, requireAircraftAdmin, handleApiError } from '@/lib/auth';
+import { setAppUser } from '@/lib/audit';
 import { env } from '@/lib/env';
 import { escapeHtml } from '@/lib/sanitize';
 import { cancelConflictingReservations } from '@/lib/mxConflicts';
@@ -26,6 +27,7 @@ export async function POST(req: Request) {
 
     // Verify the user has access to this aircraft
     await requireAircraftAdmin(supabaseAdmin, user.id, event.aircraft_id);
+    await setAppUser(supabaseAdmin, user.id);
 
     const portalUrl = `${new URL(req.url).origin}/service/${event.access_token}`;
     const mxEmail = event.mx_contact_email;

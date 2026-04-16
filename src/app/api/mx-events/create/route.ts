@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireAuth, requireAircraftAccess, requireAircraftAdmin, handleApiError } from '@/lib/auth';
+import { setAppUser } from '@/lib/audit';
 
 export async function POST(req: Request) {
   try {
@@ -12,6 +13,7 @@ export async function POST(req: Request) {
 
     // Verify the user is an admin for this aircraft
     await requireAircraftAdmin(supabaseAdmin, user.id, aircraftId);
+    await setAppUser(supabaseAdmin, user.id);
 
     const { data: aircraft, error: acErr } = await supabaseAdmin
       .from('aft_aircraft').select('*').eq('id', aircraftId).is('deleted_at', null).maybeSingle();

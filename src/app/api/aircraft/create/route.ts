@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireAuth, handleApiError } from '@/lib/auth';
+import { setAppUser } from '@/lib/audit';
 
 export async function POST(req: Request) {
   try {
@@ -12,6 +13,7 @@ export async function POST(req: Request) {
 
     // Ensure created_by is set
     payload.created_by = user.id;
+    await setAppUser(supabaseAdmin, user.id);
 
     // Insert the aircraft
     const { data: newAircraft, error: insertError } = await supabaseAdmin

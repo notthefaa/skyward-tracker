@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireAuth, requireAircraftAccess, handleApiError } from '@/lib/auth';
+import { setAppUser } from '@/lib/audit';
 import { cancelConflictingReservations } from '@/lib/mxConflicts';
 
 export async function POST(req: Request) {
@@ -27,6 +28,8 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: 'Only admins can create maintenance blocks.' }, { status: 403 });
       }
     }
+
+    await setAppUser(supabaseAdmin, user.id);
 
     // Get the caller's name/email from aft_user_roles (the canonical table).
     const { data: profile } = await supabaseAdmin
