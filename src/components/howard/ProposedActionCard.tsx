@@ -135,6 +135,10 @@ export default function ProposedActionCard({ action, onChange }: Props) {
     // post-onboarding refetch; skip the per-aircraft flush here.
     if (!action.aircraft_id) return;
     globalMutate(matchesAircraft(action.aircraft_id), undefined, { revalidate: true });
+    // Poke AppShell to re-check the grounded banner. useGroundedStatus
+    // runs direct queries (not SWR), so the matchesAircraft invalidation
+    // above doesn't trigger it — the event bridges the gap.
+    window.dispatchEvent(new CustomEvent('aft:refresh-grounded'));
   };
 
   const handleConfirm = async (mode: 'confirm' | 'retry' = 'confirm') => {

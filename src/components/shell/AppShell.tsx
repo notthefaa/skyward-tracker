@@ -16,7 +16,7 @@ import {
   Wrench, AlertTriangle, FileText, LogOut,
   ChevronDown, Home, LayoutGrid, Send, ShieldCheck, X, Share, Copy, WifiOff, Loader2, Calendar, Settings,
   MoreHorizontal, FolderOpen, ShieldAlert,
-  ListChecks, PenLine, Plane, BarChart3, Gauge, CheckSquare,
+  ListChecks, PenLine, Plane, BarChart3, Gauge, CheckSquare, Plus,
 } from "lucide-react";
 import { HowardIcon } from "@/components/shell/TrayIcons";
 
@@ -209,6 +209,16 @@ export default function AppShell({ session }: AppShellProps) {
   // ─── Derived State (extracted hooks) ───
   const { aircraftStatus, groundedReason, checkGroundedStatus } = useGroundedStatus(allAircraftList);
   const currentAircraftRole = useAircraftRole(activeTail, allAircraftList, allAccessRecords, session);
+
+  // Grounded-banner refresh — ProposedActionCard fires aft:refresh-grounded
+  // after any confirmed write that may affect airworthiness. The grounded
+  // status comes from direct Supabase queries (not SWR), so the per-
+  // aircraft SWR invalidation doesn't trigger it.
+  useEffect(() => {
+    const handle = () => { if (activeTail) checkGroundedStatus(activeTail); };
+    window.addEventListener('aft:refresh-grounded', handle);
+    return () => window.removeEventListener('aft:refresh-grounded', handle);
+  }, [activeTail, checkGroundedStatus]);
 
   // ─── Realtime (extracted hook) ───
   const boundRefresh = useCallback(
@@ -667,6 +677,26 @@ export default function AppShell({ session }: AppShellProps) {
         <div className="w-full max-w-3xl flex flex-col gap-6">
           {!isDataLoaded ? (
             activeTab === 'fleet' ? <FleetSkeleton /> : <SummarySkeleton />
+          ) : aircraftList.length === 0 ? (
+            /* ── Empty fleet recovery ───────────────────────────
+               The user has completed onboarding but deleted their
+               only aircraft (or is a new admin with no personal
+               fleet). Show a clear recovery path instead of an
+               empty ghost town. */
+            <div className="flex flex-col items-center justify-center text-center py-16 px-4">
+              <Plane size={48} className="text-gray-300 mb-4" />
+              <h2 className="font-oswald text-2xl font-bold uppercase text-navy mb-2">No aircraft in your fleet</h2>
+              <p className="font-roboto text-sm text-gray-500 mb-6 max-w-sm">
+                Add an aircraft to start tracking flights, maintenance, squawks, and more.
+              </p>
+              <button
+                onClick={() => openAircraftForm(null)}
+                className="bg-[#e6651b] text-white font-oswald font-bold uppercase tracking-widest text-sm py-3 px-8 rounded-lg active:scale-95 transition-transform shadow-md"
+              >
+                <Plus size={16} className="inline mr-2 -mt-0.5" />
+                Add Aircraft
+              </button>
+            </div>
           ) : (<>
             {activeTab === 'fleet' && <FleetSummary
               aircraftList={aircraftList}
