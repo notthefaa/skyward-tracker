@@ -67,7 +67,7 @@ export default function HowardWelcome({
             Meet Howard
           </h1>
           <p className="text-[11px] font-bold uppercase tracking-widest text-[#e6651b] text-center mt-1 mb-5">
-            Your hangar helper
+            Your aviation mentor
           </p>
 
           <p className="font-roboto text-sm md:text-base text-gray-700 leading-relaxed text-center">

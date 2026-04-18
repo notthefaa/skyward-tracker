@@ -43,6 +43,7 @@ export async function* sendMessageStream(
   userRole: string,
   faaRatings: string[],
   pilotInitials: string,
+  pilotFullName: string,
   timeZone: string,
   userId: string,
   threadId: string,
@@ -59,6 +60,7 @@ export async function* sendMessageStream(
     userRole,
     faaRatings,
     pilotInitials,
+    pilotFullName,
     timeZone,
     new Date(),
   );

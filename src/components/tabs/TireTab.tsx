@@ -12,6 +12,47 @@ import { useModalScrollLock } from "@/hooks/useModalScrollLock";
 const whiteBg = { backgroundColor: '#ffffff' } as const;
 const PAGE_SIZE = 10;
 
+function TireRow({
+  label, checked, onCheck, psi, onPsi,
+}: {
+  label: string;
+  checked: boolean;
+  onCheck: (v: boolean) => void;
+  psi: string;
+  onPsi: (v: string) => void;
+}) {
+  return (
+    <div className={`flex items-center gap-3 rounded p-3 border transition-colors ${checked ? 'border-[#525659] bg-gray-50' : 'border-gray-200 bg-white hover:border-gray-300'}`}>
+      <label className="flex items-center gap-3 flex-1 cursor-pointer select-none">
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={e => onCheck(e.target.checked)}
+          className="h-4 w-4 accent-[#525659]"
+        />
+        <span className="text-sm font-bold uppercase tracking-widest text-navy">{label}</span>
+      </label>
+      {checked && (
+        <div className="flex items-center gap-1.5">
+          <input
+            type="number"
+            step="0.5"
+            min="0"
+            value={psi}
+            onChange={e => onPsi(e.target.value)}
+            placeholder="PSI"
+            className="w-20 rounded p-2 text-sm border border-gray-300 focus:border-[#525659] outline-none"
+            style={whiteBg}
+            required
+            autoFocus
+          />
+          <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">psi</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function TireTab({
   aircraft, session, role, userInitials, openFormSignal
 }: {
@@ -30,7 +71,12 @@ export default function TireTab({
   const [isSubmitting, setIsSubmitting] = useState(false);
   useModalScrollLock(showModal);
 
-  // Form fields
+  // Form fields. Each tire has a "was low" checkbox; the PSI input
+  // only appears (and only matters) when the box is checked. Tires
+  // not checked are stored as NULL — they weren't adjusted.
+  const [noseLow, setNoseLow] = useState(false);
+  const [leftLow, setLeftLow] = useState(false);
+  const [rightLow, setRightLow] = useState(false);
   const [nosePsi, setNosePsi] = useState('');
   const [leftMainPsi, setLeftMainPsi] = useState('');
   const [rightMainPsi, setRightMainPsi] = useState('');
@@ -58,6 +104,9 @@ export default function TireTab({
   const hasMore = data?.hasMore || false;
 
   const openForm = useCallback(() => {
+    setNoseLow(false);
+    setLeftLow(false);
+    setRightLow(false);
     setNosePsi('');
     setLeftMainPsi('');
     setRightMainPsi('');
@@ -74,10 +123,20 @@ export default function TireTab({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!aircraft || isSubmitting) return;
-    const fields = [['Nose PSI', nosePsi], ['Left Main PSI', leftMainPsi], ['Right Main PSI', rightMainPsi]] as const;
-    for (const [label, val] of fields) {
+    if (!noseLow && !leftLow && !rightLow) {
+      showError('Select at least one tire that was adjusted.'); return;
+    }
+    const checks: Array<[string, boolean, string]> = [
+      ['Nose PSI', noseLow, nosePsi],
+      ['Left Main PSI', leftLow, leftMainPsi],
+      ['Right Main PSI', rightLow, rightMainPsi],
+    ];
+    for (const [label, isChecked, val] of checks) {
+      if (!isChecked) continue;
       const n = Number(val);
-      if (Number.isNaN(n) || n < 0) { showError(`${label} must be a non-negative number.`); return; }
+      if (val === '' || Number.isNaN(n) || n < 0) {
+        showError(`${label} must be a non-negative number.`); return;
+      }
     }
     if (!initials.trim()) { showError('Initials are required.'); return; }
 
@@ -88,9 +147,9 @@ export default function TireTab({
         body: JSON.stringify({
           aircraftId: aircraft.id,
           logData: {
-            nose_psi: Number(nosePsi),
-            left_main_psi: Number(leftMainPsi),
-            right_main_psi: Number(rightMainPsi),
+            nose_psi: noseLow ? Number(nosePsi) : null,
+            left_main_psi: leftLow ? Number(leftMainPsi) : null,
+            right_main_psi: rightLow ? Number(rightMainPsi) : null,
             initials: initials.trim(),
             notes: notes.trim() || null,
           },
@@ -148,9 +207,9 @@ export default function TireTab({
                 <tr key={c.id} className="border-b border-gray-200 hover:bg-blue-50/50 transition-colors">
                   <td className="py-3 pr-4 whitespace-nowrap">{new Date(c.created_at).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: '2-digit' })}</td>
                   <td className="py-3 pr-4 whitespace-nowrap font-bold">{c.initials}</td>
-                  <td className="py-3 pr-4 whitespace-nowrap">{c.nose_psi}</td>
-                  <td className="py-3 pr-4 whitespace-nowrap">{c.left_main_psi}</td>
-                  <td className="py-3 pr-4 whitespace-nowrap">{c.right_main_psi}</td>
+                  <td className="py-3 pr-4 whitespace-nowrap">{c.nose_psi ?? '—'}</td>
+                  <td className="py-3 pr-4 whitespace-nowrap">{c.left_main_psi ?? '—'}</td>
+                  <td className="py-3 pr-4 whitespace-nowrap">{c.right_main_psi ?? '—'}</td>
                   <td className="py-3 pr-4 max-w-[120px] truncate text-gray-500">{c.notes || '—'}</td>
                   {isAdmin && (
                     <td className="py-3 text-right">
@@ -185,18 +244,30 @@ export default function TireTab({
                 <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-red-500"><X size={20} /></button>
               </div>
               <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-                <div className="grid grid-cols-3 gap-3">
-                  <div>
-                    <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1 block">Nose PSI</label>
-                    <input type="number" step="0.1" min="0" value={nosePsi} onChange={e => setNosePsi(e.target.value)} className="w-full rounded p-3 text-sm border border-gray-300 focus:border-[#525659] outline-none" style={whiteBg} required />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1 block">L Main</label>
-                    <input type="number" step="0.1" min="0" value={leftMainPsi} onChange={e => setLeftMainPsi(e.target.value)} className="w-full rounded p-3 text-sm border border-gray-300 focus:border-[#525659] outline-none" style={whiteBg} required />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1 block">R Main</label>
-                    <input type="number" step="0.1" min="0" value={rightMainPsi} onChange={e => setRightMainPsi(e.target.value)} className="w-full rounded p-3 text-sm border border-gray-300 focus:border-[#525659] outline-none" style={whiteBg} required />
+                <div>
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2 block">Tires Adjusted</span>
+                  <div className="flex flex-col gap-2">
+                    <TireRow
+                      label="Nose"
+                      checked={noseLow}
+                      onCheck={setNoseLow}
+                      psi={nosePsi}
+                      onPsi={setNosePsi}
+                    />
+                    <TireRow
+                      label="Left Main"
+                      checked={leftLow}
+                      onCheck={setLeftLow}
+                      psi={leftMainPsi}
+                      onPsi={setLeftMainPsi}
+                    />
+                    <TireRow
+                      label="Right Main"
+                      checked={rightLow}
+                      onCheck={setRightLow}
+                      psi={rightMainPsi}
+                      onPsi={setRightMainPsi}
+                    />
                   </div>
                 </div>
                 <div>

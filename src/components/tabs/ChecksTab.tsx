@@ -306,7 +306,7 @@ export default function ChecksTab({ aircraft, session, role, userInitials }: Pro
   );
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-2">
       {/* Dashboard: centered hint, three dials in a 3-column grid,
        * and a parallel 3-column grid of Log buttons below. Using
        * grid-cols-3 on both rows keeps the buttons vertically

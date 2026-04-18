@@ -7,7 +7,7 @@ import { supabase } from "@/lib/supabase";
 import { swrKeys } from "@/lib/swrKeys";
 import type { AircraftWithMetrics } from "@/lib/types";
 import type { HowardMessage } from "@/lib/howard/types";
-import useSWR from "swr";
+import useSWR, { useSWRConfig } from "swr";
 import { Send, Wrench, Globe, CloudSun, FileSearch, Database, BarChart3, Trash2, X } from "lucide-react";
 import { useToast } from "@/components/ToastProvider";
 import { useConfirm } from "@/components/ConfirmProvider";
@@ -70,6 +70,30 @@ const EMPTY_FLEET_SUGGESTIONS = [
  * sees Howard speak first without seeing a prompt they didn't type. */
 export const ONBOARDING_KICKOFF_MARKER = "Start the setup conversation.";
 
+/** Howard can end a reply with a fenced ```chips block (one suggestion
+ * per line) when his question has a small natural answer set. The
+ * client strips the fence from the rendered markdown and renders the
+ * suggestions as clickable buttons that send the suggestion as the
+ * pilot's next message. */
+const CHIPS_FENCE_RE = /```chips\s*\n([\s\S]*?)\n```/g;
+function extractChipBlocks(markdown: string): { content: string; chips: string[] } {
+  const chips: string[] = [];
+  let content = markdown.replace(CHIPS_FENCE_RE, (_match, body: string) => {
+    for (const raw of body.split('\n')) {
+      const line = raw.trim().replace(/^[-*]\s*/, '').replace(/^["']|["']$/g, '').trim();
+      if (line) chips.push(line);
+    }
+    return '';
+  });
+  // Mid-stream: hide an unterminated ```chips fence from the rendered
+  // bubble so the user doesn't see the raw syntax while it streams.
+  // The chips appear as buttons once the closing fence lands.
+  const openIdx = content.indexOf('```chips');
+  if (openIdx >= 0) content = content.slice(0, openIdx);
+  content = content.replace(/\n{3,}/g, '\n\n').trimEnd();
+  return { content, chips };
+}
+
 // Friendly label for tool-use indicator
 function toolLabel(name: string): { label: string; Icon: any } {
   if (name === 'web_search') return { label: 'Searching the web', Icon: Globe };
@@ -104,6 +128,7 @@ export default function HowardTab({
 }) {
   const { showError, showSuccess } = useToast();
   const confirm = useConfirm();
+  const { mutate: globalMutate } = useSWRConfig();
   const [input, setInput] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [streamingText, setStreamingText] = useState('');
@@ -418,12 +443,18 @@ export default function HowardTab({
     try {
       const res = await authFetch(`/api/howard`, { method: 'DELETE' });
       if (!res.ok) throw new Error((await res.json()).error || 'Failed to clear conversation');
-      mutate({ thread: null, messages: [] }, false);
+      // Drop the old thread's proposed-actions cache so stale cards
+      // can't flash back in before the messages refetch resolves.
+      if (threadId) globalMutate(swrKeys.howardActions(threadId), { actions: [] }, false);
+      // Force a fresh GET instead of optimistically setting empty —
+      // that way, if the server delete ever misbehaves (silent RLS
+      // failure, etc.), the UI reflects reality instead of lying.
+      await mutate();
       showSuccess('Conversation cleared.');
     } catch (err: any) {
       showError(err.message);
     }
-  }, [isSending, confirm, mutate, showSuccess, showError]);
+  }, [isSending, confirm, mutate, showSuccess, showError, threadId, globalMutate]);
 
   // Single-aircraft auto-confirm — if Howard asks "which aircraft?" and
   // the user only has one, there's no real choice to make. Send the
@@ -552,7 +583,7 @@ export default function HowardTab({
               <div className="min-w-0">
                 <h2 className="font-oswald text-2xl md:text-3xl font-bold uppercase text-navy m-0 leading-none">Howard</h2>
                 <span className="text-[10px] font-bold uppercase tracking-widest text-[#e6651b] truncate block">
-                  {currentAircraft ? `Hangar helper · ${currentAircraft.tail_number}` : 'Hangar helper'}
+                  {currentAircraft ? `Aviation mentor · ${currentAircraft.tail_number}` : 'Aviation mentor'}
                 </span>
               </div>
             </div>
@@ -615,7 +646,7 @@ export default function HowardTab({
           </div>
         ) : (
           <div className="flex flex-col gap-3">
-            {messages.map(msg => {
+            {messages.map((msg, msgIndex) => {
               // Find any propose_* tool calls and their resulting
               // proposed_action_ids (parsed from tool_results).
               const proposedActions: ProposedAction[] = [];
@@ -638,6 +669,16 @@ export default function HowardTab({
                 }
               }
 
+              // Strip ```chips fences from assistant content; render them
+              // as buttons beneath the bubble (only for the latest
+              // assistant message + while not currently streaming).
+              const isLatest = msgIndex === messages.length - 1;
+              const { content: visibleContent, chips: msgChips } =
+                msg.role === 'assistant'
+                  ? extractChipBlocks(msg.content)
+                  : { content: msg.content, chips: [] };
+              const showChips = isLatest && msg.role === 'assistant' && !isSending && msgChips.length > 0;
+
               return (
                 <div key={msg.id} className={`flex flex-col gap-2 ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
                   <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 ${
@@ -650,7 +691,7 @@ export default function HowardTab({
                     ) : (
                       <div className="howard-markdown">
                         <ReactMarkdown remarkPlugins={[remarkGfm]} components={MARKDOWN_COMPONENTS}>
-                          {msg.content}
+                          {visibleContent}
                         </ReactMarkdown>
                       </div>
                     )}
@@ -658,6 +699,20 @@ export default function HowardTab({
                       {new Date(msg.created_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
                     </span>
                   </div>
+
+                  {showChips && (
+                    <div className="flex flex-wrap gap-1.5 max-w-[85%]">
+                      {msgChips.map(chip => (
+                        <button
+                          key={chip}
+                          onClick={() => handleSend(chip)}
+                          className="text-[12px] font-roboto font-medium text-[#e6651b] bg-white border border-[#e6651b]/40 rounded-full px-3 py-1.5 hover:bg-[#e6651b]/10 active:scale-95 transition-all"
+                        >
+                          {chip}
+                        </button>
+                      ))}
+                    </div>
+                  )}
 
                   {proposedActions.map(a => (
                     <div key={a.id} className="max-w-[85%] w-full">
@@ -681,7 +736,7 @@ export default function HowardTab({
                   {streamingText && (
                     <div className="howard-markdown">
                       <ReactMarkdown remarkPlugins={[remarkGfm]} components={MARKDOWN_COMPONENTS}>
-                        {streamingText}
+                        {extractChipBlocks(streamingText).content}
                       </ReactMarkdown>
                       <span className="inline-block w-1.5 h-3.5 ml-0.5 bg-[#e6651b] align-middle animate-pulse" />
                     </div>

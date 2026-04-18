@@ -316,9 +316,9 @@ export interface TireCheck {
   id: string;
   aircraft_id: string;
   user_id?: string | null;
-  nose_psi: number;
-  left_main_psi: number;
-  right_main_psi: number;
+  nose_psi: number | null;
+  left_main_psi: number | null;
+  right_main_psi: number | null;
   initials: string;
   notes?: string | null;
   created_at: string;

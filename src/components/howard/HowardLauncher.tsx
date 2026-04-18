@@ -203,7 +203,7 @@ export default function HowardLauncher({ currentAircraft, userFleet = [], sessio
                     {mode === 'flight-briefing' ? 'Flight Briefing' : 'Howard'}
                   </h3>
                   <p className="text-[10px] font-bold uppercase tracking-widest text-[#e6651b] truncate">
-                    {currentTail ? `Selected: ${currentTail}` : 'Hangar helper'}
+                    {currentTail ? `Selected: ${currentTail}` : 'Aviation mentor'}
                   </p>
                 </div>
               </div>

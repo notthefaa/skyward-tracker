@@ -293,11 +293,11 @@ export default function OilTab({
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1 block">Oil Level (qt)</label>
-                    <input type="number" step="0.1" min="0" value={oilQty} onChange={e => setOilQty(e.target.value)} className="w-full rounded p-3 text-sm border border-gray-300 focus:border-[#CE3732] outline-none" style={whiteBg} required />
+                    <input type="number" step="0.5" min="0" value={oilQty} onChange={e => setOilQty(e.target.value)} className="w-full rounded p-3 text-sm border border-gray-300 focus:border-[#CE3732] outline-none" style={whiteBg} required />
                   </div>
                   <div>
                     <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1 block">Oil Added (qt)</label>
-                    <input type="number" step="0.1" min="0" value={oilAdded} onChange={e => setOilAdded(e.target.value)} placeholder="Optional" className="w-full rounded p-3 text-sm border border-gray-300 focus:border-[#CE3732] outline-none" style={whiteBg} />
+                    <input type="number" step="0.5" min="0" value={oilAdded} onChange={e => setOilAdded(e.target.value)} placeholder="Optional" className="w-full rounded p-3 text-sm border border-gray-300 focus:border-[#CE3732] outline-none" style={whiteBg} />
                   </div>
                 </div>
                 <div>

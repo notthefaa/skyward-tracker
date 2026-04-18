@@ -7,7 +7,7 @@ export const tools: Anthropic.Tool[] = [
     input_schema: {
       type: 'object' as const,
       properties: {
-        tail: { type: 'string', description: 'Aircraft tail number. Ask the user if you don\'t already know which aircraft.' },
+        tail: { type: 'string', description: 'Aircraft tail number. Default to the currently-selected tail in context if the pilot didn\'t name one. Only ask if no aircraft is selected and the pilot has more than one in their fleet.' },
         limit: { type: 'number', description: 'Max rows (default 10, max 50)' },
         date_from: { type: 'string', description: 'ISO date, inclusive lower bound' },
         date_to: { type: 'string', description: 'ISO date, inclusive upper bound' },
@@ -202,7 +202,7 @@ export const tools: Anthropic.Tool[] = [
         airports: {
           type: 'array',
           items: { type: 'string' },
-          description: 'Array of ICAO airport codes (e.g. ["KDAL", "KAUS", "KHOU"])',
+          description: 'Array of ICAO airport codes (e.g. ["KDAL", "KAUS", "KHOU"]). If the pilot only named a destination, include the active aircraft\'s home_airport from context as the departure unless they specified otherwise.',
         },
       },
       required: ['airports'],
@@ -232,7 +232,7 @@ export const tools: Anthropic.Tool[] = [
         airports: {
           type: 'array',
           items: { type: 'string' },
-          description: 'ICAO airport codes to pull NOTAMs for (e.g. ["KDAL", "KAUS", "KADS"])',
+          description: 'ICAO airport codes to pull NOTAMs for (e.g. ["KDAL", "KAUS", "KADS"]). If the pilot only named a destination, include the active aircraft\'s home_airport from context as the departure NOTAM source.',
         },
       },
       required: ['airports'],
@@ -306,11 +306,11 @@ export const tools: Anthropic.Tool[] = [
       type: 'object' as const,
       properties: {
         tail: { type: 'string', description: 'Aircraft tail number to reserve.' },
-        start_time: { type: 'string', description: 'ISO datetime for start of reservation' },
-        end_time: { type: 'string', description: 'ISO datetime for end of reservation' },
-        pilot_initials: { type: 'string', description: 'Pilot initials (2-3 chars)' },
-        pod: { type: 'string', description: 'Point of departure airport code (optional)' },
-        poa: { type: 'string', description: 'Point of arrival airport code (optional)' },
+        start_time: { type: 'string', description: 'ISO datetime for start of reservation. Resolve relative phrases ("tomorrow 9am", "next Tuesday") using the `## Now` line in context — don\'t ask the pilot for today\'s date.' },
+        end_time: { type: 'string', description: 'ISO datetime for end of reservation. Resolve relative phrases using context.' },
+        pilot_initials: { type: 'string', description: 'Pilot initials (2-3 chars). Use the `## Pilot initials` line from context — never ask.' },
+        pod: { type: 'string', description: 'Point of departure airport code (optional). If pilot didn\'t name one, default to the aircraft\'s home_airport from context (don\'t leave blank if home is on file).' },
+        poa: { type: 'string', description: 'Point of arrival airport code (optional). For local flights / pattern work, the same airport as pod is fine.' },
         notes: { type: 'string', description: 'Optional notes' },
       },
       required: ['tail', 'start_time', 'end_time', 'pilot_initials'],

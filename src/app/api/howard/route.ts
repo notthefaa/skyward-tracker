@@ -42,21 +42,31 @@ export async function DELETE(req: Request) {
   try {
     const { user, supabaseAdmin } = await requireAuth(req);
 
-    const { data: thread } = await supabaseAdmin
+    const { data: thread, error: threadErr } = await supabaseAdmin
       .from('aft_howard_threads')
       .select('id')
       .eq('user_id', user.id)
       .maybeSingle();
+    if (threadErr) throw threadErr;
 
     if (!thread) return NextResponse.json({ success: true, cleared: 0 });
 
-    await supabaseAdmin.from('aft_howard_messages').delete().eq('thread_id', thread.id);
-    await supabaseAdmin
+    // Use count: 'exact' so a silent zero-row delete (RLS misconfig,
+    // service-role key missing, etc.) surfaces instead of letting the
+    // UI show an optimistic-empty state that snaps back on reload.
+    const { error: delErr, count } = await supabaseAdmin
+      .from('aft_howard_messages')
+      .delete({ count: 'exact' })
+      .eq('thread_id', thread.id);
+    if (delErr) throw delErr;
+
+    const { error: bumpErr } = await supabaseAdmin
       .from('aft_howard_threads')
       .update({ updated_at: new Date().toISOString() })
       .eq('id', thread.id);
+    if (bumpErr) throw bumpErr;
 
-    return NextResponse.json({ success: true, cleared: 1 });
+    return NextResponse.json({ success: true, cleared: count ?? 0 });
   } catch (error) { return handleApiError(error); }
 }
 
@@ -146,12 +156,13 @@ export async function POST(req: Request) {
     // 'pilot' if none). Ratings + initials come straight from the profile.
     const { data: profile } = await supabaseAdmin
       .from('aft_user_roles')
-      .select('role, faa_ratings, initials')
+      .select('role, faa_ratings, initials, full_name')
       .eq('user_id', user.id)
       .maybeSingle();
     let userRole: string = (profile as any)?.role || 'pilot';
     const faaRatings: string[] = ((profile as any)?.faa_ratings as string[] | null) || [];
     const pilotInitials: string = (profile as any)?.initials || '';
+    const pilotFullName: string = (profile as any)?.full_name || '';
     if (userRole !== 'admin' && currentAircraft) {
       const { data: acAccess } = await supabaseAdmin
         .from('aft_user_aircraft_access')
@@ -216,6 +227,7 @@ export async function POST(req: Request) {
             userRole,
             faaRatings,
             pilotInitials,
+            pilotFullName,
             typeof timeZone === 'string' && timeZone ? timeZone : 'UTC',
             user.id,
             threadId,

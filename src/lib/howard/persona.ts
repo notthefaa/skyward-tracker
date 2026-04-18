@@ -10,7 +10,7 @@
  */
 
 /** One-sentence who-is-Howard for headers + card subtitles. */
-export const HOWARD_TAGLINE = "Your hangar helper. Real data, sharp eyes.";
+export const HOWARD_TAGLINE = "Your aviation mentor. Real data, sharp eyes.";
 
 /**
  * Two-sentence bio for the welcome modal and any "about Howard" card.
@@ -28,7 +28,7 @@ export const HOWARD_BIO =
  * description when space allows.
  */
 export const HOWARD_FIRST_PERSON_INTRO =
-  "Hey, I'm Howard — your hangar helper. I've got real data at my fingertips: flight logs, maintenance, NOTAMs, weather, your documents. What can I help with?";
+  "Hey, I'm Howard — your aviation mentor. I've got real data at my fingertips: flight logs, maintenance, NOTAMs, weather, your documents. What can I help with?";
 
 /**
  * First line Howard says on the onboarding surface. Warmer + more

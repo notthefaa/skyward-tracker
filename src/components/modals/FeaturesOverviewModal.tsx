@@ -227,7 +227,7 @@ export default function FeaturesOverviewModal({
                 Features Guide
               </h2>
               <p className="text-[10px] font-bold uppercase tracking-widest text-[#e6651b] mt-1">
-                From your hangar helper
+                From your aviation mentor
               </p>
             </div>
           </div>
