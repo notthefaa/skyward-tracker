@@ -11,6 +11,7 @@ import { useToast } from "@/components/ToastProvider";
 import { useConfirm } from "@/components/ConfirmProvider";
 import SectionSelector from "@/components/shell/SectionSelector";
 import { MORE_SELECTOR_ITEMS, emitMoreNavigate } from "@/components/shell/moreNav";
+import { useSignedUrls } from "@/hooks/useSignedUrls";
 
 const DOC_TYPES: { value: DocType; label: string }[] = [
   { value: 'POH', label: "Pilot's Operating Handbook" },
@@ -33,6 +34,7 @@ export default function DocumentsTab({
 }) {
   const { showSuccess, showError } = useToast();
   const confirm = useConfirm();
+  const resolve = useSignedUrls();
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -195,7 +197,7 @@ export default function DocumentsTab({
                   <td className="py-3 pr-4">
                     <div className="flex items-center gap-2">
                       <FileText size={14} className="text-[#56B94A] shrink-0" />
-                      <a href={doc.file_url} target="_blank" rel="noopener noreferrer" className="text-[#3AB0FF] underline truncate max-w-[180px]">{doc.filename}</a>
+                      <a href={resolve(doc.file_url) || '#'} target="_blank" rel="noopener noreferrer" className="text-[#3AB0FF] underline truncate max-w-[180px]">{doc.filename}</a>
                     </div>
                   </td>
                   <td className="py-3 pr-4 whitespace-nowrap text-[10px] font-bold uppercase tracking-wider">{doc.doc_type}</td>

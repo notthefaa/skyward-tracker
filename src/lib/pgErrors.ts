@@ -43,6 +43,10 @@ const MAP: MapEntry[] = [
     },
   },
   {
+    match: e => e.code === '23P01',
+    text: () => 'This time overlaps with an existing reservation for the same aircraft. Pick a different slot.',
+  },
+  {
     match: e => e.code === '23514',
     text: () => 'That value is out of the allowed range. Double-check the form.',
   },

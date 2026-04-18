@@ -13,6 +13,7 @@ import { useConfirm } from "@/components/ConfirmProvider";
 import { useModalScrollLock } from "@/hooks/useModalScrollLock";
 import SectionSelector from "@/components/shell/SectionSelector";
 import { MORE_SELECTOR_ITEMS, emitMoreNavigate } from "@/components/shell/moreNav";
+import { useSignedUrls } from "@/hooks/useSignedUrls";
 
 const whiteBg = { backgroundColor: '#ffffff' } as const;
 
@@ -52,6 +53,7 @@ export default function NotesTab({ aircraft, session, role, aircraftRole, userIn
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const { showSuccess, showError } = useToast();
+  const resolve = useSignedUrls();
   const confirm = useConfirm();
 
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -264,7 +266,7 @@ export default function NotesTab({ aircraft, session, role, aircraftRole, userIn
                   <div className="mt-3 flex gap-2 overflow-x-auto pt-2">
                     {note.pictures.map((pic: string, i: number) => (
                       <button key={i} onClick={() => { setPreviewImages(note.pictures); setPreviewIndex(i); }} className="active:scale-95 transition-transform shrink-0">
-                        <img src={pic} loading="lazy" alt="Note Attachment" className="h-20 w-20 object-cover rounded border border-gray-300 shadow-sm" />
+                        <img src={resolve(pic) || pic} loading="lazy" alt="Note Attachment" className="h-20 w-20 object-cover rounded border border-gray-300 shadow-sm" />
                       </button>
                     ))}
                   </div>

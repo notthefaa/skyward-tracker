@@ -1,11 +1,16 @@
 import { NextResponse } from 'next/server';
 import { requireAuth, requireAircraftAccess, requireAircraftAdmin, handleApiError } from '@/lib/auth';
 import { setAppUser } from '@/lib/audit';
+import { idempotency } from '@/lib/idempotency';
 
 // POST — report squawk (any user with aircraft access)
 export async function POST(req: Request) {
   try {
     const { user, supabaseAdmin } = await requireAuth(req);
+    const idem = idempotency(supabaseAdmin, user.id, req, 'squawks/POST');
+    const cached = await idem.check();
+    if (cached) return cached;
+
     const { aircraftId, squawkData } = await req.json();
     if (!aircraftId) return NextResponse.json({ error: 'Aircraft ID required.' }, { status: 400 });
     await requireAircraftAccess(supabaseAdmin, user.id, aircraftId);
@@ -14,7 +19,9 @@ export async function POST(req: Request) {
     const { data, error } = await supabaseAdmin.from('aft_squawks').insert({ ...squawkData, aircraft_id: aircraftId }).select().single();
     if (error) throw error;
 
-    return NextResponse.json({ success: true, squawk: data });
+    const body = { success: true, squawk: data };
+    await idem.save(200, body);
+    return NextResponse.json(body);
   } catch (error) { return handleApiError(error); }
 }
 

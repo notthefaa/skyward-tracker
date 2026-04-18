@@ -3,6 +3,7 @@ import { Resend } from 'resend';
 import { requireAuth, handleApiError } from '@/lib/auth';
 import { env } from '@/lib/env';
 import { escapeHtml } from '@/lib/sanitize';
+import { idempotency } from '@/lib/idempotency';
 import {
   safeTimeZone,
   formatInTimeZone,
@@ -17,6 +18,10 @@ const FROM_EMAIL = 'notifications@skywardsociety.com';
 export async function POST(req: Request) {
   try {
     const { user, supabaseAdmin } = await requireAuth(req);
+    const idem = idempotency(supabaseAdmin, user.id, req, 'reservations/POST');
+    const cached = await idem.check();
+    if (cached) return cached;
+
     const { aircraftId, occurrences: rawOccurrences, title, route, timeZone, bookForUserId } = await req.json();
     const tz = safeTimeZone(timeZone);
 
@@ -314,12 +319,14 @@ export async function POST(req: Request) {
       }
     }
 
-    return NextResponse.json({
+    const body = {
       success: true,
       created: created.length,
       skipped: skipped.length,
       skippedDetails: skipped.length > 0 ? skipped : undefined,
-    });
+    };
+    await idem.save(200, body);
+    return NextResponse.json(body);
   } catch (error) {
     return handleApiError(error);
   }

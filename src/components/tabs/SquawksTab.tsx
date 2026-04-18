@@ -8,6 +8,7 @@ import useSWR from "swr";
 import { AlertTriangle, Plus, X, Upload, Mail, Edit2, ChevronLeft, ChevronRight, Download, CheckSquare, Trash2, CheckCircle, Link2, Clock, MapPin, User } from "lucide-react";
 import { PrimaryButton } from "@/components/AppButtons";
 import SignatureCanvas from "react-signature-canvas";
+import { useSignedUrls } from "@/hooks/useSignedUrls";
 import imageCompression from "browser-image-compression";
 import { useToast } from "@/components/ToastProvider";
 import { useConfirm } from "@/components/ConfirmProvider";
@@ -62,6 +63,7 @@ export default function SquawksTab({
   const [visibleArchivedCount, setVisibleArchivedCount] = useState(10);
 
   const { showSuccess, showError, showWarning } = useToast();
+  const resolve = useSignedUrls();
   const confirm = useConfirm();
 
   // Detail modal state
@@ -410,7 +412,7 @@ export default function SquawksTab({
                   <div className="mt-3 flex gap-2 overflow-x-auto pb-2">
                     {sq.pictures.slice(0, 4).map((pic: string, i: number) => (
                       <div key={i} className="shrink-0">
-                        <img src={pic} loading="lazy" alt="Squawk" className="h-16 w-16 object-cover rounded border border-gray-300 shadow-sm" />
+                        <img src={resolve(pic) || pic} loading="lazy" alt="Squawk" className="h-16 w-16 object-cover rounded border border-gray-300 shadow-sm" />
                       </div>
                     ))}
                     {sq.pictures.length > 4 && <div className="h-16 w-16 rounded bg-gray-200 flex items-center justify-center text-xs font-bold text-gray-500 shrink-0">+{sq.pictures.length - 4}</div>}
@@ -513,7 +515,7 @@ export default function SquawksTab({
                 <div className="flex gap-2 overflow-x-auto pb-2">
                   {detailSquawk.pictures.map((pic: string, i: number) => (
                     <button key={i} onClick={() => { setPreviewImages(detailSquawk.pictures); setPreviewIndex(i); }} className="active:scale-95 transition-transform shrink-0">
-                      <img src={pic} loading="lazy" alt="Squawk" className="h-20 w-20 object-cover rounded border border-gray-300 shadow-sm" />
+                      <img src={resolve(pic) || pic} loading="lazy" alt="Squawk" className="h-20 w-20 object-cover rounded border border-gray-300 shadow-sm" />
                     </button>
                   ))}
                 </div>
@@ -593,7 +595,7 @@ export default function SquawksTab({
           <div className="flex min-h-full items-center justify-center">
           <button className="absolute top-4 right-4 text-gray-400 hover:text-white z-50 p-2"><X size={32}/></button>
           {previewImages.length > 1 && <button onClick={(e) => { e.stopPropagation(); setPreviewIndex(prev => prev === 0 ? previewImages.length - 1 : prev - 1); }} className="absolute left-4 text-gray-400 hover:text-white z-50 p-2"><ChevronLeft size={48}/></button>}
-          <div className="max-w-full max-h-full p-4 flex items-center justify-center" onClick={(e) => e.stopPropagation()}><img src={previewImages[previewIndex]} className="max-h-[85vh] max-w-full object-contain rounded shadow-2xl" /></div>
+          <div className="max-w-full max-h-full p-4 flex items-center justify-center" onClick={(e) => e.stopPropagation()}><img src={resolve(previewImages[previewIndex]) || previewImages[previewIndex]} className="max-h-[85vh] max-w-full object-contain rounded shadow-2xl" /></div>
           {previewImages.length > 1 && <button onClick={(e) => { e.stopPropagation(); setPreviewIndex(prev => prev === previewImages.length - 1 ? 0 : prev + 1); }} className="absolute right-4 text-gray-400 hover:text-white z-50 p-2"><ChevronRight size={48}/></button>}
           <div className="absolute bottom-6 text-gray-400 font-oswald tracking-widest text-sm uppercase">Image {previewIndex + 1} of {previewImages.length}</div>
           </div>

@@ -2,10 +2,15 @@ import { NextResponse } from 'next/server';
 import { requireAuth, requireAircraftAccess, requireAircraftAdmin, handleApiError } from '@/lib/auth';
 import { setAppUser } from '@/lib/audit';
 import { isIsoDate } from '@/lib/validation';
+import { idempotency } from '@/lib/idempotency';
 
 export async function POST(req: Request) {
   try {
     const { user, supabaseAdmin } = await requireAuth(req);
+    const idem = idempotency(supabaseAdmin, user.id, req, 'mx-events/POST');
+    const cached = await idem.check();
+    if (cached) return cached;
+
     const { aircraftId, mxItemIds, squawkIds, addonServices, proposedDate } = await req.json();
 
     if (!aircraftId) {
@@ -104,7 +109,9 @@ export async function POST(req: Request) {
         : 'Work package created. Ready to send to mechanic.',
     } as any);
 
-    return NextResponse.json({ success: true, eventId: event.id });
+    const body = { success: true, eventId: event.id };
+    await idem.save(200, body);
+    return NextResponse.json(body);
   } catch (error) {
     return handleApiError(error);
   }

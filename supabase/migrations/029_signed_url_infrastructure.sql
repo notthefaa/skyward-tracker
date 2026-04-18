@@ -1,0 +1,42 @@
+-- =============================================================
+-- Migration 029: Signed-URL infrastructure (documentation only)
+-- =============================================================
+-- This migration documents the bucket-privacy toggle step. The
+-- actual code changes (server-side /api/storage/sign endpoint +
+-- client-side useSignedUrls hook) are deployed in the same commit
+-- but the bucket-privacy flip is a MANUAL step in the Supabase
+-- Dashboard once all clients are verified to use signed URLs.
+--
+-- ── Step 1 (code, already deployed): ──────────────────────────
+-- /api/storage/sign endpoint generates 1-hour signed URLs via
+-- the admin client. The useSignedUrls() hook resolves public URLs
+-- to signed URLs transparently. Components calling resolve() work
+-- whether the bucket is public or private — progressive enhancement.
+--
+-- ── Step 2 (manual, after verifying all surfaces work): ───────
+-- In the Supabase Dashboard → Storage → each bucket below:
+--   aft_aircraft_documents  → toggle Public OFF
+--   aft_squawk_images       → toggle Public OFF
+--   aft_note_images         → toggle Public OFF
+--   aft_event_attachments   → toggle Public OFF
+--   aft_aircraft_avatars    → toggle Public OFF
+--
+-- After flipping, public URLs return 403 and only signed URLs work.
+-- Clients using useSignedUrls() are already covered. Any surface
+-- NOT yet migrated (e.g., a 3rd-party integration or email template
+-- with a hard-coded public URL) will break — verify all rendering
+-- surfaces first.
+--
+-- ── Backfill (not needed): ────────────────────────────────────
+-- Existing file_url / pictures values in the DB remain as public
+-- URLs. The /api/storage/sign endpoint extracts the bucket + path
+-- from these URLs to generate signed versions, so no column
+-- migration or data backfill is required. The public URL format:
+--   https://{project}.supabase.co/storage/v1/object/public/{bucket}/{path}
+-- is stable and used as the input key for signing.
+--
+-- Run in the Supabase SQL Editor (no-op — documentation only).
+-- =============================================================
+
+-- No SQL changes needed. This file exists for the migration log.
+SELECT 1;
