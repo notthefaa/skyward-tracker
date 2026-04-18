@@ -256,7 +256,7 @@ export default function HowardLauncher({ currentAircraft, userFleet = [], sessio
                 })}
                 <button
                   onClick={() => setMode('flight-briefing')}
-                  className="text-left px-4 py-3 bg-[#e6651b]/5 hover:bg-[#e6651b]/15 border border-[#e6651b]/50 rounded-lg text-sm font-bold text-navy transition-colors active:scale-[0.98] flex items-center gap-3"
+                  className="text-left px-4 py-3 bg-gray-50 hover:bg-[#e6651b]/10 hover:border-[#e6651b] border border-gray-200 rounded-lg text-sm font-bold text-navy transition-colors active:scale-[0.98] flex items-center gap-3"
                 >
                   <Plane size={16} className="text-[#e6651b] shrink-0" />
                   <span>Flight briefing…</span>

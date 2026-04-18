@@ -484,14 +484,54 @@ const handlers: Record<string, ToolHandler> = {
 
     if (!acRes.data) return { error: 'Aircraft not found.' };
 
+    const equipment = (eqRes.data || []) as any[];
+    const mxItems = mxRes.data || [];
+    const squawks = (sqRes.data || []) as any[];
+    const ads = (adRes.data || []) as any[];
+    const isIfr = (acRes.data as any).is_ifr_equipped === true;
+
     const verdict = computeAirworthinessStatus({
       aircraft: acRes.data as any,
-      equipment: (eqRes.data || []) as any,
-      mxItems: mxRes.data || [],
-      squawks: (sqRes.data || []) as any,
-      ads: (adRes.data || []) as any,
+      equipment: equipment as any,
+      mxItems,
+      squawks,
+      ads: ads as any,
     });
-    return verdict;
+
+    // Data-completeness flags. A "airworthy" verdict can be misleading
+    // when the database simply doesn't have the data to flag anything —
+    // e.g., equipment list is empty so 91.207/91.411/91.413 checks have
+    // nothing to evaluate. Surface what's tracked so Howard can caveat
+    // the verdict honestly instead of claiming airworthy on thin data.
+    const has = (cat: string) => equipment.some((e: any) => e.category === cat || (cat === 'elt' && e.is_elt));
+    const missing_critical_equipment: string[] = [];
+    if (!has('elt')) missing_critical_equipment.push('ELT (91.207)');
+    if (!has('transponder')) missing_critical_equipment.push('Transponder (91.413)');
+    if (isIfr) {
+      if (!has('altimeter')) missing_critical_equipment.push('Altimeter (91.411, IFR)');
+      if (!has('pitot_static')) missing_critical_equipment.push('Pitot-static (91.411, IFR)');
+    }
+
+    const data_completeness = {
+      equipment_count: equipment.length,
+      mx_item_count: mxItems.length,
+      ad_count: ads.length,
+      open_squawk_count: squawks.length,
+      equipment_tracked: equipment.length > 0,
+      mx_tracked: mxItems.length > 0,
+      ads_tracked: ads.length > 0,
+      missing_critical_equipment,
+      is_ifr: isIfr,
+      // Combined signal Howard should key on: a "thin" record means
+      // an "airworthy" verdict reflects absence-of-data, not
+      // confirmed-compliance. Howard MUST caveat when this is true.
+      thin_record:
+        equipment.length === 0 ||
+        mxItems.length === 0 ||
+        missing_critical_equipment.length > 0,
+    };
+
+    return { ...verdict, data_completeness };
   },
 
   // ─── Write tools (propose-confirm) ─────────────────────────

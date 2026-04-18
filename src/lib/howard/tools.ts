@@ -290,7 +290,7 @@ export const tools: Anthropic.Tool[] = [
   },
   {
     name: 'check_airworthiness',
-    description: 'Run the explicit airworthiness check (91.205 / 91.411 / 91.413 / 91.207 / 91.417) for the named aircraft, combining equipment, MX, squawks, and ADs. Returns a structured verdict with status, citation, and all findings. Preferred over guessing based on individual tool results when the user asks "is my aircraft airworthy?".',
+    description: 'Run the explicit airworthiness check (91.205 / 91.411 / 91.413 / 91.207 / 91.417) for the named aircraft, combining equipment, MX, squawks, and ADs. Returns a structured verdict with status, citation, and all findings — PLUS a `data_completeness` block (equipment_count, mx_item_count, missing_critical_equipment, thin_record). When status is `airworthy` AND `thin_record` is true, the verdict reflects absence of data, NOT confirmed compliance — caveat accordingly (see prelude "Airworthiness — data completeness matters"). Preferred over guessing based on individual tool results when the user asks "is my aircraft airworthy?".',
     input_schema: {
       type: 'object' as const,
       properties: {
