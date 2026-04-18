@@ -3,7 +3,7 @@
 import { useEffect, useLayoutEffect, useState, useCallback } from "react";
 import { authFetch } from "@/lib/authFetch";
 import {
-  X, Home, PenLine, Calendar, Wrench, FolderOpen, MessageSquare, Settings, BookOpen,
+  X, Home, PenLine, Calendar, Wrench, FolderOpen, MessageSquare, Settings, BookOpen, Users,
   type LucideIcon,
 } from "lucide-react";
 import { HOWARD_LOGO_PATH } from "@/lib/howard/persona";
@@ -39,7 +39,7 @@ const STEPS: Step[] = [
     hero: BookOpen,
     eyebrow: "Intro",
     title: "You're in. Let's look around.",
-    lead: "Seven stops, under a minute. I'll show you what this app actually does — some of it you won't find anywhere else.",
+    lead: "Seven quick stops — under a minute. Each one walks you through what you can do in that part of the app.",
     bullets: [],
   },
   {
@@ -47,12 +47,12 @@ const STEPS: Step[] = [
     accent: '#091F3C',
     hero: Home,
     eyebrow: "Step 1 of 7",
-    title: "Summary — the pre-flight check",
-    lead: "Everything you'd check before walking to the airplane.",
+    title: "Summary — your pre-flight snapshot",
+    lead: "Check the airplane's status before you head out.",
     bullets: [
-      { icon: Wrench, text: "Live airworthiness verdict citing the specific FAR (91.205, 91.411, 91.413, 91.207)" },
-      { icon: PenLine, text: "Current Hobbs/Tach, engine burn rate, fuel state, next inspection due" },
-      { icon: Home, text: "Open squawks with airworthiness impact flagged — grounded items turn the header red" },
+      { icon: Home, text: "Status at a glance — airworthy, issues, or grounded. The header turns red if something's blocking." },
+      { icon: PenLine, text: "Current hours, fuel on board, last flight, next inspection due." },
+      { icon: Wrench, text: "Any open squawks, plus quick links to the full lists and your crew." },
     ],
   },
   {
@@ -60,11 +60,11 @@ const STEPS: Step[] = [
     accent: '#3AB0FF',
     hero: PenLine,
     eyebrow: "Step 2 of 7",
-    title: "Log — two log types, one tab",
-    lead: "Flight and Ops Checks. Every entry updates your aircraft's totals atomically — no drift, no race conditions.",
+    title: "Log — record what just happened",
+    lead: "Two kinds of log entries live here.",
     bullets: [
-      { icon: PenLine, text: "Flight: Hobbs/Tach/AFTT, route, fuel, landings — totals lock the aircraft row so two pilots can't clobber each other" },
-      { icon: PenLine, text: "Ops Checks: VOR (FAR 91.171 with 30-day validity tracked), oil consumption trending, tire PSI" },
+      { icon: PenLine, text: "Flight log: times, route, fuel, landings. Totals on the aircraft update automatically." },
+      { icon: PenLine, text: "Ops checks: VOR (30-day validity), oil, and tire pressures — each tracked so you know when they're due." },
     ],
   },
   {
@@ -72,11 +72,11 @@ const STEPS: Step[] = [
     accent: '#56B94A',
     hero: Calendar,
     eyebrow: "Step 3 of 7",
-    title: "Calendar — shared scheduling",
-    lead: "Reservations that talk to maintenance.",
+    title: "Calendar — book the airplane",
+    lead: "Shared scheduling so nobody collides.",
     bullets: [
-      { icon: Wrench, text: "Confirmed maintenance dates auto-block the calendar — no double-booking over a shop visit" },
-      { icon: MessageSquare, text: "If MX bumps a pilot's reservation, they get an email explaining what happened and why" },
+      { icon: Calendar, text: "See reservations and confirmed maintenance on one timeline — book around shop visits without overlap." },
+      { icon: MessageSquare, text: "If a shop visit bumps your reservation, you get an email explaining what happened." },
     ],
   },
   {
@@ -84,13 +84,13 @@ const STEPS: Step[] = [
     accent: '#F08B46',
     hero: Wrench,
     eyebrow: "Step 4 of 7",
-    title: "Maintenance — the shop side",
-    lead: "Four views: MX items, squawks, service events, and ADs that auto-sync nightly from the FAA.",
+    title: "Maintenance — what's due, what's broken, what's scheduled",
+    lead: "Four areas under one tab.",
     bullets: [
-      { icon: Wrench, text: "Dual-interval tracking — hours AND calendar date, whichever comes first. Start from FAA templates or custom." },
-      { icon: MessageSquare, text: "Squawks with photos and airworthiness-impact flags. Resolved squawks link back to the service event that fixed them." },
-      { icon: Calendar, text: "Service: email your mechanic a portal link — they propose dates, upload photos, sign off items. No login required." },
-      { icon: BookOpen, text: "ADs auto-sync from the FAA DRS feed nightly. Export a 91.417(b) compliance CSV for your IA anytime." },
+      { icon: Wrench, text: "Maintenance items: track by hours, by date, or both — whichever comes first." },
+      { icon: MessageSquare, text: "Squawks: log issues with photos. Flag one as airworthiness-affecting and it grounds the airplane." },
+      { icon: Calendar, text: "Service events: email your mechanic a portal link so they can propose dates, upload photos, and sign off items. No login needed." },
+      { icon: BookOpen, text: "Airworthiness Directives: auto-synced from the FAA nightly. Export a compliance list for your IA anytime." },
     ],
   },
   {
@@ -98,12 +98,12 @@ const STEPS: Step[] = [
     accent: '#525659',
     hero: FolderOpen,
     eyebrow: "Step 5 of 7",
-    title: "More — documents, equipment, crew notes",
-    lead: "The stuff that makes the difference between tracking an airplane and actually managing it.",
+    title: "More — documents, equipment, notes",
+    lead: "Everything else that travels with the airplane.",
     bullets: [
-      { icon: FolderOpen, text: "Upload POH, registration, W&B, MEL — each file SHA-256 hashed for tamper detection. Howard can search inside them." },
-      { icon: Wrench, text: "Equipment list with transponder / altimeter / pitot-static / ELT due dates — feeds the airworthiness check automatically" },
-      { icon: MessageSquare, text: "Notes: crew message board with photos that stays with the aircraft, not a group text that scrolls away" },
+      { icon: FolderOpen, text: "Documents: upload POH, registration, W&B, MEL — keep the airplane's paper trail in one place." },
+      { icon: Wrench, text: "Equipment: list what's installed and when each piece is next due for inspection." },
+      { icon: MessageSquare, text: "Notes: crew message board with photos. Stays tied to the aircraft, not a group text that scrolls away." },
     ],
   },
   {
@@ -111,13 +111,14 @@ const STEPS: Step[] = [
     accent: '#e6651b',
     hero: MessageSquare,
     eyebrow: "Step 6 of 7",
-    title: "And me — always one tap away",
-    lead: "That orange button is me. I pull real data from the FAA and your own records — I never guess.",
+    title: "Meet Howard — your aviation mentor",
+    lead: "The orange button is me. I sit on top of everything you just saw — ask me anything, I pull real data instead of guessing.",
     bullets: [
-      { icon: Wrench, text: "Airworthiness checks against 91.205/411/413/207, citing the specific reg that's blocking you" },
-      { icon: Calendar, text: "Flight briefings with official METARs, TAFs, NOTAMs, PIREPs — decoded into plain English" },
-      { icon: FolderOpen, text: "Search inside your uploaded documents. Ask 'What's the Vne?' and I'll find it in your POH." },
-      { icon: BookOpen, text: "Propose bookings, resolve squawks, schedule MX — you see a card and tap Confirm" },
+      { icon: Wrench, text: "Airworthiness reads: I combine your equipment, MX, squawks, and ADs against 91.205, 91.411, 91.413, and 91.207 — and cite the specific reg blocking you." },
+      { icon: Calendar, text: "Flight briefings with official METARs, TAFs, NOTAMs, PIREPs — decoded into plain English. Source is NOAA AWC and the FAA, never guesswork." },
+      { icon: FolderOpen, text: "Search inside your own documents — ask \"what's the Vne?\" and I'll find it in your POH and cite the page." },
+      { icon: PenLine, text: "Pull flight history, squawk details, maintenance status, fuel trends — anything on the aircraft's record." },
+      { icon: BookOpen, text: "Book reservations, resolve squawks, schedule maintenance — I hand you a Confirm card; nothing happens until you tap it." },
     ],
   },
   {
@@ -125,12 +126,13 @@ const STEPS: Step[] = [
     accent: '#091F3C',
     hero: Settings,
     eyebrow: "Step 7 of 7",
-    title: "Settings & Crew",
-    lead: "Your FAA ratings shape how I talk to you. Admins get crew tools — invite pilots, control access per aircraft.",
+    title: "Settings & crew",
+    lead: "Your profile, your team, and the full feature guide.",
     bullets: [
-      { icon: Settings, text: "Student pilots get more scaffolding; CFIs get the short version. Set your ratings and I adjust." },
-      { icon: MessageSquare, text: "MX reminder thresholds — how early you want heads-up emails as inspections approach" },
-      { icon: BookOpen, text: "Features Guide in Settings: the full rundown, organized by task, any time you want it" },
+      { icon: Settings, text: "Set your FAA ratings so the app (and Howard) match the level of detail you need." },
+      { icon: MessageSquare, text: "Maintenance reminder thresholds — choose how early you get heads-up emails on upcoming inspections." },
+      { icon: Users, text: "Admins: invite pilots and control access per aircraft." },
+      { icon: BookOpen, text: "Features Guide: the full walkthrough, by task, any time you want it." },
     ],
   },
 ];
