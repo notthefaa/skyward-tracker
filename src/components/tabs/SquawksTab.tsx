@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { authFetch } from "@/lib/authFetch";
 import { validateFileSizes, MAX_UPLOAD_SIZE_LABEL } from "@/lib/constants";
@@ -85,6 +85,29 @@ export default function SquawksTab({
   const [melControl, setMelControl] = useState(""); const [category, setCategory] = useState("");
   const [procCompleted, setProcCompleted] = useState(false); const [fullName, setFullName] = useState(""); const [certNum, setCertNum] = useState("");
   const [notifyMx, setNotifyMx] = useState(false);
+
+  // When the pilot switches aircraft, close any open squawk modal
+  // and clear per-squawk editing state — otherwise a "Resolve"
+  // click in the stale detail view would hit the squawk from the
+  // prior aircraft.
+  useEffect(() => {
+    setShowModal(false);
+    setDetailSquawk(null);
+    setShowResolveForm(false);
+    setResolveNote('');
+    setEditingId(null);
+    setPreviewImages(null);
+    setShowExportModal(false);
+    setSelectedForExport([]);
+    setResendingId(null);
+    setLocation(''); setDescription('');
+    setAffectsAirworthiness(false); setIsDeferred(false);
+    setStatus('open');
+    setSelectedImages([]); setExistingImages([]);
+    setMel(''); setCdl(''); setNef(''); setMdl(''); setMelControl(''); setCategory('');
+    setProcCompleted(false); setFullName(''); setCertNum('');
+    setNotifyMx(false);
+  }, [aircraft?.id]);
 
   const isTurbine = aircraft?.engine_type === 'Turbine';
   const isAdmin = role === 'admin' || aircraftRole === 'admin';
@@ -234,12 +257,25 @@ export default function SquawksTab({
           }
           // Persist the notify-failed state so the squawk card can show
           // a "MX not notified — resend?" badge until the pilot retries.
-          // Fire-and-forget; the toast below already warned the pilot.
+          // Await this: fire-and-forget lost the signal entirely when
+          // the PUT failed, leaving a squawk that claimed all was well
+          // while the mechanic was never reached.
           if (notifyMxFailed) {
-            authFetch('/api/squawks', {
-              method: 'PUT',
-              body: JSON.stringify({ squawkId: newSquawk.id, aircraftId: aircraft!.id, squawkData: { mx_notify_failed: true } }),
-            }).catch(() => { /* best-effort; toast already fired */ });
+            try {
+              const flagRes = await authFetch('/api/squawks', {
+                method: 'PUT',
+                body: JSON.stringify({ squawkId: newSquawk.id, aircraftId: aircraft!.id, squawkData: { mx_notify_failed: true } }),
+              });
+              if (!flagRes.ok) throw new Error('PUT failed');
+            } catch (flagErr) {
+              // Couldn't store the badge state. Keep the louder
+              // "email didn't send" warning below, but also mention
+              // the badge won't appear so the pilot doesn't assume
+              // the app will remind them later.
+              console.error('Failed to persist mx_notify_failed flag', flagErr);
+              showWarning('MX notification failed to send AND we couldn\u2019t mark the squawk for resend. Contact maintenance directly and consider editing the squawk to re-trigger the email.');
+              notifyMxFailed = false; // already warned above; suppress duplicate toast
+            }
           }
         }
       }

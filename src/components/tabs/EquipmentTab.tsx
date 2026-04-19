@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { authFetch } from "@/lib/authFetch";
 import useSWR from "swr";
 import { Plus, X, Edit2, Trash2, Power, PowerOff, Plane, Radio, Gauge, Wind, ShieldCheck } from "lucide-react";
@@ -39,14 +39,23 @@ const CATEGORIES: Array<{ value: EquipmentCategory; label: string }> = [
  * (red), expiring within 30 days (orange), or still good (gray). */
 function EquipmentDueTag({ label, date }: { label: string; date: string }) {
   const today = new Date(); today.setHours(0, 0, 0, 0);
-  const due = new Date(date + 'T00:00:00');
+  // Expected shape is YYYY-MM-DD; if we ever get a full ISO or junk
+  // from the DB, `new Date(junk + 'T00:00:00')` becomes Invalid Date
+  // and every comparison is NaN, silently defaulting to gray. Render
+  // the raw string instead so a pilot sees "due 2026-04-18" rather
+  // than a gray color that implies "not urgent."
+  const normalized = /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : null;
+  if (!normalized) {
+    return <span className="text-gray-500">{label} due {date}</span>;
+  }
+  const due = new Date(normalized + 'T00:00:00');
   const days = Math.floor((due.getTime() - today.getTime()) / 86400000);
   let className = 'text-gray-500';
   if (days < 0) className = 'text-[#CE3732] font-bold';
   else if (days <= 30) className = 'text-[#F08B46] font-bold';
   return (
     <span className={className}>
-      {label} {days < 0 ? 'overdue' : 'due'} {date}
+      {label} {days < 0 ? 'overdue' : 'due'} {normalized}
       {days < 0 ? ` (${Math.abs(days)}d ago)` : days <= 30 ? ` (${days}d)` : ''}
     </span>
   );
@@ -108,6 +117,22 @@ export default function EquipmentTab({ aircraft, role, aircraftRole }: Props) {
   const [fTransponderDueDate, setFTransponderDueDate] = useState("");
   const [fAltimeterDueDate, setFAltimeterDueDate] = useState("");
   const [fNotes, setFNotes] = useState("");
+
+  // Close any open edit/create modal on aircraft switch so the pilot
+  // can't accidentally save an equipment row onto the wrong tail.
+  useEffect(() => {
+    setShowForm(false);
+    setEditingId(null);
+    setIncludeRemoved(false);
+    setFName(''); setFMake(''); setFModel(''); setFSerial(''); setFPartNumber('');
+    setFInstalledAt(''); setFInstalledBy('');
+    setFRemovedAt(''); setFRemovedReason('');
+    setFIfrCapable(false); setFAdsbOut(false); setFAdsbIn(false);
+    setFTransponderClass('');
+    setFIsElt(false); setFEltBatteryExpires('');
+    setFPitotStaticDueDate(''); setFTransponderDueDate(''); setFAltimeterDueDate('');
+    setFNotes('');
+  }, [aircraft?.id]);
 
   useModalScrollLock(showForm);
 

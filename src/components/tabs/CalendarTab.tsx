@@ -170,6 +170,23 @@ export default function CalendarTab({
   const { showSuccess, showError, showWarning } = useToast();
   const [cancellingId, setCancellingId] = useState<string | null>(null);
 
+  // Close any open booking / MX-block modal and clear any in-progress
+  // edit IDs when the pilot switches aircraft. Otherwise the Save
+  // button would POST against the new aircraft with the previous
+  // aircraft's reservation id, silently patching the wrong row.
+  useEffect(() => {
+    setShowBookingForm(false);
+    setShowMxBlockForm(false);
+    setEditingReservationId(null);
+    setCancellingId(null);
+    setShowDatePicker(false);
+    setBookingStartDate(''); setBookingEndDate('');
+    setBookingTitle(''); setBookingRoute('');
+    setBookingRepeat('none');
+    setBookingForOther(false); setBookingForUserId('');
+    setMxBlockStartDate(''); setMxBlockEndDate(''); setMxBlockNotes('');
+  }, [aircraft?.id]);
+
   const fetchKey = aircraft ? swrKeys.calendar(aircraft.id, currentDate.getFullYear(), currentDate.getMonth()) : null;
 
   const { data: calendarData, mutate } = useSWR(fetchKey, async () => {

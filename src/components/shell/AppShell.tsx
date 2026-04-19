@@ -232,11 +232,26 @@ export default function AppShell({ session }: AppShellProps) {
   // after any confirmed write that may affect airworthiness. The grounded
   // status comes from direct Supabase queries (not SWR), so the per-
   // aircraft SWR invalidation doesn't trigger it.
+  // The event carries { detail: aircraftId } so a write on Aircraft A
+  // only re-runs Aircraft A's check — otherwise a pilot who switched
+  // tails between the write firing and the event landing would re-
+  // check the wrong plane.
   useEffect(() => {
-    const handle = () => { if (activeTail) checkGroundedStatus(activeTail); };
+    const handle = (e: Event) => {
+      const ce = e as CustomEvent<string | undefined>;
+      const targetAircraftId = ce.detail;
+      // If the event carries an aircraftId, match it against the
+      // current aircraft before refreshing. Missing detail falls back
+      // to the old broadcast behavior for older call sites.
+      if (targetAircraftId) {
+        const currentAircraftId = allAircraftList?.find((a: any) => a.tail_number === activeTail)?.id;
+        if (currentAircraftId !== targetAircraftId) return;
+      }
+      if (activeTail) checkGroundedStatus(activeTail);
+    };
     window.addEventListener('aft:refresh-grounded', handle);
     return () => window.removeEventListener('aft:refresh-grounded', handle);
-  }, [activeTail, checkGroundedStatus]);
+  }, [activeTail, checkGroundedStatus, allAircraftList]);
 
   // ─── Realtime (extracted hook) ───
   const boundRefresh = useCallback(

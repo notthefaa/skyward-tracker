@@ -76,6 +76,25 @@ export default function TimesTab({
   const [logFuel, setLogFuel] = useState("");
   const [logFuelUnit, setLogFuelUnit] = useState<'gallons' | 'lbs'>('gallons');
 
+  // Reset everything tied to a single aircraft's context when the
+  // pilot switches tails. Without this, an open "Edit Flight Log"
+  // modal stays open across the switch and the Save would land on
+  // the previous aircraft's row; pagination past the new tail's
+  // last page would render empty. Preserves logFuelUnit (a UI
+  // preference, not tail-specific).
+  useEffect(() => {
+    setShowLogModal(false);
+    setEditingId(null);
+    setLogPage(1);
+    setViewPax(null);
+    setViewRouting(null);
+    setLogPod(''); setLogPoa('');
+    setLogAftt(''); setLogFtt(''); setLogHobbs(''); setLogTach('');
+    setLogCycles(''); setLogLandings('');
+    setLogPax(''); setLogReason('');
+    setLogFuel('');
+  }, [aircraft?.id]);
+
   // Lazily load the last fuel unit the pilot chose so they don't have to
   // re-select it every time they log a flight. Only runs on the client.
   useEffect(() => {

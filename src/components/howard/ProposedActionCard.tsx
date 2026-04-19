@@ -146,8 +146,10 @@ export default function ProposedActionCard({ action, onChange }: Props) {
     globalMutate(matchesAircraft(action.aircraft_id), undefined, { revalidate: true });
     // Poke AppShell to re-check the grounded banner. useGroundedStatus
     // runs direct queries (not SWR), so the matchesAircraft invalidation
-    // above doesn't trigger it — the event bridges the gap.
-    window.dispatchEvent(new CustomEvent('aft:refresh-grounded'));
+    // above doesn't trigger it — the event bridges the gap. The
+    // aircraftId in detail scopes the refresh so a write on one plane
+    // can't re-check a different plane if the pilot just switched.
+    window.dispatchEvent(new CustomEvent('aft:refresh-grounded', { detail: action.aircraft_id }));
   };
 
   const handleConfirm = async (mode: 'confirm' | 'retry' = 'confirm') => {

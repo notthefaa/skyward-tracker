@@ -75,6 +75,23 @@ export default function MaintenanceTab({
   const [resendingEventId, setResendingEventId] = useState<string | null>(null);
   const [isExportingMx, setIsExportingMx] = useState(false);
 
+  // Reset modal + editing state when the aircraft changes — otherwise
+  // a partially-edited MX row from Aircraft A would land on Aircraft
+  // B when the form submits.
+  useEffect(() => {
+    setShowMxModal(false);
+    setShowServiceModal(false);
+    setPreSelectMxItemId(null);
+    setShowGuideModal(false);
+    setShowTemplateModal(false);
+    setEditingId(null);
+    setConfirmResendId(null);
+    setResendingEventId(null);
+    setMxName(''); setMxLastTime(''); setMxIntervalTime(''); setMxDueTime('');
+    setMxLastDate(''); setMxIntervalDays(''); setMxDueDate('');
+    setAutomateScheduling(false);
+  }, [aircraft?.id]);
+
   useModalScrollLock(showMxModal || !!confirmResendId);
 
   // ─── Separate items into active tracking vs needs-setup ───

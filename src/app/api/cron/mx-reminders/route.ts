@@ -341,14 +341,19 @@ export async function GET(req: Request) {
           hitReminder1 = remaining <= reminder1;
         }
 
+        // New aircraft with no flights yet report projectedDays=Infinity
+        // (no burn rate yet). Rendering "~Infinity DAYS" in a template
+        // is nonsense — substitute a readable fallback so the email
+        // still makes sense.
+        const projectedDaysText = Number.isFinite(projectedDays) ? `~${Math.ceil(projectedDays)} DAYS` : 'PROJECTION UNAVAILABLE — NO RECENT FLIGHT DATA';
         if (hitReminder3 && !mx.reminder_5_sent) {
-          internalTriggerTemplate = mx.tracking_type === 'time' ? `DUE IN ${remaining.toFixed(1)} HRS (~${Math.ceil(projectedDays)} DAYS)` : `DUE IN ${remaining} DAYS`;
+          internalTriggerTemplate = mx.tracking_type === 'time' ? `DUE IN ${remaining.toFixed(1)} HRS (${projectedDaysText})` : `DUE IN ${remaining} DAYS`;
           flagToUpdate.reminder_5_sent = true; flagToUpdate.reminder_15_sent = true; flagToUpdate.reminder_30_sent = true;
         } else if (hitReminder2 && !mx.reminder_15_sent) {
-          internalTriggerTemplate = mx.tracking_type === 'time' ? `DUE IN ${remaining.toFixed(1)} HRS (~${Math.ceil(projectedDays)} DAYS)` : `DUE IN ${remaining} DAYS`;
+          internalTriggerTemplate = mx.tracking_type === 'time' ? `DUE IN ${remaining.toFixed(1)} HRS (${projectedDaysText})` : `DUE IN ${remaining} DAYS`;
           flagToUpdate.reminder_15_sent = true; flagToUpdate.reminder_30_sent = true;
         } else if (hitReminder1 && !mx.reminder_30_sent) {
-          internalTriggerTemplate = mx.tracking_type === 'time' ? `DUE IN ${remaining.toFixed(1)} HRS (~${Math.ceil(projectedDays)} DAYS)` : `DUE IN ${remaining} DAYS`;
+          internalTriggerTemplate = mx.tracking_type === 'time' ? `DUE IN ${remaining.toFixed(1)} HRS (${projectedDaysText})` : `DUE IN ${remaining} DAYS`;
           flagToUpdate.reminder_30_sent = true;
         }
 

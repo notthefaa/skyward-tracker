@@ -557,10 +557,14 @@ export default function HowardTab({
   // tail diverges from that baseline, show the switch banner.
   const currentTail = currentAircraft?.tail_number || null;
   useEffect(() => {
-    if (acknowledgedTail === null && currentTail && messages.length > 0) {
+    // Anchor the baseline tail as soon as we have one in hand —
+    // waiting on messages.length > 0 meant the first-ever message
+    // went out with previousTail=null, so a pilot whose first action
+    // was to switch aircraft lost the switch signal on that turn.
+    if (acknowledgedTail === null && currentTail) {
       setAcknowledgedTail(currentTail);
     }
-  }, [currentTail, messages.length, acknowledgedTail]);
+  }, [currentTail, acknowledgedTail]);
   const showSwitchBanner =
     !onboardingMode &&
     currentTail != null &&

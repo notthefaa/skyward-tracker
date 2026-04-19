@@ -157,6 +157,7 @@ export default function HowardTour({
   const [step, setStep] = useState(0);
   const [rect, setRect] = useState<DOMRect | null>(null);
   const [isFinishing, setIsFinishing] = useState(false);
+  const [finishError, setFinishError] = useState<string | null>(null);
 
   const current = STEPS[step];
   const isLast = step === STEPS.length - 1;
@@ -183,12 +184,19 @@ export default function HowardTour({
   const finish = useCallback(async () => {
     if (isFinishing) return;
     setIsFinishing(true);
+    setFinishError(null);
     try {
-      await authFetch('/api/user/tour-complete', { method: 'POST' });
-    } catch {
-      // Best effort — tour still closes client-side.
-    } finally {
+      const res = await authFetch('/api/user/tour-complete', { method: 'POST' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      // Server confirmed — safe to tear down the tour. If the server
+      // write fails and we close the tour anyway, the next reload
+      // replays the whole thing; keep the tour visible with a retry
+      // instead so we don't land in that loop.
       onComplete();
+    } catch (err) {
+      console.error('Failed to mark tour complete', err);
+      setFinishError('Couldn\u2019t save tour progress. Check your connection and try again.');
+      setIsFinishing(false);
     }
   }, [isFinishing, onComplete]);
 
@@ -349,9 +357,14 @@ export default function HowardTour({
               className="text-white font-oswald font-bold uppercase tracking-widest text-xs px-5 py-2 rounded active:scale-95 transition-all disabled:opacity-50"
               style={{ backgroundColor: current.accent }}
             >
-              {isLast ? "Let's fly" : 'Next'}
+              {isFinishing ? 'Saving…' : isLast ? "Let's fly" : 'Next'}
             </button>
           </div>
+          {finishError && (
+            <p className="mt-3 text-[10px] text-[#CE3732] leading-tight">
+              {finishError}
+            </p>
+          )}
         </div>
       </div>
     </div>
