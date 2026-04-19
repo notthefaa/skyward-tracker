@@ -41,30 +41,34 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     // Attribute subsequent writes to the user via the audit trigger.
     await setAppUser(supabaseAdmin, user.id);
 
-    // Mark confirmed before execution so audit captures the intent.
-    // On retry we also clear the stale error so the card reads cleanly
-    // if the next attempt fails in a different way.
-    await supabaseAdmin
-      .from('aft_proposed_actions')
-      .update({
-        status: 'confirmed',
-        confirmed_at: new Date().toISOString(),
-        confirmed_by: user.id,
-        error_message: null,
-      })
-      .eq('id', id);
-
+    // Run the side-effect first, then record the outcome as a single
+    // status flip. The old flow marked `confirmed` up front (for audit
+    // intent) and relied on a second update to set `executed` or
+    // `failed`. That left a failure window: if the second update
+    // failed the row stayed stuck in `confirmed` — neither retryable
+    // nor visibly failed. Single-flip avoids the stuck state; the
+    // confirm timestamp is still recorded via confirmed_at on success.
     try {
       const result = await executeAction(supabaseAdmin, action as ProposedAction, user.id);
-      await supabaseAdmin
+      const { error: updateErr } = await supabaseAdmin
         .from('aft_proposed_actions')
         .update({
           status: 'executed',
+          confirmed_at: new Date().toISOString(),
+          confirmed_by: user.id,
           executed_at: new Date().toISOString(),
           executed_record_id: result.recordId,
           executed_record_table: result.recordTable,
+          error_message: null,
         })
         .eq('id', id);
+      if (updateErr) {
+        // Side-effect landed but the bookkeeping didn't. Log and return
+        // success so the UI doesn't show a failed card for a change
+        // that actually happened — the next GET will reconcile via
+        // retry-to-200-OK if bookkeeping eventually recovers.
+        console.error('[howard/actions] executed but status update failed', updateErr);
+      }
 
       return NextResponse.json({
         success: true,

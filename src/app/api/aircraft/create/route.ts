@@ -37,12 +37,13 @@ export async function POST(req: Request) {
 
     await setAppUser(supabaseAdmin, user.id);
 
-    // Insert the aircraft
+    // One-shot RPC (migration 034) does the three writes that used to
+    // happen sequentially — aircraft insert, admin access grant, and
+    // onboarding flag — inside a single transaction so a failure in
+    // any step rolls back the others instead of leaving an orphan.
     const { data: newAircraft, error: insertError } = await supabaseAdmin
-      .from('aft_aircraft')
-      .insert(safePayload)
-      .select()
-      .single();
+      .rpc('create_aircraft_atomic', { p_user_id: user.id, p_payload: safePayload })
+      .single<typeof safePayload & { id: string }>();
 
     if (insertError) {
       if (insertError.code === '23505') {
@@ -50,25 +51,6 @@ export async function POST(req: Request) {
       }
       throw insertError;
     }
-
-    // Assign the creator as a tailnumber admin
-    await supabaseAdmin.from('aft_user_aircraft_access').insert({
-      user_id: user.id,
-      aircraft_id: newAircraft.id,
-      aircraft_role: 'admin',
-    });
-
-    // Creating an aircraft IS onboarding completion for the form path.
-    // The Howard-guided path flips this in propose_onboarding_setup's
-    // executor; doing it here too means the form path doesn't need a
-    // separate POST to /api/user/onboarding-complete that could fail
-    // silently and leave the user bouncing back into onboarding on
-    // next reload.
-    await supabaseAdmin
-      .from('aft_user_roles')
-      .update({ completed_onboarding: true })
-      .eq('user_id', user.id)
-      .eq('completed_onboarding', false);
 
     return NextResponse.json({ success: true, aircraft: newAircraft });
   } catch (error) {
