@@ -263,10 +263,13 @@ export default function HowardLauncher({ currentAircraft, userFleet = [], sessio
                 </button>
                 <button
                   onClick={openFreeChat}
-                  className="text-left px-4 py-3 bg-white hover:bg-gray-50 border border-dashed border-gray-300 rounded-lg text-sm font-bold text-gray-600 transition-colors active:scale-[0.98] flex items-center gap-3"
+                  className="text-left px-4 py-3 bg-white hover:bg-gray-50 border border-dashed border-gray-300 rounded-lg text-sm font-bold text-gray-600 transition-colors active:scale-[0.98] flex flex-col gap-0.5"
                 >
-                  <MessageSquare size={16} className="text-gray-500 shrink-0" />
-                  <span>Something else…</span>
+                  <div className="flex items-center gap-3">
+                    <MessageSquare size={16} className="text-gray-500 shrink-0" />
+                    <span>Ask Howard anything</span>
+                  </div>
+                  <span className="text-[10px] font-normal text-gray-500 pl-7 leading-tight">Weather, regs, buying a plane, a specific question — just type it.</span>
                 </button>
               </div>
             )}

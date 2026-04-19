@@ -431,7 +431,7 @@ export default function TimesTab({
             <tbody className="text-xs font-roboto text-navy">
               {displayLogsReversed.map((log) => (
                 <tr key={log.id} className="border-b border-gray-200 hover:bg-blue-50/50 transition-colors">
-                  <td className="py-3 pr-4 whitespace-nowrap">{new Date(log.created_at).toLocaleDateString('en-US', { year: '2-digit', month: 'numeric', day: 'numeric' })}</td>
+                  <td className="py-3 pr-4 whitespace-nowrap">{new Date(log.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</td>
                   <td className="py-3 pr-4 font-bold">{log.initials}</td>
                   <td className="py-3 pr-4 text-[#3AB0FF] font-bold">
                     {log.pod || log.poa ? (

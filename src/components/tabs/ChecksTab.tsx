@@ -352,13 +352,13 @@ export default function ChecksTab({ aircraft, session, role, userInitials }: Pro
         </div>
         <div className="grid grid-cols-3 gap-3 px-1 mt-4">
           <div className="flex justify-center">
-            <DialAction label="Log VOR" onPress={() => { scrollTo(vorRef); setVorOpenSignal(n => n + 1); }} />
+            <DialAction label="Record VOR Check" onPress={() => { scrollTo(vorRef); setVorOpenSignal(n => n + 1); }} />
           </div>
           <div className="flex justify-center">
-            <DialAction label="Log Oil" onPress={() => { scrollTo(oilRef); setOilOpenSignal(n => n + 1); }} />
+            <DialAction label="Record Oil" onPress={() => { scrollTo(oilRef); setOilOpenSignal(n => n + 1); }} />
           </div>
           <div className="flex justify-center">
-            <DialAction label="Log Tires" onPress={() => { scrollTo(tireRef); setTireOpenSignal(n => n + 1); }} />
+            <DialAction label="Record Tires" onPress={() => { scrollTo(tireRef); setTireOpenSignal(n => n + 1); }} />
           </div>
         </div>
       </div>
@@ -398,6 +398,9 @@ export default function ChecksTab({ aircraft, session, role, userInitials }: Pro
             </span>
           )}
         </div>
+        <p className="text-[10px] text-gray-500 italic mb-2 pl-1 leading-snug">
+          &ldquo;Hrs since add&rdquo; resets only when you log an actual oil addition. Routine level checks (no oil added) keep the clock running so the consumption-rate math stays honest.
+        </p>
         <OilTab aircraft={aircraft} session={session} role={role} userInitials={userInitials} openFormSignal={oilOpenSignal} />
       </section>
 
