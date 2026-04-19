@@ -1,24 +1,46 @@
 import { NextResponse } from 'next/server';
 import { requireAuth, handleApiError } from '@/lib/auth';
 import { setAppUser } from '@/lib/audit';
+import { pickAllowedFields } from '@/lib/validation';
+
+// Only these columns can be set by a client on create. Columns the
+// server controls (id, created_by, created_at, deleted_at, deleted_by,
+// fuel_last_updated) are NOT in this list — a client that slips them
+// into the payload silently drops them instead of overriding server
+// logic. Keep this allow-list in sync with the Aircraft type.
+const AIRCRAFT_ALLOWED_FIELDS = [
+  'tail_number', 'serial_number', 'aircraft_type', 'engine_type',
+  'total_airframe_time', 'total_engine_time',
+  'setup_aftt', 'setup_ftt', 'setup_hobbs', 'setup_tach',
+  'home_airport',
+  'main_contact', 'main_contact_phone', 'main_contact_email',
+  'mx_contact', 'mx_contact_phone', 'mx_contact_email',
+  'avatar_url', 'current_fuel_gallons',
+  'make', 'model', 'year_mfg',
+  'is_ifr_equipped', 'is_for_hire',
+] as const;
 
 export async function POST(req: Request) {
   try {
     const { user, supabaseAdmin } = await requireAuth(req);
-    const { payload } = await req.json();
+    const body = await req.json();
+    const payload = body?.payload;
 
-    if (!payload || !payload.tail_number) {
+    if (!payload || typeof payload !== 'object' || !payload.tail_number) {
       return NextResponse.json({ error: 'Aircraft payload with tail_number is required.' }, { status: 400 });
     }
 
-    // Ensure created_by is set
-    payload.created_by = user.id;
+    const safePayload: Record<string, unknown> = {
+      ...pickAllowedFields(payload, AIRCRAFT_ALLOWED_FIELDS),
+      created_by: user.id,
+    };
+
     await setAppUser(supabaseAdmin, user.id);
 
     // Insert the aircraft
     const { data: newAircraft, error: insertError } = await supabaseAdmin
       .from('aft_aircraft')
-      .insert(payload)
+      .insert(safePayload)
       .select()
       .single();
 

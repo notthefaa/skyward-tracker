@@ -25,7 +25,7 @@ export async function POST(req: Request) {
     if (!station || typeof station !== 'string') return NextResponse.json({ error: 'Station/place is required.' }, { status: 400 });
     if (!initials || typeof initials !== 'string') return NextResponse.json({ error: 'Initials are required.' }, { status: 400 });
     const error = Number(bearing_error);
-    if (Number.isNaN(error)) return NextResponse.json({ error: 'Bearing error must be a number.' }, { status: 400 });
+    if (!Number.isFinite(error)) return NextResponse.json({ error: 'Bearing error must be a finite number.' }, { status: 400 });
 
     const tolerance = VOR_TOLERANCES[check_type];
     const passed = Math.abs(error) <= tolerance;

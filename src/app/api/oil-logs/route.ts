@@ -23,7 +23,9 @@ export async function POST(req: Request) {
     }
     for (const [field, value] of fields) {
       const num = Number(value);
-      if (Number.isNaN(num) || num < 0) return NextResponse.json({ error: `Invalid ${field}: must be a non-negative number.` }, { status: 400 });
+      // `!Number.isFinite` catches NaN *and* ±Infinity — plain
+      // `Number.isNaN` was letting "Infinity" slip through.
+      if (!Number.isFinite(num) || num < 0) return NextResponse.json({ error: `Invalid ${field}: must be a non-negative finite number.` }, { status: 400 });
     }
 
     await setAppUser(supabaseAdmin, user.id);

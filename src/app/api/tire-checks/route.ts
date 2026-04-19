@@ -17,20 +17,30 @@ export async function POST(req: Request) {
     // null = tire wasn't adjusted on this check. A non-null value
     // must be a non-negative number. At least one tire must be
     // adjusted, otherwise there's nothing to log.
-    const normalize = (v: unknown): number | null => {
+    // Normalize "not supplied" → null and reject NaN / ±Infinity /
+    // negative. Using `Number.isFinite` here (rather than just
+    // `Number.isNaN`) means a caller can't sneak "Infinity" through
+    // the tire-logged check and poison downstream pressure math.
+    const normalize = (v: unknown): number | null | 'invalid' => {
       if (v === null || v === undefined || v === '') return null;
       const n = Number(v);
-      return Number.isNaN(n) ? NaN : n;
+      if (!Number.isFinite(n) || n < 0) return 'invalid';
+      return n;
     };
     const nose = normalize(nose_psi);
     const left = normalize(left_main_psi);
     const right = normalize(right_main_psi);
     for (const [field, val] of [['nose_psi', nose], ['left_main_psi', left], ['right_main_psi', right]] as const) {
-      if (val !== null && (Number.isNaN(val) || val < 0)) {
-        return NextResponse.json({ error: `Invalid ${field}: must be a non-negative number.` }, { status: 400 });
+      if (val === 'invalid') {
+        return NextResponse.json({ error: `Invalid ${field}: must be a non-negative finite number.` }, { status: 400 });
       }
     }
-    if (nose === null && left === null && right === null) {
+    // After normalize, each slot is either `null` (not adjusted) or a
+    // number. The 'invalid' sentinel has already been rejected above.
+    const noseClean = nose === 'invalid' ? null : nose;
+    const leftClean = left === 'invalid' ? null : left;
+    const rightClean = right === 'invalid' ? null : right;
+    if (noseClean === null && leftClean === null && rightClean === null) {
       return NextResponse.json({ error: 'Select at least one tire that was adjusted.' }, { status: 400 });
     }
 
@@ -38,9 +48,9 @@ export async function POST(req: Request) {
     await supabaseAdmin.from('aft_tire_checks').insert({
       aircraft_id: aircraftId,
       user_id: user.id,
-      nose_psi: nose,
-      left_main_psi: left,
-      right_main_psi: right,
+      nose_psi: noseClean,
+      left_main_psi: leftClean,
+      right_main_psi: rightClean,
       initials: initials.trim().toUpperCase(),
       notes: notes?.trim() || null,
     });

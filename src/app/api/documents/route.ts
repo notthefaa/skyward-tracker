@@ -233,12 +233,25 @@ export async function DELETE(req: Request) {
     if (!documentId || !aircraftId) return NextResponse.json({ error: 'Document ID and Aircraft ID required.' }, { status: 400 });
     await requireAircraftAdmin(supabaseAdmin, user.id, aircraftId);
 
+    // Verify the document actually belongs to this aircraft — without
+    // this, an admin on Aircraft A could delete B's docs by sending
+    // A's id + B's documentId. Matches the VOR/Tire/Oil DELETE pattern.
+    const { data: existing } = await supabaseAdmin
+      .from('aft_documents')
+      .select('aircraft_id, deleted_at')
+      .eq('id', documentId)
+      .maybeSingle();
+    if (!existing || existing.aircraft_id !== aircraftId || existing.deleted_at) {
+      return NextResponse.json({ error: 'Document not found for this aircraft.' }, { status: 404 });
+    }
+
     await setAppUser(supabaseAdmin, user.id);
     await supabaseAdmin.from('aft_document_chunks').delete().eq('document_id', documentId);
     await supabaseAdmin
       .from('aft_documents')
       .update({ deleted_at: new Date().toISOString(), deleted_by: user.id })
-      .eq('id', documentId);
+      .eq('id', documentId)
+      .eq('aircraft_id', aircraftId);
     return NextResponse.json({ success: true });
   } catch (error) { return handleApiError(error); }
 }

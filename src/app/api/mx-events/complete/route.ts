@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireAuth, requireAircraftAccess, requireAircraftAdmin, handleApiError } from '@/lib/auth';
 import { setAppUser } from '@/lib/audit';
+import { parseFiniteNumber } from '@/lib/validation';
 
 export async function POST(req: Request) {
   try {
@@ -34,21 +35,32 @@ export async function POST(req: Request) {
         tachAtCompletion, hobbsAtCompletion, logbookRef,
       } = completion;
 
+      // Coerce hour readings to finite numbers. parseFloat("Infinity")
+      // happily returns Infinity, which poisons MX projection math and
+      // sorting. `parseFiniteNumber` treats absent as null and rejects
+      // Infinity / NaN / negative by returning undefined.
+      const completionTimeNum = parseFiniteNumber(completionTime, { min: 0 });
+      const tachNum = parseFiniteNumber(tachAtCompletion, { min: 0 });
+      const hobbsNum = parseFiniteNumber(hobbsAtCompletion, { min: 0 });
+      if (completionTimeNum === undefined || tachNum === undefined || hobbsNum === undefined) {
+        return NextResponse.json({ error: 'completion_time / tach_at_completion / hobbs_at_completion must be a non-negative finite number.' }, { status: 400 });
+      }
+
       // Update the line item with completion data. 43.11 fields are
       // optional at the API layer so this works for older clients,
       // but the UI is expected to collect them for a clean signoff.
       await supabaseAdmin.from('aft_event_line_items').update({
         line_status: 'complete',
         completion_date: completionDate || null,
-        completion_time: completionTime ? parseFloat(completionTime) : null,
+        completion_time: completionTimeNum,
         completed_by_name: completedByName || null,
         completed_by_cert: completedByCert || null,
         work_description: workDescription || null,
         cert_type: certType || null,
         cert_number: certNumber || null,
         cert_expiry: certExpiry || null,
-        tach_at_completion: tachAtCompletion != null && tachAtCompletion !== '' ? parseFloat(tachAtCompletion) : null,
-        hobbs_at_completion: hobbsAtCompletion != null && hobbsAtCompletion !== '' ? parseFloat(hobbsAtCompletion) : null,
+        tach_at_completion: tachNum,
+        hobbs_at_completion: hobbsNum,
         logbook_ref: logbookRef || null,
       }).eq('id', lineItemId).eq('event_id', eventId);
 

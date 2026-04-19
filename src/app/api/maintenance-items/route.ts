@@ -1,6 +1,24 @@
 import { NextResponse } from 'next/server';
 import { requireAuth, requireAircraftAdmin, handleApiError } from '@/lib/auth';
 import { setAppUser } from '@/lib/audit';
+import { pickAllowedFields } from '@/lib/validation';
+
+// Columns a client may set when creating / updating a maintenance item.
+// Schema-owned fields (reminder_*_sent, mx_schedule_sent, deleted_*,
+// created_*) are deliberately excluded so a malicious admin can't
+// pre-mark an item as "reminders sent" or forge audit metadata.
+const MX_ITEM_ALLOWED_FIELDS = [
+  'item_name',
+  'tracking_type',
+  'is_required',
+  'last_completed_time', 'time_interval', 'due_time',
+  'last_completed_date', 'date_interval_days', 'due_date',
+  'automate_scheduling',
+] as const;
+
+// Bulk-insert cap. Templates typically insert ~15 items at once.
+// 100 is generous headroom; anything larger signals abuse or a bug.
+const MAX_BULK_ITEMS = 100;
 
 // POST — create maintenance item(s) (aircraft admin only)
 export async function POST(req: Request) {
@@ -13,11 +31,21 @@ export async function POST(req: Request) {
 
     await setAppUser(supabaseAdmin, user.id);
     if (items && Array.isArray(items)) {
-      const rows = items.map((item: any) => ({ ...item, aircraft_id: aircraftId }));
+      if (items.length === 0) {
+        return NextResponse.json({ error: 'items array cannot be empty.' }, { status: 400 });
+      }
+      if (items.length > MAX_BULK_ITEMS) {
+        return NextResponse.json({ error: `Too many items; max ${MAX_BULK_ITEMS} per request.` }, { status: 400 });
+      }
+      const rows = items.map((item: unknown) => ({
+        ...pickAllowedFields(item, MX_ITEM_ALLOWED_FIELDS),
+        aircraft_id: aircraftId,
+      }));
       const { error } = await supabaseAdmin.from('aft_maintenance_items').insert(rows);
       if (error) throw error;
     } else {
-      const { error } = await supabaseAdmin.from('aft_maintenance_items').insert({ ...itemData, aircraft_id: aircraftId });
+      const safe = pickAllowedFields(itemData, MX_ITEM_ALLOWED_FIELDS);
+      const { error } = await supabaseAdmin.from('aft_maintenance_items').insert({ ...safe, aircraft_id: aircraftId });
       if (error) throw error;
     }
 
@@ -46,7 +74,8 @@ export async function PUT(req: Request) {
     }
 
     await setAppUser(supabaseAdmin, user.id);
-    const { error } = await supabaseAdmin.from('aft_maintenance_items').update(itemData).eq('id', itemId);
+    const safeUpdate = pickAllowedFields(itemData, MX_ITEM_ALLOWED_FIELDS);
+    const { error } = await supabaseAdmin.from('aft_maintenance_items').update(safeUpdate).eq('id', itemId);
     if (error) throw error;
 
     return NextResponse.json({ success: true });
