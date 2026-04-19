@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { authFetch } from "@/lib/authFetch";
 import { processMxItem, getMxTextColor } from "@/lib/math";
 import { getFuelWeightPerGallon } from "@/lib/constants";
+import { parseFiniteNumber } from "@/lib/validation";
 import { INPUT_WHITE_BG } from "@/lib/styles";
 import { swrKeys } from "@/lib/swrKeys";
 import type { AircraftWithMetrics, SystemSettings, AppTab, AppRole, AircraftRole } from "@/lib/types";
@@ -165,9 +166,16 @@ export default function SummaryTab({
   const handleFuelUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!fuelAmount || !aircraft) return;
+    // parseFloat("Infinity") returns Infinity, which passes the old
+    // truthy check and lands in current_fuel_gallons — poisoning the
+    // fuel-burn projection forever. parseFiniteNumber rejects NaN /
+    // ±Infinity and out-of-range values up front.
+    const parsed = parseFiniteNumber(fuelAmount, { min: 0, max: 10000 });
+    if (parsed === undefined || parsed === null) {
+      return showError("Enter a valid fuel amount (finite number between 0 and 10,000).");
+    }
     setIsSavingFuel(true);
-    let gallons = parseFloat(fuelAmount);
-    if (fuelUnit === 'lbs') gallons = gallons / getFuelWeightPerGallon(aircraft.engine_type);
+    const gallons = fuelUnit === 'lbs' ? parsed / getFuelWeightPerGallon(aircraft.engine_type) : parsed;
     await supabase.from('aft_aircraft').update({ current_fuel_gallons: gallons, fuel_last_updated: new Date().toISOString() }).eq('id', aircraft.id);
     setShowFuelModal(false); setFuelAmount(""); setIsSavingFuel(false); refreshData(); showSuccess("Fuel state updated");
   };

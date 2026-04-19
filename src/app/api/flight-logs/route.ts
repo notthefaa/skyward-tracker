@@ -18,7 +18,11 @@ function validateLogData(logData: any): string | null {
   for (const [field, value] of nonNegative) {
     if (value === null || value === undefined) continue;
     const num = Number(value);
-    if (Number.isNaN(num) || num < 0) return `Invalid ${field}: must be a non-negative number.`;
+    // `Number.isNaN(Infinity)` is false, so the old guard let Infinity
+    // through — it would pass the `< 0` check and land in log_flight_atomic,
+    // poisoning every downstream hours-based calc (AD compliance, MX
+    // intervals, fuel-burn). `Number.isFinite` rejects NaN and ±Infinity.
+    if (!Number.isFinite(num) || num < 0) return `Invalid ${field}: must be a finite non-negative number.`;
   }
   return null;
 }

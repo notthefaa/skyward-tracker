@@ -565,12 +565,12 @@ export default function TimesTab({
                     {hasAirframeMeter && (
                       <div>
                         <div className="flex justify-between items-center mb-1"><label className="text-[10px] font-bold uppercase tracking-widest text-navy">AFTT (Opt)</label><span className="text-[9px] font-bold uppercase text-gray-400">Last: {aircraft?.total_airframe_time?.toFixed(1) || 0} hrs</span></div>
-                        <input type="number" style={whiteBg} step="0.1" value={logAftt} onChange={e=>setLogAftt(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-[#3AB0FF] outline-none bg-white" />
+                        <input type="number" min="0" style={whiteBg} step="0.1" value={logAftt} onChange={e=>setLogAftt(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-[#3AB0FF] outline-none bg-white" />
                       </div>
                     )}
                     <div>
                       <div className="flex justify-between items-center mb-1"><label className="text-[10px] font-bold uppercase tracking-widest text-navy">FTT <span className="text-[#CE3732]">*</span></label><span className="text-[9px] font-bold uppercase text-gray-400">Last: {aircraft?.total_engine_time?.toFixed(1) || 0} hrs</span></div>
-                      <input type="number" style={whiteBg} step="0.1" required value={logFtt} onChange={e=>setLogFtt(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-[#3AB0FF] outline-none bg-white" />
+                      <input type="number" min="0" style={whiteBg} step="0.1" required value={logFtt} onChange={e=>setLogFtt(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-[#3AB0FF] outline-none bg-white" />
                     </div>
                   </>
                 ) : (
@@ -578,12 +578,12 @@ export default function TimesTab({
                     {hasAirframeMeter && (
                       <div>
                         <div className="flex justify-between items-center mb-1"><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Hobbs (Opt)</label><span className="text-[9px] font-bold uppercase text-gray-400">Last: {aircraft?.total_airframe_time?.toFixed(1) || 0} hrs</span></div>
-                        <input type="number" style={whiteBg} step="0.1" value={logHobbs} onChange={e=>setLogHobbs(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-[#3AB0FF] outline-none bg-white" />
+                        <input type="number" min="0" style={whiteBg} step="0.1" value={logHobbs} onChange={e=>setLogHobbs(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-[#3AB0FF] outline-none bg-white" />
                       </div>
                     )}
                     <div>
                       <div className="flex justify-between items-center mb-1"><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Tach <span className="text-[#CE3732]">*</span></label><span className="text-[9px] font-bold uppercase text-gray-400">Last: {aircraft?.total_engine_time?.toFixed(1) || 0} hrs</span></div>
-                      <input type="number" style={whiteBg} step="0.1" required value={logTach} onChange={e=>setLogTach(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-[#3AB0FF] outline-none bg-white" />
+                      <input type="number" min="0" style={whiteBg} step="0.1" required value={logTach} onChange={e=>setLogTach(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-[#3AB0FF] outline-none bg-white" />
                     </div>
                   </>
                 )}
@@ -603,7 +603,7 @@ export default function TimesTab({
               </div>
 
               <div className="grid grid-cols-2 gap-4 border border-[#3AB0FF]/30 bg-[#3AB0FF]/5 p-3 rounded mt-2">
-                <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Current Fuel State (Opt)</label><input type="number" style={whiteBg} step="0.1" value={logFuel} onChange={e=>setLogFuel(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#3AB0FF] outline-none bg-white" placeholder="Quantity" /></div>
+                <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Current Fuel State (Opt)</label><input type="number" min="0" style={whiteBg} step="0.1" value={logFuel} onChange={e=>setLogFuel(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#3AB0FF] outline-none bg-white" placeholder="Quantity" /></div>
                 <div>
                   <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Fuel Unit</label>
                   {editingId ? (

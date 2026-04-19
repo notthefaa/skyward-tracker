@@ -37,16 +37,23 @@ export async function PUT(req: Request) {
       }
     }
 
-    // Prevent self-demotion if last admin
-    if (targetUserId === user.id && newRole === 'pilot') {
+    // Prevent demoting the last admin — self OR other. The old guard
+    // only fired on self-demotion, so any admin (or global admin) could
+    // demote the last remaining aircraft admin to pilot and leave the
+    // aircraft with zero admins.
+    if (newRole === 'pilot') {
       const { data: admins } = await supabaseAdmin
         .from('aft_user_aircraft_access')
         .select('user_id')
         .eq('aircraft_id', aircraftId)
         .eq('aircraft_role', 'admin');
 
-      if (admins && admins.length <= 1) {
-        return NextResponse.json({ error: 'Cannot demote yourself — you are the only admin for this aircraft.' }, { status: 400 });
+      const isDemotingAnAdmin = (admins || []).some((a) => a.user_id === targetUserId);
+      if (isDemotingAnAdmin && admins && admins.length <= 1) {
+        const msg = targetUserId === user.id
+          ? 'Cannot demote yourself — you are the only admin for this aircraft.'
+          : 'Cannot demote the only admin for this aircraft. Promote another pilot first.';
+        return NextResponse.json({ error: msg }, { status: 400 });
       }
     }
 
@@ -94,17 +101,21 @@ export async function DELETE(req: Request) {
       }
     }
 
-    // Prevent removing self if last admin
-    if (targetUserId === user.id) {
-      const { data: admins } = await supabaseAdmin
-        .from('aft_user_aircraft_access')
-        .select('user_id')
-        .eq('aircraft_id', aircraftId)
-        .eq('aircraft_role', 'admin');
+    // Prevent removing the last admin — self OR other. The old guard
+    // only fired on self-removal, so any admin (or global admin) could
+    // strand the aircraft by removing the last remaining admin.
+    const { data: admins } = await supabaseAdmin
+      .from('aft_user_aircraft_access')
+      .select('user_id, aircraft_role')
+      .eq('aircraft_id', aircraftId)
+      .eq('aircraft_role', 'admin');
 
-      if (admins && admins.length <= 1) {
-        return NextResponse.json({ error: 'Cannot remove yourself — you are the only admin for this aircraft.' }, { status: 400 });
-      }
+    const targetIsAdmin = (admins || []).some((a) => a.user_id === targetUserId);
+    if (targetIsAdmin && admins && admins.length <= 1) {
+      const msg = targetUserId === user.id
+        ? 'Cannot remove yourself — you are the only admin for this aircraft.'
+        : 'Cannot remove the only admin for this aircraft. Promote another pilot first.';
+      return NextResponse.json({ error: msg }, { status: 400 });
     }
 
     // Cancel all future reservations for this user on this aircraft
