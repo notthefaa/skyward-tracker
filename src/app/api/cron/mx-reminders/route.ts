@@ -4,6 +4,7 @@ import { createAdminClient, handleApiError } from '@/lib/auth';
 import { env } from '@/lib/env';
 import { escapeHtml } from '@/lib/sanitize';
 import { computeMetrics } from '@/lib/math';
+import { daysUntilDate } from '@/lib/pilotTime';
 import { FLIGHT_DATA_LOOKBACK_DAYS, MX_AGGREGATION_WINDOW_DAYS } from '@/lib/constants';
 
 // How many days to let an event sit in ready_for_pickup before nudging
@@ -131,8 +132,12 @@ export async function GET(req: Request) {
           remaining = (mx.due_time ?? 0) - (aircraft.total_engine_time || 0);
           if (burnRate > 0) projectedDays = remaining / burnRate;
         } else {
-          const diffTime = new Date((mx.due_date ?? '') + 'T00:00:00').getTime() - new Date(new Date().setHours(0, 0, 0, 0)).getTime();
-          remaining = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+          // Compute "days to due_date" against today in the pilot's
+          // timezone, not the Vercel UTC runtime. Without this, a
+          // reminder email at the UTC day-boundary rounded a
+          // tomorrow-for-the-pilot item to "due today".
+          const daysRemaining = daysUntilDate(mx.due_date, aircraft.time_zone);
+          remaining = Number.isFinite(daysRemaining) ? daysRemaining : 0;
           projectedDays = remaining;
         }
 

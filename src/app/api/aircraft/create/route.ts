@@ -18,6 +18,7 @@ const AIRCRAFT_ALLOWED_FIELDS = [
   'avatar_url', 'current_fuel_gallons',
   'make', 'model', 'year_mfg',
   'is_ifr_equipped', 'is_for_hire',
+  'time_zone',
 ] as const;
 
 export async function POST(req: Request) {

@@ -36,6 +36,9 @@ export default function AircraftModal({
   const [newAirframeTime, setNewAirframeTime] = useState("");
   const [newEngineTime, setNewEngineTime] = useState("");
   const [newHomeAirport, setNewHomeAirport] = useState("");
+  // IANA timezone for pilot-local date math. Default UTC keeps
+  // server-side behavior identical for aircraft that don't set it.
+  const [newTimeZone, setNewTimeZone] = useState<string>("UTC");
   const [newMainContact, setNewMainContact] = useState("");
   const [newMainContactPhone, setNewMainContactPhone] = useState(""); 
   const [newMainContactEmail, setNewMainContactEmail] = useState(""); 
@@ -86,7 +89,8 @@ export default function AircraftModal({
         setNewEngineTime(existingAircraft.setup_tach != null ? String(existingAircraft.setup_tach) : String(existingAircraft.total_engine_time || ""));
       }
 
-      setNewHomeAirport(existingAircraft.home_airport || ""); 
+      setNewHomeAirport(existingAircraft.home_airport || "");
+      setNewTimeZone(existingAircraft.time_zone || "UTC");
       setNewMainContact(existingAircraft.main_contact || ""); 
       setNewMainContactPhone(existingAircraft.main_contact_phone || ""); 
       setNewMainContactEmail(existingAircraft.main_contact_email || ""); 
@@ -199,6 +203,7 @@ export default function AircraftModal({
       aircraft_type: newModel,
       engine_type: newType,
       home_airport: newHomeAirport,
+      time_zone: newTimeZone || 'UTC',
       main_contact: newMainContact,
       main_contact_phone: newMainContactPhone,
       main_contact_email: newMainContactEmail,
@@ -469,9 +474,34 @@ export default function AircraftModal({
             </div>
           </div>
 
-          <div>
-            <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">Home Airport</label>
-            <input type="text" value={newHomeAirport} onChange={e => setNewHomeAirport(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 uppercase focus:border-[#F08B46] outline-none" placeholder="ICAO" />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">Home Airport</label>
+              <input type="text" value={newHomeAirport} onChange={e => setNewHomeAirport(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 uppercase focus:border-[#F08B46] outline-none" placeholder="ICAO" />
+            </div>
+            <div>
+              <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">Time Zone</label>
+              {/* Affects how server-generated MX-reminder emails and
+                  Howard airworthiness verdicts compute "today". Client
+                  displays already use the pilot's browser TZ. */}
+              <select value={newTimeZone} onChange={e => setNewTimeZone(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none">
+                <option value="UTC">UTC</option>
+                <option value="America/New_York">Eastern (New York)</option>
+                <option value="America/Chicago">Central (Chicago)</option>
+                <option value="America/Denver">Mountain (Denver)</option>
+                <option value="America/Phoenix">Arizona (no DST)</option>
+                <option value="America/Los_Angeles">Pacific (Los Angeles)</option>
+                <option value="America/Anchorage">Alaska</option>
+                <option value="Pacific/Honolulu">Hawaii</option>
+                <option value="America/Toronto">Eastern (Toronto)</option>
+                <option value="America/Vancouver">Pacific (Vancouver)</option>
+                <option value="America/Mexico_City">Mexico City</option>
+                <option value="Europe/London">London</option>
+                <option value="Europe/Paris">Central Europe (Paris)</option>
+                <option value="Asia/Tokyo">Tokyo</option>
+                <option value="Australia/Sydney">Sydney</option>
+              </select>
+            </div>
           </div>
 
           <label className="flex items-start gap-3 cursor-pointer group bg-gray-50 border border-gray-200 rounded p-3">

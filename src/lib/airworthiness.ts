@@ -12,6 +12,7 @@
 
 import type { Aircraft, AircraftEquipment, AirworthinessDirective, EquipmentCategory } from './types';
 import { isMxExpired } from './math';
+import { isDateExpiredInZone } from './pilotTime';
 
 // Named constants for the equipment categories the regulatory checks
 // look up. Keeping them here (typed as `EquipmentCategory`) means a
@@ -41,27 +42,27 @@ export interface AirworthinessFinding {
 }
 
 interface Inputs {
-  aircraft: Pick<Aircraft, 'id' | 'tail_number' | 'total_engine_time' | 'is_ifr_equipped' | 'is_for_hire'>;
+  aircraft: Pick<Aircraft, 'id' | 'tail_number' | 'total_engine_time' | 'is_ifr_equipped' | 'is_for_hire'> & {
+    // Optional so callers that pass a legacy `aircraft` without the
+    // column (pre-migration-036 cached payloads) still compile. A
+    // missing value falls back to UTC in isDateExpiredInZone.
+    time_zone?: string | null;
+  };
   equipment: AircraftEquipment[];
   mxItems: any[];
   squawks: Array<{ affects_airworthiness: boolean; location?: string | null; status: string }>;
   ads?: AirworthinessDirective[];
 }
 
-/** Days between a yyyy-mm-dd string and today (negative = past). */
-function daysUntil(dateStr: string | null | undefined): number {
-  if (!dateStr) return Infinity;
-  const d = new Date(dateStr + 'T00:00:00');
-  const today = new Date(new Date().setHours(0, 0, 0, 0));
-  return Math.ceil((d.getTime() - today.getTime()) / 86400000);
-}
-
-/** Is a regulatory due date expired? */
-function isDateExpired(d: string | null | undefined): boolean {
-  return d != null && daysUntil(d) < 0;
-}
-
 export function computeAirworthinessStatus(input: Inputs): AirworthinessVerdict {
+  // "Expired" here means `due_date < today_in_pilot_tz`. Computing
+  // that server-side in UTC would mis-classify a due-today item as
+  // expired in the pilot's evening — pass the aircraft's zone so
+  // the verdict matches the calendar the pilot is looking at.
+  const zone = input.aircraft.time_zone ?? 'UTC';
+  const isDateExpired = (d: string | null | undefined): boolean =>
+    isDateExpiredInZone(d, zone);
+
   const findings: AirworthinessFinding[] = [];
   const activeEquipment = input.equipment.filter(e => !e.deleted_at && !e.removed_at);
   // Treat an entirely empty equipment list as "tracking not set up yet"

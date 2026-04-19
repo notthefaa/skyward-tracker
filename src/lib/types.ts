@@ -15,6 +15,10 @@ export interface Aircraft {
   setup_hobbs?: number;
   setup_tach?: number;
   home_airport?: string | null;
+  /** IANA timezone identifier (e.g. 'America/Los_Angeles'). Used by
+   *  server-side date math so MX-reminder emails and airworthiness
+   *  verdicts reflect the pilot's calendar day, not the UTC runtime. */
+  time_zone?: string | null;
   main_contact?: string | null;
   main_contact_phone?: string | null;
   main_contact_email?: string | null;
