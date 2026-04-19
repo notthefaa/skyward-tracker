@@ -8,7 +8,12 @@ import { AlertTriangle, X, Image, MapPin } from "lucide-react";
 
 export default function SquawkViewer() {
   const params = useParams();
-  const squawkId = params.id as string;
+  // The URL segment is the squawk's `access_token` (a random
+  // 32-byte base64url string). Old URLs that embedded the row UUID
+  // directly no longer resolve — a deliberate tradeoff so a leaked
+  // UUID from any source (audit log, DB export) doesn't leak the
+  // squawk. The token is what gets distributed in mechanic emails.
+  const token = params.id as string;
 
   const [squawk, setSquawk] = useState<any>(null);
   const [aircraft, setAircraft] = useState<any>(null);
@@ -19,12 +24,12 @@ export default function SquawkViewer() {
   useBodyScrollOverride();
 
   useEffect(() => {
-    if (squawkId) fetchSquawk();
-  }, [squawkId]);
+    if (token) fetchSquawk();
+  }, [token]);
 
   const fetchSquawk = async () => {
     const { data: sqData } = await supabase
-      .from('aft_squawks').select('*').eq('id', squawkId).single();
+      .from('aft_squawks').select('*').eq('access_token', token).is('deleted_at', null).maybeSingle();
 
     if (sqData) {
       setSquawk(sqData);

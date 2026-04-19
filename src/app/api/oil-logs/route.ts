@@ -50,10 +50,17 @@ export async function DELETE(req: Request) {
     await requireAircraftAdmin(supabaseAdmin, user.id, aircraftId);
 
     await setAppUser(supabaseAdmin, user.id);
-    await supabaseAdmin
+    // Guard: filter by aircraft_id too so admin-on-A can't delete B's logs
+    // by mixing aircraftId=A with a foreign logId.
+    const { data: deleted } = await supabaseAdmin
       .from('aft_oil_logs')
       .update({ deleted_at: new Date().toISOString(), deleted_by: user.id })
-      .eq('id', logId);
+      .eq('id', logId)
+      .eq('aircraft_id', aircraftId)
+      .is('deleted_at', null)
+      .select('id')
+      .maybeSingle();
+    if (!deleted) return NextResponse.json({ error: 'Oil log not found for this aircraft.' }, { status: 404 });
     return NextResponse.json({ success: true });
   } catch (error) { return handleApiError(error); }
 }

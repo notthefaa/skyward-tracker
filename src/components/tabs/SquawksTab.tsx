@@ -349,7 +349,7 @@ export default function SquawksTab({
     body += `Reported Date: ${new Date(sq.created_at).toLocaleDateString()}\nStatus: ${sq.status.toUpperCase()}\n`;
     body += `Airworthiness Affected: ${sq.affects_airworthiness ? 'YES (GROUNDED)' : 'NO'}\n\nLocation: ${sq.location}\nDescription: ${sq.description}\n\n`;
     if (sq.is_deferred) { body += `--- DEFERRAL DETAILS ---\nCategory: ${sq.deferral_category}\nMEL/CDL/NEF/MDL: ${sq.mel_number} / ${sq.cdl_number} / ${sq.nef_number} / ${sq.mdl_number}\n\n`; }
-    body += `--- VIEW FULL DETAILS & PHOTOS ---\nSecure Link:\n${window.location.origin}/squawk/${sq.id}\n\n---\n`;
+    body += `--- VIEW FULL DETAILS & PHOTOS ---\nSecure Link:\n${window.location.origin}/squawk/${sq.access_token}\n\n---\n`;
     window.location.href = `mailto:${targetEmail}?subject=${subject}&body=${encodeURIComponent(body)}`;
   };
 

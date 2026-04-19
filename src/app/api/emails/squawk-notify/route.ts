@@ -67,7 +67,7 @@ export async function POST(req: Request) {
             Description: ${safeDescription}</p>
             
             <p style="margin-top: 20px;">You can view the full report and attached photos securely here:<br/>
-            <a href="${mainAppUrl}/squawk/${squawk.id}">${mainAppUrl}/squawk/${squawk.id}</a></p>
+            <a href="${mainAppUrl}/squawk/${squawk.access_token}">${mainAppUrl}/squawk/${squawk.access_token}</a></p>
             
             ${mxSignature}
           </div>

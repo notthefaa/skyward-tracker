@@ -94,42 +94,23 @@ export async function POST(req: Request) {
         }));
         await supabaseAdmin.from('aft_event_line_items').insert(lineItems);
       }
-
-      // Update event status to 'scheduling' and set proposed date
-      const eventUpdate: any = {
-        status: 'scheduling',
-        addon_services: addonServices || event.addon_services || [],
-      };
-      if (proposedDate) {
-        eventUpdate.proposed_date = proposedDate;
-        eventUpdate.proposed_by = 'owner';
-      } else {
-        // No date proposed — owner is requesting availability
-        eventUpdate.proposed_by = 'owner';
-        eventUpdate.proposed_date = null;
-      }
-      await supabaseAdmin.from('aft_maintenance_events').update(eventUpdate).eq('id', eventId);
-
-      // Log proposed date message
-      if (proposedDate) {
-        await supabaseAdmin.from('aft_event_messages').insert({
-          event_id: eventId,
-          sender: 'owner',
-          message_type: 'propose_date',
-          proposed_date: proposedDate,
-          message: `Requesting service on ${proposedDate}.`,
-        } as any);
-      } else {
-        await supabaseAdmin.from('aft_event_messages').insert({
-          event_id: eventId,
-          sender: 'owner',
-          message_type: 'status_update',
-          message: 'Work package sent. Requesting mechanic availability — no preferred date specified.',
-        } as any);
-      }
+      // NOTE: the status flip to 'scheduling' and the proposed-date
+      // message row used to happen right here — they now fire AFTER
+      // the mechanic email successfully sends, so a failed email
+      // leaves the event as a draft the pilot can retry instead of
+      // stuck in 'scheduling' with no mechanic notified.
     }
 
-    // Send the work package email to the mechanic
+    // Send the work package email to the mechanic. Draft stays a
+    // draft until the email actually succeeds — a failed Resend call
+    // returns a 502 here so the pilot retries instead of seeing the
+    // event flip to "scheduling" with no mechanic ever notified.
+    if (!aircraft.mx_contact_email) {
+      return NextResponse.json(
+        { error: 'No mechanic email on file for this aircraft. Add one in Aircraft Settings before sending a work package.' },
+        { status: 400 },
+      );
+    }
     if (aircraft.mx_contact_email) {
       const portalUrl = `${new URL(req.url).origin}/service/${event.access_token}`;
       const mxCc = aircraft.main_contact_email ? [aircraft.main_contact_email] : [];
@@ -167,7 +148,7 @@ export async function POST(req: Request) {
 
       const subjectPrefix = isResend ? 'Reminder — ' : '';
 
-      await resend.emails.send({
+      const emailResult = await resend.emails.send({
         from: `Skyward Operations <${FROM_EMAIL}>`,
         replyTo: aircraft.main_contact_email || undefined,
         to: [aircraft.mx_contact_email],
@@ -216,6 +197,49 @@ export async function POST(req: Request) {
           </div>
         `
       });
+      if (emailResult.error) {
+        // Email gateway rejected the send. Don't flip status; let the
+        // pilot retry from the draft.
+        return NextResponse.json(
+          { error: `Couldn't deliver the work package to the mechanic (${emailResult.error.message}). Your draft is unchanged — try again in a moment.` },
+          { status: 502 },
+        );
+      }
+    }
+
+    // Email landed. Now it's safe to flip the draft to 'scheduling'
+    // and record the proposed-date message. Resends skip this because
+    // they started from a non-draft state.
+    if (!isResend) {
+      const eventUpdate: any = {
+        status: 'scheduling',
+        addon_services: addonServices || event.addon_services || [],
+      };
+      if (proposedDate) {
+        eventUpdate.proposed_date = proposedDate;
+        eventUpdate.proposed_by = 'owner';
+      } else {
+        eventUpdate.proposed_by = 'owner';
+        eventUpdate.proposed_date = null;
+      }
+      await supabaseAdmin.from('aft_maintenance_events').update(eventUpdate).eq('id', eventId);
+
+      if (proposedDate) {
+        await supabaseAdmin.from('aft_event_messages').insert({
+          event_id: eventId,
+          sender: 'owner',
+          message_type: 'propose_date',
+          proposed_date: proposedDate,
+          message: `Requesting service on ${proposedDate}.`,
+        } as any);
+      } else {
+        await supabaseAdmin.from('aft_event_messages').insert({
+          event_id: eventId,
+          sender: 'owner',
+          message_type: 'status_update',
+          message: 'Work package sent. Requesting mechanic availability — no preferred date specified.',
+        } as any);
+      }
     }
 
     return NextResponse.json({ success: true });

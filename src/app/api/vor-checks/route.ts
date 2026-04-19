@@ -55,10 +55,19 @@ export async function DELETE(req: Request) {
     await requireAircraftAdmin(supabaseAdmin, user.id, aircraftId);
 
     await setAppUser(supabaseAdmin, user.id);
-    await supabaseAdmin
+    // Guard: admin on aircraft A must not be able to delete logs on B
+    // by supplying aircraftId=A plus a foreign logId. Filtering the
+    // update by both columns means a mismatched pair updates zero rows
+    // and we return 404 instead of silently wiping someone else's data.
+    const { data: deleted } = await supabaseAdmin
       .from('aft_vor_checks')
       .update({ deleted_at: new Date().toISOString(), deleted_by: user.id })
-      .eq('id', logId);
+      .eq('id', logId)
+      .eq('aircraft_id', aircraftId)
+      .is('deleted_at', null)
+      .select('id')
+      .maybeSingle();
+    if (!deleted) return NextResponse.json({ error: 'VOR check not found for this aircraft.' }, { status: 404 });
     return NextResponse.json({ success: true });
   } catch (error) { return handleApiError(error); }
 }
