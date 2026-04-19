@@ -4,7 +4,18 @@ import OpenAI from 'openai';
 import { computeAirworthinessStatus } from '@/lib/airworthiness';
 import { syncAdsForAircraft } from '@/lib/drs';
 import { logEvent } from '@/lib/requestId';
+import { isIsoDate, isIsoDateTime, parseFiniteNumber } from '@/lib/validation';
 import { proposeAction, type ActionType } from './proposedActions';
+
+// Allow-list for aft_aircraft_equipment.category. Must match the
+// UI-level selector + airworthiness `has('elt')` checks. If Claude
+// hallucinates "battery" or "GPS_Primary", the DB accepts the string
+// but downstream filters never find it again — silent data loss.
+const EQUIPMENT_CATEGORIES = new Set([
+  'engine', 'propeller', 'avionics', 'transponder', 'altimeter',
+  'pitot_static', 'elt', 'adsb', 'autopilot', 'gps', 'radio',
+  'intercom', 'instrument', 'landing_gear', 'lighting', 'accessory', 'other',
+]);
 
 export interface ToolContext {
   userId: string;
@@ -540,6 +551,14 @@ const handlers: Record<string, ToolHandler> = {
     if (!params.start_time || !params.end_time || !params.pilot_initials) {
       return { error: 'start_time, end_time, and pilot_initials are required.' };
     }
+    // Datetimes, not bare dates — reservations live in `timestamptz`.
+    // Claude sometimes returns a partial string like "2025-04-19 14:30".
+    if (!isIsoDateTime(params.start_time) || !isIsoDateTime(params.end_time)) {
+      return { error: 'start_time and end_time must be full ISO datetimes with a timezone (e.g. "2025-04-19T14:30:00Z" or "2025-04-19T07:30:00-07:00").' };
+    }
+    if (Date.parse(params.end_time) <= Date.parse(params.start_time)) {
+      return { error: 'end_time must be after start_time.' };
+    }
     return makeProposal(sb, ctx, 'reservation', params);
   },
 
@@ -593,6 +612,21 @@ const handlers: Record<string, ToolHandler> = {
     if (!params.name || !params.category) {
       return { error: 'name and category are required.' };
     }
+    if (typeof params.category !== 'string' || !EQUIPMENT_CATEGORIES.has(params.category)) {
+      return { error: `category must be one of: ${Array.from(EQUIPMENT_CATEGORIES).join(', ')}.` };
+    }
+    // Optional date fields — reject malformed strings early so a
+    // garbage "2025-13-45" doesn't land in the DB as a text-cast mess
+    // that `transponder_due_date` checks then misread as overdue.
+    const dateFields = [
+      'installed_at', 'transponder_due_date', 'altimeter_due_date',
+      'pitot_static_due_date', 'elt_battery_expires',
+    ] as const;
+    for (const f of dateFields) {
+      if (params[f] != null && params[f] !== '' && !isIsoDate(params[f])) {
+        return { error: `${f} must be an ISO calendar date (YYYY-MM-DD) if provided.` };
+      }
+    }
     return makeProposal(sb, ctx, 'equipment', params);
   },
 
@@ -607,6 +641,18 @@ const handlers: Record<string, ToolHandler> = {
     }
     if (typeof aircraft.is_ifr_equipped !== 'boolean') {
       return { error: 'aircraft.is_ifr_equipped must be true or false — ask if unknown.' };
+    }
+    // Setup meters go straight into aft_aircraft.total_airframe_time /
+    // total_engine_time. NaN or Infinity here poisons every downstream
+    // hours-based calc (AD compliance, MX interval projection, fuel
+    // burn), so reject non-finite input loudly up front.
+    const meterOpts = { min: 0, max: 100000 };
+    const setupAftt = parseFiniteNumber(aircraft.setup_aftt, meterOpts);
+    const setupFtt = parseFiniteNumber(aircraft.setup_ftt, meterOpts);
+    const setupHobbs = parseFiniteNumber(aircraft.setup_hobbs, meterOpts);
+    const setupTach = parseFiniteNumber(aircraft.setup_tach, meterOpts);
+    if (setupAftt === undefined || setupFtt === undefined || setupHobbs === undefined || setupTach === undefined) {
+      return { error: 'setup_aftt, setup_ftt, setup_hobbs, and setup_tach must each be a finite number ≥ 0 if provided.' };
     }
     // Normalize into the payload shape the executor expects.
     const payload = {
@@ -624,10 +670,10 @@ const handlers: Record<string, ToolHandler> = {
         engine_type: aircraft.engine_type === 'Turbine' ? 'Turbine' : 'Piston',
         is_ifr_equipped: !!aircraft.is_ifr_equipped,
         home_airport: aircraft.home_airport ? String(aircraft.home_airport).toUpperCase().trim() : undefined,
-        setup_aftt: aircraft.setup_aftt != null ? Number(aircraft.setup_aftt) : undefined,
-        setup_ftt: aircraft.setup_ftt != null ? Number(aircraft.setup_ftt) : undefined,
-        setup_hobbs: aircraft.setup_hobbs != null ? Number(aircraft.setup_hobbs) : undefined,
-        setup_tach: aircraft.setup_tach != null ? Number(aircraft.setup_tach) : undefined,
+        setup_aftt: setupAftt ?? undefined,
+        setup_ftt: setupFtt ?? undefined,
+        setup_hobbs: setupHobbs ?? undefined,
+        setup_tach: setupTach ?? undefined,
       },
     };
 

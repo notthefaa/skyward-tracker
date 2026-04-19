@@ -43,7 +43,14 @@ export default function DateProposalSection({ wantsToPropose, setWantsToPropose,
       {wantsToPropose === true && (
         <div className="animate-fade-in bg-orange-50 border border-orange-200 rounded-lg p-4">
           <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Preferred Service Date *</label>
-          <input type="date" value={proposedDate} onChange={e => setProposedDate(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" />
+          <input
+            type="date"
+            value={proposedDate}
+            min={new Date().toISOString().slice(0, 10)}
+            onChange={e => setProposedDate(e.target.value)}
+            style={INPUT_WHITE_BG}
+            className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none"
+          />
         </div>
       )}
       {wantsToPropose === false && (

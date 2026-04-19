@@ -57,18 +57,41 @@ export default function ServiceEventCreate({
     if (wantsToPropose === null) return showWarning("Please choose whether you'd like to propose a date or request availability.");
     if (wantsToPropose && !proposedDate) return showWarning("Please select a preferred service date or choose 'Request Availability' instead.");
     setIsSubmitting(true);
+    // Two-step call. The create step returns an event row; only the
+    // send step actually emails the mechanic. If send fails *after*
+    // create succeeded, the event is already in the list as a draft
+    // — we tell the user where to resume rather than hiding the fact
+    // that the event exists (which looked like an orphan to them).
+    let createdEventId: string | null = null;
     try {
       const createRes = await authFetch('/api/mx-events/create', { method: 'POST', body: JSON.stringify({ aircraftId: aircraft.id, mxItemIds: selectedMxIds, squawkIds: selectedSquawkIds, addonServices: selectedAddons, proposedDate: (wantsToPropose && proposedDate) ? proposedDate : null }) });
-      if (!createRes.ok) throw new Error('Failed to create event');
+      if (!createRes.ok) {
+        const d = await createRes.json().catch(() => ({}));
+        throw new Error(d.error || 'Failed to create event');
+      }
       const createData = await createRes.json();
+      createdEventId = createData.eventId;
 
-      const sendRes = await authFetch('/api/mx-events/send-workpackage', { method: 'POST', body: JSON.stringify({ eventId: createData.eventId, proposedDate: (wantsToPropose && proposedDate) ? proposedDate : null }) });
-      if (!sendRes.ok) throw new Error('Failed to send work package');
+      const sendRes = await authFetch('/api/mx-events/send-workpackage', { method: 'POST', body: JSON.stringify({ eventId: createdEventId, proposedDate: (wantsToPropose && proposedDate) ? proposedDate : null }) });
+      if (!sendRes.ok) {
+        const d = await sendRes.json().catch(() => ({}));
+        throw new Error(d.error || 'Failed to send work package');
+      }
 
       onRefresh();
       showSuccess("Work package sent to mechanic");
       onNavigate('list');
-    } catch (err: any) { showError("Failed to send work package: " + err.message); }
+    } catch (err: any) {
+      if (createdEventId) {
+        // The draft landed; only the email failed. Point the user at
+        // the draft so they don't re-create a duplicate on retry.
+        showError(`Draft saved, but we couldn't send it: ${err.message}. Open the draft from the Events list to retry.`);
+        onRefresh();
+        onNavigate('list');
+      } else {
+        showError("Failed to send work package: " + err.message);
+      }
+    }
     setIsSubmitting(false);
   };
 

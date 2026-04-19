@@ -15,6 +15,20 @@ export function isIsoDate(s: unknown): s is string {
 }
 
 /**
+ * ISO datetime check — `YYYY-MM-DDTHH:MM[:SS[.sss]]` with a timezone
+ * suffix (`Z` or `±HH:MM`). Used for reservation start/end times where
+ * the DB column is `timestamptz`; passing a bare date would silently
+ * write midnight-UTC and produce wrong local-time reservations.
+ */
+export function isIsoDateTime(s: unknown): s is string {
+  if (typeof s !== 'string') return false;
+  // Shape check keeps garbage strings out; Date() handles the rest.
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})$/.test(s)) return false;
+  const t = Date.parse(s);
+  return Number.isFinite(t);
+}
+
+/**
  * Parse a client-supplied value as a finite number. Treats empty string,
  * null, and undefined as "absent" (returns null). Rejects NaN / ±Infinity
  * and out-of-range values.

@@ -51,6 +51,14 @@ export default function SettingsModal({
       checkPrimaryContactStatus();
       loadProfile();
     }
+    // Reset the danger-zone on close so reopening doesn't keep "DELETE"
+    // staged in the confirm field — one accidental click away from a
+    // destructive submit otherwise.
+    if (!show) {
+      setShowDeleteSection(false);
+      setDeleteConfirmText("");
+      setDeleteImpact(null);
+    }
   }, [show, session]);
 
   const loadProfile = async () => {

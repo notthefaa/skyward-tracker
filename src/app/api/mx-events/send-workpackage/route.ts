@@ -55,6 +55,16 @@ export async function POST(req: Request) {
         const { data: mxItems } = await supabaseAdmin
           .from('aft_maintenance_items').select('*').in('id', additionalMxItemIds);
 
+        // Scope check: every id the caller passed must belong to this
+        // event's aircraft. Without this, an admin on aircraft A could
+        // splice aircraft B's items into A's work package by id.
+        if (mxItems && mxItems.some((mx: any) => mx.aircraft_id !== event.aircraft_id)) {
+          return NextResponse.json(
+            { error: 'All maintenance items must belong to this aircraft.' },
+            { status: 400 },
+          );
+        }
+
         if (mxItems && mxItems.length > 0) {
           const lineItems = mxItems.map((mx: any) => ({
             event_id: eventId,
@@ -72,6 +82,13 @@ export async function POST(req: Request) {
       if (additionalSquawkIds && additionalSquawkIds.length > 0) {
         const { data: squawks } = await supabaseAdmin
           .from('aft_squawks').select('*').in('id', additionalSquawkIds);
+
+        if (squawks && squawks.some((sq: any) => sq.aircraft_id !== event.aircraft_id)) {
+          return NextResponse.json(
+            { error: 'All squawks must belong to this aircraft.' },
+            { status: 400 },
+          );
+        }
 
         if (squawks && squawks.length > 0) {
           const lineItems = squawks.map((sq: any) => ({

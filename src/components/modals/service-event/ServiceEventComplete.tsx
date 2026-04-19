@@ -201,7 +201,7 @@ export default function ServiceEventComplete({
               </div>
               <div>
                 <label className="text-[10px] font-bold uppercase tracking-widest text-navy block">Completion {isTurbine ? 'FTT' : 'Tach'}</label>
-                <input type="number" step="0.1" value={item.completionTime} onChange={e => updateItem(idx, 'completionTime', e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-[#56B94A] outline-none" placeholder="Engine time at completion" />
+                <input type="number" min="0" step="0.1" value={item.completionTime} onChange={e => updateItem(idx, 'completionTime', e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-[#56B94A] outline-none" placeholder="Engine time at completion" />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="min-w-0">
@@ -232,11 +232,11 @@ export default function ServiceEventComplete({
               <div className="grid grid-cols-2 gap-3">
                 <div className="min-w-0">
                   <label className="text-[10px] font-bold uppercase tracking-widest text-navy block">Tach at Completion</label>
-                  <input type="number" step="0.1" value={item.tachAtCompletion} onChange={e => updateItem(idx, 'tachAtCompletion', e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-[#56B94A] outline-none" />
+                  <input type="number" min="0" step="0.1" value={item.tachAtCompletion} onChange={e => updateItem(idx, 'tachAtCompletion', e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-[#56B94A] outline-none" />
                 </div>
                 <div className="min-w-0">
                   <label className="text-[10px] font-bold uppercase tracking-widest text-navy block">Hobbs at Completion</label>
-                  <input type="number" step="0.1" value={item.hobbsAtCompletion} onChange={e => updateItem(idx, 'hobbsAtCompletion', e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-[#56B94A] outline-none" />
+                  <input type="number" min="0" step="0.1" value={item.hobbsAtCompletion} onChange={e => updateItem(idx, 'hobbsAtCompletion', e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-[#56B94A] outline-none" />
                 </div>
               </div>
               <div>
