@@ -259,6 +259,12 @@ export default function HowardTab({
       // times ("9am today", "tomorrow 7pm") without asking. Falls back
       // to UTC on the server if absent.
       const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      // Hint the server that the selected aircraft changed since the
+      // last message so the per-request system prompt can tell Howard
+      // his prior answers referenced a different tail.
+      const previousTail = acknowledgedTail && currentAircraft?.tail_number && acknowledgedTail !== currentAircraft.tail_number
+        ? acknowledgedTail
+        : null;
       const res = await fetch('/api/howard', {
         method: 'POST',
         headers: {
@@ -268,11 +274,14 @@ export default function HowardTab({
         body: JSON.stringify({
           message: msg,
           currentTail: currentAircraft?.tail_number ?? null,
+          previousTail,
           timeZone: tz,
           onboardingMode: onboardingMode || undefined,
         }),
         signal: abortController.signal,
       });
+      // Anchor the new tail so next message doesn't re-raise the flag.
+      if (currentAircraft?.tail_number) setAcknowledgedTail(currentAircraft.tail_number);
 
       if (!res.ok || !res.body) {
         const d = await res.json().catch(() => ({ error: 'Failed to send message' }));

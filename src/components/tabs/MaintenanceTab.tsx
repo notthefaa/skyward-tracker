@@ -60,6 +60,7 @@ export default function MaintenanceTab({
 
   const [showMxModal, setShowMxModal] = useState(false);
   const [showServiceModal, setShowServiceModal] = useState(false);
+  const [preSelectMxItemId, setPreSelectMxItemId] = useState<string | null>(null);
   const [showGuideModal, setShowGuideModal] = useState(false);
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -178,24 +179,12 @@ export default function MaintenanceTab({
     setShowMxModal(true);
   };
 
-  const handleManualMxTrigger = async (item: any) => {
-    const ok = await confirm({
-      title: "Create Draft Work Package?",
-      message: `A draft work package will be created for "${item.item_name}" and the primary contact will be notified.`,
-      confirmText: "Create Draft",
-    });
-    if (!ok) return;
-    setIsSubmitting(true);
-    try {
-      const res = await authFetch('/api/mx-events/manual-trigger', { method: 'POST', body: JSON.stringify({ mxItemId: item.id, aircraftId: aircraft!.id }) });
-      if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || 'Failed to create draft work package.'); }
-      await mutate(); await mutateEvents();
-      showSuccess('Draft work package created.');
-    } catch (err: any) {
-      showError(err?.message || 'Failed to create draft work package.');
-    } finally {
-      setIsSubmitting(false);
-    }
+  const handleManualMxTrigger = (item: any) => {
+    // Open the service-event review flow with this item pre-selected.
+    // The pilot then confirms items + date + mechanic email before
+    // anything is sent — no silent one-click email out the door.
+    setPreSelectMxItemId(item.id);
+    setShowServiceModal(true);
   };
 
   const handleResendWorkpackage = async (eventId: string) => {
@@ -327,7 +316,7 @@ export default function MaintenanceTab({
             </div>
           )}
 
-          <ServiceEventModal aircraft={aircraft} show={showServiceModal} onClose={() => { setShowServiceModal(false); mutateEvents(); }} onRefresh={() => { mutate(); mutateEvents(); }} canManageService={canEditMx} />
+          <ServiceEventModal aircraft={aircraft} show={showServiceModal} onClose={() => { setShowServiceModal(false); setPreSelectMxItemId(null); mutateEvents(); }} onRefresh={() => { mutate(); mutateEvents(); }} canManageService={canEditMx} preSelectMxItemId={preSelectMxItemId} />
           <MxGuideModal show={showGuideModal} onClose={() => setShowGuideModal(false)} />
           <MxTemplatePickerModal aircraft={aircraft} show={showTemplateModal} onClose={() => setShowTemplateModal(false)} onRefresh={() => { mutate(); onGroundedStatusChange(); }} />
 
@@ -420,8 +409,9 @@ export default function MaintenanceTab({
                       <p className={`text-xs mt-1 font-roboto font-bold ${dueTextColor}`}>{processed.dueText}</p>
                       {item.primary_heads_up_sent && !item.mx_schedule_sent && (
                         <div className="mt-3 bg-red-50 border border-red-200 p-3 rounded w-full max-w-sm">
-                          <p className="text-[10px] text-[#CE3732] font-bold uppercase mb-2 leading-tight">Action Required: Projected MX Due<br/>(System Confidence: {aircraft.confidenceScore || 0}%)</p>
-                          <button onClick={() => handleManualMxTrigger(item)} disabled={isSubmitting} className="w-full bg-[#CE3732] text-white text-[10px] font-bold uppercase px-3 py-2 rounded shadow active:scale-95 transition-transform disabled:opacity-50">{isSubmitting ? "Processing..." : "Approve & Email Mechanic"}</button>
+                          <p className="text-[10px] text-[#CE3732] font-bold uppercase mb-1 leading-tight">Action Required: Projected MX Due</p>
+                          <p className="text-[10px] text-[#CE3732] mb-2 leading-tight" title="Confidence reflects how much flight history we have. Higher = more reliable projection.">System Confidence: {aircraft.confidenceScore || 0}% <span className="opacity-60">(based on recent flight activity)</span></p>
+                          <button onClick={() => handleManualMxTrigger(item)} disabled={isSubmitting} className="w-full bg-[#CE3732] text-white text-[10px] font-bold uppercase px-3 py-2 rounded shadow active:scale-95 transition-transform disabled:opacity-50">Review &amp; Schedule</button>
                         </div>
                       )}
                     </div>

@@ -99,7 +99,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const { user, supabaseAdmin } = await requireAuth(req);
-    const { message, currentTail, timeZone, onboardingMode } = await req.json();
+    const { message, currentTail, previousTail, timeZone, onboardingMode } = await req.json();
 
     if (!message || typeof message !== 'string' || message.trim().length === 0) {
       return NextResponse.json({ error: 'Message is required.' }, { status: 400 });
@@ -163,15 +163,29 @@ export async function POST(req: Request) {
     const faaRatings: string[] = ((profile as any)?.faa_ratings as string[] | null) || [];
     const pilotInitials: string = (profile as any)?.initials || '';
     const pilotFullName: string = (profile as any)?.full_name || '';
-    if (userRole !== 'admin' && currentAircraft) {
+    let aircraftRole: string | null = null;
+    if (currentAircraft) {
       const { data: acAccess } = await supabaseAdmin
         .from('aft_user_aircraft_access')
         .select('aircraft_role')
         .eq('user_id', user.id)
         .eq('aircraft_id', currentAircraft.id)
         .maybeSingle();
-      userRole = (acAccess as any)?.aircraft_role || userRole;
+      aircraftRole = (acAccess as any)?.aircraft_role || null;
+      if (userRole !== 'admin' && aircraftRole) {
+        userRole = aircraftRole;
+      }
     }
+
+    // Only flag a switch when the client's previousTail is different
+    // from the current one AND isn't the same physical tail (avoids
+    // false positives on casing / whitespace drift).
+    const switchedFromTail: string | null =
+      (previousTail && typeof previousTail === 'string'
+        && currentAircraft
+        && previousTail.toUpperCase().trim() !== currentAircraft.tail_number)
+        ? previousTail.toUpperCase().trim()
+        : null;
 
     // Save user message up-front
     const { data: userMsg, error: userMsgErr } = await supabaseAdmin
@@ -233,6 +247,8 @@ export async function POST(req: Request) {
             threadId,
             supabaseAdmin,
             onboardingMode === true,
+            switchedFromTail,
+            aircraftRole,
           )) {
             if (ev.type === 'complete') {
               assistantText = ev.assistantText;

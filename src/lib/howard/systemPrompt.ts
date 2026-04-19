@@ -163,6 +163,8 @@ export function buildUserContext(
   pilotFullName: string = '',
   timeZone: string = 'UTC',
   now: Date = new Date(),
+  switchedFromTail: string | null = null,
+  aircraftRole: string | null = null,
 ): string {
   const lines: string[] = [];
 
@@ -274,6 +276,17 @@ export function buildUserContext(
   }
 
   lines.push(`\n## User role: ${userRole}`);
+  if (currentAircraft && aircraftRole) {
+    lines.push(`## Role on \`${currentAircraft.tail_number}\`: ${aircraftRole}`);
+    if (aircraftRole !== 'admin' && userRole !== 'admin') {
+      lines.push(`This pilot is NOT an aircraft admin on the selected aircraft. Admin-only actions (propose_mx_schedule, propose_equipment_entry, propose_document_entry, propose_ad_entry, propose_onboarding_setup) will fail if you propose them. Don't offer to run those — instead explain the pilot would need an admin to handle it, and suggest they contact the aircraft admin.`);
+    }
+  }
+
+  if (switchedFromTail && currentAircraft && switchedFromTail !== currentAircraft.tail_number) {
+    lines.push(`\n## Aircraft just switched`);
+    lines.push(`The user just switched the selected aircraft from \`${switchedFromTail}\` to \`${currentAircraft.tail_number}\`. Anything you said earlier in this thread about \`${switchedFromTail}\` does NOT apply to \`${currentAircraft.tail_number}\`. Treat the new aircraft as a fresh context — re-check its status if they ask a question that assumed the prior plane, and clarify which one they mean if it's ambiguous.`);
+  }
 
   if (faaRatings.length > 0) {
     lines.push(`\n## Pilot holds: ${faaRatings.join(', ')}`);

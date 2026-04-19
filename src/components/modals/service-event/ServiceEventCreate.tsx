@@ -16,13 +16,16 @@ interface ServiceEventCreateProps extends ServiceEventChildProps {
   draftedMxIds?: string[];
   /** IDs of squawks already included in an existing draft/active event */
   draftedSquawkIds?: string[];
+  /** MX items to pre-select when this view opens (e.g. from the
+   * "projected due" banner in MaintenanceTab). */
+  preSelectedMxIds?: string[];
 }
 
 export default function ServiceEventCreate({
   aircraft, mxItems, squawks, isSubmitting, setIsSubmitting, onNavigate, onRefresh, showSuccess, showError, showWarning, canManageService,
-  draftedMxIds = [], draftedSquawkIds = [],
+  draftedMxIds = [], draftedSquawkIds = [], preSelectedMxIds,
 }: ServiceEventCreateProps) {
-  const [selectedMxIds, setSelectedMxIds] = useState<string[]>([]);
+  const [selectedMxIds, setSelectedMxIds] = useState<string[]>(preSelectedMxIds || []);
   const [selectedSquawkIds, setSelectedSquawkIds] = useState<string[]>([]);
   const [selectedAddons, setSelectedAddons] = useState<string[]>([]);
   const [proposedDate, setProposedDate] = useState("");

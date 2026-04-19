@@ -118,9 +118,18 @@ function describePayload(action: ProposedAction): React.ReactNode {
 export default function ProposedActionCard({ action, onChange }: Props) {
   const [isPending, setIsPending] = useState<'confirm' | 'cancel' | 'retry' | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [picConfirming, setPicConfirming] = useState(false);
   const { mutate: globalMutate } = useSWRConfig();
 
   const Icon = actionIcon(action.action_type);
+
+  // Actions that touch airworthiness state or permanent records warrant
+  // an explicit "as PIC I take responsibility for this" re-click so the
+  // pilot doesn't tap Confirm on autopilot after 30 Howard messages.
+  // Squawk resolution can un-ground the plane; MX schedule sends an
+  // email to the mechanic — both deserve the gate. Reservations, notes,
+  // equipment adds, and onboarding skip it.
+  const requiresPicAck = action.action_type === 'squawk_resolve' || action.action_type === 'mx_schedule';
 
   // When Howard's action lands (reservation, note, squawk_resolve,
   // mx_schedule, equipment), the side-effects touch tabs scoped to
@@ -206,10 +215,13 @@ export default function ProposedActionCard({ action, onChange }: Props) {
           )}
           {error && <p className="text-[10px] text-[#CE3732] mt-2 italic">{error}</p>}
 
-          {action.status === 'pending' && (
+          {action.status === 'pending' && !picConfirming && (
             <div className="flex gap-2 mt-3">
               <button
-                onClick={() => handleConfirm('confirm')}
+                onClick={() => {
+                  if (requiresPicAck) setPicConfirming(true);
+                  else handleConfirm('confirm');
+                }}
                 disabled={isPending !== null}
                 className="flex-1 bg-[#56B94A] text-white font-oswald font-bold uppercase tracking-widest text-[10px] py-2 rounded active:scale-95 transition-transform disabled:opacity-50 flex items-center justify-center gap-1.5"
               >
@@ -224,6 +236,34 @@ export default function ProposedActionCard({ action, onChange }: Props) {
                 {isPending === 'cancel' ? <Loader2 size={12} className="animate-spin" /> : <X size={12} />}
                 Cancel
               </button>
+            </div>
+          )}
+
+          {action.status === 'pending' && picConfirming && (
+            <div className="mt-3 bg-[#CE3732]/5 border border-[#CE3732]/30 rounded-md p-2.5">
+              <p className="text-[10px] text-[#CE3732] font-bold uppercase tracking-widest mb-1">PIC confirmation</p>
+              <p className="text-xs text-navy mb-2 leading-snug">
+                {action.action_type === 'squawk_resolve'
+                  ? 'Resolving this squawk can clear a grounding condition. As PIC, you are confirming the issue is actually fixed and the aircraft is safe to fly.'
+                  : 'Sending this work package emails the mechanic on file. As PIC, you are confirming the items, date, and contact are correct.'}
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => { setPicConfirming(false); handleConfirm('confirm'); }}
+                  disabled={isPending !== null}
+                  className="flex-1 bg-[#CE3732] text-white font-oswald font-bold uppercase tracking-widest text-[10px] py-2 rounded active:scale-95 transition-transform disabled:opacity-50 flex items-center justify-center gap-1.5"
+                >
+                  {isPending === 'confirm' ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle size={12} />}
+                  I&apos;m the PIC — proceed
+                </button>
+                <button
+                  onClick={() => setPicConfirming(false)}
+                  disabled={isPending !== null}
+                  className="flex-1 border border-gray-300 text-gray-600 font-oswald font-bold uppercase tracking-widest text-[10px] py-2 rounded active:scale-95 transition-transform disabled:opacity-50 flex items-center justify-center gap-1.5"
+                >
+                  <X size={12} /> Back
+                </button>
+              </div>
             </div>
           )}
 

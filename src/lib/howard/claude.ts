@@ -49,6 +49,8 @@ export async function* sendMessageStream(
   threadId: string,
   supabaseAdmin: SupabaseClient,
   onboardingMode = false,
+  switchedFromTail: string | null = null,
+  aircraftRole: string | null = null,
 ): AsyncGenerator<StreamEvent, void, unknown> {
   // Two-block system prompt: stable prelude is prompt-cached, user context
   // (fleet + currently-selected aircraft + ratings + "now" + initials) is
@@ -63,6 +65,8 @@ export async function* sendMessageStream(
     pilotFullName,
     timeZone,
     new Date(),
+    switchedFromTail,
+    aircraftRole,
   );
 
   const toolCtx = {

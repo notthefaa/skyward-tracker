@@ -24,9 +24,13 @@ interface ServiceEventModalProps {
   onClose: () => void;
   onRefresh: () => void;
   canManageService?: boolean;
+  /** When set, opening the modal jumps directly to the create view with
+   * this maintenance item pre-selected. Used by the MX projected-due
+   * banner so the pilot still sees the review/send flow. */
+  preSelectMxItemId?: string | null;
 }
 
-export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, canManageService = true }: ServiceEventModalProps) {
+export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, canManageService = true, preSelectMxItemId }: ServiceEventModalProps) {
   useModalScrollLock(show);
   const [view, setView] = useState<ServiceEventView>('list');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -59,8 +63,18 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
   }, [show]);
 
   useEffect(() => {
-    if (show && aircraft) fetchEvents();
-  }, [show, aircraft]);
+    if (show && aircraft) {
+      if (preSelectMxItemId) {
+        // Jump into the create flow with this item pre-selected so
+        // the pilot still reviews/sends rather than firing an email
+        // on a single tap.
+        openCreateFlow();
+      } else {
+        fetchEvents();
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [show, aircraft, preSelectMxItemId]);
 
   const fetchEvents = async () => {
     const { data } = await supabase
@@ -258,7 +272,7 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
           )}
 
           {view === 'create' && (
-            <ServiceEventCreate {...childProps} mxItems={mxItems} squawks={squawks} draftedMxIds={draftedMxIds} draftedSquawkIds={draftedSquawkIds} />
+            <ServiceEventCreate {...childProps} mxItems={mxItems} squawks={squawks} draftedMxIds={draftedMxIds} draftedSquawkIds={draftedSquawkIds} preSelectedMxIds={preSelectMxItemId ? [preSelectMxItemId] : undefined} />
           )}
 
           {view === 'detail' && selectedEvent && (

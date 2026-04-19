@@ -102,6 +102,20 @@ export default function VorTab({
     if (!station.trim()) { showError('Station/place is required.'); return; }
     if (!initials.trim()) { showError('Initials are required.'); return; }
 
+    // Logging a failing check (out of tolerance) should be an explicit
+    // pilot choice, not a silent save. Confirm before persisting so the
+    // pilot can't accidentally file a fail thinking it "passed."
+    const tol = VOR_CHECK_TYPES.find(t => t.value === checkType)?.tolerance || 4;
+    if (Math.abs(error) > tol) {
+      const ok = await confirm({
+        title: 'Log a failed VOR check?',
+        message: `${Math.abs(error)}° exceeds the ±${tol}° tolerance for this check type. The VOR is not legal for IFR until re-checked within tolerance. Continue logging this fail?`,
+        confirmText: 'Log as fail',
+        variant: 'danger',
+      });
+      if (!ok) return;
+    }
+
     setIsSubmitting(true);
     try {
       const res = await authFetch('/api/vor-checks', {
