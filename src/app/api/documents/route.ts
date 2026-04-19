@@ -99,6 +99,13 @@ export async function POST(req: Request) {
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
+    // Magic-byte check — `%PDF` (0x25 0x50 0x44 0x46). The `file.type`
+    // header is client-supplied and can be spoofed; this confirms the
+    // bytes actually start like a PDF before we hand them to pdf-parse.
+    if (buffer.length < 4 || !buffer.subarray(0, 4).equals(Buffer.from([0x25, 0x50, 0x44, 0x46]))) {
+      return NextResponse.json({ error: 'File does not appear to be a valid PDF.' }, { status: 400 });
+    }
+
     // SHA-256 tamper-evidence hash — computed before upload so we can
     // detect post-upload mutation of the storage object.
     const sha256 = createHash('sha256').update(buffer).digest('hex');
@@ -148,10 +155,24 @@ export async function POST(req: Request) {
     // source page number, enabling Howard to cite "POH page 47".
     let pageCount = 0;
     let taggedChunks: TaggedChunk[] = [];
+
+    // Parse-bomb guard: an adversarial PDF (deeply nested compression,
+    // circular references, password-protected structures) can make
+    // pdf-parse hang indefinitely, eating the whole serverless budget.
+    // 25s ceiling for the full parse + per-page loop keeps us inside
+    // Vercel's 30s pro-tier default with margin for the embeddings call.
+    const PARSE_DEADLINE_MS = 25_000;
+    const parseDeadline = Date.now() + PARSE_DEADLINE_MS;
+    const withTimeout = <T>(p: Promise<T>, ms: number): Promise<T> =>
+      Promise.race([
+        p,
+        new Promise<T>((_, reject) => setTimeout(() => reject(new Error('pdf_timeout')), ms)),
+      ]);
+
     try {
       const parser = new PDFParse({ data: new Uint8Array(buffer) });
       // First pass: get total page count from the full parse.
-      const fullResult = await parser.getText();
+      const fullResult = await withTimeout(parser.getText(), PARSE_DEADLINE_MS);
       pageCount = fullResult.total || 0;
 
       // Second pass: extract per-page text so chunks are page-tagged.
@@ -161,8 +182,13 @@ export async function POST(req: Request) {
       if (pageCount > 0) {
         const pages: Array<{ page: number; text: string }> = [];
         for (let p = 1; p <= pageCount; p++) {
+          // If we've already used up the parse budget, bail out and
+          // fall back to the (already-computed) full-text chunks so
+          // the user at least gets something indexable.
+          if (Date.now() > parseDeadline) break;
           try {
-            const pageResult = await parser.getText({ partial: [p] });
+            const remaining = Math.max(1_000, parseDeadline - Date.now());
+            const pageResult = await withTimeout(parser.getText({ partial: [p] }), remaining);
             if (pageResult.text?.trim()) {
               pages.push({ page: p, text: pageResult.text });
             }
@@ -183,8 +209,11 @@ export async function POST(req: Request) {
       }
 
       await parser.destroy();
-    } catch {
+    } catch (err: any) {
       await supabaseAdmin.from('aft_documents').update({ status: 'error' }).eq('id', doc.id);
+      if (err?.message === 'pdf_timeout') {
+        return NextResponse.json({ error: 'PDF took too long to parse. Try a smaller or simpler file.' }, { status: 400 });
+      }
       return NextResponse.json({ error: 'Failed to parse PDF. The file may be scanned/image-based.' }, { status: 400 });
     }
 

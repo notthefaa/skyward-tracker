@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { randomBytes } from 'crypto';
 import { Resend } from 'resend';
 import { requireAuth, requireAircraftAdmin, handleApiError } from '@/lib/auth';
 import { setAppUser } from '@/lib/audit';
@@ -167,9 +168,15 @@ export async function POST(req: Request) {
       }
 
     } else if (action === 'cancel') {
-      // Owner cancels the service event
+      // Owner cancels the service event. Rotate the access_token so any
+      // still-circulating portal links stop working — the mutations
+      // were already rejected by the status check, but read access to
+      // event history / attached images / message thread would linger
+      // otherwise. A fresh random token makes the old link a 404.
+      const freshToken = randomBytes(32).toString('base64url');
       await supabaseAdmin.from('aft_maintenance_events').update({
         status: 'cancelled',
+        access_token: freshToken,
       }).eq('id', eventId);
 
       await supabaseAdmin.from('aft_event_messages').insert({

@@ -49,8 +49,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Aircraft not found.' }, { status: 404 });
     }
 
-    // Add additional items (only for initial send, not resend)
+    // Add additional items (only for initial send, not resend).
+    // All three categories are accumulated into a single insert batch
+    // so a mid-sequence failure (say, squawks insert after mx insert
+    // succeeded) can't leave the event with a partial line-item set.
     if (!isResend) {
+      const allLineItems: any[] = [];
+
       if (additionalMxItemIds && additionalMxItemIds.length > 0) {
         const { data: mxItems } = await supabaseAdmin
           .from('aft_maintenance_items').select('*').in('id', additionalMxItemIds);
@@ -65,17 +70,18 @@ export async function POST(req: Request) {
           );
         }
 
-        if (mxItems && mxItems.length > 0) {
-          const lineItems = mxItems.map((mx: any) => ({
-            event_id: eventId,
-            item_type: 'maintenance',
-            maintenance_item_id: mx.id,
-            item_name: mx.item_name,
-            item_description: mx.tracking_type === 'time'
-              ? `Due at ${mx.due_time} hrs`
-              : `Due on ${mx.due_date}`,
-          }));
-          await supabaseAdmin.from('aft_event_line_items').insert(lineItems);
+        if (mxItems) {
+          for (const mx of mxItems) {
+            allLineItems.push({
+              event_id: eventId,
+              item_type: 'maintenance',
+              maintenance_item_id: mx.id,
+              item_name: mx.item_name,
+              item_description: mx.tracking_type === 'time'
+                ? `Due at ${mx.due_time} hrs`
+                : `Due on ${mx.due_date}`,
+            });
+          }
         }
       }
 
@@ -90,26 +96,33 @@ export async function POST(req: Request) {
           );
         }
 
-        if (squawks && squawks.length > 0) {
-          const lineItems = squawks.map((sq: any) => ({
-            event_id: eventId,
-            item_type: 'squawk',
-            squawk_id: sq.id,
-            item_name: sq.description ? `Squawk: ${sq.description}` : `Squawk: ${sq.location || 'No description'}`,
-            item_description: sq.affects_airworthiness && sq.location ? `Grounded at ${sq.location}` : (sq.description || null),
-          }));
-          await supabaseAdmin.from('aft_event_line_items').insert(lineItems);
+        if (squawks) {
+          for (const sq of squawks) {
+            allLineItems.push({
+              event_id: eventId,
+              item_type: 'squawk',
+              squawk_id: sq.id,
+              item_name: sq.description ? `Squawk: ${sq.description}` : `Squawk: ${sq.location || 'No description'}`,
+              item_description: sq.affects_airworthiness && sq.location ? `Grounded at ${sq.location}` : (sq.description || null),
+            });
+          }
         }
       }
 
       if (addonServices && addonServices.length > 0) {
-        const lineItems = addonServices.map((service: string) => ({
-          event_id: eventId,
-          item_type: 'addon',
-          item_name: service,
-          item_description: null,
-        }));
-        await supabaseAdmin.from('aft_event_line_items').insert(lineItems);
+        for (const service of addonServices) {
+          allLineItems.push({
+            event_id: eventId,
+            item_type: 'addon',
+            item_name: service,
+            item_description: null,
+          });
+        }
+      }
+
+      if (allLineItems.length > 0) {
+        const { error: liErr } = await supabaseAdmin.from('aft_event_line_items').insert(allLineItems);
+        if (liErr) throw liErr;
       }
       // NOTE: the status flip to 'scheduling' and the proposed-date
       // message row used to happen right here — they now fire AFTER
