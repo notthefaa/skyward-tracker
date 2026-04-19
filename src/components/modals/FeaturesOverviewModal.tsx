@@ -44,144 +44,144 @@ type Section = {
 const SECTIONS: Section[] = [
   {
     title: "Fleet basics",
-    subtitle: "Your aircraft and its current state",
+    subtitle: "The airplane and where it stands right now",
     cards: [
       {
         icon: Home, accent: '#091F3C',
         name: "Summary",
-        blurb: "Live airworthiness verdict citing specific FARs (91.205, 91.411, 91.413, 91.207). Current Hobbs/Tach, engine burn rate, fuel state, next inspection due, open squawks. Grounded items turn the header red.",
+        blurb: "Status at a glance — is the airplane good to go, or is there maintenance to address? Current Hobbs/Tach, fuel, next inspection, and any open squawks. Header runs green, orange, or red so you know before you walk out to the ramp.",
         where: "Home icon in the nav",
       },
       {
         icon: Plane, accent: '#091F3C',
         name: "Fleet view",
-        blurb: "Multi-aircraft operators see every tail side-by-side with airworthiness status rings — green/orange/red. Tap one to drill in.",
+        blurb: "Every tail side-by-side when you've got more than one airplane. Green, orange, red — pick the one you need.",
         where: "Home icon (double-tap with 2+ aircraft)",
       },
     ],
   },
   {
     title: "Logging",
-    subtitle: "Every entry updates totals atomically — no drift, no race conditions",
+    subtitle: "Log what you fly — totals stay in sync across the crew",
     cards: [
       {
         icon: PenLine, accent: '#3AB0FF',
         name: "Flight log",
-        blurb: "Hobbs/Tach/AFTT/FTT, route, pilot, fuel, landings, engine cycles. Each entry locks the aircraft row in a single database transaction so two pilots logging at the same time can't clobber each other's totals.",
+        blurb: "Hobbs, Tach, AFTT, FTT, route, fuel, landings, engine cycles. If two pilots close out a flight at the same time, the numbers still come out right.",
         where: "Log → Flight",
       },
       {
         icon: CheckSquare, accent: '#56B94A',
         name: "Ops Checks",
-        blurb: "VOR checks with 30-day validity tracked against FAR 91.171 (auto-flags when due). Oil consumption trending across engine hours. Tire PSI. All three on a live-updating dial dashboard.",
+        blurb: "VOR check every 30 days per §91.171, oil burn trending across your engine hours, tire PSI. All three on one dashboard.",
         where: "Log → Ops Checks",
       },
     ],
   },
   {
     title: "Maintenance",
-    subtitle: "From tracking to the shop visit to the signoff",
+    subtitle: "Tracking, the shop visit, the signoff",
     cards: [
       {
         icon: Wrench, accent: '#F08B46',
         name: "Maintenance items",
-        blurb: "Dual-interval tracking — hours AND calendar date, whichever comes first. Seed from an FAA inspection template or create custom items. Predictive scheduling emails you before items are due.",
+        blurb: "Track by hours, by calendar, or whichever comes first. Start from an FAA inspection template or build your own list. You'll get an email before anything comes due.",
         where: "MX → Maintenance",
       },
       {
         icon: AlertTriangle, accent: '#CE3732',
         name: "Squawks",
-        blurb: "Report a discrepancy with photos. Flag airworthiness impact — that flag grounds the aircraft immediately and shows across Howard, the summary, and the fleet view. Resolved squawks link back to the service event that fixed them.",
+        blurb: "Write up a squawk with photos. Mark it airworthiness-affecting and the airplane grounds — Howard, the summary, and the fleet view all show it. When the shop fixes it, the squawk links back to the service event that closed it.",
         where: "MX → Squawks",
       },
       {
         icon: ClipboardList, accent: '#0EA5E9',
         name: "Service events",
-        blurb: "Bundle MX items and squawks into one shop visit. Your mechanic gets an email with a portal link — no account needed. They propose dates, upload photos, comment, and sign off individual line items. You confirm from the app. Conflicting pilot reservations are auto-cancelled with email notification.",
+        blurb: "Bundle MX items and squawks into one trip to the shop. Your mechanic gets an email with a portal link — no account, no app. They propose dates, upload photos, comment, and sign off line by line. You confirm from the app. If a pilot had the airplane booked during that window, they get an email that says why.",
         where: "MX → Service",
       },
       {
         icon: ShieldAlert, accent: '#7C3AED',
         name: "Airworthiness Directives",
-        blurb: "Track ADs per aircraft with compliance status (overdue / due soon / compliant). Nightly auto-sync from the FAA DRS feed pulls newly issued directives. Export a 91.417(b) compliance CSV for your IA — audit-ready in one tap.",
+        blurb: "Every AD on the airplane with compliance status — overdue, due soon, or compliant. Skyward checks the FAA's DRS feed every night for new issues. Export a 91.417(b) log for your IA when it's time for the annual.",
         where: "MX → ADs",
       },
       {
         icon: Gauge, accent: '#F08B46',
         name: "Equipment list",
-        blurb: "Every installed piece with make/model/serial and certification due dates. Transponder (91.413), altimeter + pitot-static (91.411), and ELT (91.207) dates feed the airworthiness check automatically — if a date lapses, the aircraft shows grounded.",
+        blurb: "Every installed piece with make, model, serial, and the certification dates the FAA cares about. Transponder (§91.413), altimeter & pitot-static (§91.411), ELT (§91.207) — let one lapse and the airplane shows grounded.",
         where: "More → Equipment",
       },
     ],
   },
   {
     title: "Team",
-    subtitle: "Scheduling, crew comms, and access control",
+    subtitle: "Scheduling, crew messages, and who's on the airplane",
     cards: [
       {
         icon: Calendar, accent: '#56B94A',
         name: "Calendar",
-        blurb: "Confirmed maintenance dates auto-block the calendar. If MX bumps a pilot's reservation, they get an email explaining what happened and why. Howard can book for you from a chat.",
+        blurb: "Confirmed service dates block the calendar. If maintenance bumps a pilot off the airplane, they get an email that explains what moved and why. Howard can book a slot for you in chat.",
         where: "Calendar icon in nav",
       },
       {
         icon: MessageSquare, accent: '#525659',
         name: "Notes",
-        blurb: "Crew message board that stays with the aircraft — not a group text that scrolls away. Attach photos. Next pilot sees unread notes before they fly. Badged in the nav.",
+        blurb: "A message board that stays with the airplane — nothing scrolls off into a group text. Attach photos. The next pilot sees what's new before they fly.",
         where: "More → Notes",
       },
       {
         icon: Users, accent: '#091F3C',
         name: "Crew & access",
-        blurb: "Invite pilots by email — they get a setup link with no app store required. Grant access per aircraft, promote to aircraft admin. Global admins see the whole fleet.",
+        blurb: "Invite a pilot by email — they get a link, no app store. Grant access by aircraft. Promote to admin when they should own the numbers. Global admins see the whole fleet.",
         where: "Settings → cog → Users / Access",
       },
     ],
   },
   {
     title: "Howard + Tools",
-    subtitle: "AI-powered, FAA-sourced, always available",
+    subtitle: "Howard, weather, documents, and your airworthiness check",
     cards: [
       {
         icon: MessageSquare, accent: '#e6651b',
         name: "Howard",
-        blurb: "Orange button on every screen. Ask airworthiness, flight briefings (METARs/TAFs/NOTAMs/PIREPs from NOAA/FAA), decode a METAR, pull an AD, search inside your uploaded documents. He proposes actions — book a flight, resolve a squawk, schedule MX — you see a card and tap Confirm.",
+        blurb: "Orange button on every screen. Ask whether the airplane's airworthy, pull a briefing (METARs, TAFs, NOTAMs, PIREPs straight from NOAA and FAA), decode a METAR, look up an AD, search your own documents. When Howard wants to act — book a flight, close a squawk, schedule the shop — he shows you a card. You tap Confirm.",
         where: "Orange floating button, any screen",
       },
       {
         icon: CloudSun, accent: '#e6651b',
         name: "Flight briefing",
-        blurb: "Official NOAA weather (METARs, TAFs, SIGMETs, AIRMETs, PIREPs) and FAA NOTAMs pulled directly from the source — always current, never cached scrapings. Howard decodes METARs into plain English and flags what matters.",
+        blurb: "NOAA weather (METARs, TAFs, SIGMETs, AIRMETs, PIREPs) and FAA NOTAMs straight from the official feeds — nothing scraped, nothing stale. Howard reads the METAR in plain English and calls out what matters.",
         where: "Howard → Flight briefing",
       },
       {
         icon: FolderOpen, accent: '#7C3AED',
         name: "Documents",
-        blurb: "Upload POH, AFM, MEL, SOPs, registration, W&B. Each file is tamper-checked with a SHA-256 hash. Howard can search inside them — ask 'What's the Vne?' and he'll find the answer in your POH.",
+        blurb: "Upload POH, AFM, MEL, SOPs, registration, W&B. Every file gets a fingerprint so you know it hasn't been swapped. Ask Howard 'What's the Vne?' and he reads your POH to answer.",
         where: "More → Documents",
       },
       {
         icon: ShieldCheck, accent: '#56B94A',
         name: "Airworthiness check",
-        blurb: "Howard runs an explicit verdict against 91.205/91.411/91.413/91.207/91.417 on demand — combines your equipment due dates, MX items, open squawks, and AD compliance into one structured answer, citing the specific reg that's blocking you.",
+        blurb: "Ask Howard if the airplane's airworthy. He checks §91.205, §91.411, §91.413, §91.207, and §91.417 against your equipment dates, MX items, open squawks, and AD compliance — then tells you whether you're good, and if not, which reg is in the way.",
         where: "Howard → 'Is my aircraft airworthy?'",
       },
       {
         icon: Settings, accent: '#091F3C',
         name: "Profile & ratings",
-        blurb: "Your FAA ratings shape how Howard talks to you. Student pilots get more scaffolding and VFR-framed language; CPLs and CFIs get the short version. Set your certs once and the tone adjusts everywhere.",
+        blurb: "Howard talks to you the way you fly. A student gets more explanation; a CPL or CFI gets the short version. Set your certs once and the tone follows.",
         where: "Settings → cog",
       },
       {
         icon: Bell, accent: '#F08B46',
         name: "Notifications",
-        blurb: "Email alerts as MX items approach due — configurable thresholds (30/15/5 days and hours). Squawk reports, new notes, and service-event status changes also trigger emails.",
+        blurb: "Emails as MX items come due — you pick the lead time (30, 15, 5 days or hours out). New squawks, new notes, and service-event updates also land in your inbox.",
         where: "Settings → cog → Notifications",
       },
       {
         icon: Smartphone, accent: '#091F3C',
         name: "Install as app",
-        blurb: "Skyward is a PWA. Add it to your home screen from the browser share menu — full-screen, its own icon, no app store. Works on iPhone, Android, and desktop.",
+        blurb: "Add Skyward to your home screen from the browser share menu. Full-screen, its own icon, no app store. Works on iPhone, Android, and desktop.",
         where: "Browser share menu → Add to Home Screen",
       },
     ],
@@ -227,7 +227,7 @@ export default function FeaturesOverviewModal({
                 Features Guide
               </h2>
               <p className="text-[10px] font-bold uppercase tracking-widest text-[#e6651b] mt-1">
-                From your aviation mentor
+                Every tool, grouped by what it's for
               </p>
             </div>
           </div>
@@ -245,7 +245,7 @@ export default function FeaturesOverviewModal({
           <p className="font-roboto text-sm text-navy leading-snug">
             <span className="font-bold">Here's the whole hangar.</span>{' '}
             <span className="text-gray-600">
-              Scroll through — everything the app does, organized by what you're trying to accomplish. Tap the orange button any time if you'd rather just ask me.
+              Every tool in the app, grouped by what you're doing with it. Tap the orange button any time if you'd rather just ask me.
             </span>
           </p>
         </div>
