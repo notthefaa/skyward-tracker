@@ -44,18 +44,18 @@ export async function DELETE(req: Request) {
       }
     }
 
-    // FK cascades today (migrations 005 / 006 / 007 / 008 / 020 / 028):
-    //   CASCADE    — user_preferences, rate_limit, chuck/howard threads +
-    //                messages, idempotency_keys (ephemeral data, OK to drop)
-    //   SET NULL   — flight_logs.user_id, squawks.reported_by, notes.user_id,
-    //                documents.user_id (history preserved, author becomes
-    //                anonymous)
-    //   NO ACTION  — audit columns with no ON DELETE clause (deleted_by,
-    //                locked_by, proposed_actions.user_id, etc.). These will
-    //                BLOCK the deletion if the user has touched those rows;
-    //                the error bubbles up through the catch below. A future
-    //                migration should give these explicit SET NULL / CASCADE
-    //                rules — see project_audit_2026_04_19.md follow-ups.
+    // FK cascade behavior (migrations 005 / 006 / 007 / 008 / 009 /
+    // 012 / 013 / 014 / 015 / 020 / 028 / 035):
+    //   CASCADE   — user_preferences, rate_limit, chuck/howard threads,
+    //               idempotency_keys, aft_proposed_actions.user_id
+    //               (thread-scoped content that should die with the user).
+    //   SET NULL  — every audit / authorship column (`*_by`, historical
+    //               user_id on logs/docs/notes/squawks). Migration 035
+    //               replaced the default NO ACTION on these so the
+    //               deletion doesn't throw when the user has touched
+    //               audit-tracked rows.
+    // The sole-admin guard above still blocks the case where deletion
+    // would leave an aircraft unrecoverable.
     const { error } = await supabaseAdmin.auth.admin.deleteUser(userId);
     if (error) throw error;
 
