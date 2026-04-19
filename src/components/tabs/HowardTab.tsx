@@ -61,6 +61,7 @@ const SUGGESTIONS = [
 
 const EMPTY_FLEET_SUGGESTIONS = [
   "How do I add my first aircraft?",
+  "Walk me through what I should set up first",
   "What's a good pre-buy inspection checklist?",
   "Explain 91.205 VFR equipment requirements",
 ];

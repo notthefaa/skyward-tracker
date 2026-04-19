@@ -5,7 +5,7 @@ import { validateFileSizes, MAX_UPLOAD_SIZE_LABEL } from "@/lib/constants";
 import { swrKeys } from "@/lib/swrKeys";
 import type { AircraftWithMetrics, AircraftRole } from "@/lib/types";
 import useSWR from "swr";
-import { AlertTriangle, Plus, X, Upload, Mail, Edit2, ChevronLeft, ChevronRight, Download, CheckSquare, Trash2, CheckCircle, Link2, Clock, MapPin, User } from "lucide-react";
+import { AlertTriangle, Plus, X, Upload, Mail, MailWarning, Edit2, ChevronLeft, ChevronRight, Download, CheckSquare, Trash2, CheckCircle, Link2, Clock, MapPin, User, Send } from "lucide-react";
 import { PrimaryButton } from "@/components/AppButtons";
 import SignatureCanvas from "react-signature-canvas";
 import { useSignedUrls } from "@/hooks/useSignedUrls";
@@ -68,6 +68,7 @@ export default function SquawksTab({
 
   // Detail modal state
   const [detailSquawk, setDetailSquawk] = useState<any>(null);
+  const [resendingId, setResendingId] = useState<string | null>(null);
   const [showResolveForm, setShowResolveForm] = useState(false);
   const [resolveNote, setResolveNote] = useState("");
 
@@ -231,6 +232,15 @@ export default function SquawksTab({
             console.error("Failed to send squawk email", err);
             notifyMxFailed = true;
           }
+          // Persist the notify-failed state so the squawk card can show
+          // a "MX not notified — resend?" badge until the pilot retries.
+          // Fire-and-forget; the toast below already warned the pilot.
+          if (notifyMxFailed) {
+            authFetch('/api/squawks', {
+              method: 'PUT',
+              body: JSON.stringify({ squawkId: newSquawk.id, aircraftId: aircraft!.id, squawkData: { mx_notify_failed: true } }),
+            }).catch(() => { /* best-effort; toast already fired */ });
+          }
         }
       }
 
@@ -249,6 +259,34 @@ export default function SquawksTab({
       showError(err?.message || 'Failed to save squawk.');
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const resendMxNotify = async (sq: any, e: React.MouseEvent) => {
+    // Stop the click from bubbling into the parent card's detail modal.
+    e.stopPropagation();
+    if (!aircraft || resendingId) return;
+    setResendingId(sq.id);
+    try {
+      const emailRes = await authFetch('/api/emails/squawk-notify', {
+        method: 'POST',
+        body: JSON.stringify({ squawk: sq, aircraft, notifyMx: true }),
+      });
+      if (!emailRes.ok) {
+        const d = await emailRes.json().catch(() => ({}));
+        throw new Error(d.error || 'Email send failed');
+      }
+      // Clear the persistent flag so the badge disappears.
+      await authFetch('/api/squawks', {
+        method: 'PUT',
+        body: JSON.stringify({ squawkId: sq.id, aircraftId: aircraft.id, squawkData: { mx_notify_failed: false } }),
+      });
+      await mutate();
+      showSuccess('MX notification resent.');
+    } catch (err: any) {
+      showError(err?.message || 'Still couldn\u2019t reach MX. Contact them directly.');
+    } finally {
+      setResendingId(null);
     }
   };
 
@@ -395,12 +433,17 @@ export default function SquawksTab({
               <div key={sq.id} className="relative">
                 <button onClick={() => openDetailModal(sq)} className={`w-full text-left p-4 border rounded transition-colors active:scale-[0.98] ${sq.affects_airworthiness ? 'border-[#CE3732]/30 bg-[#CE3732]/10 hover:bg-[#CE3732]/15' : 'border-[#F08B46]/30 bg-[#F08B46]/10 hover:bg-[#F08B46]/15'}`}>
                 <div className="flex justify-between items-start mb-2">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded text-white flex items-center gap-1 ${sq.affects_airworthiness ? 'bg-[#CE3732]' : 'bg-[#F08B46]'}`}>
                       {sq.affects_airworthiness && <AlertTriangle size={10} />}
                       {sq.affects_airworthiness ? 'AOG / GROUNDED' : 'OPEN'}
                     </span>
                     {sq.is_deferred && <span className="text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded bg-blue-600 text-white">DEFERRED ({sq.deferral_category})</span>}
+                    {sq.mx_notify_failed && (
+                      <span className="text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded bg-amber-100 text-amber-800 border border-amber-300 flex items-center gap-1">
+                        <MailWarning size={10} /> MX not notified
+                      </span>
+                    )}
                   </div>
                 </div>
                 <div className="mt-3">
@@ -419,6 +462,18 @@ export default function SquawksTab({
                   </div>
                 )}
                 </button>
+                {sq.mx_notify_failed && (
+                  <div className="mt-2 bg-amber-50 border border-amber-200 rounded p-2 flex items-center justify-between gap-2">
+                    <p className="text-[11px] text-amber-800 leading-tight flex-1">Mechanic email didn&apos;t go out — they may not know about this squawk.</p>
+                    <button
+                      onClick={(e) => resendMxNotify(sq, e)}
+                      disabled={resendingId === sq.id}
+                      className="text-[10px] font-bold uppercase tracking-widest px-2.5 py-1.5 rounded bg-amber-600 text-white flex items-center gap-1 shrink-0 active:scale-95 disabled:opacity-50"
+                    >
+                      <Send size={10} /> {resendingId === sq.id ? 'Sending…' : 'Resend'}
+                    </button>
+                  </div>
+                )}
               </div>
             ))
           )}

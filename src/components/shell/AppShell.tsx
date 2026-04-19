@@ -97,9 +97,27 @@ export default function AppShell({ session }: AppShellProps) {
   const [activeTail, setActiveTail] = useState<string>("");
   // First-time onboarding path selection. null = show welcome modal;
   // 'guided' = Howard chat flow; 'form' = classic PilotOnboarding.
-  // Derived locally (not persisted) — the durable signal is
-  // `completed_onboarding` on aft_user_roles.
-  const [onboardingPath, setOnboardingPath] = useState<'guided' | 'form' | null>(null);
+  // Persisted locally — if a pilot picks "guided" and reloads mid-chat
+  // (flaky connection, accidental nav), they land back on the path they
+  // chose instead of the welcome modal. The durable "I'm done" signal is
+  // `completed_onboarding` on aft_user_roles — this key only sticks
+  // around between the pick and the finish; both paths clear it on
+  // completion.
+  const [onboardingPath, setOnboardingPathRaw] = useState<'guided' | 'form' | null>(() => {
+    if (typeof window === 'undefined') return null;
+    try {
+      const stored = window.localStorage.getItem('aft_onboarding_path');
+      return stored === 'guided' || stored === 'form' ? stored : null;
+    } catch { return null; }
+  });
+  const setOnboardingPath = (v: 'guided' | 'form' | null) => {
+    setOnboardingPathRaw(v);
+    if (typeof window === 'undefined') return;
+    try {
+      if (v) window.localStorage.setItem('aft_onboarding_path', v);
+      else window.localStorage.removeItem('aft_onboarding_path');
+    } catch { /* storage unavailable — not fatal */ }
+  };
   // Features Guide modal — reachable from Settings, from the tour's
   // final step, and from a custom event any Howard surface can fire
   // (his onboarding closer links to it).
@@ -849,9 +867,17 @@ export default function AppShell({ session }: AppShellProps) {
                 setExpandedNav(prev => prev === 'more' ? null : 'more');
               } else if (tab.id === 'summary') {
                 setExpandedNav(null);
+                // Three-state toggle for multi-aircraft users:
+                //   On Summary → Fleet (overview of every tail)
+                //   On Fleet   → Summary (last-active tail)
+                //   Anywhere   → Summary (ordinary home behavior)
+                // Single-aircraft users never see Fleet, so the button
+                // just goes home.
                 if (activeTab === 'summary' && showFleetButton) {
                   navigateTab('fleet');
-                } else if (activeTab !== 'fleet') {
+                } else if (activeTab === 'fleet') {
+                  navigateTab('summary');
+                } else {
                   navigateTab('summary');
                 }
               } else {

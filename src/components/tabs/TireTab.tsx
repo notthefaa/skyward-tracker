@@ -82,6 +82,7 @@ export default function TireTab({
   const [rightMainPsi, setRightMainPsi] = useState('');
   const [initials, setInitials] = useState(userInitials);
   const [notes, setNotes] = useState('');
+  const [allGood, setAllGood] = useState(false);
 
   const { data, mutate } = useSWR(
     aircraft ? swrKeys.tire(aircraft.id, page) : null,
@@ -112,6 +113,7 @@ export default function TireTab({
     setRightMainPsi('');
     setInitials(userInitials);
     setNotes('');
+    setAllGood(false);
     setShowModal(true);
   }, [userInitials]);
 
@@ -123,8 +125,11 @@ export default function TireTab({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!aircraft || isSubmitting) return;
-    if (!noseLow && !leftLow && !rightLow) {
-      showError('Select at least one tire that was adjusted.'); return;
+    if (!allGood && !noseLow && !leftLow && !rightLow) {
+      showError('Pick the tires you adjusted, or check "All tires OK — no adjustment needed".'); return;
+    }
+    if (allGood && (noseLow || leftLow || rightLow)) {
+      showError('Uncheck "All tires OK" if you adjusted any tires.'); return;
     }
     const checks: Array<[string, boolean, string]> = [
       ['Nose PSI', noseLow, nosePsi],
@@ -244,32 +249,52 @@ export default function TireTab({
                 <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-red-500"><X size={20} /></button>
               </div>
               <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-                <div>
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2 block">Tires Adjusted</span>
-                  <div className="flex flex-col gap-2">
-                    <TireRow
-                      label="Nose"
-                      checked={noseLow}
-                      onCheck={setNoseLow}
-                      psi={nosePsi}
-                      onPsi={setNosePsi}
-                    />
-                    <TireRow
-                      label="Left Main"
-                      checked={leftLow}
-                      onCheck={setLeftLow}
-                      psi={leftMainPsi}
-                      onPsi={setLeftMainPsi}
-                    />
-                    <TireRow
-                      label="Right Main"
-                      checked={rightLow}
-                      onCheck={setRightLow}
-                      psi={rightMainPsi}
-                      onPsi={setRightMainPsi}
-                    />
+                <label className={`flex items-center gap-2 p-2.5 rounded border cursor-pointer text-sm ${allGood ? 'bg-[#56B94A]/10 border-[#56B94A]/40 text-navy' : 'bg-white border-gray-200 text-navy hover:bg-gray-50'}`}>
+                  <input
+                    type="checkbox"
+                    checked={allGood}
+                    onChange={e => {
+                      const v = e.target.checked;
+                      setAllGood(v);
+                      if (v) {
+                        // Shortcut: checking "all good" clears any tire
+                        // adjustments the pilot may have partially toggled.
+                        setNoseLow(false); setLeftLow(false); setRightLow(false);
+                        setNosePsi(''); setLeftMainPsi(''); setRightMainPsi('');
+                      }
+                    }}
+                    className="h-4 w-4"
+                  />
+                  <span>All tires OK — no adjustment needed</span>
+                </label>
+                {!allGood && (
+                  <div>
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2 block">Tires Adjusted</span>
+                    <div className="flex flex-col gap-2">
+                      <TireRow
+                        label="Nose"
+                        checked={noseLow}
+                        onCheck={setNoseLow}
+                        psi={nosePsi}
+                        onPsi={setNosePsi}
+                      />
+                      <TireRow
+                        label="Left Main"
+                        checked={leftLow}
+                        onCheck={setLeftLow}
+                        psi={leftMainPsi}
+                        onPsi={setLeftMainPsi}
+                      />
+                      <TireRow
+                        label="Right Main"
+                        checked={rightLow}
+                        onCheck={setRightLow}
+                        psi={rightMainPsi}
+                        onPsi={setRightMainPsi}
+                      />
+                    </div>
                   </div>
-                </div>
+                )}
                 <div>
                   <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1 block">Pilot Initials</label>
                   <input value={initials} onChange={e => setInitials(e.target.value.toUpperCase())} maxLength={3} className="w-full rounded p-3 text-sm border border-gray-300 focus:border-[#525659] outline-none uppercase" style={whiteBg} required />

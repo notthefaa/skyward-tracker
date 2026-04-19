@@ -34,6 +34,24 @@ const CATEGORIES: Array<{ value: EquipmentCategory; label: string }> = [
   { value: 'other', label: 'Other' },
 ];
 
+/** Color-code equipment due dates so pilots can tell at a glance
+ * whether a transponder / altimeter / pitot-static check is overdue
+ * (red), expiring within 30 days (orange), or still good (gray). */
+function EquipmentDueTag({ label, date }: { label: string; date: string }) {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const due = new Date(date + 'T00:00:00');
+  const days = Math.floor((due.getTime() - today.getTime()) / 86400000);
+  let className = 'text-gray-500';
+  if (days < 0) className = 'text-[#CE3732] font-bold';
+  else if (days <= 30) className = 'text-[#F08B46] font-bold';
+  return (
+    <span className={className}>
+      {label} {days < 0 ? 'overdue' : 'due'} {date}
+      {days < 0 ? ` (${Math.abs(days)}d ago)` : days <= 30 ? ` (${days}d)` : ''}
+    </span>
+  );
+}
+
 function categoryIcon(c: EquipmentCategory) {
   if (c === 'transponder' || c === 'adsb' || c === 'avionics' || c === 'radio' || c === 'autopilot' || c === 'gps' || c === 'intercom') return Radio;
   if (c === 'altimeter' || c === 'pitot_static' || c === 'instrument') return Gauge;
@@ -253,11 +271,11 @@ export default function EquipmentTab({ aircraft, role, aircraftRole }: Props) {
                       {[CATEGORIES.find(c => c.value === e.category)?.label, e.make, e.model, e.serial ? `S/N ${e.serial}` : null].filter(Boolean).join(' · ')}
                     </p>
                     {(e.pitot_static_due_date || e.transponder_due_date || e.altimeter_due_date || e.elt_battery_expires) && (
-                      <p className="text-[10px] text-gray-500 mt-1">
-                        {e.pitot_static_due_date && <>Pitot-static due {e.pitot_static_due_date} · </>}
-                        {e.transponder_due_date && <>Xponder due {e.transponder_due_date} · </>}
-                        {e.altimeter_due_date && <>Altimeter due {e.altimeter_due_date} · </>}
-                        {e.elt_battery_expires && <>ELT battery {e.elt_battery_expires}</>}
+                      <p className="text-[10px] mt-1 flex flex-wrap gap-x-2 gap-y-0.5">
+                        {e.pitot_static_due_date && <EquipmentDueTag label="Pitot-static" date={e.pitot_static_due_date} />}
+                        {e.transponder_due_date && <EquipmentDueTag label="Xponder" date={e.transponder_due_date} />}
+                        {e.altimeter_due_date && <EquipmentDueTag label="Altimeter" date={e.altimeter_due_date} />}
+                        {e.elt_battery_expires && <EquipmentDueTag label="ELT battery" date={e.elt_battery_expires} />}
                       </p>
                     )}
                   </div>

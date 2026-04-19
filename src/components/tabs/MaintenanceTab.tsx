@@ -382,6 +382,51 @@ export default function MaintenanceTab({
           )}
 
           {/* ─── ACTIVE TRACKING ITEMS ─── */}
+          {(() => {
+            const processedActiveItems = activeItems.map(item => ({
+              item,
+              processed: processMxItem(item, currentEngineTime, aircraft.burnRate, aircraft.burnRateLow, aircraft.burnRateHigh),
+            }));
+            // Split into three buckets so a pilot scanning this tab can
+            // tell at a glance what's actually blocking flight today
+            // vs. what's just worth keeping an eye on. "Blocks flight"
+            // mirrors isGroundedLocally (required + expired).
+            const blocking = processedActiveItems.filter(({ item, processed }) => processed.isExpired && item.is_required);
+            const watchlist = processedActiveItems.filter(({ item, processed }) => processed.isExpired && !item.is_required);
+            const onTrack = processedActiveItems.filter(({ processed }) => !processed.isExpired);
+            const renderRow = ({ item, processed }: { item: any; processed: any }) => {
+              const dueTextColor = getMxTextColor(processed, sysSettings);
+              const containerClass = processed.isExpired
+                ? (item.is_required ? 'bg-red-50 border-red-200' : 'bg-orange-50 border-orange-200')
+                : 'bg-white border-gray-200';
+              return (
+                <div key={item.id} className={`p-4 border rounded flex justify-between items-center ${containerClass}`}>
+                  <div className="w-full">
+                    <div className="flex items-center gap-2">
+                      <h4 className={`font-oswald font-bold uppercase text-sm ${processed.isExpired ? 'text-[#CE3732]' : 'text-navy'}`}>{item.item_name}</h4>
+                      {!item.is_required && <span className={`text-[8px] border px-1 rounded uppercase tracking-widest opacity-70 ${processed.isExpired ? 'border-[#CE3732] text-[#CE3732]' : 'border-navy text-navy'}`}>Optional</span>}
+                    </div>
+                    <p className={`text-xs mt-1 font-roboto font-bold ${dueTextColor}`}>{processed.dueText}</p>
+                    {item.primary_heads_up_sent && !item.mx_schedule_sent && (
+                      <div className="mt-3 bg-red-50 border border-red-200 p-3 rounded w-full max-w-sm">
+                        <p className="text-[10px] text-[#CE3732] font-bold uppercase mb-1 leading-tight">Action Required: Projected MX Due</p>
+                        <p className="text-[10px] text-[#CE3732] mb-2 leading-tight" title="Confidence reflects how much flight history we have. Higher = more reliable projection.">System Confidence: {aircraft.confidenceScore || 0}% <span className="opacity-60">(based on recent flight activity)</span></p>
+                        <button onClick={() => handleManualMxTrigger(item)} disabled={isSubmitting} className="w-full bg-[#CE3732] text-white text-[10px] font-bold uppercase px-3 py-2 rounded shadow active:scale-95 transition-transform disabled:opacity-50">Review &amp; Schedule</button>
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3 pl-4 shrink-0">
+                    {canEditMx && (
+                      <>
+                        <button onClick={() => openMxForm(item)} className="text-gray-400 hover:text-[#F08B46] transition-colors active:scale-95"><Edit2 size={16}/></button>
+                        <button onClick={() => deleteMxItem(item.id)} className="text-gray-400 hover:text-[#CE3732] transition-colors active:scale-95"><Trash2 size={16}/></button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              );
+            };
+            return (
           <div className={`bg-cream shadow-lg rounded-sm p-4 md:p-6 border-t-4 mb-6 ${isGroundedLocally ? 'border-[#CE3732]' : 'border-[#F08B46]'}`}>
             <div className="flex justify-between items-end mb-6">
               <h2 className="font-oswald text-2xl md:text-3xl font-bold uppercase text-navy m-0 leading-none">Maintenance</h2>
@@ -390,44 +435,40 @@ export default function MaintenanceTab({
                 <button onClick={() => setShowGuideModal(true)} className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-[#F08B46] hover:opacity-80 transition-colors active:scale-95"><HelpCircle size={14} /> Guide</button>
               </div>
             </div>
-            <div className="space-y-3">
-              {activeItems.length === 0 ? (
-                <p className="text-center text-sm text-gray-400 italic py-4">
-                  {needsSetupItems.length > 0 ? 'All items need setup — configure them above to start tracking.' : 'No maintenance items tracked.'}
-                </p>
-              ) : activeItems.map(item => {
-                const processed = processMxItem(item, currentEngineTime, aircraft.burnRate, aircraft.burnRateLow, aircraft.burnRateHigh);
-                const dueTextColor = getMxTextColor(processed, sysSettings);
-                const containerClass = processed.isExpired ? (item.is_required ? 'bg-red-50 border-red-200' : 'bg-orange-50 border-orange-200') : 'bg-white border-gray-200';
-                return (
-                  <div key={item.id} className={`p-4 border rounded flex justify-between items-center ${containerClass}`}>
-                    <div className="w-full">
-                      <div className="flex items-center gap-2">
-                        <h4 className={`font-oswald font-bold uppercase text-sm ${processed.isExpired ? 'text-[#CE3732]' : 'text-navy'}`}>{item.item_name}</h4>
-                        {!item.is_required && <span className={`text-[8px] border px-1 rounded uppercase tracking-widest opacity-70 ${processed.isExpired ? 'border-[#CE3732] text-[#CE3732]' : 'border-navy text-navy'}`}>Optional</span>}
-                      </div>
-                      <p className={`text-xs mt-1 font-roboto font-bold ${dueTextColor}`}>{processed.dueText}</p>
-                      {item.primary_heads_up_sent && !item.mx_schedule_sent && (
-                        <div className="mt-3 bg-red-50 border border-red-200 p-3 rounded w-full max-w-sm">
-                          <p className="text-[10px] text-[#CE3732] font-bold uppercase mb-1 leading-tight">Action Required: Projected MX Due</p>
-                          <p className="text-[10px] text-[#CE3732] mb-2 leading-tight" title="Confidence reflects how much flight history we have. Higher = more reliable projection.">System Confidence: {aircraft.confidenceScore || 0}% <span className="opacity-60">(based on recent flight activity)</span></p>
-                          <button onClick={() => handleManualMxTrigger(item)} disabled={isSubmitting} className="w-full bg-[#CE3732] text-white text-[10px] font-bold uppercase px-3 py-2 rounded shadow active:scale-95 transition-transform disabled:opacity-50">Review &amp; Schedule</button>
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-3 pl-4 shrink-0">
-                      {canEditMx && (
-                        <>
-                          <button onClick={() => openMxForm(item)} className="text-gray-400 hover:text-[#F08B46] transition-colors active:scale-95"><Edit2 size={16}/></button>
-                          <button onClick={() => deleteMxItem(item.id)} className="text-gray-400 hover:text-[#CE3732] transition-colors active:scale-95"><Trash2 size={16}/></button>
-                        </>
-                      )}
-                    </div>
+            {activeItems.length === 0 ? (
+              <p className="text-center text-sm text-gray-400 italic py-4">
+                {needsSetupItems.length > 0 ? 'All items need setup — configure them above to start tracking.' : 'No maintenance items tracked.'}
+              </p>
+            ) : (
+              <div className="space-y-5">
+                {blocking.length > 0 && (
+                  <div>
+                    <h3 className="text-[11px] font-bold uppercase tracking-widest text-[#CE3732] mb-2 flex items-center gap-1.5">
+                      <ShieldAlert size={13} /> Blocks flight today ({blocking.length})
+                    </h3>
+                    <div className="space-y-3">{blocking.map(renderRow)}</div>
                   </div>
-                );
-              })}
-            </div>
+                )}
+                {watchlist.length > 0 && (
+                  <div>
+                    <h3 className="text-[11px] font-bold uppercase tracking-widest text-[#F08B46] mb-2 flex items-center gap-1.5">
+                      <AlertTriangle size={13} /> Watch list — expired but not required ({watchlist.length})
+                    </h3>
+                    <p className="text-[10px] text-gray-500 mb-2 italic">These don&apos;t ground the aircraft, but they&apos;re past due.</p>
+                    <div className="space-y-3">{watchlist.map(renderRow)}</div>
+                  </div>
+                )}
+                {onTrack.length > 0 && (
+                  <div>
+                    <h3 className="text-[11px] font-bold uppercase tracking-widest text-gray-500 mb-2">On track ({onTrack.length})</h3>
+                    <div className="space-y-3">{onTrack.map(renderRow)}</div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
+            );
+          })()}
 
           {/* ─── MX ITEM FORM MODAL ─── */}
           {showMxModal && canEditMx && (

@@ -259,9 +259,9 @@ export default function ADsTab({ aircraft, role, aircraftRole }: Props) {
       {untracked.length > 0 && (
         <div className="bg-gray-100 shadow-inner rounded-sm p-4 md:p-6">
           <h3 className="font-oswald text-sm font-bold uppercase text-gray-500 mb-3">Needs compliance data ({untracked.length})</h3>
-          <p className="text-xs text-gray-500 mb-3">These ADs were added (either manually or from DRS sync) but don&apos;t yet have compliance dates logged.</p>
+          <p className="text-xs text-gray-500 mb-3">These ADs were added but don&apos;t yet have compliance dates logged. Handle the <span className="text-[#CE3732] font-bold">Grounds aircraft</span> ones first — until their compliance is recorded, the aircraft may not be legal to fly.</p>
           <div className="space-y-2">
-            {untracked.map(c => renderAdRow(c, canEdit, openEdit, handleDelete))}
+            {untracked.map(c => renderAdRow(c, canEdit, openEdit, handleDelete, true))}
           </div>
         </div>
       )}
@@ -332,6 +332,7 @@ function renderAdRow(
   canEdit: boolean,
   openEdit: (a: AirworthinessDirective) => void,
   handleDelete: (a: AirworthinessDirective) => void,
+  showGroundingPill = false,
 ) {
   const { ad, status, daysOut, hrsOut } = c;
   return (
@@ -341,6 +342,9 @@ function renderAdRow(
           <p className="font-oswald font-bold text-sm uppercase text-navy leading-tight">AD {ad.ad_number}</p>
           {ad.source === 'drs_sync' && <span className="text-[8px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-[#7C3AED]/10 text-[#7C3AED] border border-[#7C3AED]/20">DRS</span>}
           {ad.compliance_type === 'recurring' && <span className="text-[8px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-[#3AB0FF]/10 text-[#3AB0FF] border border-[#3AB0FF]/20">Recurring</span>}
+          {showGroundingPill && ad.affects_airworthiness && (
+            <span className="text-[8px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-[#CE3732]/10 text-[#CE3732] border border-[#CE3732]/30">Grounds aircraft</span>
+          )}
           {!ad.affects_airworthiness && <span className="text-[8px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 border border-gray-200">Non-AW</span>}
         </div>
         <p className="text-sm text-navy mt-1 leading-tight">{ad.subject}</p>
