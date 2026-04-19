@@ -24,6 +24,10 @@ CREATE EXTENSION IF NOT EXISTS btree_gist;
 -- (status = 'cancelled') can overlap freely — they're not competing
 -- for the airplane. Reservations use status-based soft-delete, not
 -- a deleted_at column (migration 009 didn't add one to this table).
+--
+-- Drop-then-add keeps re-runs idempotent (42710 otherwise).
+ALTER TABLE aft_reservations
+  DROP CONSTRAINT IF EXISTS aft_reservations_no_overlap;
 ALTER TABLE aft_reservations
   ADD CONSTRAINT aft_reservations_no_overlap
   EXCLUDE USING gist (

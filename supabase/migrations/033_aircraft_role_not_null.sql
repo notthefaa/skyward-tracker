@@ -22,7 +22,15 @@ SET aircraft_role = 'pilot'
 WHERE aircraft_role IS NULL;
 
 ALTER TABLE aft_user_aircraft_access
-  ALTER COLUMN aircraft_role SET NOT NULL,
+  ALTER COLUMN aircraft_role SET NOT NULL;
+
+-- Drop-then-add keeps the migration idempotent — re-running after a
+-- partial earlier apply (or on a DB where the constraint already
+-- landed) now succeeds instead of erroring with 42710.
+ALTER TABLE aft_user_aircraft_access
+  DROP CONSTRAINT IF EXISTS aft_user_aircraft_access_role_chk;
+
+ALTER TABLE aft_user_aircraft_access
   ADD CONSTRAINT aft_user_aircraft_access_role_chk
     CHECK (aircraft_role IN ('admin', 'pilot'));
 
