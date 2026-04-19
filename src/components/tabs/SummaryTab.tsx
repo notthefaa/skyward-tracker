@@ -166,18 +166,35 @@ export default function SummaryTab({
   const handleFuelUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!fuelAmount || !aircraft) return;
-    // parseFloat("Infinity") returns Infinity, which passes the old
-    // truthy check and lands in current_fuel_gallons — poisoning the
-    // fuel-burn projection forever. parseFiniteNumber rejects NaN /
-    // ±Infinity and out-of-range values up front.
+    // Client-side parse + bound so the user gets an immediate error
+    // on bad input instead of waiting for a 400 round-trip.
     const parsed = parseFiniteNumber(fuelAmount, { min: 0, max: 10000 });
     if (parsed === undefined || parsed === null) {
       return showError("Enter a valid fuel amount (finite number between 0 and 10,000).");
     }
     setIsSavingFuel(true);
     const gallons = fuelUnit === 'lbs' ? parsed / getFuelWeightPerGallon(aircraft.engine_type) : parsed;
-    await supabase.from('aft_aircraft').update({ current_fuel_gallons: gallons, fuel_last_updated: new Date().toISOString() }).eq('id', aircraft.id);
-    setShowFuelModal(false); setFuelAmount(""); setIsSavingFuel(false); refreshData(); showSuccess("Fuel state updated");
+    // Route through the API so the validation + access check runs on
+    // the server too. The direct supabase update path used to let a
+    // DevTools caller splash NaN / Infinity into current_fuel_gallons
+    // even when the UI validated correctly.
+    try {
+      const res = await authFetch('/api/aircraft/fuel', {
+        method: 'POST',
+        body: JSON.stringify({ aircraftId: aircraft.id, gallons }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || 'Fuel update failed');
+      }
+      setShowFuelModal(false);
+      setFuelAmount("");
+      refreshData();
+      showSuccess("Fuel state updated");
+    } catch (err: any) {
+      showError(err.message || 'Fuel update failed');
+    }
+    setIsSavingFuel(false);
   };
 
   const handleInvitePilot = async (e: React.FormEvent) => {

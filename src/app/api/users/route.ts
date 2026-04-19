@@ -44,8 +44,18 @@ export async function DELETE(req: Request) {
       }
     }
 
-    // This securely deletes them from the Auth system.
-    // Our SQL script ensures their flight logs are safely preserved (ON DELETE SET NULL).
+    // FK cascades today (migrations 005 / 006 / 007 / 008 / 020 / 028):
+    //   CASCADE    — user_preferences, rate_limit, chuck/howard threads +
+    //                messages, idempotency_keys (ephemeral data, OK to drop)
+    //   SET NULL   — flight_logs.user_id, squawks.reported_by, notes.user_id,
+    //                documents.user_id (history preserved, author becomes
+    //                anonymous)
+    //   NO ACTION  — audit columns with no ON DELETE clause (deleted_by,
+    //                locked_by, proposed_actions.user_id, etc.). These will
+    //                BLOCK the deletion if the user has touched those rows;
+    //                the error bubbles up through the catch below. A future
+    //                migration should give these explicit SET NULL / CASCADE
+    //                rules — see project_audit_2026_04_19.md follow-ups.
     const { error } = await supabaseAdmin.auth.admin.deleteUser(userId);
     if (error) throw error;
 

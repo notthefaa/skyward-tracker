@@ -32,8 +32,14 @@ export async function checkRateLimit(
   }
 
   const row = data[0] as { allowed: boolean; retry_after_ms: number | string };
+  // RPC contract is deterministic today, but guard anyway — if
+  // retry_after_ms ever returns NaN / Infinity / a garbage string,
+  // the `|| 0` fallback would silently tell the client to retry
+  // immediately, defeating the back-off. isFinite rejects both NaN
+  // and ±Infinity.
+  const raw = Number(row.retry_after_ms);
   return {
     allowed: row.allowed,
-    retryAfterMs: Number(row.retry_after_ms) || 0,
+    retryAfterMs: Number.isFinite(raw) && raw >= 0 ? raw : 0,
   };
 }
