@@ -24,9 +24,11 @@ export async function POST(req: Request) {
     await requireAircraftAdmin(supabaseAdmin, user.id, event.aircraft_id);
     await setAppUser(supabaseAdmin, user.id);
 
-    // Process each line item completion
-    const completedNames: string[] = [];
-
+    // Pre-validate finite numeric fields in every completion so the
+    // API returns a clean 400 with a pointer to the bad item instead
+    // of burying the failure inside the RPC. The RPC trusts valid
+    // input; the loop here is the boundary check.
+    const cleanedCompletions: any[] = [];
     for (const completion of lineCompletions) {
       const {
         lineItemId, completionDate, completionTime,
@@ -35,139 +37,50 @@ export async function POST(req: Request) {
         tachAtCompletion, hobbsAtCompletion, logbookRef,
       } = completion;
 
-      // Coerce hour readings to finite numbers. parseFloat("Infinity")
-      // happily returns Infinity, which poisons MX projection math and
-      // sorting. `parseFiniteNumber` treats absent as null and rejects
-      // Infinity / NaN / negative by returning undefined.
       const completionTimeNum = parseFiniteNumber(completionTime, { min: 0 });
-      const tachNum = parseFiniteNumber(tachAtCompletion, { min: 0 });
+      const tachNum  = parseFiniteNumber(tachAtCompletion,  { min: 0 });
       const hobbsNum = parseFiniteNumber(hobbsAtCompletion, { min: 0 });
       if (completionTimeNum === undefined || tachNum === undefined || hobbsNum === undefined) {
-        return NextResponse.json({ error: 'completion_time / tach_at_completion / hobbs_at_completion must be a non-negative finite number.' }, { status: 400 });
+        return NextResponse.json(
+          { error: 'completion_time / tach_at_completion / hobbs_at_completion must be a non-negative finite number.' },
+          { status: 400 },
+        );
       }
 
-      // Update the line item with completion data. 43.11 fields are
-      // optional at the API layer so this works for older clients,
-      // but the UI is expected to collect them for a clean signoff.
-      await supabaseAdmin.from('aft_event_line_items').update({
-        line_status: 'complete',
-        completion_date: completionDate || null,
-        completion_time: completionTimeNum,
-        completed_by_name: completedByName || null,
-        completed_by_cert: completedByCert || null,
-        work_description: workDescription || null,
-        cert_type: certType || null,
-        cert_number: certNumber || null,
-        cert_expiry: certExpiry || null,
-        tach_at_completion: tachNum,
-        hobbs_at_completion: hobbsNum,
-        logbook_ref: logbookRef || null,
-      }).eq('id', lineItemId).eq('event_id', eventId);
-
-      // Fetch the line item to check if it's linked to an MX item
-      const { data: lineItem } = await supabaseAdmin
-        .from('aft_event_line_items').select('*').eq('id', lineItemId).single();
-
-      if (lineItem) {
-        completedNames.push(lineItem.item_name);
-
-        if (lineItem.maintenance_item_id) {
-          // Fetch the original MX item to get the interval
-          const { data: mxItem } = await supabaseAdmin
-            .from('aft_maintenance_items').select('*').eq('id', lineItem.maintenance_item_id).single();
-
-          if (mxItem) {
-            const mxUpdate: any = {
-              // Reset reminder flags
-              reminder_5_sent: false,
-              reminder_15_sent: false,
-              reminder_30_sent: false,
-              mx_schedule_sent: false,
-              primary_heads_up_sent: false,
-            };
-
-            const advanceTime = (mxItem.tracking_type === 'time' || mxItem.tracking_type === 'both') && completionTime;
-            const advanceDate = (mxItem.tracking_type === 'date' || mxItem.tracking_type === 'both') && completionDate;
-
-            if (advanceTime) {
-              mxUpdate.last_completed_time = parseFloat(completionTime);
-              if (mxItem.time_interval) {
-                mxUpdate.due_time = parseFloat(completionTime) + mxItem.time_interval;
-              }
-            }
-            if (advanceDate) {
-              mxUpdate.last_completed_date = completionDate;
-              if (mxItem.date_interval_days) {
-                // Parse as UTC midnight so getUTC*/setUTC* stays in-sync —
-                // local-TZ parse + setDate drifts by one day in negative UTC zones.
-                const nextDue = new Date(completionDate + 'T00:00:00Z');
-                nextDue.setUTCDate(nextDue.getUTCDate() + mxItem.date_interval_days);
-                mxUpdate.due_date = nextDue.toISOString().split('T')[0];
-              }
-            }
-
-            await supabaseAdmin.from('aft_maintenance_items')
-              .update(mxUpdate).eq('id', mxItem.id);
-          }
-        }
-
-        // If it's a squawk line item, resolve the squawk and record the service event reference
-        if (lineItem.squawk_id) {
-          await supabaseAdmin.from('aft_squawks').update({
-            status: 'resolved',
-            affects_airworthiness: false,
-            resolved_by_event_id: eventId,
-          }).eq('id', lineItem.squawk_id);
-        }
-      }
+      cleanedCompletions.push({
+        lineItemId,
+        completionDate: completionDate || null,
+        // Pass as string so the JSONB payload keeps it numeric. `null`
+        // lets the RPC's NULLIF(...)::numeric produce a SQL NULL cleanly.
+        completionTime: completionTimeNum != null ? String(completionTimeNum) : null,
+        completedByName: completedByName || null,
+        completedByCert: completedByCert || null,
+        workDescription: workDescription || null,
+        certType: certType || null,
+        certNumber: certNumber || null,
+        certExpiry: certExpiry || null,
+        tachAtCompletion:  tachNum  != null ? String(tachNum)  : null,
+        hobbsAtCompletion: hobbsNum != null ? String(hobbsNum) : null,
+        logbookRef: logbookRef || null,
+      });
     }
 
-    // Check if ALL line items in the event are now resolved (complete or deferred)
-    const { data: allItems } = await supabaseAdmin
-      .from('aft_event_line_items').select('line_status').eq('event_id', eventId);
-
-    const allResolved = allItems && allItems.every(
-      (li: any) => li.line_status === 'complete' || li.line_status === 'deferred'
-    );
-
-    if (allResolved && !partial) {
-      // All items done and caller didn't request partial — close the event
-      await supabaseAdmin.from('aft_maintenance_events').update({
-        status: 'complete',
-        completed_at: new Date().toISOString(),
-      }).eq('id', eventId);
-
-      await supabaseAdmin.from('aft_event_messages').insert({
-        event_id: eventId,
-        sender: 'system',
-        message_type: 'status_update',
-        message: 'Maintenance event completed. All tracking items have been reset.',
-      } as any);
-    } else if (allResolved && partial) {
-      // All resolved but caller used partial mode — mark complete automatically
-      await supabaseAdmin.from('aft_maintenance_events').update({
-        status: 'complete',
-        completed_at: new Date().toISOString(),
-      }).eq('id', eventId);
-
-      await supabaseAdmin.from('aft_event_messages').insert({
-        event_id: eventId,
-        sender: 'system',
-        message_type: 'status_update',
-        message: 'All items resolved. Maintenance event completed and tracking reset.',
-      } as any);
-    } else {
-      // Partial completion — log what was completed, keep event open
-      const itemList = completedNames.join(', ');
-      await supabaseAdmin.from('aft_event_messages').insert({
-        event_id: eventId,
-        sender: 'system',
-        message_type: 'status_update',
-        message: `Logbook data entered for: ${itemList}. Tracking reset for completed items. Remaining items still open.`,
-      } as any);
+    // Single-transaction apply (migration 037). Line-item updates,
+    // MX-item interval advances, squawk resolves, event status flip,
+    // and summary message all commit or roll back together — a
+    // mid-loop failure can't leave half-finished completions behind.
+    const { data: rpcData, error: rpcErr } = await supabaseAdmin.rpc('complete_mx_event_atomic', {
+      p_event_id:    eventId,
+      p_user_id:     user.id,
+      p_completions: cleanedCompletions,
+      p_partial:     !!partial,
+    });
+    if (rpcErr) {
+      return NextResponse.json({ error: rpcErr.message || 'Failed to apply completions.' }, { status: 500 });
     }
 
-    return NextResponse.json({ success: true, allResolved: !!allResolved });
+    const allResolved = !!(rpcData as any)?.all_resolved;
+    return NextResponse.json({ success: true, allResolved });
   } catch (error) {
     return handleApiError(error);
   }
