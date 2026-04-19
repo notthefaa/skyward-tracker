@@ -12,7 +12,12 @@ const client = new Anthropic();
 // well and matches Howard's "short, conversational" register much better
 // than Sonnet, which tended to produce report-style replies.
 export const HOWARD_MODEL = 'claude-haiku-4-5-20251001';
-const MAX_OUTPUT_TOKENS = 500;
+// 500 was too tight — flight briefings (weather + NOTAMs + hazards +
+// bottom-line) were getting cut off mid-sentence. 2000 leaves room
+// for substantive briefings without changing the "1–3 sentence"
+// default register (Howard still trends short; the cap just stops
+// truncating when he genuinely needs more).
+const MAX_OUTPUT_TOKENS = 2000;
 const MAX_TOOL_ROUNDS = 3;
 const CONTEXT_WINDOW = 10;
 
