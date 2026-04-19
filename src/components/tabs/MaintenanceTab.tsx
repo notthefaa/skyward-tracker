@@ -333,7 +333,6 @@ export default function MaintenanceTab({
             </div>
           )}
 
-          <ServiceEventModal aircraft={aircraft} show={showServiceModal} onClose={() => { setShowServiceModal(false); setPreSelectMxItemId(null); mutateEvents(); }} onRefresh={() => { mutate(); mutateEvents(); }} canManageService={canEditMx} preSelectMxItemId={preSelectMxItemId} />
           <MxGuideModal show={showGuideModal} onClose={() => setShowGuideModal(false)} />
           <MxTemplatePickerModal aircraft={aircraft} show={showTemplateModal} onClose={() => setShowTemplateModal(false)} onRefresh={() => { mutate(); onGroundedStatusChange(); }} />
 
@@ -578,6 +577,8 @@ export default function MaintenanceTab({
           onOpenModal={() => setShowServiceModal(true)}
         />
       )}
+
+      <ServiceEventModal aircraft={aircraft} show={showServiceModal} onClose={() => { setShowServiceModal(false); setPreSelectMxItemId(null); mutateEvents(); }} onRefresh={() => { mutate(); mutateEvents(); }} canManageService={canEditMx} preSelectMxItemId={preSelectMxItemId} />
     </div>
   );
 }
