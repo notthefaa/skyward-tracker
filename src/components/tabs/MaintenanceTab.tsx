@@ -257,7 +257,7 @@ export default function MaintenanceTab({
   const deleteMxItem = async (id: string) => {
     const ok = await confirm({
       title: "Delete Maintenance Item?",
-      message: "This maintenance item will be permanently removed from tracking.",
+      message: "We'll stop tracking this item. History on completed work stays in your service-event records.",
       confirmText: "Delete",
       variant: "danger",
     });
@@ -366,7 +366,7 @@ export default function MaintenanceTab({
                   <h2 className="font-oswald text-xl font-bold uppercase text-navy m-0 leading-none flex items-center gap-2">
                     <Settings size={18} className="text-[#F08B46]" /> Needs Setup
                   </h2>
-                  <p className="text-[10px] text-gray-500 mt-1">Enter last-completed data from your logbook to activate tracking</p>
+                  <p className="text-[10px] text-gray-500 mt-1">Enter when this was last done (from your logbook) and we'll start tracking it.</p>
                 </div>
                 <span className="text-[10px] font-bold uppercase tracking-widest bg-[#F08B46] text-white px-2 py-1 rounded">{needsSetupItems.length} item{needsSetupItems.length > 1 ? 's' : ''}</span>
               </div>
@@ -425,8 +425,8 @@ export default function MaintenanceTab({
                     <p className={`text-xs mt-1 font-roboto font-bold ${dueTextColor}`}>{processed.dueText}</p>
                     {item.primary_heads_up_sent && !item.mx_schedule_sent && (
                       <div className="mt-3 bg-red-50 border border-red-200 p-3 rounded w-full max-w-sm">
-                        <p className="text-[10px] text-[#CE3732] font-bold uppercase mb-1 leading-tight">Action Required: Projected MX Due</p>
-                        <p className="text-[10px] text-[#CE3732] mb-2 leading-tight" title="Confidence reflects how much flight history we have. Higher = more reliable projection.">System Confidence: {aircraft.confidenceScore || 0}% <span className="opacity-60">(based on recent flight activity)</span></p>
+                        <p className="text-[10px] text-[#CE3732] font-bold uppercase mb-1 leading-tight">Heads up — coming due based on recent flying</p>
+                        <p className="text-[10px] text-[#CE3732] mb-2 leading-tight" title="How sure we are about the projection, based on how much recent flight history we have to work with.">Forecast confidence: {aircraft.confidenceScore || 0}% <span className="opacity-60">(from recent flight activity)</span></p>
                         <button onClick={() => handleManualMxTrigger(item)} disabled={isSubmitting} className="w-full bg-[#CE3732] text-white text-[10px] font-bold uppercase px-3 py-2 rounded shadow active:scale-95 transition-transform disabled:opacity-50">Review &amp; Schedule</button>
                       </div>
                     )}
@@ -453,14 +453,14 @@ export default function MaintenanceTab({
             </div>
             {activeItems.length === 0 ? (
               <p className="text-center text-sm text-gray-400 italic py-4">
-                {needsSetupItems.length > 0 ? 'All items need setup — configure them above to start tracking.' : 'No maintenance items tracked.'}
+                {needsSetupItems.length > 0 ? 'All items need setup — fill in the last-completed info above to start tracking.' : 'Nothing tracked yet.'}
               </p>
             ) : (
               <div className="space-y-5">
                 {blocking.length > 0 && (
                   <div>
                     <h3 className="text-[11px] font-bold uppercase tracking-widest text-[#CE3732] mb-2 flex items-center gap-1.5">
-                      <ShieldAlert size={13} /> Blocks flight today ({blocking.length})
+                      <ShieldAlert size={13} /> Grounds the airplane today ({blocking.length})
                     </h3>
                     <div className="space-y-3">{blocking.map(renderRow)}</div>
                   </div>
@@ -468,9 +468,9 @@ export default function MaintenanceTab({
                 {watchlist.length > 0 && (
                   <div>
                     <h3 className="text-[11px] font-bold uppercase tracking-widest text-[#F08B46] mb-2 flex items-center gap-1.5">
-                      <AlertTriangle size={13} /> Watch list — expired but not required ({watchlist.length})
+                      <AlertTriangle size={13} /> Past due — optional items ({watchlist.length})
                     </h3>
-                    <p className="text-[10px] text-gray-500 mb-2 italic">These don&apos;t ground the aircraft, but they&apos;re past due.</p>
+                    <p className="text-[10px] text-gray-500 mb-2 italic">These are past due but marked optional, so they don&apos;t ground the airplane.</p>
                     <div className="space-y-3">{watchlist.map(renderRow)}</div>
                   </div>
                 )}
@@ -492,7 +492,7 @@ export default function MaintenanceTab({
             <div className="flex min-h-full items-center justify-center p-3">
               <div className="bg-white rounded shadow-2xl w-full max-w-md p-5 border-t-4 border-[#F08B46] animate-slide-up">
                 <div className="flex justify-between items-center mb-6">
-                  <h2 className="font-oswald text-2xl font-bold uppercase text-navy">{editingId ? 'Edit MX Item' : 'Track New Item'}</h2>
+                  <h2 className="font-oswald text-2xl font-bold uppercase text-navy">{editingId ? 'Edit Maintenance Item' : 'Track New Item'}</h2>
                   <button onClick={() => setShowMxModal(false)} className="text-gray-400 hover:text-[#CE3732] transition-colors"><X size={24}/></button>
                 </div>
                 <form onSubmit={submitMxItem} className="space-y-4">
@@ -535,7 +535,7 @@ export default function MaintenanceTab({
                     <div className="pt-2 pb-2">
                       <label className="flex items-start gap-2 text-xs font-bold text-navy cursor-pointer">
                         <input type="checkbox" checked={automateScheduling} onChange={e=>setAutomateScheduling(e.target.checked)} className="mt-0.5 w-4 h-4 text-[#F08B46] border-gray-300 rounded focus:ring-[#F08B46] cursor-pointer shrink-0" />
-                        <span className="flex flex-col"><span>Automate Scheduling</span><span className="text-[10px] text-gray-500 font-normal mt-1 leading-tight">When this item approaches its due threshold, the system will automatically create a draft work package and notify you to review and send it to your mechanic.</span></span>
+                        <span className="flex flex-col"><span>Auto-draft a work package when this gets close to due</span><span className="text-[10px] text-gray-500 font-normal mt-1 leading-tight">When this item gets close to due, we'll draft a work package and email you to review it before it goes to your mechanic. Nothing sends automatically — you still tap send.</span></span>
                       </label>
                     </div>
                   )}
@@ -551,7 +551,7 @@ export default function MaintenanceTab({
             <div className="flex min-h-full items-center justify-center p-4">
               <div className="bg-white rounded shadow-2xl w-full max-w-sm p-6 border-t-4 border-[#F08B46] animate-slide-up" onClick={e => e.stopPropagation()}>
                 <h3 className="font-oswald text-xl font-bold uppercase text-navy mb-3">Resend Work Package?</h3>
-                <p className="text-sm text-gray-600 mb-6">Are you sure you want to resend the work order to <strong>{activeEvents.find(e => e.id === confirmResendId)?.mx_contact_name || 'the primary maintenance contact'}</strong>?</p>
+                <p className="text-sm text-gray-600 mb-6">Send the same work package email to <strong>{activeEvents.find(e => e.id === confirmResendId)?.mx_contact_name || 'your maintenance contact'}</strong> again? The subject line gets a &quot;Reminder&quot; tag so they know it&apos;s a nudge.</p>
                 <div className="flex gap-3">
                   <button onClick={() => setConfirmResendId(null)} className="flex-1 border border-gray-300 text-gray-600 font-oswald font-bold uppercase tracking-widest py-3 rounded text-xs active:scale-95">Cancel</button>
                   <button onClick={() => handleResendWorkpackage(confirmResendId)} disabled={resendingEventId === confirmResendId} className="flex-1 bg-[#F08B46] text-white font-oswald font-bold uppercase tracking-widest py-3 rounded text-xs active:scale-95 disabled:opacity-50">{resendingEventId === confirmResendId ? 'Sending...' : 'Resend'}</button>
@@ -696,7 +696,7 @@ function ServiceEventsList({
         </div>
         {activeEvents.length === 0 ? (
           <p className="text-xs text-gray-500 italic bg-gray-50 rounded p-3 border border-gray-200">
-            No work packages in flight. {canEditMx ? 'Tap Schedule Service to bundle items into a trip to the shop.' : 'Your aircraft admin can schedule service when needed.'}
+            Nothing open right now. {canEditMx ? 'Tap Schedule Service to bundle items into a trip to the shop.' : 'Your aircraft admin can schedule service when needed.'}
           </p>
         ) : (
           <div className="space-y-2">{activeEvents.map(renderCard)}</div>
