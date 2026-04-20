@@ -129,7 +129,7 @@ export default function AuthGate({ children }: AuthGateProps) {
       <div className="flex flex-col items-center justify-center p-4 bg-slateGray h-[100dvh] w-full text-white text-center">
         <WifiOff size={64} className="mb-6 text-brandOrange animate-pulse" />
         <h2 className="font-oswald text-3xl tracking-widest uppercase mb-4">Connection Timeout</h2>
-        <p className="text-sm font-roboto text-gray-300 mb-8 max-w-xs leading-relaxed">We are having trouble connecting to the database. You may be experiencing spotty cell or WiFi coverage.</p>
+        <p className="text-sm font-roboto text-gray-300 mb-8 max-w-xs leading-relaxed">Can&apos;t reach our servers right now. You might be on spotty cell or WiFi.</p>
         <button onClick={() => window.location.reload()} className="w-full max-w-xs bg-brandOrange text-white font-oswald text-xl tracking-widest uppercase py-4 rounded-xl shadow-lg active:scale-95 transition-transform">Refresh App</button>
       </div>
     );

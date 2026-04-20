@@ -75,7 +75,7 @@ export default function AuthScreen() {
               </div>
             </div>
             <div className="pt-4">
-              <PrimaryButton disabled={isSubmitting}>{isSubmitting ? "Logging in..." : "Access Portal"}</PrimaryButton>
+              <PrimaryButton disabled={isSubmitting}>{isSubmitting ? "Logging in..." : "Log in"}</PrimaryButton>
             </div>
             <button type="button" onClick={() => setShowForgotPassword(true)} className="w-full text-center text-xs text-gray-500 mt-4 hover:text-navy underline">
               Forgot Password?
@@ -86,7 +86,7 @@ export default function AuthScreen() {
             <div className="bg-green-50 border border-green-200 rounded-md p-4">
               <p className="text-sm text-navy font-bold mb-1">Reset link sent</p>
               <p className="text-xs text-gray-600 leading-relaxed">
-                Check <span className="font-bold">{resetSentTo}</span> for the secure link to set a new password. If it&apos;s not in your inbox within a minute, check spam.
+                Check <span className="font-bold">{resetSentTo}</span> for the link to set a new password. If it&apos;s not in your inbox within a minute, check your spam folder.
               </p>
             </div>
             <button
@@ -99,7 +99,7 @@ export default function AuthScreen() {
           </div>
         ) : (
           <form onSubmit={handleForgotPassword} className="space-y-4 animate-fade-in">
-            <p className="text-xs text-gray-500 text-center mb-4">Enter your email and we&apos;ll send a secure link to set a new password.</p>
+            <p className="text-xs text-gray-500 text-center mb-4">Enter your email and we&apos;ll send a link to set a new password.</p>
             <div>
               <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Email Address</label>
               <input type="email" required value={authEmail} onChange={(e) => setAuthEmail(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 bg-white focus:border-navy outline-none" />
