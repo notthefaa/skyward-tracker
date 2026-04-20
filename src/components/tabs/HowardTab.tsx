@@ -444,7 +444,7 @@ export default function HowardTab({
     if (isSending) return;
     const ok = await confirm({
       title: 'Clear conversation?',
-      message: `This will permanently delete your entire chat history with Howard. Usage totals are unaffected.`,
+      message: `Your chat history with Howard gets wiped. Your usage totals stay.`,
       confirmText: 'Clear',
       cancelText: 'Cancel',
       variant: 'danger',
@@ -452,7 +452,7 @@ export default function HowardTab({
     if (!ok) return;
     try {
       const res = await authFetch(`/api/howard`, { method: 'DELETE' });
-      if (!res.ok) throw new Error((await res.json()).error || 'Failed to clear conversation');
+      if (!res.ok) throw new Error((await res.json()).error || "Couldn't clear the conversation");
       // Drop the old thread's proposed-actions cache so stale cards
       // can't flash back in before the messages refetch resolves.
       if (threadId) globalMutate(swrKeys.howardActions(threadId), { actions: [] }, false);

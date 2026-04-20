@@ -61,7 +61,7 @@ export default function HowardUsageTab() {
     'howard-usage',
     async () => {
       const res = await authFetch('/api/howard/usage');
-      if (!res.ok) throw new Error('Failed to load usage');
+      if (!res.ok) throw new Error("Couldn't load usage");
       return await res.json();
     },
     { revalidateOnFocus: false }
@@ -79,7 +79,7 @@ export default function HowardUsageTab() {
   if (error || !data) {
     return (
       <div className="bg-cream shadow-lg rounded-sm p-6 text-center">
-        <p className="text-sm text-gray-500">Unable to load usage data.</p>
+        <p className="text-sm text-gray-500">Couldn&apos;t load your usage. Try again in a minute.</p>
       </div>
     );
   }
@@ -108,7 +108,7 @@ export default function HowardUsageTab() {
           <HowardIcon size={40} style={{ color: '#0EA5E9' }} className="mx-auto mb-3" />
           <p className="font-oswald text-lg font-bold uppercase text-navy mb-1">No usage yet</p>
           <p className="text-xs text-gray-500 font-roboto mb-4 max-w-sm mx-auto">
-            Start a conversation with Howard to see your token usage, daily activity, and estimated cost tracked here.
+            Start a conversation with Howard and your token use, daily activity, and estimated cost show up here.
           </p>
           <button
             onClick={() => window.dispatchEvent(new CustomEvent('aft:navigate-howard'))}
