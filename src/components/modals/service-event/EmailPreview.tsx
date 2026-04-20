@@ -31,7 +31,7 @@ export default function EmailPreview({ aircraft, mxItems, squawks, selectedAddon
     <div className="bg-gray-50 border border-gray-200 rounded p-4 space-y-4 text-sm animate-fade-in">
       <div className="flex justify-between items-center border-b border-gray-200 pb-2">
         <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Email Preview</span>
-        <button onClick={onClose} className="text-gray-400 hover:text-red-500"><X size={16}/></button>
+        <button onClick={onClose} className="text-gray-400 hover:text-[#CE3732]"><X size={16}/></button>
       </div>
       <div className="space-y-1 text-[10px] text-gray-500">
         <p><strong>To:</strong> {aircraft.mx_contact_email || 'No MX contact set'}</p>

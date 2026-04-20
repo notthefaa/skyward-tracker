@@ -469,7 +469,7 @@ export default function TimesTab({
                     <td className="py-3 text-right flex justify-end items-center gap-3">
                       <button onClick={() => openLogForm(log)} className="text-gray-400 hover:text-[#3AB0FF] transition-colors" title="Edit Log"><Edit2 size={14}/></button>
                       {logPage === 1 && log.id === flightLogs[0]?.id && (
-                        <button onClick={() => deleteLatestLog(log)} className="text-gray-400 hover:text-red-500 transition-colors" title="Delete Latest Log"><Trash2 size={14}/></button>
+                        <button onClick={() => deleteLatestLog(log)} className="text-gray-400 hover:text-[#CE3732] transition-colors" title="Delete Latest Log"><Trash2 size={14}/></button>
                       )}
                     </td>
                   )}
@@ -495,7 +495,7 @@ export default function TimesTab({
         <div className="fixed inset-0 z-[60] overflow-y-auto bg-black/60 animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => setViewPax(null)}>
           <div className="flex min-h-full items-center justify-center p-4">
           <div className="bg-white rounded shadow-2xl w-full max-w-sm p-6 border-t-4 border-[#3AB0FF] animate-slide-up relative" onClick={(e) => e.stopPropagation()}>
-            <button onClick={() => setViewPax(null)} className="absolute top-4 right-4 text-gray-400 hover:text-red-500 transition-colors"><X size={20}/></button>
+            <button onClick={() => setViewPax(null)} className="absolute top-4 right-4 text-gray-400 hover:text-[#CE3732] transition-colors"><X size={20}/></button>
             <h3 className="font-oswald text-xl font-bold uppercase tracking-widest text-navy mb-4">Passenger Info</h3>
             <p className="text-sm text-navy font-roboto whitespace-pre-wrap">{viewPax}</p>
           </div>
@@ -507,7 +507,7 @@ export default function TimesTab({
         <div className="fixed inset-0 z-[60] overflow-y-auto bg-black/60 animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => setViewRouting(null)}>
           <div className="flex min-h-full items-center justify-center p-4">
           <div className="bg-white rounded shadow-2xl w-full max-w-sm p-6 border-t-4 border-[#3AB0FF] animate-slide-up relative" onClick={(e) => e.stopPropagation()}>
-            <button onClick={() => setViewRouting(null)} className="absolute top-4 right-4 text-gray-400 hover:text-red-500 transition-colors"><X size={20}/></button>
+            <button onClick={() => setViewRouting(null)} className="absolute top-4 right-4 text-gray-400 hover:text-[#CE3732] transition-colors"><X size={20}/></button>
             <h3 className="font-oswald text-xl font-bold uppercase tracking-widest text-navy mb-4">Flight Routing</h3>
             <div className="flex items-center gap-4 text-navy">
               <div className="flex-1 bg-gray-50 border border-gray-200 rounded p-3 text-center">
@@ -529,7 +529,7 @@ export default function TimesTab({
         <div className="fixed inset-0 z-[60] overflow-y-auto bg-black/60 animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => setShowLegend(false)}>
           <div className="flex min-h-full items-center justify-center p-4">
           <div className="bg-white rounded shadow-2xl w-full max-w-sm p-6 border-t-4 border-[#3AB0FF] animate-slide-up relative" onClick={(e) => e.stopPropagation()}>
-            <button type="button" onClick={() => setShowLegend(false)} className="absolute top-4 right-4 text-gray-400 hover:text-red-500 transition-colors"><X size={20}/></button>
+            <button type="button" onClick={() => setShowLegend(false)} className="absolute top-4 right-4 text-gray-400 hover:text-[#CE3732] transition-colors"><X size={20}/></button>
             <h3 className="font-oswald text-xl font-bold uppercase tracking-widest text-navy mb-4">Reason Codes</h3>
             <ul className="text-sm text-navy font-roboto space-y-3">
               <li><strong className="text-[#3AB0FF] w-8 inline-block">PE:</strong> Personal Entertainment</li>
@@ -548,7 +548,7 @@ export default function TimesTab({
           <div className="bg-white rounded shadow-2xl w-full max-w-md p-6 border-t-4 border-[#3AB0FF] animate-slide-up">
             <div className="flex justify-between items-center mb-2">
               <h2 className="font-oswald text-2xl font-bold uppercase text-navy">{editingId ? 'Edit Flight Log' : 'Log New Flight'}</h2>
-              <button onClick={() => setShowLogModal(false)} className="text-gray-400 hover:text-red-500 transition-colors"><X size={24}/></button>
+              <button onClick={() => setShowLogModal(false)} className="text-gray-400 hover:text-[#CE3732] transition-colors"><X size={24}/></button>
             </div>
             <p className="text-[10px] text-gray-500 mb-4 leading-tight">
               <span className="text-[#CE3732] font-bold">*</span> required &middot; <span className="font-bold">(Opt)</span> optional

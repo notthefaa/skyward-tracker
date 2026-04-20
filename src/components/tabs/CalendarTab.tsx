@@ -608,7 +608,7 @@ export default function CalendarTab({
           <div className="bg-white rounded shadow-2xl w-full max-w-sm p-5 border-t-4 border-[#56B94A] animate-slide-up" onClick={e => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-5">
               <h2 className="font-oswald text-xl font-bold uppercase text-navy flex items-center gap-2"><Calendar size={18} className="text-[#56B94A]" /> {editingReservationId ? 'Edit Reservation' : 'Reserve Aircraft'}</h2>
-              <button onClick={() => setShowBookingForm(false)} className="text-gray-400 hover:text-red-500"><X size={22} /></button>
+              <button onClick={() => setShowBookingForm(false)} className="text-gray-400 hover:text-[#CE3732]"><X size={22} /></button>
             </div>
             <div className="space-y-4">
               {canBookForOthers && !editingReservationId && (
@@ -951,7 +951,7 @@ export default function CalendarTab({
           <div className="bg-white rounded shadow-2xl w-full max-w-sm p-5 border-t-4 border-mxOrange animate-slide-up" onClick={e => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-5">
               <h2 className="font-oswald text-xl font-bold uppercase text-navy flex items-center gap-2"><Wrench size={18} className="text-mxOrange" /> Block for Maintenance</h2>
-              <button onClick={() => setShowMxBlockForm(false)} className="text-gray-400 hover:text-red-500"><X size={22} /></button>
+              <button onClick={() => setShowMxBlockForm(false)} className="text-gray-400 hover:text-[#CE3732]"><X size={22} /></button>
             </div>
             <div className="space-y-4">
               <div>

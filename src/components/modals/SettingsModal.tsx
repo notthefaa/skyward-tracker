@@ -241,7 +241,7 @@ export default function SettingsModal({
           <h2 className="font-oswald text-2xl font-bold uppercase text-navy flex items-center gap-2">
             <Settings size={20} className="text-gray-500" /> Settings
           </h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-red-500"><X size={24} /></button>
+          <button onClick={onClose} className="text-gray-400 hover:text-[#CE3732]"><X size={24} /></button>
         </div>
 
         <div className="p-6 space-y-8">

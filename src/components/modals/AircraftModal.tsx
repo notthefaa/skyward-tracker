@@ -361,7 +361,7 @@ export default function AircraftModal({
           <h2 className="font-oswald text-2xl font-bold uppercase text-[#1B4869]">
             {isEditing ? 'Edit Aircraft' : 'Add Aircraft'}
           </h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-red-500 transition-colors">
+          <button onClick={onClose} className="text-gray-400 hover:text-[#CE3732] transition-colors">
             <X size={24}/>
           </button>
         </div>

@@ -632,7 +632,7 @@ export default function AppShell({ session }: AppShellProps) {
         <div className="fixed inset-0 bg-black/80 z-[10000] overflow-y-auto animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => setShowLogItModal(false)}>
           <div className="flex min-h-full items-center justify-center p-4">
           <div role="dialog" aria-label="Install Log It companion app" className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 border-t-8 border-[#3AB0FF] animate-slide-up relative" onClick={e => e.stopPropagation()}>
-            <button onClick={() => setShowLogItModal(false)} aria-label="Close" className="absolute top-4 right-4 text-gray-400 hover:text-red-500"><X size={24}/></button>
+            <button onClick={() => setShowLogItModal(false)} aria-label="Close" className="absolute top-4 right-4 text-gray-400 hover:text-[#CE3732]"><X size={24}/></button>
             <h3 className="font-oswald text-2xl font-bold uppercase tracking-widest text-navy mb-4">Install Log It</h3>
             <p className="text-sm text-gray-600 font-roboto mb-4 leading-relaxed">Log It is a companion app that is designed to make logging times and squawks easy on the go.</p>
             <ol className="text-left text-sm text-gray-600 font-roboto mb-8 space-y-2 max-w-xs mx-auto list-decimal pl-4"><li>Tap below to copy the app link.</li><li>Open your phone&apos;s browser and paste the link.</li><li>Use the Share menu <Share size={14} className="inline text-blue-500 mb-1"/> to Add to Home Screen.</li></ol>

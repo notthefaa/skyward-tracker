@@ -253,7 +253,7 @@ export default function NotesTab({ aircraft, session, role, aircraftRole, userIn
                       </button>
                     )}
                     {(isAdmin || note.author_id === session.user.id) && (
-                      <button onClick={() => deleteNote(note.id)} className="text-gray-400 hover:text-red-500 active:scale-95" title="Delete Note">
+                      <button onClick={() => deleteNote(note.id)} className="text-gray-400 hover:text-[#CE3732] active:scale-95" title="Delete Note">
                         <Trash2 size={14}/>
                       </button>
                     )}
@@ -316,7 +316,7 @@ export default function NotesTab({ aircraft, session, role, aircraftRole, userIn
               <h2 className="font-oswald text-2xl font-bold uppercase text-navy flex items-center gap-2">
                 <FileText size={20} className="text-navy"/> {editingId ? 'Edit Note' : 'Add Note'}
               </h2>
-              <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-red-500">
+              <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-[#CE3732]">
                 <X size={24}/>
               </button>
             </div>

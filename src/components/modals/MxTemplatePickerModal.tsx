@@ -287,7 +287,7 @@ export default function MxTemplatePickerModal({ aircraft, show, onClose, onRefre
             <Layers size={20} className="text-mxOrange" />
             {step === 'pick' ? 'MX Templates' : step === 'select' ? 'Select Items' : 'Adding Items...'}
           </h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-red-500 p-2 -mr-2"><X size={24} /></button>
+          <button onClick={onClose} className="text-gray-400 hover:text-[#CE3732] p-2 -mr-2"><X size={24} /></button>
         </div>
 
         {/* ═══════════════ STEP 1: PICK TEMPLATE ═══════════════ */}

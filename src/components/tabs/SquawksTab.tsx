@@ -552,7 +552,7 @@ export default function SquawksTab({
           <div className="bg-white rounded shadow-2xl w-full max-w-lg p-5 border-t-4 border-[#CE3732] animate-slide-up" style={{ overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch' }} onClick={e => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-4">
               <h2 className="font-oswald text-2xl font-bold uppercase text-navy">Squawk Detail</h2>
-              <button onClick={closeDetailModal} className="text-gray-400 hover:text-red-500"><X size={24}/></button>
+              <button onClick={closeDetailModal} className="text-gray-400 hover:text-[#CE3732]"><X size={24}/></button>
             </div>
 
             <div className="flex items-center gap-2 mb-4">
@@ -654,7 +654,7 @@ export default function SquawksTab({
           <div className="bg-white rounded shadow-2xl w-full max-w-md p-5 border-t-4 border-[#CE3732] animate-slide-up flex flex-col" style={{ overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch' }}>
             <div className="flex justify-between items-center mb-4">
               <h2 className="font-oswald text-2xl font-bold uppercase text-navy flex items-center gap-2"><CheckSquare size={20} className="text-[#CE3732]" /> Export to PDF</h2>
-              <button onClick={() => setShowExportModal(false)} className="text-gray-400 hover:text-red-500 transition-colors"><X size={24}/></button>
+              <button onClick={() => setShowExportModal(false)} className="text-gray-400 hover:text-[#CE3732] transition-colors"><X size={24}/></button>
             </div>
             <p className="text-xs text-gray-500 mb-4">Pick the squawks to include in the PDF report.</p>
             <div className="flex justify-between items-center mb-2 pb-2 border-b border-gray-200">
@@ -699,7 +699,7 @@ export default function SquawksTab({
           <div className="bg-white rounded shadow-2xl w-full max-w-lg p-5 border-t-4 border-[#CE3732] animate-slide-up" style={{ overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch' }}>
             <div className="flex justify-between items-center mb-4">
               <h2 className="font-oswald text-2xl font-bold uppercase text-navy">{editingId ? 'Edit Squawk' : 'Report Squawk'}</h2>
-              <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-red-500"><X size={24}/></button>
+              <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-[#CE3732]"><X size={24}/></button>
             </div>
             <div className="bg-gray-50 p-3 rounded border border-gray-200 mb-4 grid grid-cols-2 gap-2 text-xs">
               <div><span className="font-bold text-gray-500 uppercase">Date:</span> {new Date().toLocaleDateString()}</div>
@@ -742,7 +742,7 @@ export default function SquawksTab({
                       <div className="pt-4 border-t border-gray-200">
                         <label className="text-[10px] font-bold uppercase tracking-widest text-navy block mb-2">Signature *</label>
                         <div className="border border-gray-300 rounded bg-white"><SignatureCanvas ref={sigCanvas} penColor="black" canvasProps={{ className: 'w-full h-32 rounded' }} /></div>
-                        <button type="button" onClick={() => sigCanvas.current?.clear()} className="text-[10px] font-bold uppercase text-gray-500 mt-1 hover:text-red-500">Clear Signature</button>
+                        <button type="button" onClick={() => sigCanvas.current?.clear()} className="text-[10px] font-bold uppercase text-gray-500 mt-1 hover:text-[#CE3732]">Clear Signature</button>
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Name (Full Name) *</label><input type="text" required value={fullName} onChange={e=>setFullName(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#CE3732] outline-none" /></div>

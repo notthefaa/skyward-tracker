@@ -396,7 +396,7 @@ export default function AdminModals({
         <div className="fixed inset-0 bg-black/60 z-[10000] overflow-y-auto animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => setShowAdminMenu(false)}>
           <div className="flex min-h-full items-center justify-center p-4">
           <div className="bg-white rounded shadow-2xl w-full max-w-sm p-6 border-t-4 border-navy animate-slide-up" onClick={(e) => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-6"><h2 className="font-oswald text-xl font-bold uppercase text-navy flex items-center gap-2"><ShieldCheck size={20}/> Admin Center</h2><button onClick={() => setShowAdminMenu(false)} className="text-gray-400 hover:text-red-500"><X size={24}/></button></div>
+            <div className="flex justify-between items-center mb-6"><h2 className="font-oswald text-xl font-bold uppercase text-navy flex items-center gap-2"><ShieldCheck size={20}/> Admin Center</h2><button onClick={() => setShowAdminMenu(false)} className="text-gray-400 hover:text-[#CE3732]"><X size={24}/></button></div>
             <div className="space-y-3">
               <button onClick={openGlobalFleetModal} className="w-full bg-gray-50 border border-gray-200 p-4 rounded text-left flex items-center gap-3 hover:border-navy hover:bg-blue-50 transition-colors active:scale-95"><Globe size={18} className="text-navy" /><div><span className="block font-bold text-navy text-sm uppercase">Global Fleet</span><span className="block text-[10px] text-gray-500 uppercase tracking-widest mt-0.5">View all aircraft in system</span></div></button>
               <button onClick={openUsersModal} className="w-full bg-gray-50 border border-gray-200 p-4 rounded text-left flex items-center gap-3 hover:border-navy hover:bg-blue-50 transition-colors active:scale-95"><Users size={18} className="text-navy" /><div><span className="block font-bold text-navy text-sm uppercase">Global Users</span><span className="block text-[10px] text-gray-500 uppercase tracking-widest mt-0.5">Manage all users, roles & access</span></div></button>
@@ -413,7 +413,7 @@ export default function AdminModals({
         <div className="fixed inset-0 bg-black/60 z-[10000] overflow-y-auto animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => { setShowGlobalFleetModal(false); setGlobalFleetSearch(""); }}>
           <div className="flex min-h-full items-center justify-center p-4">
           <div className="bg-white rounded shadow-2xl w-full max-w-md p-6 border-t-4 border-navy animate-slide-up flex flex-col" onClick={(e) => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-6 shrink-0"><h2 className="font-oswald text-2xl font-bold uppercase text-navy flex items-center gap-2"><Globe size={20} className="text-navy"/> Global Fleet</h2><button onClick={() => { setShowGlobalFleetModal(false); setGlobalFleetSearch(""); }} className="text-gray-400 hover:text-red-500"><X size={24}/></button></div>
+            <div className="flex justify-between items-center mb-6 shrink-0"><h2 className="font-oswald text-2xl font-bold uppercase text-navy flex items-center gap-2"><Globe size={20} className="text-navy"/> Global Fleet</h2><button onClick={() => { setShowGlobalFleetModal(false); setGlobalFleetSearch(""); }} className="text-gray-400 hover:text-[#CE3732]"><X size={24}/></button></div>
             <div className="mb-4 shrink-0"><input type="text" placeholder="Search Tail Number..." value={globalFleetSearch} onChange={(e) => setGlobalFleetSearch(e.target.value.toUpperCase())} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-navy outline-none uppercase font-bold" /></div>
             <div className="overflow-y-auto space-y-2 pr-2 flex-1">
               {isLoadingFleet ? (
@@ -438,7 +438,7 @@ export default function AdminModals({
         <div className="fixed inset-0 bg-black/60 z-[10000] overflow-y-auto animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => setShowToolsMenu(false)}>
           <div className="flex min-h-full items-center justify-center p-4">
           <div className="bg-white rounded shadow-2xl w-full max-w-sm p-6 border-t-4 border-mxOrange animate-slide-up" onClick={(e) => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-6"><h2 className="font-oswald text-xl font-bold uppercase text-navy flex items-center gap-2"><Settings size={20}/> System Tools</h2><button onClick={() => setShowToolsMenu(false)} className="text-gray-400 hover:text-red-500"><X size={24}/></button></div>
+            <div className="flex justify-between items-center mb-6"><h2 className="font-oswald text-xl font-bold uppercase text-navy flex items-center gap-2"><Settings size={20}/> System Tools</h2><button onClick={() => setShowToolsMenu(false)} className="text-gray-400 hover:text-[#CE3732]"><X size={24}/></button></div>
             <div className="space-y-4">
               <button onClick={() => { setShowToolsMenu(false); setShowEmailPreview(true); }} className="w-full border border-gray-300 text-navy font-bold py-3 px-4 rounded hover:bg-gray-50 active:scale-95 transition-all flex justify-center items-center gap-2 text-xs uppercase tracking-widest"><MailOpen size={16} /> Preview Automated Emails</button>
               <button onClick={() => { setShowToolsMenu(false); setShowSettingsModal(true); }} className="w-full border border-gray-300 text-navy font-bold py-3 px-4 rounded hover:bg-gray-50 active:scale-95 transition-all flex justify-center items-center gap-2 text-xs uppercase tracking-widest"><Sliders size={16} /> Maintenance Triggers</button>
@@ -453,7 +453,7 @@ export default function AdminModals({
         <div className="fixed inset-0 bg-black/60 z-[10001] overflow-y-auto animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => setShowSettingsModal(false)}>
           <div className="flex min-h-full items-center justify-center p-3">
           <div className="bg-white rounded shadow-2xl w-full max-w-sm p-5 border-t-4 border-navy animate-slide-up" onClick={(e) => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-6"><h2 className="font-oswald text-xl font-bold uppercase text-navy flex items-center gap-2"><Sliders size={20}/> Maintenance Triggers</h2><button onClick={() => setShowSettingsModal(false)} className="text-gray-400 hover:text-red-500"><X size={24}/></button></div>
+            <div className="flex justify-between items-center mb-6"><h2 className="font-oswald text-xl font-bold uppercase text-navy flex items-center gap-2"><Sliders size={20}/> Maintenance Triggers</h2><button onClick={() => setShowSettingsModal(false)} className="text-gray-400 hover:text-[#CE3732]"><X size={24}/></button></div>
             <form onSubmit={handleSaveSettings} className="space-y-4">
               <p className="text-[10px] text-gray-500 uppercase tracking-widest border-b pb-1">Internal Alerts - Date Based (Days)</p>
               <div className="grid grid-cols-3 gap-2">
@@ -488,7 +488,7 @@ export default function AdminModals({
         <div className="fixed inset-0 bg-black/60 z-[10001] overflow-y-auto animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => setShowEmailPreview(false)}>
           <div className="flex min-h-full items-center justify-center p-4">
           <div className="bg-white rounded shadow-2xl w-full max-w-lg p-6 border-t-4 border-navy animate-slide-up" onClick={(e) => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-4"><h2 className="font-oswald text-xl font-bold uppercase text-navy flex items-center gap-2"><MailOpen size={20}/> Email Previewer</h2><button onClick={() => setShowEmailPreview(false)} className="text-gray-400 hover:text-red-500"><X size={24}/></button></div>
+            <div className="flex justify-between items-center mb-4"><h2 className="font-oswald text-xl font-bold uppercase text-navy flex items-center gap-2"><MailOpen size={20}/> Email Previewer</h2><button onClick={() => setShowEmailPreview(false)} className="text-gray-400 hover:text-[#CE3732]"><X size={24}/></button></div>
             <div className="mb-4">
               <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Select Template to Preview</label>
               <select value={emailPreviewType} onChange={e=>setEmailPreviewType(e.target.value as typeof emailPreviewType)} style={whiteBg} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 outline-none focus:border-navy">
@@ -508,7 +508,7 @@ export default function AdminModals({
         <div className="fixed inset-0 bg-black/60 z-[10000] overflow-y-auto animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => setShowAccessModal(false)}>
           <div className="flex min-h-full items-center justify-center p-4">
           <div className="bg-white rounded shadow-2xl w-full max-w-md p-6 border-t-4 border-navy animate-slide-up" onClick={(e) => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-6"><h2 className="font-oswald text-2xl font-bold uppercase text-navy flex items-center gap-2"><ShieldCheck size={20}/> Assign Aircraft</h2><button onClick={() => setShowAccessModal(false)} className="text-gray-400 hover:text-red-500"><X size={24}/></button></div>
+            <div className="flex justify-between items-center mb-6"><h2 className="font-oswald text-2xl font-bold uppercase text-navy flex items-center gap-2"><ShieldCheck size={20}/> Assign Aircraft</h2><button onClick={() => setShowAccessModal(false)} className="text-gray-400 hover:text-[#CE3732]"><X size={24}/></button></div>
             <div className="space-y-6">
               <div>
                 <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Select Pilot</label>
@@ -551,7 +551,7 @@ export default function AdminModals({
         <div className="fixed inset-0 bg-black/60 z-[10000] overflow-y-auto animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => setShowInviteModal(false)}>
           <div className="flex min-h-full items-center justify-center p-4">
           <div className="bg-white rounded shadow-2xl w-full max-w-sm p-6 border-t-4 border-navy animate-slide-up" onClick={(e) => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-6"><h2 className="font-oswald text-2xl font-bold uppercase text-navy flex items-center gap-2"><Users size={20}/> Invite User</h2><button onClick={() => { setShowInviteModal(false); setInviteAircraftIds([]); }} className="text-gray-400 hover:text-red-500"><X size={24}/></button></div>
+            <div className="flex justify-between items-center mb-6"><h2 className="font-oswald text-2xl font-bold uppercase text-navy flex items-center gap-2"><Users size={20}/> Invite User</h2><button onClick={() => { setShowInviteModal(false); setInviteAircraftIds([]); }} className="text-gray-400 hover:text-[#CE3732]"><X size={24}/></button></div>
             <form onSubmit={handleInviteUser} className="space-y-4">
               <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Email Address</label><input type="email" required value={inviteEmail} onChange={e=>setInviteEmail(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 outline-none focus:border-navy" /></div>
               <div>
@@ -585,7 +585,7 @@ export default function AdminModals({
           <div className="bg-white rounded shadow-2xl w-full max-w-md p-6 border-t-4 border-navy animate-slide-up flex flex-col" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-4 shrink-0">
               <h2 className="font-oswald text-2xl font-bold uppercase text-navy flex items-center gap-2"><Users size={20} className="text-navy" /> Global Users</h2>
-              <button onClick={() => { setShowUsersModal(false); setExpandedUserId(null); setUsersSearch(""); }} className="text-gray-400 hover:text-red-500"><X size={24} /></button>
+              <button onClick={() => { setShowUsersModal(false); setExpandedUserId(null); setUsersSearch(""); }} className="text-gray-400 hover:text-[#CE3732]"><X size={24} /></button>
             </div>
 
             <div className="mb-4 shrink-0 relative">

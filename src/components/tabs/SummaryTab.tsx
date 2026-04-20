@@ -269,7 +269,7 @@ export default function SummaryTab({
         <div className="fixed inset-0 z-[70] overflow-y-auto bg-black/80 animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => setShowDeleteModal(false)}>
           <div className="flex min-h-full items-center justify-center p-4">
           <div className="bg-white rounded shadow-2xl w-full max-w-sm p-6 border-t-4 border-[#CE3732] animate-slide-up relative" onClick={(e) => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-4"><h2 className="font-oswald text-2xl font-bold uppercase text-[#CE3732] flex items-center gap-2"><AlertTriangle size={24} /> Delete Aircraft</h2><button onClick={() => setShowDeleteModal(false)} className="text-gray-400 hover:text-red-500 transition-colors"><X size={24}/></button></div>
+            <div className="flex justify-between items-center mb-4"><h2 className="font-oswald text-2xl font-bold uppercase text-[#CE3732] flex items-center gap-2"><AlertTriangle size={24} /> Delete Aircraft</h2><button onClick={() => setShowDeleteModal(false)} className="text-gray-400 hover:text-[#CE3732] transition-colors"><X size={24}/></button></div>
             <p className="text-sm text-navy font-roboto mb-6 leading-relaxed"><strong>Heads up:</strong> no undo on this one.<br/><br/>Every flight log, maintenance item, squawk, and note tied to <strong className="text-[#CE3732]">{aircraft.tail_number}</strong> goes with it.</p>
             <div className="flex gap-4">
               <button onClick={() => setShowDeleteModal(false)} className="flex-1 border border-gray-300 text-gray-600 font-bold uppercase tracking-widest text-[10px] py-3 rounded hover:bg-gray-50 transition-colors active:scale-95">Cancel</button>
@@ -285,7 +285,7 @@ export default function SummaryTab({
         <div className="fixed inset-0 z-[70] overflow-y-auto bg-black/80 animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => setShowFuelModal(false)}>
           <div className="flex min-h-full items-center justify-center p-4">
           <div className="bg-white rounded shadow-2xl w-full max-w-sm p-6 border-t-4 border-blue-500 animate-slide-up" onClick={e => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-4"><h2 className="font-oswald text-xl font-bold uppercase text-navy flex items-center gap-2"><Droplet size={20} className="text-blue-500" /> Update Fuel State</h2><button onClick={() => setShowFuelModal(false)} className="text-gray-400 hover:text-red-500"><X size={24} /></button></div>
+            <div className="flex justify-between items-center mb-4"><h2 className="font-oswald text-xl font-bold uppercase text-navy flex items-center gap-2"><Droplet size={20} className="text-blue-500" /> Update Fuel State</h2><button onClick={() => setShowFuelModal(false)} className="text-gray-400 hover:text-[#CE3732]"><X size={24} /></button></div>
             <form onSubmit={handleFuelUpdate} className="space-y-4">
               <div className="grid grid-cols-5 gap-3">
                 <div className="col-span-3"><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Current Fuel *</label><input type="number" step="0.1" required value={fuelAmount} onChange={e => setFuelAmount(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-blue-500 outline-none" placeholder="Quantity" /></div>
@@ -303,7 +303,7 @@ export default function SummaryTab({
         <div className="fixed inset-0 z-[70] overflow-y-auto bg-black/80 animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => setShowInviteModal(false)}>
           <div className="flex min-h-full items-center justify-center p-4">
           <div className="bg-white rounded shadow-2xl w-full max-w-sm p-6 border-t-4 border-[#3AB0FF] animate-slide-up" onClick={e => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-4"><h2 className="font-oswald text-xl font-bold uppercase text-navy flex items-center gap-2"><UserPlus size={20} className="text-[#3AB0FF]" /> Invite Pilot</h2><button onClick={() => setShowInviteModal(false)} className="text-gray-400 hover:text-red-500"><X size={24} /></button></div>
+            <div className="flex justify-between items-center mb-4"><h2 className="font-oswald text-xl font-bold uppercase text-navy flex items-center gap-2"><UserPlus size={20} className="text-[#3AB0FF]" /> Invite Pilot</h2><button onClick={() => setShowInviteModal(false)} className="text-gray-400 hover:text-[#CE3732]"><X size={24} /></button></div>
             <p className="text-xs text-gray-500 mb-4">Give a pilot access to <strong>{aircraft.tail_number}</strong>.</p>
             <form onSubmit={handleInvitePilot} className="space-y-4">
               <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Email Address *</label><input type="email" required value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#3AB0FF] outline-none" placeholder="pilot@example.com" /></div>
@@ -453,7 +453,7 @@ export default function SummaryTab({
               <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => setShowNoteModal(false)}>
                 <div className="flex min-h-full items-center justify-center p-4">
                 <div className="bg-white rounded shadow-2xl w-full max-w-md p-6 border-t-4 border-navy animate-slide-up relative" onClick={(e) => e.stopPropagation()}>
-                  <button onClick={() => setShowNoteModal(false)} className="absolute top-4 right-4 text-gray-400 hover:text-red-500"><X size={20}/></button>
+                  <button onClick={() => setShowNoteModal(false)} className="absolute top-4 right-4 text-gray-400 hover:text-[#CE3732]"><X size={20}/></button>
                   <div className="mb-4"><span className="text-[10px] font-bold uppercase tracking-widest text-navy block">{latestNote.author_email || 'Pilot'}</span><span className="text-[10px] uppercase text-gray-400 font-bold">{new Date(latestNote.created_at).toLocaleString()}</span></div>
                   <p className="text-sm text-navy font-roboto whitespace-pre-wrap leading-relaxed">{latestNote.content}</p>
                 </div>

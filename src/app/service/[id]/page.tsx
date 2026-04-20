@@ -569,7 +569,7 @@ export default function ServicePortal() {
                             <div className="w-10 h-10 rounded bg-gray-200 flex items-center justify-center shrink-0"><FileText size={18} className="text-gray-500" /></div>
                           )}
                           <div className="flex-1 min-w-0"><p className="text-xs font-bold text-navy truncate">{file.name}</p><p className="text-[10px] text-gray-400">{formatFileSize(file.size)}</p></div>
-                          <button onClick={() => removeUploadFile(idx)} className="text-gray-400 hover:text-red-500 shrink-0 active:scale-95"><X size={16} /></button>
+                          <button onClick={() => removeUploadFile(idx)} className="text-gray-400 hover:text-[#CE3732] shrink-0 active:scale-95"><X size={16} /></button>
                         </div>
                       ))}
                     </div>

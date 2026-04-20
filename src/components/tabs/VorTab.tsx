@@ -222,7 +222,7 @@ export default function VorTab({
             <div className="bg-white rounded-lg shadow-2xl w-full max-w-sm p-5 border-t-4 border-mxOrange animate-slide-up" onClick={e => e.stopPropagation()}>
               <div className="flex justify-between items-center mb-4">
                 <h3 className="font-oswald text-lg font-bold uppercase tracking-widest text-navy">Log VOR Check</h3>
-                <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-red-500"><X size={20} /></button>
+                <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-[#CE3732]"><X size={20} /></button>
               </div>
               <form onSubmit={handleSubmit} className="flex flex-col gap-4">
                 <div>

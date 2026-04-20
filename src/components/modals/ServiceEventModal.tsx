@@ -264,7 +264,7 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
             <h2 className="font-oswald text-2xl font-bold uppercase text-navy flex items-center gap-2">
               <Wrench size={20} className="text-mxOrange" /> {viewTitle}
             </h2>
-            <button onClick={onClose} className="text-gray-400 hover:text-red-500 p-2 -mr-2"><X size={24}/></button>
+            <button onClick={onClose} className="text-gray-400 hover:text-[#CE3732] p-2 -mr-2"><X size={24}/></button>
           </div>
 
           {view === 'list' && (
