@@ -649,7 +649,8 @@ function ServiceEventsList({
     return (
       <div
         key={ev.id}
-        className="bg-white shadow rounded-sm p-4 border-l-4 flex items-start justify-between gap-3"
+        onClick={onOpenModal}
+        className="bg-white shadow rounded-sm p-4 border-l-4 flex items-start justify-between gap-3 cursor-pointer hover:shadow-lg active:scale-[0.99] transition-all"
         style={{ borderLeftColor: statusColor }}
       >
         <div className="min-w-0">
@@ -669,7 +670,7 @@ function ServiceEventsList({
         </div>
         <div className="flex flex-col gap-1.5 shrink-0">
           <button
-            onClick={onOpenModal}
+            onClick={(e) => { e.stopPropagation(); onOpenModal(); }}
             className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-info bg-blue-50 border border-blue-200 px-2.5 py-1.5 rounded active:scale-95"
           >
             View <ChevronRight size={12} />
@@ -677,6 +678,7 @@ function ServiceEventsList({
           {ev.access_token && ev.status !== 'draft' && (
             <a
               href={`/service/${ev.access_token}`}
+              onClick={(e) => e.stopPropagation()}
               target="_blank"
               rel="noreferrer"
               className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-navy bg-gray-50 border border-gray-200 px-2.5 py-1.5 rounded active:scale-95"
