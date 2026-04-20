@@ -92,29 +92,38 @@ main {
   animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
-/* ─── MODAL SAFE-AREA INSETS ───
+/* ─── MODAL SAFE-AREA + NAV-CHROME INSETS ───
    Every popup/modal in the app uses the pattern
      <div className="fixed inset-0 ... animate-fade-in">
-   on its outer wrapper. `fixed inset-0` covers the full viewport
-   including the iOS dynamic-island / notch at the top and the
-   home-indicator bar at the bottom, so without safe-area padding
-   the sticky header (X close button) and the bottom of the scroll
-   region fall behind system UI and become untappable.
+   on its outer wrapper. `fixed inset-0` covers the full viewport,
+   including the iOS dynamic-island/notch and the home-indicator
+   bar — AND the fixed app chrome (3.5rem navy header at the top,
+   3.5rem nav bar at the bottom).
 
-   The attribute selector below auto-applies safe-area padding to
-   every wrapper carrying both classes. `background-color` still
-   fills the full viewport (it paints the padded area too), so the
-   dimmed backdrop stays edge-to-edge while the scroll content is
-   inset inside the reachable area. Sticky `top: 0` children stick
-   to the top of the padding box — which is just below the notch.
+   Without padding here, a tall modal's scroll content extends into
+   the header/nav bands, and on mobile browsers where stacking
+   contexts get fussy (backdrop-filter on the bottom nav, fixed
+   ancestors, iOS Safari quirks) the chrome can actually paint
+   over the modal content. Padding keeps modal content in the
+   middle region regardless of z-index stacking behavior.
+
+   The top padding is: notch inset + header height (3.5rem).
+   The bottom padding is: home-indicator inset + nav height
+   (3.5rem).
+
+   `background-color` on the overlay still fills the full viewport
+   (it paints the padded area too), so the dimmed backdrop stays
+   edge-to-edge while the scroll content is inset. Sticky `top: 0`
+   children stick to the top of the padding box — just below the
+   header.
 
    `.modal-overlay` is the manual escape hatch for wrappers that
    don't use `animate-fade-in` (e.g. HowardLauncher's custom
    animation). Attach it explicitly on those. */
 [class~="animate-fade-in"][class*="fixed inset-0"],
 .modal-overlay {
-  padding-top: env(safe-area-inset-top, 0px);
-  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-top: calc(env(safe-area-inset-top, 0px) + 3.5rem);
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 3.5rem);
 }
 
 /* Hide scrollbar for nav tray */
