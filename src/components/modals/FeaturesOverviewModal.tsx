@@ -212,21 +212,21 @@ export default function FeaturesOverviewModal({
       onClick={onClose}
     >
       <div
-        className="bg-cream w-full md:max-w-2xl rounded-t-2xl md:rounded-xl shadow-2xl border-t-4 border-[#e6651b] flex flex-col max-h-[92vh] md:max-h-[85vh]"
+        className="bg-cream w-full md:max-w-2xl rounded-t-2xl md:rounded-xl shadow-2xl border-t-4 border-brandOrange flex flex-col max-h-[92vh] md:max-h-[85vh]"
         onClick={e => e.stopPropagation()}
       >
         {/* Header — Howard-branded so the guide feels like his reference
             shelf, not a generic help modal. */}
         <div className="flex items-center justify-between gap-3 p-4 border-b border-gray-200 shrink-0">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="w-11 h-11 rounded-full overflow-hidden border border-[#e6651b]/30 shrink-0">
+            <div className="w-11 h-11 rounded-full overflow-hidden border border-brandOrange/30 shrink-0">
               <img src={HOWARD_LOGO_PATH} alt="" className="w-full h-full object-cover" draggable={false} />
             </div>
             <div className="min-w-0">
               <h2 className="font-oswald text-xl md:text-2xl font-bold uppercase text-navy leading-none">
                 Features Guide
               </h2>
-              <p className="text-[10px] font-bold uppercase tracking-widest text-[#e6651b] mt-1">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-brandOrange mt-1">
                 Every tool, grouped by what it's for
               </p>
             </div>
@@ -241,7 +241,7 @@ export default function FeaturesOverviewModal({
         </div>
 
         {/* Intro line — Howard's voice, one sentence */}
-        <div className="px-4 py-3 border-b border-[#e6651b]/10 bg-[#e6651b]/5 shrink-0">
+        <div className="px-4 py-3 border-b border-brandOrange/10 bg-brandOrange/5 shrink-0">
           <p className="font-roboto text-sm text-navy leading-snug">
             <span className="font-bold">Here's the whole hangar.</span>{' '}
             <span className="text-gray-600">
@@ -268,7 +268,7 @@ export default function FeaturesOverviewModal({
                   return (
                     <div
                       key={card.name}
-                      className="bg-white rounded-lg p-3.5 border border-gray-200 shadow-sm hover:border-[#e6651b]/40 transition-colors flex flex-col gap-2"
+                      className="bg-white rounded-lg p-3.5 border border-gray-200 shadow-sm hover:border-brandOrange/40 transition-colors flex flex-col gap-2"
                       style={{ borderLeftWidth: 3, borderLeftColor: card.accent }}
                     >
                       <div className="flex items-start gap-3">

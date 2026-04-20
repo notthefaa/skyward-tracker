@@ -467,10 +467,10 @@ export default function SquawksTab({
           {activeSquawks.length === 0 ? (<p className="text-center text-sm text-gray-400 italic py-4">No active squawks.</p>) : (
             activeSquawks.map(sq => (
               <div key={sq.id} className="relative">
-                <button onClick={() => openDetailModal(sq)} className={`w-full text-left p-4 border rounded transition-colors active:scale-[0.98] ${sq.affects_airworthiness ? 'border-[#CE3732]/30 bg-[#CE3732]/10 hover:bg-[#CE3732]/15' : 'border-[#F08B46]/30 bg-[#F08B46]/10 hover:bg-[#F08B46]/15'}`}>
+                <button onClick={() => openDetailModal(sq)} className={`w-full text-left p-4 border rounded transition-colors active:scale-[0.98] ${sq.affects_airworthiness ? 'border-[#CE3732]/30 bg-[#CE3732]/10 hover:bg-[#CE3732]/15' : 'border-mxOrange/30 bg-mxOrange/10 hover:bg-mxOrange/15'}`}>
                 <div className="flex justify-between items-start mb-2">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded text-white flex items-center gap-1 ${sq.affects_airworthiness ? 'bg-[#CE3732]' : 'bg-[#F08B46]'}`}>
+                    <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded text-white flex items-center gap-1 ${sq.affects_airworthiness ? 'bg-[#CE3732]' : 'bg-mxOrange'}`}>
                       {sq.affects_airworthiness && <AlertTriangle size={10} />}
                       {sq.affects_airworthiness ? 'AOG / GROUNDED' : 'OPEN'}
                     </span>
@@ -556,7 +556,7 @@ export default function SquawksTab({
             </div>
 
             <div className="flex items-center gap-2 mb-4">
-              <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded text-white ${detailSquawk.status === 'resolved' ? 'bg-[#56B94A]' : detailSquawk.affects_airworthiness ? 'bg-[#CE3732]' : 'bg-[#F08B46]'}`}>
+              <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded text-white ${detailSquawk.status === 'resolved' ? 'bg-[#56B94A]' : detailSquawk.affects_airworthiness ? 'bg-[#CE3732]' : 'bg-mxOrange'}`}>
                 {detailSquawk.status === 'resolved' ? 'RESOLVED' : detailSquawk.affects_airworthiness ? 'AOG / GROUNDED' : 'OPEN'}
               </span>
               {detailSquawk.is_deferred && <span className="text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded bg-blue-600 text-white">DEFERRED ({detailSquawk.deferral_category})</span>}
@@ -567,7 +567,7 @@ export default function SquawksTab({
               <div className="flex items-start gap-2"><User size={14} className="text-gray-500 shrink-0 mt-0.5" /><div><span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 block">Reported By</span><span className="font-bold text-navy">{detailSquawk.reporter_initials || 'Unknown'}</span></div></div>
               <div className="flex items-start gap-2"><Clock size={14} className="text-gray-500 shrink-0 mt-0.5" /><div><span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 block">Date</span><span className="font-bold text-navy">{new Date(detailSquawk.created_at).toLocaleDateString()}</span></div></div>
               {detailSquawk.edited_at && (
-                <div className="flex items-start gap-2"><Edit2 size={14} className="text-[#F08B46] shrink-0 mt-0.5" /><div><span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 block">Last Edited</span><span className="font-bold text-navy">{new Date(detailSquawk.edited_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}{detailSquawk.edited_by_initials ? ` by ${detailSquawk.edited_by_initials}` : ''}</span></div></div>
+                <div className="flex items-start gap-2"><Edit2 size={14} className="text-mxOrange shrink-0 mt-0.5" /><div><span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 block">Last Edited</span><span className="font-bold text-navy">{new Date(detailSquawk.edited_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}{detailSquawk.edited_by_initials ? ` by ${detailSquawk.edited_by_initials}` : ''}</span></div></div>
               )}
             </div>
 

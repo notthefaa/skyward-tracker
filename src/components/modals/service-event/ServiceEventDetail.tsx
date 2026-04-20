@@ -114,14 +114,14 @@ export default function ServiceEventDetail({
 
   return (
     <div className="space-y-5">
-      <button onClick={() => onNavigate('list')} className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-[#F08B46] bg-orange-50 border border-orange-200 rounded px-3 py-1.5 hover:bg-orange-100 active:scale-95 transition-all">
+      <button onClick={() => onNavigate('list')} className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-mxOrange bg-orange-50 border border-orange-200 rounded px-3 py-1.5 hover:bg-orange-100 active:scale-95 transition-all">
         <ChevronDown size={12} className="rotate-90" /> Back to Events
       </button>
 
       {/* Status card */}
       <div className="bg-gray-50 rounded p-4 border border-gray-200">
         <div className="flex justify-between items-center mb-3">
-          <span className={`text-[8px] font-bold uppercase tracking-widest px-2 py-1 rounded text-white ${selectedEvent.status === 'confirmed' ? 'bg-[#3AB0FF]' : selectedEvent.status === 'complete' ? 'bg-[#56B94A]' : selectedEvent.status === 'ready_for_pickup' ? 'bg-[#56B94A]' : selectedEvent.status === 'cancelled' ? 'bg-[#CE3732]' : 'bg-[#F08B46]'}`}>
+          <span className={`text-[8px] font-bold uppercase tracking-widest px-2 py-1 rounded text-white ${selectedEvent.status === 'confirmed' ? 'bg-[#3AB0FF]' : selectedEvent.status === 'complete' ? 'bg-[#56B94A]' : selectedEvent.status === 'ready_for_pickup' ? 'bg-[#56B94A]' : selectedEvent.status === 'cancelled' ? 'bg-[#CE3732]' : 'bg-mxOrange'}`}>
             {selectedEvent.status === 'ready_for_pickup' ? 'Ready for Pickup' : selectedEvent.status}
           </span>
           {selectedEvent.access_token && selectedEvent.status !== 'complete' && (
@@ -143,12 +143,12 @@ export default function ServiceEventDetail({
           <p className="text-sm font-bold text-navy">{selectedEvent.mx_contact_name || 'Mechanic'} proposed <strong>{selectedEvent.proposed_date}</strong>{selectedEvent.service_duration_days ? ` (${selectedEvent.service_duration_days} day${selectedEvent.service_duration_days > 1 ? 's' : ''})` : ''}</p>
           <div className="flex gap-2">
             <button onClick={handleOwnerConfirm} disabled={isSubmitting} className="flex-1 bg-[#56B94A] text-white font-oswald font-bold uppercase tracking-widest py-2 rounded text-xs active:scale-95 disabled:opacity-50">Confirm</button>
-            <button onClick={() => {}} className="flex-1 bg-[#F08B46] text-white font-oswald font-bold uppercase tracking-widest py-2 rounded text-xs active:scale-95">Counter</button>
+            <button onClick={() => {}} className="flex-1 bg-mxOrange text-white font-oswald font-bold uppercase tracking-widest py-2 rounded text-xs active:scale-95">Counter</button>
           </div>
           <div className="space-y-2 pt-2">
-            <input type="date" value={proposedDate} onChange={e => setProposedDate(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-2 text-sm focus:border-[#F08B46] outline-none" />
-            <textarea value={ownerMessage} onChange={e => setOwnerMessage(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-2 text-sm focus:border-[#F08B46] outline-none min-h-[50px]" placeholder="Message (optional)" />
-            <button onClick={handleOwnerCounter} disabled={isSubmitting || !proposedDate} className="w-full bg-[#F08B46] text-white font-oswald font-bold uppercase tracking-widest py-2 rounded text-xs active:scale-95 disabled:opacity-50">Send Counter Proposal</button>
+            <input type="date" value={proposedDate} onChange={e => setProposedDate(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-2 text-sm focus:border-mxOrange outline-none" />
+            <textarea value={ownerMessage} onChange={e => setOwnerMessage(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-2 text-sm focus:border-mxOrange outline-none min-h-[50px]" placeholder="Message (optional)" />
+            <button onClick={handleOwnerCounter} disabled={isSubmitting || !proposedDate} className="w-full bg-mxOrange text-white font-oswald font-bold uppercase tracking-widest py-2 rounded text-xs active:scale-95 disabled:opacity-50">Send Counter Proposal</button>
           </div>
         </div>
       )}
@@ -162,9 +162,9 @@ export default function ServiceEventDetail({
               <p className="text-xs text-gray-500">Waiting for {selectedEvent.mx_contact_name || 'the mechanic'} to respond.</p>
               <div className="border-t border-blue-200 pt-3 space-y-2">
                 <p className="text-[10px] font-bold uppercase tracking-widest text-navy">Change Proposed Date</p>
-                <input type="date" value={proposedDate} onChange={e => setProposedDate(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-2 text-sm focus:border-[#F08B46] outline-none" />
-                <textarea value={ownerMessage} onChange={e => setOwnerMessage(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-2 text-sm focus:border-[#F08B46] outline-none min-h-[50px]" placeholder="Message to mechanic (optional)" />
-                <button onClick={handleOwnerCounter} disabled={isSubmitting || !proposedDate} className="w-full bg-[#F08B46] text-white font-oswald font-bold uppercase tracking-widest py-2 rounded text-xs active:scale-95 disabled:opacity-50">Update Proposed Date</button>
+                <input type="date" value={proposedDate} onChange={e => setProposedDate(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-2 text-sm focus:border-mxOrange outline-none" />
+                <textarea value={ownerMessage} onChange={e => setOwnerMessage(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-2 text-sm focus:border-mxOrange outline-none min-h-[50px]" placeholder="Message to mechanic (optional)" />
+                <button onClick={handleOwnerCounter} disabled={isSubmitting || !proposedDate} className="w-full bg-mxOrange text-white font-oswald font-bold uppercase tracking-widest py-2 rounded text-xs active:scale-95 disabled:opacity-50">Update Proposed Date</button>
               </div>
             </>
           ) : (
@@ -173,9 +173,9 @@ export default function ServiceEventDetail({
               <p className="text-xs text-gray-500">No preferred date was specified. Waiting for the mechanic to propose dates.</p>
               <div className="border-t border-blue-200 pt-3 space-y-2">
                 <p className="text-[10px] font-bold uppercase tracking-widest text-navy">Propose a Date Instead</p>
-                <input type="date" value={proposedDate} onChange={e => setProposedDate(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-2 text-sm focus:border-[#F08B46] outline-none" />
-                <textarea value={ownerMessage} onChange={e => setOwnerMessage(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-2 text-sm focus:border-[#F08B46] outline-none min-h-[50px]" placeholder="Message to mechanic (optional)" />
-                <button onClick={handleOwnerCounter} disabled={isSubmitting || !proposedDate} className="w-full bg-[#F08B46] text-white font-oswald font-bold uppercase tracking-widest py-2 rounded text-xs active:scale-95 disabled:opacity-50">Send Date Proposal</button>
+                <input type="date" value={proposedDate} onChange={e => setProposedDate(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-2 text-sm focus:border-mxOrange outline-none" />
+                <textarea value={ownerMessage} onChange={e => setOwnerMessage(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-2 text-sm focus:border-mxOrange outline-none min-h-[50px]" placeholder="Message to mechanic (optional)" />
+                <button onClick={handleOwnerCounter} disabled={isSubmitting || !proposedDate} className="w-full bg-mxOrange text-white font-oswald font-bold uppercase tracking-widest py-2 rounded text-xs active:scale-95 disabled:opacity-50">Send Date Proposal</button>
               </div>
             </>
           )}
@@ -214,7 +214,7 @@ export default function ServiceEventDetail({
           <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-2">Messages</p>
           <div className="space-y-2 max-h-[300px] overflow-y-auto">
             {eventMessages.map(msg => (
-              <div key={msg.id} className={`p-2 rounded text-xs ${msg.sender === 'mechanic' ? 'bg-blue-50 border-l-4 border-[#3AB0FF]' : msg.sender === 'owner' ? 'bg-orange-50 border-l-4 border-[#F08B46]' : 'bg-gray-50 border-l-4 border-gray-300'}`}>
+              <div key={msg.id} className={`p-2 rounded text-xs ${msg.sender === 'mechanic' ? 'bg-blue-50 border-l-4 border-[#3AB0FF]' : msg.sender === 'owner' ? 'bg-orange-50 border-l-4 border-mxOrange' : 'bg-gray-50 border-l-4 border-gray-300'}`}>
                 <span className="text-[8px] font-bold uppercase text-gray-400">{msg.sender} • {new Date(msg.created_at).toLocaleString()}</span>
                 <p className="text-navy mt-1">{msg.message}</p>
                 {renderMessageAttachments(msg.attachments)}

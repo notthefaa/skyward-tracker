@@ -437,7 +437,7 @@ export default function AdminModals({
       {showToolsMenu && (
         <div className="fixed inset-0 bg-black/60 z-[10000] overflow-y-auto animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => setShowToolsMenu(false)}>
           <div className="flex min-h-full items-center justify-center p-4">
-          <div className="bg-white rounded shadow-2xl w-full max-w-sm p-6 border-t-4 border-[#F08B46] animate-slide-up" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-white rounded shadow-2xl w-full max-w-sm p-6 border-t-4 border-mxOrange animate-slide-up" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-6"><h2 className="font-oswald text-xl font-bold uppercase text-navy flex items-center gap-2"><Settings size={20}/> System Tools</h2><button onClick={() => setShowToolsMenu(false)} className="text-gray-400 hover:text-red-500"><X size={24}/></button></div>
             <div className="space-y-4">
               <button onClick={() => { setShowToolsMenu(false); setShowEmailPreview(true); }} className="w-full border border-gray-300 text-navy font-bold py-3 px-4 rounded hover:bg-gray-50 active:scale-95 transition-all flex justify-center items-center gap-2 text-xs uppercase tracking-widest"><MailOpen size={16} /> Preview Automated Emails</button>

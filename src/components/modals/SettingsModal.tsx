@@ -301,7 +301,7 @@ export default function SettingsModal({
           {/* ─── PILOT RATINGS ─── */}
           <div className="border-t border-gray-200 pt-6">
             <h3 className="font-oswald text-lg font-bold uppercase text-navy mb-1 flex items-center gap-2">
-              <Award size={18} className="text-[#F08B46]" /> Pilot Ratings
+              <Award size={18} className="text-mxOrange" /> Pilot Ratings
             </h3>
             <p className="text-[10px] text-gray-500 uppercase tracking-widest mb-4">
               Howard uses these to tailor briefings and tone — pick everything you hold
@@ -323,9 +323,9 @@ export default function SettingsModal({
                         checked={checked}
                         onChange={() => toggleRating(r.code)}
                         disabled={saving}
-                        className="w-4 h-4 rounded border-gray-300 text-[#F08B46] focus:ring-[#F08B46] cursor-pointer shrink-0"
+                        className="w-4 h-4 rounded border-gray-300 text-mxOrange focus:ring-mxOrange cursor-pointer shrink-0"
                       />
-                      <span className="text-xs text-navy group-hover:text-[#F08B46] transition-colors leading-tight">
+                      <span className="text-xs text-navy group-hover:text-mxOrange transition-colors leading-tight">
                         {r.label}
                       </span>
                       {saving && <Loader2 size={10} className="text-gray-400 animate-spin" />}
@@ -375,7 +375,7 @@ export default function SettingsModal({
           {/* ─── PASSWORD RESET ─── */}
           <div className="border-t border-gray-200 pt-6">
             <h3 className="font-oswald text-lg font-bold uppercase text-navy mb-1 flex items-center gap-2">
-              <Key size={18} className="text-[#F08B46]" /> Password
+              <Key size={18} className="text-mxOrange" /> Password
             </h3>
             <p className="text-[10px] text-gray-500 uppercase tracking-widest mb-4">Reset your account password via email</p>
 
@@ -385,7 +385,7 @@ export default function SettingsModal({
               <button 
                 onClick={handlePasswordReset} 
                 disabled={isResettingPassword}
-                className="text-sm font-bold text-[#F08B46] hover:underline disabled:opacity-50 flex items-center gap-2"
+                className="text-sm font-bold text-mxOrange hover:underline disabled:opacity-50 flex items-center gap-2"
               >
                 {isResettingPassword ? <><Loader2 size={14} className="animate-spin" /> Sending...</> : 'Send Password Reset Email'}
               </button>
@@ -414,10 +414,10 @@ export default function SettingsModal({
                   window.dispatchEvent(new CustomEvent('aft:open-features-guide'));
                 }, 50);
               }}
-              className="w-full flex items-center justify-between gap-3 bg-[#e6651b]/5 hover:bg-[#e6651b]/10 border border-[#e6651b]/30 rounded-lg px-4 py-3 active:scale-[0.98] transition-colors"
+              className="w-full flex items-center justify-between gap-3 bg-brandOrange/5 hover:bg-brandOrange/10 border border-brandOrange/30 rounded-lg px-4 py-3 active:scale-[0.98] transition-colors"
             >
               <div className="flex items-center gap-3 min-w-0 text-left">
-                <div className="w-9 h-9 rounded-full bg-[#e6651b] text-white flex items-center justify-center shrink-0">
+                <div className="w-9 h-9 rounded-full bg-brandOrange text-white flex items-center justify-center shrink-0">
                   <BookOpen size={16} />
                 </div>
                 <div className="min-w-0">
@@ -429,7 +429,7 @@ export default function SettingsModal({
                   </p>
                 </div>
               </div>
-              <span className="text-[10px] font-bold uppercase tracking-widest text-[#e6651b] shrink-0">Open</span>
+              <span className="text-[10px] font-bold uppercase tracking-widest text-brandOrange shrink-0">Open</span>
             </button>
           </div>
 

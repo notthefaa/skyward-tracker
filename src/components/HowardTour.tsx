@@ -282,7 +282,7 @@ export default function HowardTour({
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5">
-              <div className="w-4 h-4 rounded-full overflow-hidden border border-[#e6651b]/30">
+              <div className="w-4 h-4 rounded-full overflow-hidden border border-brandOrange/30">
                 <img src={HOWARD_LOGO_PATH} alt="" className="w-full h-full object-cover" draggable={false} />
               </div>
               <p className="text-[9px] font-bold uppercase tracking-widest" style={{ color: current.accent }}>
@@ -323,7 +323,7 @@ export default function HowardTour({
             <button
               onClick={() => { onOpenFeaturesGuide(); finish(); }}
               disabled={isFinishing}
-              className="mt-4 w-full border border-[#e6651b]/30 text-[#e6651b] font-oswald font-bold uppercase tracking-widest text-[11px] py-2 rounded hover:bg-[#e6651b]/5 active:scale-[0.98] disabled:opacity-50"
+              className="mt-4 w-full border border-brandOrange/30 text-brandOrange font-oswald font-bold uppercase tracking-widest text-[11px] py-2 rounded hover:bg-brandOrange/5 active:scale-[0.98] disabled:opacity-50"
             >
               Open the Features Guide
             </button>

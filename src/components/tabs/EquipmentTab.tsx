@@ -52,7 +52,7 @@ function EquipmentDueTag({ label, date }: { label: string; date: string }) {
   const days = Math.floor((due.getTime() - today.getTime()) / 86400000);
   let className = 'text-gray-500';
   if (days < 0) className = 'text-[#CE3732] font-bold';
-  else if (days <= 30) className = 'text-[#F08B46] font-bold';
+  else if (days <= 30) className = 'text-mxOrange font-bold';
   return (
     <span className={className}>
       {label} {days < 0 ? 'overdue' : 'due'} {normalized}
@@ -290,7 +290,7 @@ export default function EquipmentTab({ aircraft, role, aircraftRole }: Props) {
                       <p className="font-oswald font-bold text-sm uppercase text-navy leading-tight">{e.name}</p>
                       {e.ifr_capable && <span className="text-[8px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-[#3AB0FF]/10 text-[#3AB0FF] border border-[#3AB0FF]/20">IFR</span>}
                       {e.adsb_out && <span className="text-[8px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-[#56B94A]/10 text-[#56B94A] border border-[#56B94A]/20">ADS-B Out</span>}
-                      {e.is_elt && <span className="text-[8px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-[#F08B46]/10 text-[#F08B46] border border-[#F08B46]/20">ELT</span>}
+                      {e.is_elt && <span className="text-[8px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-mxOrange/10 text-mxOrange border border-mxOrange/20">ELT</span>}
                     </div>
                     <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mt-1">
                       {[CATEGORIES.find(c => c.value === e.category)?.label, e.make, e.model, e.serial ? `S/N ${e.serial}` : null].filter(Boolean).join(' · ')}
@@ -306,7 +306,7 @@ export default function EquipmentTab({ aircraft, role, aircraftRole }: Props) {
                   </div>
                   {canEdit && (
                     <div className="flex gap-2 shrink-0">
-                      <button onClick={() => openEdit(e)} title="Edit" className="text-gray-400 hover:text-[#F08B46] transition-colors"><Edit2 size={14} /></button>
+                      <button onClick={() => openEdit(e)} title="Edit" className="text-gray-400 hover:text-mxOrange transition-colors"><Edit2 size={14} /></button>
                       <button onClick={() => handleRemove(e)} title="Mark as removed" className="text-gray-400 hover:text-[#525659] transition-colors"><PowerOff size={14} /></button>
                       <button onClick={() => handleDelete(e)} title="Delete record" className="text-gray-400 hover:text-[#CE3732] transition-colors"><Trash2 size={14} /></button>
                     </div>

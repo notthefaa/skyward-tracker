@@ -477,7 +477,7 @@ export default function CalendarTab({
       {aircraft && session && <CalendarDashboard aircraft={aircraft} session={session} />}
       <div className={`mb-2 ${canAdmin ? 'grid grid-cols-2 gap-2' : ''}`}>
         <button onClick={() => openBookingForm()} className="w-full bg-[#56B94A] text-white font-oswald tracking-widest uppercase py-3 px-4 rounded hover:bg-opacity-90 active:scale-95 transition-all duration-150 ease-out flex justify-center items-center gap-2 text-sm"><Plus size={18} /> Reserve Aircraft</button>
-        {canAdmin && <button onClick={() => openMxBlockForm()} className="w-full bg-[#F08B46] text-white font-oswald tracking-widest uppercase py-3 px-4 rounded hover:bg-opacity-90 active:scale-95 transition-all duration-150 ease-out flex justify-center items-center gap-2 text-sm"><Wrench size={18} /> Block for MX</button>}
+        {canAdmin && <button onClick={() => openMxBlockForm()} className="w-full bg-mxOrange text-white font-oswald tracking-widest uppercase py-3 px-4 rounded hover:bg-opacity-90 active:scale-95 transition-all duration-150 ease-out flex justify-center items-center gap-2 text-sm"><Wrench size={18} /> Block for MX</button>}
       </div>
 
       <div className="bg-cream shadow-lg rounded-sm border-t-4 border-[#56B94A] mb-6">
@@ -516,7 +516,7 @@ export default function CalendarTab({
                       <div className="mt-auto pt-0.5 space-y-0.5 w-full overflow-hidden">
                         {events.reservations.slice(0,2).map((r,idx) => { const multi = isFullDayOrMultiDay(r); return (<div key={idx} className={`text-[7px] font-bold px-1 py-px rounded truncate ${multi ? 'bg-[#3AB0FF] text-white' : 'bg-[#56B94A]/20 text-[#56B94A]'}`}>{r.pilot_initials || '—'}{!multi ? ` ${formatTime(r.start_time, r)}` : ''}</div>); })}
                         {events.reservations.length > 2 && <div className="text-[7px] font-bold text-gray-400 px-1">+{events.reservations.length - 2}</div>}
-                        {hasMx && <div className="text-[7px] font-bold text-white bg-[#F08B46] px-1 py-px rounded truncate">MX</div>}
+                        {hasMx && <div className="text-[7px] font-bold text-white bg-mxOrange px-1 py-px rounded truncate">MX</div>}
                       </div>
                     </button>
                   );
@@ -526,7 +526,7 @@ export default function CalendarTab({
               <div className="flex items-center gap-4 mt-4 pt-3 border-t border-gray-100">
                 <div className="flex items-center gap-1.5"><div className="w-3 h-2 rounded bg-[#3AB0FF]" /><span className="text-[9px] font-bold uppercase tracking-widest text-gray-400">Multi-Day</span></div>
                 <div className="flex items-center gap-1.5"><div className="w-3 h-2 rounded bg-[#56B94A]" /><span className="text-[9px] font-bold uppercase tracking-widest text-gray-400">Day Trip</span></div>
-                <div className="flex items-center gap-1.5"><div className="w-3 h-2 rounded bg-[#F08B46]" /><span className="text-[9px] font-bold uppercase tracking-widest text-gray-400">Maintenance</span></div>
+                <div className="flex items-center gap-1.5"><div className="w-3 h-2 rounded bg-mxOrange" /><span className="text-[9px] font-bold uppercase tracking-widest text-gray-400">Maintenance</span></div>
               </div>
             </div>
           )}
@@ -550,7 +550,7 @@ export default function CalendarTab({
                           <div className="w-8 text-center"><span className={`text-[10px] font-oswald font-bold uppercase block leading-none ${isPast ? 'text-gray-400' : 'text-gray-500'}`}>{date.toLocaleDateString('en-US', { weekday: 'short' })}</span><span className={`text-lg font-oswald font-bold leading-none ${isToday ? 'text-[#56B94A]' : isPast ? 'text-gray-400' : 'text-navy'}`}>{date.getDate()}</span></div>
                           <div className="flex flex-col gap-0.5">
                             {singleDayRes.map((r,idx) => (<div key={idx} className="text-xs text-gray-600 font-roboto"><span className="font-bold text-navy">{r.pilot_initials}</span> {formatTime(r.start_time, r)} – {formatTime(r.end_time, r)}{r.route && <span className="text-gray-400 ml-1.5">{r.route}</span>}</div>))}
-                            {events.mxBlocks.map((m: any,idx: number) => (<div key={`mx-${idx}`} className="text-xs text-[#F08B46] font-bold font-roboto flex items-center gap-1"><Wrench size={10} /> {m.label}</div>))}
+                            {events.mxBlocks.map((m: any,idx: number) => (<div key={`mx-${idx}`} className="text-xs text-mxOrange font-bold font-roboto flex items-center gap-1"><Wrench size={10} /> {m.label}</div>))}
                             {singleDayRes.length === 0 && events.mxBlocks.length === 0 && <span className="text-[10px] text-gray-400 font-roboto">Available</span>}
                           </div>
                         </div>
@@ -588,7 +588,7 @@ export default function CalendarTab({
                     {cancellingId === r.id && (<div className="mt-3 pt-3 border-t border-sky-200 flex gap-2 animate-fade-in"><button onClick={() => setCancellingId(null)} className="flex-1 border border-gray-300 text-gray-600 font-oswald font-bold py-2 rounded text-[10px] uppercase tracking-widest active:scale-95">Keep</button><button onClick={() => handleCancelReservation(r.id)} disabled={isSubmitting} className="flex-1 bg-[#CE3732] text-white font-oswald font-bold py-2 rounded text-[10px] uppercase tracking-widest active:scale-95 disabled:opacity-50">{isSubmitting ? "..." : "Cancel Booking"}</button></div>)}
                   </div>
                 ))}
-                {hasMx && events.mxBlocks.map((m: any, idx: number) => (<div key={`mx-${idx}`} className="p-4 bg-orange-50 border border-orange-200 rounded flex items-center gap-3"><div className="bg-[#F08B46] text-white p-1.5 rounded shrink-0"><Wrench size={16} /></div><div className="min-w-0 flex-1"><p className="text-sm font-bold text-navy font-roboto truncate">{m.label}</p><p className="text-[10px] text-gray-500 font-roboto">{m.start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} — {m.end.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</p></div></div>))}
+                {hasMx && events.mxBlocks.map((m: any, idx: number) => (<div key={`mx-${idx}`} className="p-4 bg-orange-50 border border-orange-200 rounded flex items-center gap-3"><div className="bg-mxOrange text-white p-1.5 rounded shrink-0"><Wrench size={16} /></div><div className="min-w-0 flex-1"><p className="text-sm font-bold text-navy font-roboto truncate">{m.label}</p><p className="text-[10px] text-gray-500 font-roboto">{m.start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} — {m.end.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</p></div></div>))}
                 {timedRes.map(r => <ReservationCard key={r.id} r={r} />)}
                 {events.reservations.length === 0 && !hasMx && (
                   <div className="text-center py-12"><div className="bg-gray-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4"><Plane size={28} className="text-gray-300" /></div><p className="text-sm text-gray-400 font-oswald font-bold uppercase tracking-widest">Available</p><p className="text-xs text-gray-400 font-roboto mt-1">No bookings for this day</p><button onClick={() => openBookingForm(currentDate)} className="mt-4 text-[10px] font-oswald font-bold uppercase tracking-widest text-[#56B94A] bg-emerald-50 border border-emerald-200 px-4 py-2 rounded hover:bg-emerald-100 active:scale-95 transition-all">+ Reserve this date</button></div>
@@ -948,25 +948,25 @@ export default function CalendarTab({
       {showMxBlockForm && (
         <div className="fixed inset-0 bg-black/60 z-[10000] overflow-y-auto animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => setShowMxBlockForm(false)}>
           <div className="flex min-h-full items-center justify-center p-4">
-          <div className="bg-white rounded shadow-2xl w-full max-w-sm p-5 border-t-4 border-[#F08B46] animate-slide-up" onClick={e => e.stopPropagation()}>
+          <div className="bg-white rounded shadow-2xl w-full max-w-sm p-5 border-t-4 border-mxOrange animate-slide-up" onClick={e => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-5">
-              <h2 className="font-oswald text-xl font-bold uppercase text-navy flex items-center gap-2"><Wrench size={18} className="text-[#F08B46]" /> Block for Maintenance</h2>
+              <h2 className="font-oswald text-xl font-bold uppercase text-navy flex items-center gap-2"><Wrench size={18} className="text-mxOrange" /> Block for Maintenance</h2>
               <button onClick={() => setShowMxBlockForm(false)} className="text-gray-400 hover:text-red-500"><X size={22} /></button>
             </div>
             <div className="space-y-4">
               <div>
                 <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Start Date *</label>
-                <input type="date" value={mxBlockStartDate} onChange={e => setMxBlockStartDate(e.target.value)} style={wb} className="w-full border border-gray-300 rounded p-2.5 text-sm mt-1 focus:border-[#F08B46] outline-none" />
+                <input type="date" value={mxBlockStartDate} onChange={e => setMxBlockStartDate(e.target.value)} style={wb} className="w-full border border-gray-300 rounded p-2.5 text-sm mt-1 focus:border-mxOrange outline-none" />
               </div>
               <div>
                 <label className="text-[10px] font-bold uppercase tracking-widest text-navy">End Date *</label>
-                <input type="date" value={mxBlockEndDate} onChange={e => setMxBlockEndDate(e.target.value)} style={wb} className="w-full border border-gray-300 rounded p-2.5 text-sm mt-1 focus:border-[#F08B46] outline-none" />
+                <input type="date" value={mxBlockEndDate} onChange={e => setMxBlockEndDate(e.target.value)} style={wb} className="w-full border border-gray-300 rounded p-2.5 text-sm mt-1 focus:border-mxOrange outline-none" />
               </div>
               <div className="border-t border-gray-100 pt-4">
                 <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Notes (Optional)</label>
-                <input type="text" value={mxBlockNotes} onChange={e => setMxBlockNotes(e.target.value)} style={wb} className="w-full border border-gray-300 rounded p-2.5 text-sm mt-1 focus:border-[#F08B46] outline-none" placeholder="Annual inspection, oil change..." />
+                <input type="text" value={mxBlockNotes} onChange={e => setMxBlockNotes(e.target.value)} style={wb} className="w-full border border-gray-300 rounded p-2.5 text-sm mt-1 focus:border-mxOrange outline-none" placeholder="Annual inspection, oil change..." />
               </div>
-              <div className="pt-2"><button onClick={handleCreateMxBlock} disabled={isSubmitting} className="w-full bg-[#F08B46] text-white font-oswald tracking-widest uppercase py-3 px-4 rounded hover:bg-opacity-90 active:scale-95 transition-all text-sm disabled:opacity-50">{isSubmitting ? <><Loader2 size={16} className="animate-spin" /> Creating...</> : "Block Aircraft"}</button></div>
+              <div className="pt-2"><button onClick={handleCreateMxBlock} disabled={isSubmitting} className="w-full bg-mxOrange text-white font-oswald tracking-widest uppercase py-3 px-4 rounded hover:bg-opacity-90 active:scale-95 transition-all text-sm disabled:opacity-50">{isSubmitting ? <><Loader2 size={16} className="animate-spin" /> Creating...</> : "Block Aircraft"}</button></div>
             </div>
           </div>
           </div>

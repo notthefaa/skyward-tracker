@@ -156,11 +156,11 @@ export default function VorTab({
 
   return (
     <>
-      <div className="bg-cream shadow-lg rounded-sm p-4 md:p-6 border-t-4 border-[#F08B46] flex flex-col mb-6">
+      <div className="bg-cream shadow-lg rounded-sm p-4 md:p-6 border-t-4 border-mxOrange flex flex-col mb-6">
         {/* Header */}
         <div className="flex justify-between items-end mb-6">
           <div>
-            <span className="text-[10px] font-bold uppercase tracking-widest text-[#F08B46] block mb-1">FAR 91.171</span>
+            <span className="text-[10px] font-bold uppercase tracking-widest text-mxOrange block mb-1">FAR 91.171</span>
             <h2 className="font-oswald text-2xl md:text-3xl font-bold uppercase text-navy m-0 leading-none">VOR Check Log</h2>
           </div>
         </div>
@@ -208,9 +208,9 @@ export default function VorTab({
         {/* Pagination */}
         {(page > 1 || hasMore) && (
           <div className="flex justify-between items-center mt-4 border-t border-gray-200 pt-4">
-            <button onClick={() => setPage(p => p - 1)} disabled={page <= 1} className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-navy disabled:opacity-30 disabled:cursor-not-allowed hover:text-[#F08B46] transition-colors"><ChevronLeft size={14} /> Prev</button>
+            <button onClick={() => setPage(p => p - 1)} disabled={page <= 1} className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-navy disabled:opacity-30 disabled:cursor-not-allowed hover:text-mxOrange transition-colors"><ChevronLeft size={14} /> Prev</button>
             <span className="text-[10px] font-bold uppercase text-gray-400">Page {page} / {data?.totalPages ?? 1}</span>
-            <button onClick={() => setPage(p => p + 1)} disabled={!hasMore} className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-navy disabled:opacity-30 disabled:cursor-not-allowed hover:text-[#F08B46] transition-colors">Next <ChevronRight size={14} /></button>
+            <button onClick={() => setPage(p => p + 1)} disabled={!hasMore} className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-navy disabled:opacity-30 disabled:cursor-not-allowed hover:text-mxOrange transition-colors">Next <ChevronRight size={14} /></button>
           </div>
         )}
       </div>
@@ -219,7 +219,7 @@ export default function VorTab({
       {showModal && (
         <div className="fixed inset-0 z-[10000] bg-black/60 animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => setShowModal(false)}>
           <div className="flex min-h-full items-center justify-center p-4">
-            <div className="bg-white rounded-lg shadow-2xl w-full max-w-sm p-5 border-t-4 border-[#F08B46] animate-slide-up" onClick={e => e.stopPropagation()}>
+            <div className="bg-white rounded-lg shadow-2xl w-full max-w-sm p-5 border-t-4 border-mxOrange animate-slide-up" onClick={e => e.stopPropagation()}>
               <div className="flex justify-between items-center mb-4">
                 <h3 className="font-oswald text-lg font-bold uppercase tracking-widest text-navy">Log VOR Check</h3>
                 <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-red-500"><X size={20} /></button>
@@ -227,7 +227,7 @@ export default function VorTab({
               <form onSubmit={handleSubmit} className="flex flex-col gap-4">
                 <div>
                   <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1 block">Check Type</label>
-                  <select value={checkType} onChange={e => setCheckType(e.target.value as VorCheckType)} className="w-full rounded p-3 text-sm border border-gray-300 focus:border-[#F08B46] outline-none" style={whiteBg}>
+                  <select value={checkType} onChange={e => setCheckType(e.target.value as VorCheckType)} className="w-full rounded p-3 text-sm border border-gray-300 focus:border-mxOrange outline-none" style={whiteBg}>
                     {VOR_CHECK_TYPES.map(t => (
                       <option key={t.value} value={t.value}>{t.label} (±{t.tolerance}°)</option>
                     ))}
@@ -235,11 +235,11 @@ export default function VorTab({
                 </div>
                 <div>
                   <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1 block">Station / Place</label>
-                  <input value={station} onChange={e => setStation(e.target.value)} placeholder="e.g. LAX VOT, V23 checkpoint" className="w-full rounded p-3 text-sm border border-gray-300 focus:border-[#F08B46] outline-none" style={whiteBg} required />
+                  <input value={station} onChange={e => setStation(e.target.value)} placeholder="e.g. LAX VOT, V23 checkpoint" className="w-full rounded p-3 text-sm border border-gray-300 focus:border-mxOrange outline-none" style={whiteBg} required />
                 </div>
                 <div>
                   <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1 block">Bearing Error (degrees)</label>
-                  <input type="number" step="0.1" value={bearingError} onChange={e => setBearingError(e.target.value)} placeholder="e.g. 2, -3, 0" className="w-full rounded p-3 text-sm border border-gray-300 focus:border-[#F08B46] outline-none" style={whiteBg} required />
+                  <input type="number" step="0.1" value={bearingError} onChange={e => setBearingError(e.target.value)} placeholder="e.g. 2, -3, 0" className="w-full rounded p-3 text-sm border border-gray-300 focus:border-mxOrange outline-none" style={whiteBg} required />
                   {previewPassed !== null && bearingError !== '' && (
                     <span className={`text-[10px] font-bold uppercase tracking-widest mt-1 block ${previewPassed ? 'text-[#56B94A]' : 'text-[#CE3732]'}`}>
                       {Math.abs(previewError)}° — {previewPassed ? `Within ±${selectedTolerance}° tolerance` : `Exceeds ±${selectedTolerance}° tolerance`}
@@ -248,7 +248,7 @@ export default function VorTab({
                 </div>
                 <div>
                   <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1 block">Pilot Initials</label>
-                  <input value={initials} onChange={e => setInitials(e.target.value.toUpperCase())} maxLength={3} className="w-full rounded p-3 text-sm border border-gray-300 focus:border-[#F08B46] outline-none uppercase" style={whiteBg} required />
+                  <input value={initials} onChange={e => setInitials(e.target.value.toUpperCase())} maxLength={3} className="w-full rounded p-3 text-sm border border-gray-300 focus:border-mxOrange outline-none uppercase" style={whiteBg} required />
                 </div>
                 <button type="submit" disabled={isSubmitting} className="w-full bg-navy text-white font-oswald text-base font-bold uppercase tracking-widest py-3 rounded-lg shadow active:scale-95 transition-transform disabled:opacity-50 disabled:cursor-not-allowed">{isSubmitting ? 'Saving...' : 'Save VOR Check'}</button>
               </form>

@@ -355,7 +355,7 @@ export default function AircraftModal({
   return (
     <div className="fixed inset-0 bg-black/60 z-[10000] overflow-y-auto animate-fade-in" style={{ overscrollBehavior: 'contain' }}>
       <div className="flex min-h-full items-center justify-center p-4">
-      <div className="bg-white rounded shadow-2xl w-full max-w-md p-6 border-t-4 border-[#F08B46] animate-slide-up">
+      <div className="bg-white rounded shadow-2xl w-full max-w-md p-6 border-t-4 border-mxOrange animate-slide-up">
         
         <div className="flex justify-between items-center mb-4">
           <h2 className="font-oswald text-2xl font-bold uppercase text-[#1B4869]">
@@ -392,22 +392,22 @@ export default function AircraftModal({
                 window.dispatchEvent(new CustomEvent('aft:navigate-howard'));
               }, 100);
             }}
-            className="w-full mb-4 flex items-center gap-3 bg-[#e6651b]/5 hover:bg-[#e6651b]/10 border border-[#e6651b]/30 rounded-lg px-4 py-3 active:scale-[0.98] transition-colors"
+            className="w-full mb-4 flex items-center gap-3 bg-brandOrange/5 hover:bg-brandOrange/10 border border-brandOrange/30 rounded-lg px-4 py-3 active:scale-[0.98] transition-colors"
           >
-            <div className="w-9 h-9 rounded-full overflow-hidden border border-[#e6651b]/30 shrink-0">
+            <div className="w-9 h-9 rounded-full overflow-hidden border border-brandOrange/30 shrink-0">
               <img src={HOWARD_LOGO_PATH} alt="" className="w-full h-full object-cover" draggable={false} />
             </div>
             <div className="text-left min-w-0 flex-1">
               <p className="font-oswald text-sm font-bold uppercase tracking-widest text-navy">Set up with Howard</p>
               <p className="text-[10px] font-roboto text-gray-500 leading-snug">Chat through it — Howard asks the right questions</p>
             </div>
-            <MessageSquare size={16} className="text-[#e6651b] shrink-0" />
+            <MessageSquare size={16} className="text-brandOrange shrink-0" />
           </button>
         )}
         
         <form onSubmit={handleSaveAircraft} className="space-y-4">
           <div
-            className={`border-2 border-dashed rounded p-4 text-center transition-colors ${isDragging ? 'border-[#F08B46] bg-orange-50' : 'border-gray-300 bg-gray-50'} ${!avatarSrc ? 'cursor-pointer' : ''}`}
+            className={`border-2 border-dashed rounded p-4 text-center transition-colors ${isDragging ? 'border-mxOrange bg-orange-50' : 'border-gray-300 bg-gray-50'} ${!avatarSrc ? 'cursor-pointer' : ''}`}
             onDragOver={e => { e.preventDefault(); if (!avatarSrc) setIsDragging(true); }}
             onDragLeave={() => setIsDragging(false)}
             onDrop={!avatarSrc ? onDrop : undefined}
@@ -452,22 +452,22 @@ export default function AircraftModal({
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">Tail Number</label>
-              <input type="text" required value={newTail} onChange={e => setNewTail(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 uppercase focus:border-[#F08B46] outline-none" />
+              <input type="text" required value={newTail} onChange={e => setNewTail(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 uppercase focus:border-mxOrange outline-none" />
             </div>
             <div>
               <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">Serial Num</label>
-              <input type="text" value={newSerial} onChange={e => setNewSerial(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 uppercase focus:border-[#F08B46] outline-none" />
+              <input type="text" value={newSerial} onChange={e => setNewSerial(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 uppercase focus:border-mxOrange outline-none" />
             </div>
           </div>
           
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">Model Name</label>
-              <input type="text" required value={newModel} onChange={e => setNewModel(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" />
+              <input type="text" required value={newModel} onChange={e => setNewModel(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none" />
             </div>
             <div>
               <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">Engine Type</label>
-              <select value={newType} onChange={e => setNewType(e.target.value as 'Piston'|'Turbine')} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none">
+              <select value={newType} onChange={e => setNewType(e.target.value as 'Piston'|'Turbine')} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none">
                 <option value="Piston">Piston</option>
                 <option value="Turbine">Turbine</option>
               </select>
@@ -477,14 +477,14 @@ export default function AircraftModal({
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">Home Airport</label>
-              <input type="text" value={newHomeAirport} onChange={e => setNewHomeAirport(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 uppercase focus:border-[#F08B46] outline-none" placeholder="ICAO" />
+              <input type="text" value={newHomeAirport} onChange={e => setNewHomeAirport(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 uppercase focus:border-mxOrange outline-none" placeholder="ICAO" />
             </div>
             <div>
               <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">Time Zone</label>
               {/* Affects how server-generated MX-reminder emails and
                   Howard airworthiness verdicts compute "today". Client
                   displays already use the pilot's browser TZ. */}
-              <select value={newTimeZone} onChange={e => setNewTimeZone(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none">
+              <select value={newTimeZone} onChange={e => setNewTimeZone(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none">
                 <option value="UTC">UTC</option>
                 <option value="America/New_York">Eastern (New York)</option>
                 <option value="America/Chicago">Central (Chicago)</option>
@@ -509,10 +509,10 @@ export default function AircraftModal({
               type="checkbox"
               checked={newIsIfrEquipped}
               onChange={e => setNewIsIfrEquipped(e.target.checked)}
-              className="w-5 h-5 rounded border-gray-300 text-[#F08B46] focus:ring-[#F08B46] cursor-pointer mt-0.5 shrink-0"
+              className="w-5 h-5 rounded border-gray-300 text-mxOrange focus:ring-mxOrange cursor-pointer mt-0.5 shrink-0"
             />
             <div>
-              <span className="text-xs font-bold text-navy block group-hover:text-[#F08B46] transition-colors">
+              <span className="text-xs font-bold text-navy block group-hover:text-mxOrange transition-colors">
                 IFR-equipped
               </span>
               <span className="text-[10px] text-gray-500 leading-tight">
@@ -524,30 +524,30 @@ export default function AircraftModal({
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">Main Contact</label>
-              <input type="text" value={newMainContact} onChange={e => setNewMainContact(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" />
+              <input type="text" value={newMainContact} onChange={e => setNewMainContact(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none" />
             </div>
             <div>
               <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">Phone</label>
-              <input type="tel" value={newMainContactPhone} onChange={e => setNewMainContactPhone(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" />
+              <input type="tel" value={newMainContactPhone} onChange={e => setNewMainContactPhone(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none" />
             </div>
             <div>
               <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">Email</label>
-              <input type="email" value={newMainContactEmail} onChange={e => setNewMainContactEmail(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" />
+              <input type="email" value={newMainContactEmail} onChange={e => setNewMainContactEmail(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none" />
             </div>
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">MX Contact</label>
-              <input type="text" value={newMxContact} onChange={e => setNewMxContact(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" />
+              <input type="text" value={newMxContact} onChange={e => setNewMxContact(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none" />
             </div>
             <div>
               <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">MX Phone</label>
-              <input type="tel" value={newMxContactPhone} onChange={e => setNewMxContactPhone(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" />
+              <input type="tel" value={newMxContactPhone} onChange={e => setNewMxContactPhone(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none" />
             </div>
             <div>
               <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">MX Email</label>
-              <input type="email" value={newMxContactEmail} onChange={e => setNewMxContactEmail(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" />
+              <input type="email" value={newMxContactEmail} onChange={e => setNewMxContactEmail(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none" />
             </div>
           </div>
 
@@ -563,7 +563,7 @@ export default function AircraftModal({
                 onChange={e => setNewAirframeTime(e.target.value)}
                 disabled={timeFieldsLocked && !airframeMeterMissing}
                 style={INPUT_WHITE_BG}
-                className={`w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none ${timeFieldsLocked && !airframeMeterMissing ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''}`}
+                className={`w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none ${timeFieldsLocked && !airframeMeterMissing ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''}`}
                 placeholder={airframeMeterMissing ? `No ${newType === 'Turbine' ? 'AFTT' : 'Hobbs'} meter — leave blank or add one` : ''}
               />
             </div>
@@ -579,7 +579,7 @@ export default function AircraftModal({
                 onChange={e => setNewEngineTime(e.target.value)}
                 disabled={timeFieldsLocked}
                 style={INPUT_WHITE_BG}
-                className={`w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none ${timeFieldsLocked ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''}`}
+                className={`w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none ${timeFieldsLocked ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''}`}
               />
             </div>
             {timeFieldsLocked && (
@@ -620,7 +620,7 @@ export default function AircraftModal({
                           value={row.name}
                           onChange={e => updateEquipmentRow(i, 'name', e.target.value)}
                           style={INPUT_WHITE_BG}
-                          className="border border-gray-300 rounded p-2 text-xs focus:border-[#F08B46] outline-none"
+                          className="border border-gray-300 rounded p-2 text-xs focus:border-mxOrange outline-none"
                         />
                         <input
                           type="text"
@@ -628,7 +628,7 @@ export default function AircraftModal({
                           value={row.make}
                           onChange={e => updateEquipmentRow(i, 'make', e.target.value)}
                           style={INPUT_WHITE_BG}
-                          className="border border-gray-300 rounded p-2 text-xs focus:border-[#F08B46] outline-none"
+                          className="border border-gray-300 rounded p-2 text-xs focus:border-mxOrange outline-none"
                         />
                         <input
                           type="text"
@@ -636,7 +636,7 @@ export default function AircraftModal({
                           value={row.serial}
                           onChange={e => updateEquipmentRow(i, 'serial', e.target.value)}
                           style={INPUT_WHITE_BG}
-                          className="border border-gray-300 rounded p-2 text-xs focus:border-[#F08B46] outline-none"
+                          className="border border-gray-300 rounded p-2 text-xs focus:border-mxOrange outline-none"
                         />
                       </div>
                       <button type="button" onClick={() => removeEquipmentRow(i)} className="text-gray-400 hover:text-[#CE3732] p-1 mt-1 shrink-0">
@@ -680,7 +680,7 @@ export default function AircraftModal({
                       <select
                         value={df.docType}
                         onChange={e => setDocFiles(prev => prev.map((d, idx) => idx === i ? { ...d, docType: e.target.value } : d))}
-                        className="text-[10px] border border-gray-300 rounded px-2 py-1 bg-white focus:border-[#F08B46] outline-none"
+                        className="text-[10px] border border-gray-300 rounded px-2 py-1 bg-white focus:border-mxOrange outline-none"
                       >
                         {DOC_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
                       </select>

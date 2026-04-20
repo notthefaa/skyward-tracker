@@ -38,7 +38,7 @@ export default function HowardWelcome({
         background: 'linear-gradient(135deg, #091F3C 0%, #1a3a5c 50%, #091F3C 100%)',
       }}
     >
-      <div className="relative w-full max-w-lg bg-cream shadow-2xl rounded-lg border-t-4 border-[#e6651b] animate-slide-up overflow-hidden">
+      <div className="relative w-full max-w-lg bg-cream shadow-2xl rounded-lg border-t-4 border-brandOrange animate-slide-up overflow-hidden">
         {/* Log out escape hatch — some users will land here by accident
             (wrong account, shared device) and need a way back out. */}
         <button
@@ -53,7 +53,7 @@ export default function HowardWelcome({
         <div className="px-6 pt-10 pb-6 md:px-10 md:pt-12 md:pb-8">
           {/* Logo — big, centered, sets the tone instantly. */}
           <div className="flex justify-center mb-5">
-            <div className="w-24 h-24 md:w-28 md:h-28 rounded-full overflow-hidden border-2 border-[#e6651b]/30 shadow-lg">
+            <div className="w-24 h-24 md:w-28 md:h-28 rounded-full overflow-hidden border-2 border-brandOrange/30 shadow-lg">
               <img
                 src={HOWARD_LOGO_PATH}
                 alt="Howard"
@@ -66,7 +66,7 @@ export default function HowardWelcome({
           <h1 className="font-oswald text-3xl md:text-4xl font-bold uppercase tracking-widest text-navy text-center leading-tight">
             Meet Howard
           </h1>
-          <p className="text-[11px] font-bold uppercase tracking-widest text-[#e6651b] text-center mt-1 mb-5">
+          <p className="text-[11px] font-bold uppercase tracking-widest text-brandOrange text-center mt-1 mb-5">
             Your aviation mentor
           </p>
 
@@ -82,7 +82,7 @@ export default function HowardWelcome({
             <div className="flex flex-col gap-2.5">
               <button
                 onClick={onStartGuided}
-                className="w-full bg-[#e6651b] hover:bg-[#c35617] text-white font-oswald font-bold uppercase tracking-widest text-sm py-3.5 rounded-lg active:scale-[0.98] transition-all shadow-md"
+                className="w-full bg-brandOrange hover:bg-[#c35617] text-white font-oswald font-bold uppercase tracking-widest text-sm py-3.5 rounded-lg active:scale-[0.98] transition-all shadow-md"
               >
                 Let&apos;s set up together
               </button>

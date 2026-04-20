@@ -249,8 +249,8 @@ export default function SummaryTab({
 
   const isGrounded = (nextMx?.isExpired) || activeSquawks.some(sq => sq.affects_airworthiness);
   const hasIssues = activeSquawks.length > 0;
-  const statusBorderColor = isGrounded ? 'border-[#CE3732]' : hasIssues ? 'border-[#F08B46]' : 'border-success';
-  const statusIconColor = isGrounded ? 'text-[#CE3732]' : hasIssues ? 'text-[#F08B46]' : 'text-success';
+  const statusBorderColor = isGrounded ? 'border-[#CE3732]' : hasIssues ? 'border-mxOrange' : 'border-success';
+  const statusIconColor = isGrounded ? 'text-[#CE3732]' : hasIssues ? 'text-mxOrange' : 'text-success';
   const mxTextColor = nextMx ? getMxTextColor(nextMx, sysSettings) : 'text-gray-500';
 
   const lastFlownLabel = (() => {
@@ -378,7 +378,7 @@ export default function SummaryTab({
             : null;
           return (
             <div onClick={() => setActiveTab('calendar')} className="bg-orange-50 shadow-lg border border-orange-200 rounded-sm p-3 flex items-center gap-3 cursor-pointer hover:shadow-xl active:scale-[0.98] transition-all">
-              <div className="bg-[#F08B46] text-white p-2 rounded-full shrink-0"><Wrench size={16} /></div>
+              <div className="bg-mxOrange text-white p-2 rounded-full shrink-0"><Wrench size={16} /></div>
               <p className="text-sm font-roboto text-navy"><span className="font-bold">In Maintenance</span>{currentStatus.mx_contact_name ? ` with ${currentStatus.mx_contact_name}` : ''}{endDate ? ` until ${endDate}` : ''}</p>
             </div>
           );
@@ -434,7 +434,7 @@ export default function SummaryTab({
         )}
 
         <div onClick={() => setActiveTab('mx')} className={`bg-white border shadow-sm rounded-sm p-4 flex gap-4 items-center transition-colors cursor-pointer active:scale-[0.98] ${nextMx ? 'border-gray-200 hover:bg-orange-50' : 'border-gray-200 opacity-70 hover:bg-gray-50'}`}>
-          <div className={`p-3 rounded-full shrink-0 ${nextMx ? 'bg-orange-50 text-[#F08B46]' : 'bg-gray-100 text-gray-400'}`}><Wrench size={20}/></div>
+          <div className={`p-3 rounded-full shrink-0 ${nextMx ? 'bg-orange-50 text-mxOrange' : 'bg-gray-100 text-gray-400'}`}><Wrench size={20}/></div>
           <div className="flex-1"><span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Next Mx Due</span>{nextMx ? (<><p className="text-sm font-bold text-navy leading-tight">{nextMx.item_name}</p><p className={`text-xs font-bold mt-0.5 ${mxTextColor}`}>{nextMx.dueText}</p></>) : <p className="text-sm font-bold text-gray-500 leading-tight">Nothing tracked yet</p>}</div>
         </div>
 

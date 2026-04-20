@@ -366,7 +366,7 @@ export default function ChecksTab({ aircraft, session, role, userInitials }: Pro
       {/* VOR section */}
       <section ref={vorRef} className="scroll-mt-20">
         <div className="flex items-center flex-wrap gap-2 mb-2 pl-1">
-          <Compass size={16} className="text-[#F08B46]" />
+          <Compass size={16} className="text-mxOrange" />
           <h3 className="font-oswald text-lg font-bold uppercase tracking-widest text-navy m-0 leading-none">
             VOR
           </h3>

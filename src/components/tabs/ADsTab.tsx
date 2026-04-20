@@ -235,8 +235,8 @@ export default function ADsTab({ aircraft, role, aircraftRole }: Props) {
 
       {/* Due soon */}
       {dueSoon.length > 0 && (
-        <div className="bg-cream shadow-lg rounded-sm p-4 md:p-6 border-t-4 border-[#F08B46]">
-          <h3 className="font-oswald text-lg font-bold uppercase text-[#F08B46] mb-4 flex items-center gap-2"><AlertTriangle size={16} /> Due Soon ({dueSoon.length})</h3>
+        <div className="bg-cream shadow-lg rounded-sm p-4 md:p-6 border-t-4 border-mxOrange">
+          <h3 className="font-oswald text-lg font-bold uppercase text-mxOrange mb-4 flex items-center gap-2"><AlertTriangle size={16} /> Due Soon ({dueSoon.length})</h3>
           <div className="space-y-2">
             {dueSoon.map(c => renderAdRow(c, canEdit, openEdit, handleDelete))}
           </div>
@@ -364,7 +364,7 @@ function renderAdRow(
       </div>
       {canEdit && (
         <div className="flex gap-2 shrink-0">
-          <button onClick={() => openEdit(ad)} title="Edit" className="text-gray-400 hover:text-[#F08B46]"><Edit2 size={14} /></button>
+          <button onClick={() => openEdit(ad)} title="Edit" className="text-gray-400 hover:text-mxOrange"><Edit2 size={14} /></button>
           <button onClick={() => handleDelete(ad)} title="Remove" className="text-gray-400 hover:text-[#CE3732]"><Trash2 size={14} /></button>
         </div>
       )}

@@ -209,8 +209,8 @@ export default function FleetSummary({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pb-4">
         {fleetData.map(ac => {
           const fuelGals = ac.current_fuel_gallons || 0;
-          const statusColor = ac.status === 'grounded' ? 'bg-[#CE3732]' : ac.status === 'issues' ? 'bg-[#F08B46]' : 'bg-success';
-          const borderColor = ac.status === 'grounded' ? 'border-[#CE3732]' : ac.status === 'issues' ? 'border-[#F08B46]' : 'border-success';
+          const statusColor = ac.status === 'grounded' ? 'bg-[#CE3732]' : ac.status === 'issues' ? 'bg-mxOrange' : 'bg-success';
+          const borderColor = ac.status === 'grounded' ? 'border-[#CE3732]' : ac.status === 'issues' ? 'border-mxOrange' : 'border-success';
           return (
             <div key={ac.id} onClick={() => onSelectAircraft(ac.tail_number)} className={`bg-white shadow-md rounded-sm border-t-4 ${borderColor} overflow-hidden cursor-pointer hover:shadow-xl transition-all active:scale-[0.98] flex flex-col`}>
               <div className="flex justify-between items-center p-4 border-b border-gray-100 bg-gray-50">
@@ -249,7 +249,7 @@ export default function FleetSummary({
               })()}
               <div className="px-4 py-3 bg-gray-50 border-t border-gray-100">
                 <div className="flex items-start gap-2.5">
-                  <Wrench size={14} className="text-[#F08B46] shrink-0 mt-0.5" />
+                  <Wrench size={14} className="text-mxOrange shrink-0 mt-0.5" />
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-bold text-navy truncate leading-tight">{ac.nextMxName}</p>
                     {ac.nextMxDueLabel && (

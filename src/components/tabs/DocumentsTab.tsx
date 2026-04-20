@@ -204,7 +204,7 @@ export default function DocumentsTab({
                   <td className="py-3 pr-4 whitespace-nowrap">{doc.page_count || '—'}</td>
                   <td className="py-3 pr-4 whitespace-nowrap">
                     {doc.status === 'ready' && <span className="inline-flex items-center gap-1 text-[#56B94A] font-bold"><CheckCircle size={12} /> Ready</span>}
-                    {doc.status === 'processing' && <span className="inline-flex items-center gap-1 text-[#F08B46] font-bold"><Loader2 size={12} className="animate-spin" /> Processing</span>}
+                    {doc.status === 'processing' && <span className="inline-flex items-center gap-1 text-mxOrange font-bold"><Loader2 size={12} className="animate-spin" /> Processing</span>}
                     {doc.status === 'error' && <span className="inline-flex items-center gap-1 text-[#CE3732] font-bold"><AlertCircle size={12} /> Error</span>}
                   </td>
                   <td className="py-3 pr-4 whitespace-nowrap">{new Date(doc.created_at).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: '2-digit' })}</td>

@@ -258,11 +258,11 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
 
       <div className="fixed inset-0 bg-black/60 z-[10000] overflow-y-auto animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={onClose}>
         <div className="flex min-h-full items-center justify-center p-4">
-        <div className="bg-white rounded shadow-2xl w-full max-w-lg p-5 border-t-4 border-[#F08B46] animate-slide-up" onClick={e => e.stopPropagation()}>
+        <div className="bg-white rounded shadow-2xl w-full max-w-lg p-5 border-t-4 border-mxOrange animate-slide-up" onClick={e => e.stopPropagation()}>
 
           <div className="flex justify-between items-center mb-6">
             <h2 className="font-oswald text-2xl font-bold uppercase text-navy flex items-center gap-2">
-              <Wrench size={20} className="text-[#F08B46]" /> {viewTitle}
+              <Wrench size={20} className="text-mxOrange" /> {viewTitle}
             </h2>
             <button onClick={onClose} className="text-gray-400 hover:text-red-500 p-2 -mr-2"><X size={24}/></button>
           </div>
@@ -286,7 +286,7 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
           {/* Draft review — allows removing existing items, adding new ones, and setting date preference */}
           {view === 'review_draft' && selectedEvent && (
             <div className="space-y-6">
-              <button onClick={() => handleNavigate('list')} className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-[#F08B46] bg-orange-50 border border-orange-200 rounded px-3 py-1.5 hover:bg-orange-100 active:scale-95 transition-all"><ChevronDown size={12} className="rotate-90" /> Back to Events</button>
+              <button onClick={() => handleNavigate('list')} className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-mxOrange bg-orange-50 border border-orange-200 rounded px-3 py-1.5 hover:bg-orange-100 active:scale-95 transition-all"><ChevronDown size={12} className="rotate-90" /> Back to Events</button>
               <div className="bg-orange-50 border border-orange-200 rounded p-4"><p className="text-sm text-navy font-bold mb-1">Draft Work Package</p><p className="text-xs text-gray-600">Review what's bundled, add or remove items, then send. Nothing goes out to your mechanic until you tap send.</p></div>
 
               {/* Existing line items — removable */}
@@ -323,10 +323,10 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
                 return (
                   <div>
                     <div className="flex justify-between items-center mb-2">
-                      <p className="text-[10px] font-bold uppercase tracking-widest text-navy flex items-center gap-2"><Wrench size={14} className="text-[#F08B46]" /> Add More Maintenance Items</p>
-                      <button type="button" onClick={() => { const ids = availableMx.map(mx => mx.id); if (allSelected) setSelectedMxIds(prev => prev.filter(id => !ids.includes(id))); else setSelectedMxIds(prev => Array.from(new Set([...prev, ...ids]))); }} className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-[#F08B46] hover:opacity-80 active:scale-95"><CheckSquare size={12} /> {allSelected ? 'Deselect All' : 'Select All'}</button>
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-navy flex items-center gap-2"><Wrench size={14} className="text-mxOrange" /> Add More Maintenance Items</p>
+                      <button type="button" onClick={() => { const ids = availableMx.map(mx => mx.id); if (allSelected) setSelectedMxIds(prev => prev.filter(id => !ids.includes(id))); else setSelectedMxIds(prev => Array.from(new Set([...prev, ...ids]))); }} className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-mxOrange hover:opacity-80 active:scale-95"><CheckSquare size={12} /> {allSelected ? 'Deselect All' : 'Select All'}</button>
                     </div>
-                    <div className="space-y-3 pb-1">{availableMx.map(mx => (<label key={mx.id} className="flex items-start gap-3 p-3 border border-gray-200 rounded cursor-pointer hover:bg-gray-50"><input type="checkbox" checked={selectedMxIds.includes(mx.id)} onChange={() => setSelectedMxIds(prev => prev.includes(mx.id) ? prev.filter(id => id !== mx.id) : [...prev, mx.id])} className="mt-1 w-4 h-4 text-[#F08B46] border-gray-300 rounded" /><div><span className="font-bold text-sm text-navy">{mx.item_name}</span><span className="block text-[10px] text-gray-500">{mx.tracking_type === 'time' ? `Due @ ${mx.due_time} hrs` : `Due ${mx.due_date}`}</span></div></label>))}</div>
+                    <div className="space-y-3 pb-1">{availableMx.map(mx => (<label key={mx.id} className="flex items-start gap-3 p-3 border border-gray-200 rounded cursor-pointer hover:bg-gray-50"><input type="checkbox" checked={selectedMxIds.includes(mx.id)} onChange={() => setSelectedMxIds(prev => prev.includes(mx.id) ? prev.filter(id => id !== mx.id) : [...prev, mx.id])} className="mt-1 w-4 h-4 text-mxOrange border-gray-300 rounded" /><div><span className="font-bold text-sm text-navy">{mx.item_name}</span><span className="block text-[10px] text-gray-500">{mx.tracking_type === 'time' ? `Due @ ${mx.due_time} hrs` : `Due ${mx.due_date}`}</span></div></label>))}</div>
                   </div>
                 );
               })()}

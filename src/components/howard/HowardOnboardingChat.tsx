@@ -42,14 +42,14 @@ export default function HowardOnboardingChat({
       <header className="bg-white border-b border-gray-200 shadow-sm shrink-0">
         <div className="max-w-3xl mx-auto px-4 py-2.5 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="w-9 h-9 rounded-full overflow-hidden border border-[#e6651b]/30 shrink-0">
+            <div className="w-9 h-9 rounded-full overflow-hidden border border-brandOrange/30 shrink-0">
               <img src={HOWARD_LOGO_PATH} alt="" className="w-full h-full object-cover" draggable={false} />
             </div>
             <div className="min-w-0">
               <h1 className="font-oswald text-base font-bold uppercase tracking-widest text-navy leading-none truncate">
                 Setting up with Howard
               </h1>
-              <p className="text-[9px] font-bold uppercase tracking-widest text-[#e6651b] mt-0.5">
+              <p className="text-[9px] font-bold uppercase tracking-widest text-brandOrange mt-0.5">
                 First-time setup
               </p>
             </div>
@@ -71,7 +71,7 @@ export default function HowardOnboardingChat({
             </button>
           </div>
         </div>
-        <div className="max-w-3xl mx-auto px-4 py-1.5 border-t border-[#e6651b]/10 bg-[#e6651b]/5">
+        <div className="max-w-3xl mx-auto px-4 py-1.5 border-t border-brandOrange/10 bg-brandOrange/5">
           <p className="text-[10px] font-roboto italic text-gray-600 leading-snug">
             {HOWARD_PIC_DISCLAIMER}
           </p>

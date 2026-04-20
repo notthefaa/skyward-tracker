@@ -523,12 +523,12 @@ export default function AppShell({ session }: AppShellProps) {
   // always match (e.g., tab.id='log' while activeTab='times'), so a
   // check here would incorrectly return gray on valid active states.
   const getTabColor = (id: string) => {
-    const m: Record<string, string> = { summary: 'text-navy', log: 'text-[#3AB0FF]', times: 'text-[#3AB0FF]', calendar: 'text-[#56B94A]', mx: 'text-[#F08B46]', notes: 'text-[#525659]', more: 'text-[#525659]' };
+    const m: Record<string, string> = { summary: 'text-navy', log: 'text-[#3AB0FF]', times: 'text-[#3AB0FF]', calendar: 'text-[#56B94A]', mx: 'text-mxOrange', notes: 'text-[#525659]', more: 'text-[#525659]' };
     return m[id] || 'text-brandOrange';
   };
 
   const getIndicatorColor = (id: string) => {
-    const m: Record<string, string> = { summary: 'bg-navy', log: 'bg-[#3AB0FF]', times: 'bg-[#3AB0FF]', calendar: 'bg-[#56B94A]', mx: 'bg-[#F08B46]', notes: 'bg-[#525659]', more: 'bg-[#525659]' };
+    const m: Record<string, string> = { summary: 'bg-navy', log: 'bg-[#3AB0FF]', times: 'bg-[#3AB0FF]', calendar: 'bg-[#56B94A]', mx: 'bg-mxOrange', notes: 'bg-[#525659]', more: 'bg-[#525659]' };
     return m[id] || 'bg-brandOrange';
   };
 
@@ -647,7 +647,7 @@ export default function AppShell({ session }: AppShellProps) {
           <div className="flex flex-col">
             <span className="text-[9px] font-bold uppercase tracking-widest text-[#F5B05B] mb-[2px]">Active Aircraft</span>
             <div className="flex items-center gap-3">
-              <div className={`w-3.5 h-3.5 rounded-full shrink-0 shadow-inner ${aircraftStatus === 'grounded' ? 'bg-red-500' : aircraftStatus === 'issues' ? 'bg-[#F08B46]' : 'bg-success'}`} role="status" aria-label={`Aircraft status: ${aircraftStatus}`} />
+              <div className={`w-3.5 h-3.5 rounded-full shrink-0 shadow-inner ${aircraftStatus === 'grounded' ? 'bg-red-500' : aircraftStatus === 'issues' ? 'bg-mxOrange' : 'bg-success'}`} role="status" aria-label={`Aircraft status: ${aircraftStatus}`} />
               <div className="relative flex items-center">
                 <button onClick={() => navigateTab('summary')} aria-label={`View ${activeTail || 'aircraft'} summary`} className="text-xl font-oswald font-bold uppercase tracking-wide text-white hover:text-[#3AB0FF] transition-colors active:scale-95">
                   {activeTail || '—'}
@@ -724,7 +724,7 @@ export default function AppShell({ session }: AppShellProps) {
               </p>
               <button
                 onClick={() => openAircraftForm(null)}
-                className="bg-[#e6651b] text-white font-oswald font-bold uppercase tracking-widest text-sm py-3 px-8 rounded-lg active:scale-95 transition-transform shadow-md"
+                className="bg-brandOrange text-white font-oswald font-bold uppercase tracking-widest text-sm py-3 px-8 rounded-lg active:scale-95 transition-transform shadow-md"
               >
                 <Plus size={16} className="inline mr-2 -mt-0.5" />
                 Add Aircraft

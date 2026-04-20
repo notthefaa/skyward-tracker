@@ -226,7 +226,7 @@ export default function ServicePortal() {
           <img src="/logo.png" alt="Skyward" className="mx-auto h-20 object-contain mb-4 opacity-80" />
           {isExpired ? (
             <>
-              <AlertTriangle size={32} className="mx-auto text-[#F08B46] mb-3" />
+              <AlertTriangle size={32} className="mx-auto text-mxOrange mb-3" />
               <h2 className="font-oswald text-2xl font-bold uppercase tracking-widest text-navy mb-3">Portal Expired</h2>
               <p className="text-sm text-gray-600 font-roboto leading-relaxed">
                 This service event is complete and the portal link is no longer active. Contact the aircraft owner directly if you need access to the records.
@@ -246,7 +246,7 @@ export default function ServicePortal() {
     );
   }
 
-  const statusColor = event.status === 'complete' ? 'bg-[#56B94A]' : event.status === 'ready_for_pickup' ? 'bg-[#56B94A]' : event.status === 'confirmed' ? 'bg-[#3AB0FF]' : event.status === 'cancelled' ? 'bg-[#CE3732]' : 'bg-[#F08B46]';
+  const statusColor = event.status === 'complete' ? 'bg-[#56B94A]' : event.status === 'ready_for_pickup' ? 'bg-[#56B94A]' : event.status === 'confirmed' ? 'bg-[#3AB0FF]' : event.status === 'cancelled' ? 'bg-[#CE3732]' : 'bg-mxOrange';
   const statusLabel = event.status === 'ready_for_pickup' ? 'Ready for Pickup' : event.status;
   const mxLines = lineItems.filter(li => li.item_type === 'maintenance');
   const squawkLines = lineItems.filter(li => li.item_type === 'squawk');
@@ -328,7 +328,7 @@ export default function ServicePortal() {
               {event.proposed_date && !event.confirmed_date && (
                 <div>
                   <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 block">Proposed Date</span>
-                  <span className="font-roboto font-bold text-[#F08B46]">{event.proposed_date}{event.service_duration_days ? ` (${event.service_duration_days} day${event.service_duration_days > 1 ? 's' : ''})` : ''} (by {event.proposed_by})</span>
+                  <span className="font-roboto font-bold text-mxOrange">{event.proposed_date}{event.service_duration_days ? ` (${event.service_duration_days} day${event.service_duration_days > 1 ? 's' : ''})` : ''} (by {event.proposed_by})</span>
                 </div>
               )}
             </div>
@@ -336,8 +336,8 @@ export default function ServicePortal() {
 
           {/* SCHEDULING ACTIONS */}
           {event.status === 'scheduling' && (
-            <div className="bg-white shadow-lg rounded-sm p-6 border-t-4 border-[#F08B46]">
-              <h3 className="font-oswald text-lg font-bold uppercase tracking-widest text-navy mb-4 flex items-center gap-2"><Calendar size={18} className="text-[#F08B46]"/> Scheduling</h3>
+            <div className="bg-white shadow-lg rounded-sm p-6 border-t-4 border-mxOrange">
+              <h3 className="font-oswald text-lg font-bold uppercase tracking-widest text-navy mb-4 flex items-center gap-2"><Calendar size={18} className="text-mxOrange"/> Scheduling</h3>
               
               {event.proposed_by === 'owner' && (
                 <div className="space-y-3">
@@ -352,7 +352,7 @@ export default function ServicePortal() {
                       {!showConfirmWithDuration ? (
                         <div className="flex gap-3">
                           <button onClick={() => setShowConfirmWithDuration(true)} disabled={isSubmitting} className="flex-1 bg-[#56B94A] text-white font-oswald font-bold uppercase tracking-widest py-3 rounded active:scale-95 transition-transform disabled:opacity-50">Confirm Date</button>
-                          <button onClick={() => setShowDateForm(true)} disabled={isSubmitting} className="flex-1 bg-[#F08B46] text-white font-oswald font-bold uppercase tracking-widest py-3 rounded active:scale-95 transition-transform disabled:opacity-50">Propose Different</button>
+                          <button onClick={() => setShowDateForm(true)} disabled={isSubmitting} className="flex-1 bg-mxOrange text-white font-oswald font-bold uppercase tracking-widest py-3 rounded active:scale-95 transition-transform disabled:opacity-50">Propose Different</button>
                         </div>
                       ) : (
                         <div className="p-4 bg-green-50 rounded border border-green-200 space-y-3 animate-fade-in">
@@ -398,20 +398,20 @@ export default function ServicePortal() {
                 <div className="mt-4 p-4 bg-gray-50 rounded border border-gray-200 space-y-3 animate-fade-in">
                   <div>
                     <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Proposed Date *</label>
-                    <input type="date" min={todayDateString} value={proposedDate} onChange={e => setProposedDate(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" />
+                    <input type="date" min={todayDateString} value={proposedDate} onChange={e => setProposedDate(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none" />
                   </div>
                   <div>
                     <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Estimated Duration (Days) *</label>
-                    <input type="number" min="1" value={serviceDurationDays} onChange={e => setServiceDurationDays(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" placeholder="How many days will the aircraft be in your shop?" />
+                    <input type="number" min="1" value={serviceDurationDays} onChange={e => setServiceDurationDays(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none" placeholder="How many days will the aircraft be in your shop?" />
                   </div>
                   <div>
                     <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Shop Availability (Optional)</label>
-                    <textarea value={availabilityNote} onChange={e => setAvailabilityNote(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none min-h-[60px]" placeholder="e.g. We're booked through March 15. Earliest opening is March 17-21." />
+                    <textarea value={availabilityNote} onChange={e => setAvailabilityNote(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none min-h-[60px]" placeholder="e.g. We're booked through March 15. Earliest opening is March 17-21." />
                     <p className="text-[10px] text-gray-400 mt-1">Let the owner know about your upcoming availability so they can plan accordingly.</p>
                   </div>
                   <div>
                     <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Additional Message (Optional)</label>
-                    <textarea value={commentText} onChange={e => setCommentText(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none min-h-[60px]" placeholder="Any other notes..." />
+                    <textarea value={commentText} onChange={e => setCommentText(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none min-h-[60px]" placeholder="Any other notes..." />
                   </div>
                   <button 
                     onClick={() => {
@@ -419,7 +419,7 @@ export default function ServicePortal() {
                       handleAction('propose_date', { proposedDate, serviceDurationDays: parseInt(serviceDurationDays), message: fullMessage });
                     }} 
                     disabled={isSubmitting || !proposedDate || !serviceDurationDays || parseInt(serviceDurationDays) < 1} 
-                    className="w-full bg-[#F08B46] text-white font-oswald font-bold uppercase tracking-widest py-3 rounded active:scale-95 transition-transform disabled:opacity-50"
+                    className="w-full bg-mxOrange text-white font-oswald font-bold uppercase tracking-widest py-3 rounded active:scale-95 transition-transform disabled:opacity-50"
                   >
                     {isSubmitting ? "Sending..." : "Send Proposal"}
                   </button>
@@ -430,8 +430,8 @@ export default function ServicePortal() {
 
           {/* WORK PACKAGE — MX ITEMS */}
           {mxLines.length > 0 && (
-            <div className="bg-white shadow-lg rounded-sm p-6 border-t-4 border-[#F08B46]">
-              <h3 className="font-oswald text-lg font-bold uppercase tracking-widest text-navy mb-4 flex items-center gap-2"><Wrench size={18} className="text-[#F08B46]"/> Maintenance Items</h3>
+            <div className="bg-white shadow-lg rounded-sm p-6 border-t-4 border-mxOrange">
+              <h3 className="font-oswald text-lg font-bold uppercase tracking-widest text-navy mb-4 flex items-center gap-2"><Wrench size={18} className="text-mxOrange"/> Maintenance Items</h3>
               <div className="space-y-3">
                 {mxLines.map((li: any) => (
                   <div key={li.id} className={`p-4 border rounded ${li.line_status === 'complete' ? 'bg-green-50 border-green-200' : li.line_status === 'in_progress' ? 'bg-blue-50 border-blue-200' : 'bg-white border-gray-200'}`}>
@@ -442,7 +442,7 @@ export default function ServicePortal() {
                         {li.mechanic_comment && <p className="text-xs text-[#3AB0FF] mt-2 italic">Note: {li.mechanic_comment}</p>}
                       </div>
                       {event.status !== 'complete' && (
-                        <select value={li.line_status} onChange={e => handleLineStatusUpdate(li.id, e.target.value)} style={whiteBg} className="text-[10px] font-bold uppercase border border-gray-300 rounded px-2 py-1 focus:border-[#F08B46] outline-none">
+                        <select value={li.line_status} onChange={e => handleLineStatusUpdate(li.id, e.target.value)} style={whiteBg} className="text-[10px] font-bold uppercase border border-gray-300 rounded px-2 py-1 focus:border-mxOrange outline-none">
                           <option value="pending">Pending</option>
                           <option value="in_progress">In Progress</option>
                           <option value="complete">Complete</option>
@@ -523,23 +523,23 @@ export default function ServicePortal() {
 
           {/* SUGGEST ADDITIONAL WORK */}
           {event.status !== 'complete' && (
-            <div className="bg-white shadow-lg rounded-sm p-6 border-t-4 border-[#F08B46]">
-              <h3 className="font-oswald text-lg font-bold uppercase tracking-widest text-navy mb-4 flex items-center gap-2"><Plus size={18} className="text-[#F08B46]"/> Suggest Additional Work</h3>
+            <div className="bg-white shadow-lg rounded-sm p-6 border-t-4 border-mxOrange">
+              <h3 className="font-oswald text-lg font-bold uppercase tracking-widest text-navy mb-4 flex items-center gap-2"><Plus size={18} className="text-mxOrange"/> Suggest Additional Work</h3>
               {!showSuggestForm ? (
-                <button onClick={() => setShowSuggestForm(true)} className="w-full border-2 border-dashed border-gray-300 text-gray-500 font-bold py-3 rounded hover:bg-gray-50 hover:border-[#F08B46] active:scale-95 transition-all text-sm uppercase tracking-widest">+ Add Discovered Item</button>
+                <button onClick={() => setShowSuggestForm(true)} className="w-full border-2 border-dashed border-gray-300 text-gray-500 font-bold py-3 rounded hover:bg-gray-50 hover:border-mxOrange active:scale-95 transition-all text-sm uppercase tracking-widest">+ Add Discovered Item</button>
               ) : (
                 <div className="space-y-3 animate-fade-in">
                   <div>
                     <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Item Name *</label>
-                    <input type="text" value={suggestName} onChange={e => setSuggestName(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" placeholder="e.g. Replace left main brake pads" />
+                    <input type="text" value={suggestName} onChange={e => setSuggestName(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none" placeholder="e.g. Replace left main brake pads" />
                   </div>
                   <div>
                     <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Description / Reason (Optional)</label>
-                    <textarea value={suggestDescription} onChange={e => setSuggestDescription(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none min-h-[80px]" placeholder="Pads worn below minimum thickness during inspection..." />
+                    <textarea value={suggestDescription} onChange={e => setSuggestDescription(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none min-h-[80px]" placeholder="Pads worn below minimum thickness during inspection..." />
                   </div>
                   <div className="flex gap-2">
                     <button onClick={() => { setShowSuggestForm(false); setSuggestName(""); setSuggestDescription(""); }} className="flex-1 border border-gray-300 text-gray-600 font-bold py-2 rounded text-xs uppercase tracking-widest hover:bg-gray-50 active:scale-95">Cancel</button>
-                    <button onClick={async () => { if (!suggestName.trim()) return showWarning("Item name is required."); await handleAction('suggest_item', { itemName: suggestName, itemDescription: suggestDescription, message: suggestName }); setSuggestName(""); setSuggestDescription(""); setShowSuggestForm(false); }} disabled={isSubmitting || !suggestName.trim()} className="flex-[2] bg-[#F08B46] text-white font-bold py-2 rounded text-xs uppercase tracking-widest active:scale-95 transition-transform disabled:opacity-50">{isSubmitting ? "Adding..." : "Add & Notify Owner"}</button>
+                    <button onClick={async () => { if (!suggestName.trim()) return showWarning("Item name is required."); await handleAction('suggest_item', { itemName: suggestName, itemDescription: suggestDescription, message: suggestName }); setSuggestName(""); setSuggestDescription(""); setShowSuggestForm(false); }} disabled={isSubmitting || !suggestName.trim()} className="flex-[2] bg-mxOrange text-white font-bold py-2 rounded text-xs uppercase tracking-widest active:scale-95 transition-transform disabled:opacity-50">{isSubmitting ? "Adding..." : "Add & Notify Owner"}</button>
                   </div>
                 </div>
               )}
@@ -669,7 +669,7 @@ export default function ServicePortal() {
                 <p className="text-center text-sm text-gray-400 italic py-4">No messages yet.</p>
               ) : (
                 messages.map((msg: any) => (
-                  <div key={msg.id} className={`p-3 rounded text-sm ${msg.sender === 'mechanic' ? 'bg-blue-50 border-l-4 border-[#3AB0FF]' : msg.sender === 'owner' ? 'bg-orange-50 border-l-4 border-[#F08B46]' : 'bg-gray-50 border-l-4 border-gray-300'}`}>
+                  <div key={msg.id} className={`p-3 rounded text-sm ${msg.sender === 'mechanic' ? 'bg-blue-50 border-l-4 border-[#3AB0FF]' : msg.sender === 'owner' ? 'bg-orange-50 border-l-4 border-mxOrange' : 'bg-gray-50 border-l-4 border-gray-300'}`}>
                     <div className="flex justify-between items-center mb-1">
                       <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500">{msg.sender === 'mechanic' ? 'Maintenance' : msg.sender === 'owner' ? 'Owner' : 'System'}</span>
                       <span className="text-[10px] text-gray-400">{new Date(msg.created_at).toLocaleString()}</span>

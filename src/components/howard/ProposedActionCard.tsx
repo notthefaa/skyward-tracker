@@ -56,7 +56,7 @@ function describePayload(action: ProposedAction): React.ReactNode {
             <div className="flex flex-wrap gap-1 pt-1">
               {p.ifr_capable && <span className="text-[8.5px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-[#3AB0FF]/10 text-[#3AB0FF] border border-[#3AB0FF]/20">IFR</span>}
               {p.adsb_out && <span className="text-[8.5px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-[#56B94A]/10 text-[#56B94A] border border-[#56B94A]/20">ADS-B Out</span>}
-              {p.is_elt && <span className="text-[8.5px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-[#F08B46]/10 text-[#F08B46] border border-[#F08B46]/20">ELT</span>}
+              {p.is_elt && <span className="text-[8.5px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-mxOrange/10 text-mxOrange border border-mxOrange/20">ELT</span>}
             </div>
           )}
         </div>
@@ -84,18 +84,18 @@ function describePayload(action: ProposedAction): React.ReactNode {
       return (
         <div className="text-xs text-gray-700 space-y-2">
           <div>
-            <div className="text-[9px] font-bold uppercase tracking-widest text-[#e6651b] mb-0.5">Your profile</div>
+            <div className="text-[9px] font-bold uppercase tracking-widest text-brandOrange mb-0.5">Your profile</div>
             <div>{profile.full_name} <span className="text-gray-500">({profile.initials})</span></div>
             {ratings.length > 0 && (
               <div className="flex flex-wrap gap-1 mt-1">
                 {ratings.map((r: string) => (
-                  <span key={r} className="text-[8.5px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-[#e6651b]/10 text-[#c35617] border border-[#e6651b]/20">{r}</span>
+                  <span key={r} className="text-[8.5px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-brandOrange/10 text-[#c35617] border border-brandOrange/20">{r}</span>
                 ))}
               </div>
             )}
           </div>
           <div>
-            <div className="text-[9px] font-bold uppercase tracking-widest text-[#e6651b] mb-0.5">Your first aircraft</div>
+            <div className="text-[9px] font-bold uppercase tracking-widest text-brandOrange mb-0.5">Your first aircraft</div>
             <div>
               <span className="font-mono font-bold">{ac.tail_number}</span>
               {(ac.make || ac.model) && <span className="text-gray-600"> — {[ac.make, ac.model].filter(Boolean).join(' ')}</span>}

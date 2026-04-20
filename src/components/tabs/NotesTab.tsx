@@ -242,7 +242,7 @@ export default function NotesTab({ aircraft, session, role, aircraftRole, userIn
                     </span>
                     <span className="text-[10px] uppercase text-gray-400 font-bold">
                       {new Date(note.created_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
-                      {note.edited_at && <span className="text-[#F08B46] ml-2">(Edited: {new Date(note.edited_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })})</span>}
+                      {note.edited_at && <span className="text-mxOrange ml-2">(Edited: {new Date(note.edited_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })})</span>}
                     </span>
                   </div>
                   

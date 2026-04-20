@@ -113,7 +113,7 @@ export default function ServiceEventCreate({
 
   return (
     <div className="space-y-6">
-      <button onClick={() => onNavigate('list')} className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-[#F08B46] bg-orange-50 border border-orange-200 rounded px-3 py-1.5 hover:bg-orange-100 active:scale-95 transition-all mb-2">
+      <button onClick={() => onNavigate('list')} className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-mxOrange bg-orange-50 border border-orange-200 rounded px-3 py-1.5 hover:bg-orange-100 active:scale-95 transition-all mb-2">
         <ChevronDown size={12} className="rotate-90" /> Back to Events
       </button>
 
@@ -121,15 +121,15 @@ export default function ServiceEventCreate({
       {availableMx.length > 0 && (
         <div>
           <div className="flex justify-between items-center mb-2">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-navy flex items-center gap-2"><Wrench size={14} className="text-[#F08B46]" /> Maintenance Items Due</p>
-            <button type="button" onClick={toggleSelectAllMx} className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-[#F08B46] hover:opacity-80 active:scale-95 transition-all">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-navy flex items-center gap-2"><Wrench size={14} className="text-mxOrange" /> Maintenance Items Due</p>
+            <button type="button" onClick={toggleSelectAllMx} className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-mxOrange hover:opacity-80 active:scale-95 transition-all">
               <CheckSquare size={12} /> {availableMx.every(mx => selectedMxIds.includes(mx.id)) ? 'Deselect All' : 'Select All'}
             </button>
           </div>
           <div className="space-y-3 pb-1">
             {availableMx.map(mx => (
               <label key={mx.id} className="flex items-start gap-3 p-3 border border-gray-200 rounded cursor-pointer hover:bg-gray-50">
-                <input type="checkbox" checked={selectedMxIds.includes(mx.id)} onChange={() => setSelectedMxIds(prev => prev.includes(mx.id) ? prev.filter(id => id !== mx.id) : [...prev, mx.id])} className="mt-1 w-4 h-4 text-[#F08B46] border-gray-300 rounded" />
+                <input type="checkbox" checked={selectedMxIds.includes(mx.id)} onChange={() => setSelectedMxIds(prev => prev.includes(mx.id) ? prev.filter(id => id !== mx.id) : [...prev, mx.id])} className="mt-1 w-4 h-4 text-mxOrange border-gray-300 rounded" />
                 <div>
                   <span className="font-bold text-sm text-navy">{mx.item_name}</span>
                   <span className="block text-[10px] text-gray-500">{mx.tracking_type === 'time' ? `Due @ ${mx.due_time} hrs` : `Due ${mx.due_date}`}</span>

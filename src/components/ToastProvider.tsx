@@ -25,7 +25,7 @@ const ToastContext = createContext<ToastContextValue | null>(null);
 const ICON_MAP = {
   success: { Icon: CheckCircle, color: "text-[#56B94A]" },
   error: { Icon: XCircle, color: "text-[#CE3732]" },
-  warning: { Icon: AlertTriangle, color: "text-[#F08B46]" },
+  warning: { Icon: AlertTriangle, color: "text-mxOrange" },
   info: { Icon: Info, color: "text-[#3AB0FF]" },
 };
 

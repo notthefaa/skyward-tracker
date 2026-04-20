@@ -85,7 +85,7 @@ export default function SquawkViewer() {
               </div>
               <div className="text-right">
                 <span className="text-[10px] font-bold uppercase tracking-widest block mb-1">Status</span>
-                <span className={`${isResolved ? 'bg-[#56B94A]' : isGrounded ? 'bg-white text-[#CE3732]' : 'bg-[#F08B46]'} px-3 py-1 rounded text-xs font-bold uppercase tracking-widest`}>
+                <span className={`${isResolved ? 'bg-[#56B94A]' : isGrounded ? 'bg-white text-[#CE3732]' : 'bg-mxOrange'} px-3 py-1 rounded text-xs font-bold uppercase tracking-widest`}>
                   {isResolved ? 'Resolved' : isGrounded ? 'AOG / Grounded' : 'Monitor'}
                 </span>
               </div>
@@ -142,7 +142,7 @@ export default function SquawkViewer() {
 
           {/* DEFERRAL INFO */}
           {squawk.is_deferred && (
-            <div className="bg-white shadow-lg rounded-sm p-6 border-t-4 border-[#F08B46]">
+            <div className="bg-white shadow-lg rounded-sm p-6 border-t-4 border-mxOrange">
               <h3 className="font-oswald text-lg font-bold uppercase tracking-widest text-navy mb-4">Deferral Information</h3>
               <div className="grid grid-cols-2 gap-3 text-sm">
                 {squawk.mel_number && <div><span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 block">MEL</span><span className="font-bold text-navy">{squawk.mel_number}</span></div>}

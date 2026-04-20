@@ -153,7 +153,7 @@ export default function ServiceEventComplete({
 
   return (
     <div className="space-y-5">
-      <button onClick={() => onNavigate('detail', selectedEvent)} className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-[#F08B46] bg-orange-50 border border-orange-200 rounded px-3 py-1.5 hover:bg-orange-100 active:scale-95 transition-all">
+      <button onClick={() => onNavigate('detail', selectedEvent)} className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-mxOrange bg-orange-50 border border-orange-200 rounded px-3 py-1.5 hover:bg-orange-100 active:scale-95 transition-all">
         <ChevronDown size={12} className="rotate-90" /> Back to Event
       </button>
       <p className="text-sm text-gray-600">Enter the logbook data from your mechanic&apos;s sign-off. Finish items one at a time if you need to — uncheck anything you want to leave open for a later visit.</p>
@@ -163,7 +163,7 @@ export default function ServiceEventComplete({
           <div className="flex items-center gap-3">
             <input type="checkbox" checked={item.markComplete} onChange={e => updateItem(idx, 'markComplete', e.target.checked)} className="w-5 h-5 text-[#56B94A] border-gray-300 rounded cursor-pointer shrink-0" />
             <div className="flex items-center gap-2 flex-1">
-              {item.item_type === 'maintenance' ? <Wrench size={14} className="text-[#F08B46]" /> : <AlertTriangle size={14} className="text-[#CE3732]" />}
+              {item.item_type === 'maintenance' ? <Wrench size={14} className="text-mxOrange" /> : <AlertTriangle size={14} className="text-[#CE3732]" />}
               <h4 className="font-oswald font-bold uppercase text-sm text-navy">{item.item_name}</h4>
             </div>
           </div>
