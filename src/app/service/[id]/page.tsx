@@ -152,7 +152,7 @@ export default function ServicePortal() {
       setConfirmDurationDays("");
       setConfirmMessage("");
     } catch (err) {
-      showError("Something went wrong. Please try again.");
+      showError("That didn't go through. Try again.");
     }
     setIsSubmitting(false);
   };
@@ -179,14 +179,14 @@ export default function ServicePortal() {
       });
       if (!res.ok) {
         const errData = await res.json();
-        throw new Error(errData.error || 'Upload failed');
+        throw new Error(errData.error || "Upload didn't finish");
       }
       await fetchEventData();
       setUploadFiles([]);
       setUploadDescription("");
       setShowUploadForm(false);
     } catch (err: any) {
-      showError(err.message || "Upload failed. Please try again.");
+      showError(err.message || "Upload didn't finish. Try again.");
     }
     setIsUploading(false);
   };
@@ -229,7 +229,7 @@ export default function ServicePortal() {
               <AlertTriangle size={32} className="mx-auto text-[#F08B46] mb-3" />
               <h2 className="font-oswald text-2xl font-bold uppercase tracking-widest text-navy mb-3">Portal Expired</h2>
               <p className="text-sm text-gray-600 font-roboto leading-relaxed">
-                This service event has been completed and the portal link is no longer active. If you need to access the records, please contact the aircraft owner directly.
+                This service event is complete and the portal link is no longer active. Contact the aircraft owner directly if you need access to the records.
               </p>
             </>
           ) : (
@@ -237,7 +237,7 @@ export default function ServicePortal() {
               <XCircle size={32} className="mx-auto text-[#CE3732] mb-3" />
               <h2 className="font-oswald text-2xl font-bold uppercase tracking-widest text-navy mb-3">Service Event Not Found</h2>
               <p className="text-sm text-gray-600 font-roboto leading-relaxed">
-                The link you followed doesn't match an active service event. It may have been revoked or mistyped. Please contact the aircraft owner for a fresh link.
+                The link you followed doesn&apos;t match an active service event — it may have been revoked or typed wrong. Contact the aircraft owner for a fresh one.
               </p>
             </>
           )}
@@ -344,7 +344,7 @@ export default function ServicePortal() {
                   <p className="text-sm text-gray-600">
                     {event.proposed_date 
                       ? <>The owner has proposed <strong>{event.proposed_date}</strong>. Does this date work for your shop?</>
-                      : <>The owner has requested your availability. Please propose a service date below.</>
+                      : <>The owner wants to know your availability. Propose a service date below.</>
                     }
                   </p>
                   {event.proposed_date && (
@@ -387,7 +387,7 @@ export default function ServicePortal() {
 
               {(event.proposed_by === 'mechanic' || (!event.proposed_date && event.proposed_by !== 'owner')) && (
                 <div className="space-y-3">
-                  <p className="text-sm text-gray-600">{event.proposed_by === 'mechanic' ? 'Waiting for owner to confirm your proposed date.' : 'Please propose a service date.'}</p>
+                  <p className="text-sm text-gray-600">{event.proposed_by === 'mechanic' ? 'Waiting for owner to confirm your proposed date.' : 'Propose a service date.'}</p>
                   {!event.proposed_date && (
                     <button onClick={() => setShowDateForm(true)} className="w-full bg-[#091F3C] text-white font-oswald font-bold uppercase tracking-widest py-3 rounded active:scale-95 transition-transform">Propose a Date</button>
                   )}
@@ -640,8 +640,8 @@ export default function ServicePortal() {
                 <button onClick={() => setShowDeclineConfirm(true)} className="w-full text-[10px] font-bold uppercase tracking-widest text-[#CE3732] border border-red-200 bg-red-50 rounded py-2.5 hover:bg-red-100 active:scale-95 transition-all flex items-center justify-center gap-1.5"><XCircle size={12} /> Unable to Accommodate — Decline Service</button>
               ) : (
                 <div className="space-y-3 animate-fade-in">
-                  <p className="text-sm font-bold text-navy">Are you sure you want to decline this service request?</p>
-                  <p className="text-xs text-gray-500">The owner will be notified via email.</p>
+                  <p className="text-sm font-bold text-navy">Decline this service request?</p>
+                  <p className="text-xs text-gray-500">The owner will be notified by email.</p>
                   <textarea value={declineReason} onChange={e => setDeclineReason(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-[#CE3732] outline-none min-h-[60px]" placeholder="Reason (optional) — e.g. shop fully booked through Q2, recommend contacting..." />
                   <div className="flex gap-2">
                     <button onClick={() => { setShowDeclineConfirm(false); setDeclineReason(""); }} className="flex-1 border border-gray-300 text-gray-600 font-bold py-2 rounded text-xs uppercase tracking-widest hover:bg-gray-50 active:scale-95">Keep Event</button>
