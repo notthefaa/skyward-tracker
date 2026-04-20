@@ -256,7 +256,16 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
         </div>
       )}
 
-      <div className="fixed inset-0 bg-black/60 z-[10000] overflow-y-auto animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={onClose}>
+      <div className="fixed inset-0 bg-black/60 z-[10000] animate-fade-in" onClick={onClose}>
+        <div
+          className="absolute left-0 right-0 overflow-y-auto"
+          style={{
+            top: 'calc(3.5rem + env(safe-area-inset-top, 0px))',
+            bottom: 'calc(3.5rem + env(safe-area-inset-bottom, 0px))',
+            overscrollBehavior: 'contain',
+            WebkitOverflowScrolling: 'touch',
+          }}
+        >
         <div className="flex min-h-full items-center justify-center p-4">
         <div className="bg-white rounded shadow-2xl w-full max-w-lg p-5 border-t-4 border-mxOrange animate-slide-up" onClick={e => e.stopPropagation()}>
 
@@ -359,6 +368,7 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
             </div>
           )}
 
+        </div>
         </div>
         </div>
       </div>
