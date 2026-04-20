@@ -355,10 +355,10 @@ export default function ChecksTab({ aircraft, session, role, userInitials }: Pro
             <DialAction label="Record VOR Check" onPress={() => { scrollTo(vorRef); setVorOpenSignal(n => n + 1); }} />
           </div>
           <div className="flex justify-center">
-            <DialAction label="Record Oil" onPress={() => { scrollTo(oilRef); setOilOpenSignal(n => n + 1); }} />
+            <DialAction label="Record Oil Service" onPress={() => { scrollTo(oilRef); setOilOpenSignal(n => n + 1); }} />
           </div>
           <div className="flex justify-center">
-            <DialAction label="Record Tires" onPress={() => { scrollTo(tireRef); setTireOpenSignal(n => n + 1); }} />
+            <DialAction label="Record PSI Service" onPress={() => { scrollTo(tireRef); setTireOpenSignal(n => n + 1); }} />
           </div>
         </div>
       </div>
