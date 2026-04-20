@@ -270,7 +270,7 @@ export default function SummaryTab({
           <div className="flex min-h-full items-center justify-center p-4">
           <div className="bg-white rounded shadow-2xl w-full max-w-sm p-6 border-t-4 border-[#CE3732] animate-slide-up relative" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-4"><h2 className="font-oswald text-2xl font-bold uppercase text-[#CE3732] flex items-center gap-2"><AlertTriangle size={24} /> Delete Aircraft</h2><button onClick={() => setShowDeleteModal(false)} className="text-gray-400 hover:text-red-500 transition-colors"><X size={24}/></button></div>
-            <p className="text-sm text-navy font-roboto mb-6 leading-relaxed"><strong>WARNING:</strong> This action is strictly irreversible.<br/><br/>Deleting <strong className="text-[#CE3732]">{aircraft.tail_number}</strong> will permanently erase all associated flight logs, maintenance items, squawks, and notes from the database.</p>
+            <p className="text-sm text-navy font-roboto mb-6 leading-relaxed"><strong>Heads up:</strong> no undo on this one.<br/><br/>Every flight log, maintenance item, squawk, and note tied to <strong className="text-[#CE3732]">{aircraft.tail_number}</strong> goes with it.</p>
             <div className="flex gap-4">
               <button onClick={() => setShowDeleteModal(false)} className="flex-1 border border-gray-300 text-gray-600 font-bold uppercase tracking-widest text-[10px] py-3 rounded hover:bg-gray-50 transition-colors active:scale-95">Cancel</button>
               <button onClick={() => { setShowDeleteModal(false); onDeleteAircraft(aircraft.id); }} className="flex-1 bg-[#CE3732] text-white font-bold uppercase tracking-widest text-[10px] py-3 rounded hover:bg-red-700 transition-colors shadow-md active:scale-95">Confirm Delete</button>
@@ -304,7 +304,7 @@ export default function SummaryTab({
           <div className="flex min-h-full items-center justify-center p-4">
           <div className="bg-white rounded shadow-2xl w-full max-w-sm p-6 border-t-4 border-[#3AB0FF] animate-slide-up" onClick={e => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-4"><h2 className="font-oswald text-xl font-bold uppercase text-navy flex items-center gap-2"><UserPlus size={20} className="text-[#3AB0FF]" /> Invite Pilot</h2><button onClick={() => setShowInviteModal(false)} className="text-gray-400 hover:text-red-500"><X size={24} /></button></div>
-            <p className="text-xs text-gray-500 mb-4">Invite a user to <strong>{aircraft.tail_number}</strong>.</p>
+            <p className="text-xs text-gray-500 mb-4">Give a pilot access to <strong>{aircraft.tail_number}</strong>.</p>
             <form onSubmit={handleInvitePilot} className="space-y-4">
               <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Email Address *</label><input type="email" required value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#3AB0FF] outline-none" placeholder="pilot@example.com" /></div>
               <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Role for {aircraft.tail_number}</label><select value={inviteRole} onChange={e => setInviteRole(e.target.value as 'admin' | 'pilot')} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#3AB0FF] outline-none"><option value="pilot">Aircraft Pilot</option><option value="admin">Aircraft Admin</option></select></div>
@@ -368,7 +368,7 @@ export default function SummaryTab({
           return (
             <div onClick={() => setActiveTab('mx')} className="bg-green-50 shadow-lg border-2 border-green-300 rounded-sm p-3 flex items-center gap-3 cursor-pointer hover:shadow-xl active:scale-[0.98] transition-all">
               <div className="bg-[#56B94A] text-white p-2 rounded-full shrink-0"><CheckCircle size={16} /></div>
-              <p className="text-sm font-roboto text-navy"><span className="font-bold">Ready for Pickup</span>{currentStatus.mx_contact_name ? ` — ${currentStatus.mx_contact_name} has completed all work` : ' — All maintenance work is complete'}</p>
+              <p className="text-sm font-roboto text-navy"><span className="font-bold">Ready for Pickup</span>{currentStatus.mx_contact_name ? ` — ${currentStatus.mx_contact_name} is done` : " — work's done"}</p>
             </div>
           );
         }
@@ -435,7 +435,7 @@ export default function SummaryTab({
 
         <div onClick={() => setActiveTab('mx')} className={`bg-white border shadow-sm rounded-sm p-4 flex gap-4 items-center transition-colors cursor-pointer active:scale-[0.98] ${nextMx ? 'border-gray-200 hover:bg-orange-50' : 'border-gray-200 opacity-70 hover:bg-gray-50'}`}>
           <div className={`p-3 rounded-full shrink-0 ${nextMx ? 'bg-orange-50 text-[#F08B46]' : 'bg-gray-100 text-gray-400'}`}><Wrench size={20}/></div>
-          <div className="flex-1"><span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Next Mx Due</span>{nextMx ? (<><p className="text-sm font-bold text-navy leading-tight">{nextMx.item_name}</p><p className={`text-xs font-bold mt-0.5 ${mxTextColor}`}>{nextMx.dueText}</p></>) : <p className="text-sm font-bold text-gray-500 leading-tight">No Maintenance Tracked</p>}</div>
+          <div className="flex-1"><span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Next Mx Due</span>{nextMx ? (<><p className="text-sm font-bold text-navy leading-tight">{nextMx.item_name}</p><p className={`text-xs font-bold mt-0.5 ${mxTextColor}`}>{nextMx.dueText}</p></>) : <p className="text-sm font-bold text-gray-500 leading-tight">Nothing tracked yet</p>}</div>
         </div>
 
         <div onClick={onNavigateToSquawks} className={`bg-white border shadow-sm rounded-sm p-4 flex gap-4 items-center transition-colors cursor-pointer active:scale-[0.98] ${activeSquawks.length > 0 ? 'border-red-200 hover:bg-red-50' : 'border-gray-200 opacity-70 hover:bg-gray-50'}`}>

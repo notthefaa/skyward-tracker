@@ -164,7 +164,7 @@ export default function FleetSummary({
           ...ac,
           status,
           squawkCount: acSq.length,
-          nextMxName: nextMx ? nextMx.item_name : (needsSetupCount > 0 ? `${needsSetupCount} Need Setup` : 'No MX Tracked'),
+          nextMxName: nextMx ? nextMx.item_name : (needsSetupCount > 0 ? `${needsSetupCount} Need Setup` : 'Nothing tracked yet'),
           nextMxDueLabel: nextMx ? formatNextMxDue(nextMx) : null,
           nextMxIsExpired: nextMx ? nextMx.isExpired : false,
           lastFlownLabel: lastFlight ? formatLastFlown(lastFlight.created_at, lastFlight.initials) : null,
