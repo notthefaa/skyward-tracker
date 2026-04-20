@@ -182,7 +182,7 @@ export default function OilTab({
           },
         }),
       });
-      if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Failed to save.'); }
+      if (!res.ok) { const d = await res.json(); throw new Error(d.error || "Couldn't save the oil log."); }
       showSuccess('Oil log saved.');
       setShowModal(false);
       mutate();
@@ -201,7 +201,7 @@ export default function OilTab({
     if (!ok) return;
     try {
       const res = await authFetch('/api/oil-logs', { method: 'DELETE', body: JSON.stringify({ logId: log.id, aircraftId: aircraft.id }) });
-      if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Failed to delete.'); }
+      if (!res.ok) { const d = await res.json(); throw new Error(d.error || "Couldn't delete the oil log."); }
       showSuccess('Oil log deleted.');
       mutate();
       globalMutate(swrKeys.oilChart(aircraft.id));

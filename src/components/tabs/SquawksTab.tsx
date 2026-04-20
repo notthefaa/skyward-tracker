@@ -236,13 +236,13 @@ export default function SquawksTab({
           method: 'PUT',
           body: JSON.stringify({ squawkId: editingId, aircraftId: aircraft!.id, squawkData })
         });
-        if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || 'Failed to update squawk'); }
+        if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || "Couldn't update the squawk"); }
       } else {
         const res = await authFetch('/api/squawks', {
           method: 'POST',
           body: JSON.stringify({ aircraftId: aircraft!.id, squawkData })
         });
-        if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || 'Failed to create squawk'); }
+        if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || "Couldn't create the squawk"); }
         const { squawk: newSquawk } = await res.json();
         if (newSquawk && notifyMx) {
           try {

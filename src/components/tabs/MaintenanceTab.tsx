@@ -240,15 +240,15 @@ export default function MaintenanceTab({
       }
       if (editingId) {
         const res = await authFetch('/api/maintenance-items', { method: 'PUT', body: JSON.stringify({ itemId: editingId, aircraftId: aircraft!.id, itemData: payload }) });
-        if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || 'Failed to update maintenance item'); }
+        if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || "Couldn't update the maintenance item"); }
       } else {
         const res = await authFetch('/api/maintenance-items', { method: 'POST', body: JSON.stringify({ aircraftId: aircraft!.id, itemData: payload }) });
-        if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || 'Failed to create maintenance item'); }
+        if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || "Couldn't create the maintenance item"); }
       }
       await mutate(); onGroundedStatusChange(); setShowMxModal(false);
       showSuccess(editingId ? 'Maintenance item updated.' : 'Maintenance item added.');
     } catch (err: any) {
-      showError(err?.message || 'Failed to save maintenance item.');
+      showError(err?.message || "Couldn't save the maintenance item.");
     } finally {
       setIsSubmitting(false);
     }
@@ -264,11 +264,11 @@ export default function MaintenanceTab({
     if (!ok) return;
     try {
       const res = await authFetch('/api/maintenance-items', { method: 'DELETE', body: JSON.stringify({ itemId: id, aircraftId: aircraft!.id }) });
-      if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || 'Failed to delete maintenance item'); }
+      if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || "Couldn't delete the maintenance item"); }
       await mutate(); onGroundedStatusChange();
       showSuccess('Maintenance item deleted.');
     } catch (err: any) {
-      showError(err?.message || 'Failed to delete maintenance item.');
+      showError(err?.message || "Couldn't delete the maintenance item.");
     }
   };
 

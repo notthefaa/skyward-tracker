@@ -185,7 +185,7 @@ export default function TimesTab({
       method: 'DELETE',
       body: JSON.stringify({ logId: log.id, aircraftId: aircraft!.id, aircraftUpdate: updateData })
     });
-    if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Failed to delete flight log'); }
+    if (!res.ok) { const d = await res.json(); throw new Error(d.error || "Couldn't delete the flight log"); }
 
     setLogPage(1);
     await mutate(); 
@@ -373,18 +373,18 @@ export default function TimesTab({
           method: 'PUT',
           body: JSON.stringify({ logId: editingId, aircraftId: aircraft!.id, logData: payload, aircraftUpdate: editAircraftUpdate })
         });
-        if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || 'Failed to update flight log'); }
+        if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || "Couldn't update the flight log"); }
       } else {
         const res = await authFetch('/api/flight-logs', {
           method: 'POST',
           body: JSON.stringify({ aircraftId: aircraft!.id, logData: payload, aircraftUpdate })
         });
-        if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || 'Failed to save flight log'); }
+        if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || "Couldn't save the flight log"); }
       }
       await mutate(); onUpdate(); setShowLogModal(false);
       showSuccess(editingId ? "Flight log updated" : "Flight logged");
     } catch (err: any) {
-      showError(err?.message || 'Failed to save flight log.');
+      showError(err?.message || "Couldn't save the flight log.");
     } finally {
       setIsSubmitting(false);
     }

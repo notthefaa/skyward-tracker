@@ -201,7 +201,7 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
       });
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error || 'Failed to send');
+        throw new Error(errData.error || "Couldn't send the work package");
       }
       showSuccess("Work package sent to mechanic");
       fetchEvents();

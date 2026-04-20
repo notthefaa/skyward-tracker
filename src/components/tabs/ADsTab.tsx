@@ -37,7 +37,7 @@ export default function ADsTab({ aircraft, role, aircraftRole }: Props) {
     aircraft ? swrKeys.ads(aircraft.id) : null,
     async () => {
       const res = await authFetch(`/api/ads?aircraftId=${aircraft!.id}`);
-      if (!res.ok) throw new Error('Failed to load ADs');
+      if (!res.ok) throw new Error("Couldn't load ADs");
       return await res.json() as { ads: AirworthinessDirective[] };
     }
   );
@@ -136,7 +136,7 @@ export default function ADsTab({ aircraft, role, aircraftRole }: Props) {
         ? JSON.stringify({ adId: editingId, aircraftId: aircraft.id, adData: payload })
         : JSON.stringify({ aircraftId: aircraft.id, adData: payload });
       const res = await authFetch('/api/ads', { method, body });
-      if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Failed to save AD'); }
+      if (!res.ok) { const d = await res.json(); throw new Error(d.error || "Couldn't save the AD"); }
       showSuccess(editingId ? 'AD updated.' : 'AD added.');
       setShowForm(false);
       await mutate();
@@ -148,7 +148,7 @@ export default function ADsTab({ aircraft, role, aircraftRole }: Props) {
     if (!aircraft) return;
     const ok = await confirm({
       title: 'Remove AD from tracking?',
-      message: `${a.ad_number} will be soft-deleted. History stays in aft_record_history.`,
+      message: `${a.ad_number} will be removed from tracking. The compliance history stays in the record.`,
       confirmText: 'Remove',
       variant: 'danger',
     });
@@ -158,7 +158,7 @@ export default function ADsTab({ aircraft, role, aircraftRole }: Props) {
         method: 'DELETE',
         body: JSON.stringify({ adId: a.id, aircraftId: aircraft.id }),
       });
-      if (!res.ok) throw new Error('Failed to remove');
+      if (!res.ok) throw new Error("Couldn't remove the AD");
       showSuccess('Removed.');
       await mutate();
     } catch (err: any) { showError(err.message); }

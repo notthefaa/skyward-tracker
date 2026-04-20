@@ -158,7 +158,7 @@ export default function ProposedActionCard({ action, onChange }: Props) {
       const res = await authFetch(`/api/howard/actions/${action.id}`, { method: 'POST' });
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
-        throw new Error(d.error || (mode === 'retry' ? 'Retry failed' : 'Failed to confirm'));
+        throw new Error(d.error || (mode === 'retry' ? "Retry didn't work" : "Couldn't confirm"));
       }
       invalidateAircraftCache();
       onChange();
@@ -175,7 +175,7 @@ export default function ProposedActionCard({ action, onChange }: Props) {
       const res = await authFetch(`/api/howard/actions/${action.id}`, { method: 'DELETE' });
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
-        throw new Error(d.error || 'Failed to cancel');
+        throw new Error(d.error || "Couldn't cancel");
       }
       // Cancel has no side-effect on aircraft data, but flushing here
       // is cheap and keeps behavior symmetric if this ever grows to

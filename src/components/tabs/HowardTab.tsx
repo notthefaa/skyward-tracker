@@ -167,7 +167,7 @@ export default function HowardTab({
     userId ? swrKeys.howardUser(userId) : null,
     async () => {
       const res = await authFetch(`/api/howard`);
-      if (!res.ok) throw new Error('Failed to load conversation');
+      if (!res.ok) throw new Error("Couldn't load the conversation");
       return await res.json() as { thread: any; messages: HowardMessage[] };
     },
     // Focus/reconnect revalidation mid-stream can wipe optimistic/streamed
@@ -190,7 +190,7 @@ export default function HowardTab({
     threadId ? swrKeys.howardActions(threadId) : null,
     async () => {
       const res = await authFetch(`/api/howard/actions?threadId=${threadId}`);
-      if (!res.ok) throw new Error('Failed to load actions');
+      if (!res.ok) throw new Error("Couldn't load actions");
       return await res.json() as { actions: ProposedAction[] };
     }
   );
@@ -285,8 +285,8 @@ export default function HowardTab({
       if (currentAircraft?.tail_number) setAcknowledgedTail(currentAircraft.tail_number);
 
       if (!res.ok || !res.body) {
-        const d = await res.json().catch(() => ({ error: 'Failed to send message' }));
-        throw new Error(d.error || 'Failed to send message');
+        const d = await res.json().catch(() => ({ error: "Couldn't reach Howard" }));
+        throw new Error(d.error || "Couldn't reach Howard");
       }
 
       const reader = res.body.getReader();

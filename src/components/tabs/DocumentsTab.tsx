@@ -44,7 +44,7 @@ export default function DocumentsTab({
     aircraft ? swrKeys.docs(aircraft.id) : null,
     async () => {
       const res = await authFetch(`/api/documents?aircraftId=${aircraft!.id}`);
-      if (!res.ok) throw new Error('Failed to load documents');
+      if (!res.ok) throw new Error("Couldn't load documents");
       return await res.json() as { documents: AircraftDocument[] };
     }
   );
@@ -106,7 +106,7 @@ export default function DocumentsTab({
         method: 'DELETE',
         body: JSON.stringify({ documentId: doc.id, aircraftId: aircraft.id }),
       });
-      if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Failed to delete.'); }
+      if (!res.ok) { const d = await res.json(); throw new Error(d.error || "Couldn't delete the document."); }
       showSuccess('Document deleted.');
       mutate();
     } catch (err: any) { showError(err.message); }

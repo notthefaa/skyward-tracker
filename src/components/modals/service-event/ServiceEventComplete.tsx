@@ -129,7 +129,7 @@ export default function ServiceEventComplete({
         method: 'POST',
         body: JSON.stringify({ eventId: selectedEvent.id, lineCompletions, partial: true })
       });
-      if (!res.ok) throw new Error('Failed to complete items');
+      if (!res.ok) throw new Error("Couldn't complete the items");
 
       onRefresh();
 

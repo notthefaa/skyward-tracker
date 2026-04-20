@@ -249,7 +249,7 @@ export default function MxTemplatePickerModal({ aircraft, show, onClose, onRefre
     if (!res.ok) {
       const errData = await res.json().catch(() => ({ error: 'Unknown error' }));
       console.error('Template insert error:', errData);
-      showError('Failed to insert maintenance items: ' + (errData.error || 'Unknown error'));
+      showError("Couldn't add the maintenance items: " + (errData.error || 'Unknown error'));
       setIsInserting(false);
       setStep('select');
       return;

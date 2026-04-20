@@ -458,7 +458,7 @@ export default function AppShell({ session }: AppShellProps) {
       });
       if (!res.ok) {
         const errData = await res.json();
-        throw new Error(errData.error || 'Failed to delete aircraft');
+        throw new Error(errData.error || "Couldn't delete the aircraft");
       }
     } catch (err: any) {
       showError(err.message);
@@ -501,9 +501,9 @@ export default function AppShell({ session }: AppShellProps) {
     if (navigator.clipboard?.writeText) {
       navigator.clipboard.writeText(companionUrl)
         .then(() => showSuccess("Link copied! Open your phone's browser, paste the link, and Add to Home Screen."))
-        .catch(() => showInfo("Please manually copy this link: " + companionUrl));
+        .catch(() => showInfo("Couldn't copy automatically — copy this link: " + companionUrl));
     } else {
-      showInfo("Please manually copy this link: " + companionUrl);
+      showInfo("Couldn't copy automatically — copy this link: " + companionUrl);
     }
   };
 

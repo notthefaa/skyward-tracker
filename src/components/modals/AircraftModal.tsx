@@ -114,7 +114,7 @@ export default function AircraftModal({
 
   const handleFile = (file: File) => {
     if (!file.type.startsWith('image/')) {
-      showError('Please select an image file.');
+      showError('Pick an image file (JPG or PNG).');
       return;
     }
     const sizeError = validateFileSize(file);
@@ -192,7 +192,7 @@ export default function AircraftModal({
           }
         } catch (err) { 
           console.error('Avatar upload failed:', err); 
-          showWarning('Failed to upload photo. Aircraft saved without photo.');
+          showWarning("Photo upload didn't work. Aircraft saved without it — you can add a photo later.");
         }
       }
     }
@@ -259,7 +259,7 @@ export default function AircraftModal({
       const { error: updateError } = await supabase.from('aft_aircraft').update(basePayload).eq('id', existingAircraft.id);
       if (updateError) {
         console.error('[AircraftModal] Update failed:', updateError);
-        showError('Failed to update aircraft: ' + friendlyPgError(updateError));
+        showError("Couldn't update the aircraft: " + friendlyPgError(updateError));
         setIsSubmitting(false);
         return;
       }
@@ -285,7 +285,7 @@ export default function AircraftModal({
         });
         if (!res.ok) {
           const errData = await res.json();
-          throw new Error(errData.error || 'Failed to create aircraft.');
+          throw new Error(errData.error || "Couldn't create the aircraft.");
         }
         const result = await res.json();
         newAircraftId = result.aircraft?.id || null;

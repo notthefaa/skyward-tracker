@@ -160,7 +160,7 @@ export default function TireTab({
           },
         }),
       });
-      if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Failed to save.'); }
+      if (!res.ok) { const d = await res.json(); throw new Error(d.error || "Couldn't save the tire check."); }
       showSuccess('Tire check logged.');
       setShowModal(false);
       mutate();
@@ -174,7 +174,7 @@ export default function TireTab({
     if (!ok) return;
     try {
       const res = await authFetch('/api/tire-checks', { method: 'DELETE', body: JSON.stringify({ logId: check.id, aircraftId: aircraft.id }) });
-      if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Failed to delete.'); }
+      if (!res.ok) { const d = await res.json(); throw new Error(d.error || "Couldn't delete the tire check."); }
       showSuccess('Tire check deleted.');
       mutate();
     } catch (err: any) { showError(err.message); }

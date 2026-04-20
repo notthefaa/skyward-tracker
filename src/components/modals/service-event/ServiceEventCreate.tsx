@@ -67,7 +67,7 @@ export default function ServiceEventCreate({
       const createRes = await authFetch('/api/mx-events/create', { method: 'POST', body: JSON.stringify({ aircraftId: aircraft.id, mxItemIds: selectedMxIds, squawkIds: selectedSquawkIds, addonServices: selectedAddons, proposedDate: (wantsToPropose && proposedDate) ? proposedDate : null }) });
       if (!createRes.ok) {
         const d = await createRes.json().catch(() => ({}));
-        throw new Error(d.error || 'Failed to create event');
+        throw new Error(d.error || "Couldn't create the event");
       }
       const createData = await createRes.json();
       createdEventId = createData.eventId;
@@ -75,7 +75,7 @@ export default function ServiceEventCreate({
       const sendRes = await authFetch('/api/mx-events/send-workpackage', { method: 'POST', body: JSON.stringify({ eventId: createdEventId, proposedDate: (wantsToPropose && proposedDate) ? proposedDate : null }) });
       if (!sendRes.ok) {
         const d = await sendRes.json().catch(() => ({}));
-        throw new Error(d.error || 'Failed to send work package');
+        throw new Error(d.error || "Couldn't send the work package");
       }
 
       onRefresh();
@@ -101,7 +101,7 @@ export default function ServiceEventCreate({
     setIsSavingDraft(true);
     try {
       const res = await authFetch('/api/mx-events/create', { method: 'POST', body: JSON.stringify({ aircraftId: aircraft.id, mxItemIds: selectedMxIds, squawkIds: selectedSquawkIds, addonServices: selectedAddons, proposedDate: (wantsToPropose && proposedDate) ? proposedDate : null }) });
-      if (!res.ok) throw new Error('Failed to create draft');
+      if (!res.ok) throw new Error("Couldn't create the draft");
       onRefresh();
       showSuccess("Draft saved");
       onNavigate('list');

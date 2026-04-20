@@ -90,7 +90,7 @@ export default function EquipmentTab({ aircraft, role, aircraftRole }: Props) {
     aircraft ? swrKeys.equipment(aircraft.id, includeRemoved) : null,
     async () => {
       const res = await authFetch(`/api/equipment?aircraftId=${aircraft!.id}${includeRemoved ? '&includeRemoved=true' : ''}`);
-      if (!res.ok) throw new Error('Failed to load equipment');
+      if (!res.ok) throw new Error("Couldn't load equipment");
       return await res.json() as { equipment: AircraftEquipment[] };
     }
   );
@@ -197,7 +197,7 @@ export default function EquipmentTab({ aircraft, role, aircraftRole }: Props) {
         ? JSON.stringify({ equipmentId: editingId, aircraftId: aircraft.id, equipmentData: payload })
         : JSON.stringify({ aircraftId: aircraft.id, equipmentData: payload });
       const res = await authFetch('/api/equipment', { method, body });
-      if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Failed to save'); }
+      if (!res.ok) { const d = await res.json(); throw new Error(d.error || "Couldn't save equipment"); }
       showSuccess(editingId ? 'Equipment updated.' : 'Equipment added.');
       setShowForm(false);
       await mutate();
@@ -223,7 +223,7 @@ export default function EquipmentTab({ aircraft, role, aircraftRole }: Props) {
           equipmentData: { removed_at: new Date().toISOString().split('T')[0] },
         }),
       });
-      if (!res.ok) throw new Error('Failed to mark removed');
+      if (!res.ok) throw new Error("Couldn't mark it removed");
       showSuccess('Marked as removed.');
       await mutate();
     } catch (err: any) { showError(err.message); }
@@ -243,7 +243,7 @@ export default function EquipmentTab({ aircraft, role, aircraftRole }: Props) {
         method: 'DELETE',
         body: JSON.stringify({ equipmentId: e.id, aircraftId: aircraft.id }),
       });
-      if (!res.ok) throw new Error('Failed to delete');
+      if (!res.ok) throw new Error("Couldn't delete the equipment record");
       showSuccess('Deleted.');
       await mutate();
     } catch (err: any) { showError(err.message); }

@@ -204,7 +204,7 @@ export default function SummaryTab({
     try {
       const res = await authFetch('/api/pilot-invite', { method: 'POST', body: JSON.stringify({ email: inviteEmail, aircraftId: aircraft.id, aircraftRole: inviteRole }) });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to invite');
+      if (!res.ok) throw new Error(data.error || "Couldn't send the invitation");
       showSuccess(data.message || 'Invitation sent'); setShowInviteModal(false); setInviteEmail(""); setInviteRole('pilot'); mutateCrew(); refreshData();
     } catch (err: any) { showError(err.message); }
     setIsInviting(false);
@@ -216,7 +216,7 @@ export default function SummaryTab({
     try {
       const res = await authFetch('/api/aircraft-access', { method: 'PUT', body: JSON.stringify({ targetUserId, aircraftId: aircraft.id, newRole }) });
       const resData = await res.json();
-      if (!res.ok) throw new Error(resData.error || 'Failed to update role');
+      if (!res.ok) throw new Error(resData.error || "Couldn't update the role");
       showSuccess("Role updated"); setChangingRoleUserId(null); mutateCrew(); refreshData();
     } catch (err: any) { showError(err.message); }
     setIsCrewUpdating(false);
@@ -228,7 +228,7 @@ export default function SummaryTab({
     try {
       const res = await authFetch('/api/aircraft-access', { method: 'DELETE', body: JSON.stringify({ targetUserId, aircraftId: aircraft.id }) });
       const resData = await res.json();
-      if (!res.ok) throw new Error(resData.error || 'Failed to remove user');
+      if (!res.ok) throw new Error(resData.error || "Couldn't remove the pilot");
       showSuccess("Pilot removed"); setRemovingUserId(null); mutateCrew(); refreshData();
     } catch (err: any) { showError(err.message); }
     setIsCrewUpdating(false);

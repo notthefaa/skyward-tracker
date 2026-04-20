@@ -154,7 +154,7 @@ export default function NotesTab({ aircraft, session, role, aircraftRole, userIn
           method: 'PUT',
           body: JSON.stringify({ noteId: editingId, aircraftId: aircraft.id, noteData })
         });
-        if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || 'Failed to update note'); }
+        if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || "Couldn't update the note"); }
       } else {
         noteData.author_email = session.user.email;
         noteData.author_initials = userInitials;
@@ -162,7 +162,7 @@ export default function NotesTab({ aircraft, session, role, aircraftRole, userIn
           method: 'POST',
           body: JSON.stringify({ aircraftId: aircraft.id, noteData })
         });
-        if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || 'Failed to create note'); }
+        if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || "Couldn't create the note"); }
 
         try {
           await authFetch('/api/emails/note-notify', {
@@ -184,7 +184,7 @@ export default function NotesTab({ aircraft, session, role, aircraftRole, userIn
       // Note row never landed — remove the images we just uploaded
       // so they don't sit in storage forever with no referencing row.
       await cleanupUploadedImages(uploadedPathsToRollback);
-      showError(err?.message || 'Failed to save note.');
+      showError(err?.message || "Couldn't save the note.");
     } finally {
       setIsSubmitting(false);
     }
@@ -203,11 +203,11 @@ export default function NotesTab({ aircraft, session, role, aircraftRole, userIn
         method: 'DELETE',
         body: JSON.stringify({ noteId: id, aircraftId: aircraft.id })
       });
-      if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || 'Failed to delete note'); }
+      if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || "Couldn't delete the note"); }
       await mutate();
       showSuccess('Note deleted.');
     } catch (err: any) {
-      showError(err?.message || 'Failed to delete note.');
+      showError(err?.message || "Couldn't delete the note.");
     }
   };
 
