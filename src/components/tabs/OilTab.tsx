@@ -214,15 +214,15 @@ export default function OilTab({
 
   return (
     <>
-      <div className="bg-cream shadow-lg rounded-sm p-4 md:p-6 border-t-4 border-[#CE3732] flex flex-col mb-6">
+      <div className="bg-cream shadow-lg rounded-sm p-4 md:p-6 border-t-4 border-danger flex flex-col mb-6">
         {/* Oil consumption chart */}
         <div className="mb-6">
-          <span className="text-[10px] font-bold uppercase tracking-widest text-[#CE3732] block mb-1">Oil Consumption Trend</span>
+          <span className="text-[10px] font-bold uppercase tracking-widest text-danger block mb-1">Oil Consumption Trend</span>
           <div className="bg-white rounded-sm border border-gray-200 p-2">
             <OilChart entries={chartEntries || []} />
           </div>
           <div className="flex items-center gap-4 mt-1.5 justify-center">
-            <span className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-widest text-gray-400"><span className="inline-block w-2 h-2 rounded-full bg-[#CE3732]"></span> Oil Level</span>
+            <span className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-widest text-gray-400"><span className="inline-block w-2 h-2 rounded-full bg-danger"></span> Oil Level</span>
             <span className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-widest text-gray-400"><span className="inline-block w-2 h-2 rounded-full bg-[#56B94A]"></span> Oil Added</span>
           </div>
         </div>
@@ -230,7 +230,7 @@ export default function OilTab({
         {/* Header */}
         <div className="flex justify-between items-end mb-6">
           <div>
-            <span className="text-[10px] font-bold uppercase tracking-widest text-[#CE3732] block mb-1">Consumption Log</span>
+            <span className="text-[10px] font-bold uppercase tracking-widest text-danger block mb-1">Consumption Log</span>
             <h2 className="font-oswald text-2xl md:text-3xl font-bold uppercase text-navy m-0 leading-none">Oil Log</h2>
           </div>
         </div>
@@ -260,7 +260,7 @@ export default function OilTab({
                   {isAdmin && (
                     <td className="py-3 text-right">
                       {page === 1 && i === 0 && (
-                        <button onClick={() => handleDelete(l)} className="text-gray-400 hover:text-[#CE3732] transition-colors"><Trash2 size={14} /></button>
+                        <button onClick={() => handleDelete(l)} className="text-gray-400 hover:text-danger transition-colors"><Trash2 size={14} /></button>
                       )}
                     </td>
                   )}
@@ -273,9 +273,9 @@ export default function OilTab({
         {/* Pagination */}
         {(page > 1 || hasMore) && (
           <div className="flex justify-between items-center mt-4 border-t border-gray-200 pt-4">
-            <button onClick={() => setPage(p => p - 1)} disabled={page <= 1} className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-navy disabled:opacity-30 disabled:cursor-not-allowed hover:text-[#CE3732] transition-colors"><ChevronLeft size={14} /> Prev</button>
+            <button onClick={() => setPage(p => p - 1)} disabled={page <= 1} className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-navy disabled:opacity-30 disabled:cursor-not-allowed hover:text-danger transition-colors"><ChevronLeft size={14} /> Prev</button>
             <span className="text-[10px] font-bold uppercase text-gray-400">Page {page} / {data?.totalPages ?? 1}</span>
-            <button onClick={() => setPage(p => p + 1)} disabled={!hasMore} className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-navy disabled:opacity-30 disabled:cursor-not-allowed hover:text-[#CE3732] transition-colors">Next <ChevronRight size={14} /></button>
+            <button onClick={() => setPage(p => p + 1)} disabled={!hasMore} className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-navy disabled:opacity-30 disabled:cursor-not-allowed hover:text-danger transition-colors">Next <ChevronRight size={14} /></button>
           </div>
         )}
       </div>
@@ -284,34 +284,34 @@ export default function OilTab({
       {showModal && (
         <div className="fixed inset-0 z-[10000] bg-black/60 animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => setShowModal(false)}>
           <div className="flex min-h-full items-center justify-center p-4">
-            <div className="bg-white rounded-lg shadow-2xl w-full max-w-sm p-5 border-t-4 border-[#CE3732] animate-slide-up" onClick={e => e.stopPropagation()}>
+            <div className="bg-white rounded-lg shadow-2xl w-full max-w-sm p-5 border-t-4 border-danger animate-slide-up" onClick={e => e.stopPropagation()}>
               <div className="flex justify-between items-center mb-4">
                 <h3 className="font-oswald text-lg font-bold uppercase tracking-widest text-navy">Log Oil</h3>
-                <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-[#CE3732]"><X size={20} /></button>
+                <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-danger"><X size={20} /></button>
               </div>
               <form onSubmit={handleSubmit} className="flex flex-col gap-4">
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1 block">Oil Level (qt)</label>
-                    <input type="number" step="0.5" min="0" value={oilQty} onChange={e => setOilQty(e.target.value)} className="w-full rounded p-3 text-sm border border-gray-300 focus:border-[#CE3732] outline-none" style={whiteBg} required />
+                    <input type="number" step="0.5" min="0" value={oilQty} onChange={e => setOilQty(e.target.value)} className="w-full rounded p-3 text-sm border border-gray-300 focus:border-danger outline-none" style={whiteBg} required />
                   </div>
                   <div>
                     <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1 block">Oil Added (qt)</label>
-                    <input type="number" step="0.5" min="0" value={oilAdded} onChange={e => setOilAdded(e.target.value)} placeholder="Optional" className="w-full rounded p-3 text-sm border border-gray-300 focus:border-[#CE3732] outline-none" style={whiteBg} />
+                    <input type="number" step="0.5" min="0" value={oilAdded} onChange={e => setOilAdded(e.target.value)} placeholder="Optional" className="w-full rounded p-3 text-sm border border-gray-300 focus:border-danger outline-none" style={whiteBg} />
                   </div>
                 </div>
                 <div>
                   <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1 block">Engine Hours</label>
-                  <input type="number" step="0.1" min="0" value={engineHours} onChange={e => setEngineHours(e.target.value)} className="w-full rounded p-3 text-sm border border-gray-300 focus:border-[#CE3732] outline-none" style={whiteBg} required />
+                  <input type="number" step="0.1" min="0" value={engineHours} onChange={e => setEngineHours(e.target.value)} className="w-full rounded p-3 text-sm border border-gray-300 focus:border-danger outline-none" style={whiteBg} required />
                   <span className="text-[9px] text-gray-400 mt-0.5 block">Current: {aircraft?.total_engine_time?.toFixed(1) || '—'} hrs</span>
                 </div>
                 <div>
                   <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1 block">Pilot Initials</label>
-                  <input value={initials} onChange={e => setInitials(e.target.value.toUpperCase())} maxLength={3} className="w-full rounded p-3 text-sm border border-gray-300 focus:border-[#CE3732] outline-none uppercase" style={whiteBg} required />
+                  <input value={initials} onChange={e => setInitials(e.target.value.toUpperCase())} maxLength={3} className="w-full rounded p-3 text-sm border border-gray-300 focus:border-danger outline-none uppercase" style={whiteBg} required />
                 </div>
                 <div>
                   <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1 block">Notes (optional)</label>
-                  <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} className="w-full rounded p-3 text-sm border border-gray-300 focus:border-[#CE3732] outline-none resize-none" style={whiteBg} />
+                  <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} className="w-full rounded p-3 text-sm border border-gray-300 focus:border-danger outline-none resize-none" style={whiteBg} />
                 </div>
                 <button type="submit" disabled={isSubmitting} className="w-full bg-navy text-white font-oswald text-base font-bold uppercase tracking-widest py-3 rounded-lg shadow active:scale-95 transition-transform disabled:opacity-50 disabled:cursor-not-allowed">{isSubmitting ? 'Saving...' : 'Save Oil Log'}</button>
               </form>

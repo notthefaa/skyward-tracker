@@ -45,10 +45,10 @@ function getCategoryIcon(category: string) {
   const map: Record<string, React.ReactNode> = {
     inspection: <Shield size={14} className="text-mxOrange" />,
     engine: <Wrench size={14} className="text-navy" />,
-    propeller: <Wrench size={14} className="text-[#3AB0FF]" />,
+    propeller: <Wrench size={14} className="text-info" />,
     airframe: <Plane size={14} className="text-gray-600" />,
-    avionics: <Layers size={14} className="text-[#3AB0FF]" />,
-    safety: <AlertTriangle size={14} className="text-[#CE3732]" />,
+    avionics: <Layers size={14} className="text-info" />,
+    safety: <AlertTriangle size={14} className="text-danger" />,
     fluid: <Clock size={14} className="text-[#56B94A]" />,
   };
   return map[category] || <Wrench size={14} />;
@@ -287,7 +287,7 @@ export default function MxTemplatePickerModal({ aircraft, show, onClose, onRefre
             <Layers size={20} className="text-mxOrange" />
             {step === 'pick' ? 'MX Templates' : step === 'select' ? 'Select Items' : 'Adding Items...'}
           </h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-[#CE3732] p-2 -mr-2"><X size={24} /></button>
+          <button onClick={onClose} className="text-gray-400 hover:text-danger p-2 -mr-2"><X size={24} /></button>
         </div>
 
         {/* ═══════════════ STEP 1: PICK TEMPLATE ═══════════════ */}
@@ -315,7 +315,7 @@ export default function MxTemplatePickerModal({ aircraft, show, onClose, onRefre
                       <div className="flex flex-wrap gap-1 mt-2">
                         <span className="text-[8px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-navy text-white">{template.engine_type}</span>
                         <span className="text-[8px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-gray-200 text-gray-600">{template.items.length} items</span>
-                        <span className="text-[8px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-red-100 text-[#CE3732]">{requiredCount} required</span>
+                        <span className="text-[8px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-red-100 text-danger">{requiredCount} required</span>
                       </div>
                     </div>
                     <ChevronRight size={18} className="text-gray-400 shrink-0 mt-1" />
@@ -377,7 +377,7 @@ export default function MxTemplatePickerModal({ aircraft, show, onClose, onRefre
                 <div className="flex gap-2">
                   <button 
                     onClick={() => handleDuplicateDecision('skip')}
-                    className="flex-1 bg-[#3AB0FF] text-white font-oswald font-bold uppercase tracking-widest py-2.5 rounded text-xs active:scale-95"
+                    className="flex-1 bg-info text-white font-oswald font-bold uppercase tracking-widest py-2.5 rounded text-xs active:scale-95"
                   >
                     Skip Duplicates
                   </button>
@@ -451,7 +451,7 @@ export default function MxTemplatePickerModal({ aircraft, show, onClose, onRefre
                                   <div className="flex items-center gap-2 flex-wrap">
                                     <span className="text-xs font-bold text-navy">{item.item_name}</span>
                                     {item.is_required && (
-                                      <span className="text-[7px] font-bold uppercase tracking-widest px-1 py-0.5 rounded bg-red-100 text-[#CE3732]">Required</span>
+                                      <span className="text-[7px] font-bold uppercase tracking-widest px-1 py-0.5 rounded bg-red-100 text-danger">Required</span>
                                     )}
                                     {isDuplicate && (
                                       <span className="text-[7px] font-bold uppercase tracking-widest px-1 py-0.5 rounded bg-orange-100 text-mxOrange">Exists</span>

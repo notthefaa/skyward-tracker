@@ -54,7 +54,7 @@ function describePayload(action: ProposedAction): React.ReactNode {
           {p.installed_at && <div><span className="font-bold uppercase tracking-widest text-[9px] text-gray-500">Installed: </span>{p.installed_at}{p.installed_by ? ` by ${p.installed_by}` : ''}</div>}
           {(p.ifr_capable || p.adsb_out || p.is_elt) && (
             <div className="flex flex-wrap gap-1 pt-1">
-              {p.ifr_capable && <span className="text-[8.5px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-[#3AB0FF]/10 text-[#3AB0FF] border border-[#3AB0FF]/20">IFR</span>}
+              {p.ifr_capable && <span className="text-[8.5px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-info/10 text-info border border-info/20">IFR</span>}
               {p.adsb_out && <span className="text-[8.5px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-[#56B94A]/10 text-[#56B94A] border border-[#56B94A]/20">ADS-B Out</span>}
               {p.is_elt && <span className="text-[8.5px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-mxOrange/10 text-mxOrange border border-mxOrange/20">ELT</span>}
             </div>
@@ -193,12 +193,12 @@ export default function ProposedActionCard({ action, onChange }: Props) {
   let statusClasses = "border-[#0EA5E9]/40 shadow-sm";
   if (action.status === 'executed') statusClasses = "border-[#56B94A]/40 bg-green-50/50";
   if (action.status === 'cancelled') statusClasses = "border-gray-300 bg-gray-50 opacity-70";
-  if (action.status === 'failed') statusClasses = "border-[#CE3732]/40 bg-red-50";
+  if (action.status === 'failed') statusClasses = "border-danger/40 bg-red-50";
 
   return (
     <div className={`${base} ${statusClasses}`}>
       <div className="flex items-start gap-2">
-        <div className={`p-1.5 rounded-full shrink-0 ${action.status === 'executed' ? 'bg-[#56B94A]/10 text-[#56B94A]' : action.status === 'cancelled' ? 'bg-gray-200 text-gray-500' : action.status === 'failed' ? 'bg-[#CE3732]/10 text-[#CE3732]' : 'bg-[#0EA5E9]/10 text-[#0EA5E9]'}`}>
+        <div className={`p-1.5 rounded-full shrink-0 ${action.status === 'executed' ? 'bg-[#56B94A]/10 text-[#56B94A]' : action.status === 'cancelled' ? 'bg-gray-200 text-gray-500' : action.status === 'failed' ? 'bg-danger/10 text-danger' : 'bg-[#0EA5E9]/10 text-[#0EA5E9]'}`}>
           <Icon size={14} />
         </div>
         <div className="flex-1 min-w-0">
@@ -207,15 +207,15 @@ export default function ProposedActionCard({ action, onChange }: Props) {
             {action.status === 'pending' && <span className="text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-[#0EA5E9]/10 text-[#0EA5E9]">Pending</span>}
             {action.status === 'executed' && <span className="text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-[#56B94A]/10 text-[#56B94A]">Confirmed</span>}
             {action.status === 'cancelled' && <span className="text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-gray-200 text-gray-500">Cancelled</span>}
-            {action.status === 'failed' && <span className="text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-[#CE3732]/10 text-[#CE3732]">Failed</span>}
+            {action.status === 'failed' && <span className="text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-danger/10 text-danger">Failed</span>}
           </div>
           <p className="text-sm font-oswald font-bold uppercase text-navy mt-1 leading-tight">{action.summary}</p>
           <div className="mt-2">{describePayload(action)}</div>
 
           {action.status === 'failed' && action.error_message && (
-            <p className="text-[10px] text-[#CE3732] mt-2 italic">Error: {action.error_message}</p>
+            <p className="text-[10px] text-danger mt-2 italic">Error: {action.error_message}</p>
           )}
-          {error && <p className="text-[10px] text-[#CE3732] mt-2 italic">{error}</p>}
+          {error && <p className="text-[10px] text-danger mt-2 italic">{error}</p>}
 
           {action.status === 'pending' && !picConfirming && (
             <div className="flex gap-2 mt-3">
@@ -242,8 +242,8 @@ export default function ProposedActionCard({ action, onChange }: Props) {
           )}
 
           {action.status === 'pending' && picConfirming && (
-            <div className="mt-3 bg-[#CE3732]/5 border border-[#CE3732]/30 rounded-md p-2.5">
-              <p className="text-[10px] text-[#CE3732] font-bold uppercase tracking-widest mb-1">PIC confirmation</p>
+            <div className="mt-3 bg-danger/5 border border-danger/30 rounded-md p-2.5">
+              <p className="text-[10px] text-danger font-bold uppercase tracking-widest mb-1">PIC confirmation</p>
               <p className="text-xs text-navy mb-2 leading-snug">
                 {action.action_type === 'squawk_resolve'
                   ? 'Resolving this squawk can clear a grounding condition. As PIC, you are confirming the issue is actually fixed and the aircraft is safe to fly.'
@@ -253,7 +253,7 @@ export default function ProposedActionCard({ action, onChange }: Props) {
                 <button
                   onClick={() => { setPicConfirming(false); handleConfirm('confirm'); }}
                   disabled={isPending !== null}
-                  className="flex-1 bg-[#CE3732] text-white font-oswald font-bold uppercase tracking-widest text-[10px] py-2 rounded active:scale-95 transition-transform disabled:opacity-50 flex items-center justify-center gap-1.5"
+                  className="flex-1 bg-danger text-white font-oswald font-bold uppercase tracking-widest text-[10px] py-2 rounded active:scale-95 transition-transform disabled:opacity-50 flex items-center justify-center gap-1.5"
                 >
                   {isPending === 'confirm' ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle size={12} />}
                   I&apos;m the PIC — proceed
@@ -274,7 +274,7 @@ export default function ProposedActionCard({ action, onChange }: Props) {
               <button
                 onClick={() => handleConfirm('retry')}
                 disabled={isPending !== null}
-                className="flex-1 bg-[#CE3732] text-white font-oswald font-bold uppercase tracking-widest text-[10px] py-2 rounded active:scale-95 transition-transform disabled:opacity-50 flex items-center justify-center gap-1.5"
+                className="flex-1 bg-danger text-white font-oswald font-bold uppercase tracking-widest text-[10px] py-2 rounded active:scale-95 transition-transform disabled:opacity-50 flex items-center justify-center gap-1.5"
               >
                 {isPending === 'retry' ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
                 Retry

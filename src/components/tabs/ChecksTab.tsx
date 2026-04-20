@@ -385,7 +385,7 @@ export default function ChecksTab({ aircraft, session, role, userInitials }: Pro
       {/* Oil section (includes the consumption graph already baked into OilTab) */}
       <section ref={oilRef} className="scroll-mt-20">
         <div className="flex items-center flex-wrap gap-2 mb-2 pl-1">
-          <Droplets size={16} className="text-[#CE3732]" />
+          <Droplets size={16} className="text-danger" />
           <h3 className="font-oswald text-lg font-bold uppercase tracking-widest text-navy m-0 leading-none">
             Oil
           </h3>

@@ -293,10 +293,10 @@ export default function HowardLauncher({ currentAircraft, userFleet = [], sessio
                         maxLength={5}
                         autoCapitalize="characters"
                         aria-invalid={depError}
-                        className={`w-full px-3 py-2 border rounded text-sm uppercase ${depError ? 'border-[#CE3732]' : 'border-gray-300'}`}
+                        className={`w-full px-3 py-2 border rounded text-sm uppercase ${depError ? 'border-danger' : 'border-gray-300'}`}
                         style={{ backgroundColor: '#ffffff' }}
                       />
-                      {depError && <p className="text-[10px] text-[#CE3732] mt-1">Letters only, 3–5 characters.</p>}
+                      {depError && <p className="text-[10px] text-danger mt-1">Letters only, 3–5 characters.</p>}
                     </div>
                     <div>
                       <label className="text-[10px] font-bold uppercase tracking-widest text-gray-500 block mb-1">
@@ -310,10 +310,10 @@ export default function HowardLauncher({ currentAircraft, userFleet = [], sessio
                         maxLength={5}
                         autoCapitalize="characters"
                         aria-invalid={destError}
-                        className={`w-full px-3 py-2 border rounded text-sm uppercase ${destError ? 'border-[#CE3732]' : 'border-gray-300'}`}
+                        className={`w-full px-3 py-2 border rounded text-sm uppercase ${destError ? 'border-danger' : 'border-gray-300'}`}
                         style={{ backgroundColor: '#ffffff' }}
                       />
-                      {destError && <p className="text-[10px] text-[#CE3732] mt-1">Letters only, 3–5 characters.</p>}
+                      {destError && <p className="text-[10px] text-danger mt-1">Letters only, 3–5 characters.</p>}
                     </div>
                   </div>
                   <div>
@@ -340,10 +340,10 @@ export default function HowardLauncher({ currentAircraft, userFleet = [], sessio
                       maxLength={5}
                       autoCapitalize="characters"
                       aria-invalid={altError}
-                      className={`w-full px-3 py-2 border rounded text-sm uppercase ${altError ? 'border-[#CE3732]' : 'border-gray-300'}`}
+                      className={`w-full px-3 py-2 border rounded text-sm uppercase ${altError ? 'border-danger' : 'border-gray-300'}`}
                       style={{ backgroundColor: '#ffffff' }}
                     />
-                    {altError && <p className="text-[10px] text-[#CE3732] mt-1">Letters only, 3–5 characters.</p>}
+                    {altError && <p className="text-[10px] text-danger mt-1">Letters only, 3–5 characters.</p>}
                   </div>
                 </div>
                 <button

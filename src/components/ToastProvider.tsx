@@ -24,9 +24,9 @@ const ToastContext = createContext<ToastContextValue | null>(null);
 
 const ICON_MAP = {
   success: { Icon: CheckCircle, color: "text-[#56B94A]" },
-  error: { Icon: XCircle, color: "text-[#CE3732]" },
+  error: { Icon: XCircle, color: "text-danger" },
   warning: { Icon: AlertTriangle, color: "text-mxOrange" },
-  info: { Icon: Info, color: "text-[#3AB0FF]" },
+  info: { Icon: Info, color: "text-info" },
 };
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {

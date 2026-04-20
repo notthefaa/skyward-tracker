@@ -188,14 +188,14 @@ export default function VorTab({
                   <td className="py-3 pr-4 whitespace-nowrap">
                     {c.passed
                       ? <span className="inline-flex items-center gap-1 text-[#56B94A] font-bold"><Check size={14} /> Pass</span>
-                      : <span className="inline-flex items-center gap-1 text-[#CE3732] font-bold"><AlertTriangle size={14} /> Fail</span>
+                      : <span className="inline-flex items-center gap-1 text-danger font-bold"><AlertTriangle size={14} /> Fail</span>
                     }
                   </td>
                   <td className="py-3 pr-4 whitespace-nowrap font-bold">{c.initials}</td>
                   {isAdmin && (
                     <td className="py-3 text-right">
                       {page === 1 && i === 0 && (
-                        <button onClick={() => handleDelete(c)} className="text-gray-400 hover:text-[#CE3732] transition-colors"><Trash2 size={14} /></button>
+                        <button onClick={() => handleDelete(c)} className="text-gray-400 hover:text-danger transition-colors"><Trash2 size={14} /></button>
                       )}
                     </td>
                   )}
@@ -222,7 +222,7 @@ export default function VorTab({
             <div className="bg-white rounded-lg shadow-2xl w-full max-w-sm p-5 border-t-4 border-mxOrange animate-slide-up" onClick={e => e.stopPropagation()}>
               <div className="flex justify-between items-center mb-4">
                 <h3 className="font-oswald text-lg font-bold uppercase tracking-widest text-navy">Log VOR Check</h3>
-                <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-[#CE3732]"><X size={20} /></button>
+                <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-danger"><X size={20} /></button>
               </div>
               <form onSubmit={handleSubmit} className="flex flex-col gap-4">
                 <div>
@@ -241,7 +241,7 @@ export default function VorTab({
                   <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1 block">Bearing Error (degrees)</label>
                   <input type="number" step="0.1" value={bearingError} onChange={e => setBearingError(e.target.value)} placeholder="e.g. 2, -3, 0" className="w-full rounded p-3 text-sm border border-gray-300 focus:border-mxOrange outline-none" style={whiteBg} required />
                   {previewPassed !== null && bearingError !== '' && (
-                    <span className={`text-[10px] font-bold uppercase tracking-widest mt-1 block ${previewPassed ? 'text-[#56B94A]' : 'text-[#CE3732]'}`}>
+                    <span className={`text-[10px] font-bold uppercase tracking-widest mt-1 block ${previewPassed ? 'text-[#56B94A]' : 'text-danger'}`}>
                       {Math.abs(previewError)}° — {previewPassed ? `Within ±${selectedTolerance}° tolerance` : `Exceeds ±${selectedTolerance}° tolerance`}
                     </span>
                   )}

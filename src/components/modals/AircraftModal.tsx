@@ -361,7 +361,7 @@ export default function AircraftModal({
           <h2 className="font-oswald text-2xl font-bold uppercase text-navy">
             {isEditing ? 'Edit Aircraft' : 'Add Aircraft'}
           </h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-[#CE3732] transition-colors">
+          <button onClick={onClose} className="text-gray-400 hover:text-danger transition-colors">
             <X size={24}/>
           </button>
         </div>
@@ -584,7 +584,7 @@ export default function AircraftModal({
             </div>
             {timeFieldsLocked && (
               <div className="col-span-2 flex items-start gap-2 bg-blue-50 border border-blue-200 rounded p-3">
-                <Info size={16} className="text-[#3AB0FF] shrink-0 mt-0.5" />
+                <Info size={16} className="text-info shrink-0 mt-0.5" />
                 <p className="text-[10px] text-gray-600 leading-tight">
                   {airframeMeterMissing
                     ? `This aircraft has no ${newType === 'Turbine' ? 'AFTT' : 'Hobbs'} meter. You can add one by entering the current reading above — flight logs will use it going forward.`
@@ -639,7 +639,7 @@ export default function AircraftModal({
                           className="border border-gray-300 rounded p-2 text-xs focus:border-mxOrange outline-none"
                         />
                       </div>
-                      <button type="button" onClick={() => removeEquipmentRow(i)} className="text-gray-400 hover:text-[#CE3732] p-1 mt-1 shrink-0">
+                      <button type="button" onClick={() => removeEquipmentRow(i)} className="text-gray-400 hover:text-danger p-1 mt-1 shrink-0">
                         <Trash2 size={14} />
                       </button>
                     </div>
@@ -647,7 +647,7 @@ export default function AircraftModal({
                   <button
                     type="button"
                     onClick={addEquipmentRow}
-                    className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-widest text-[#3AB0FF] hover:text-[#0EA5E9] active:scale-95 py-1"
+                    className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-widest text-info hover:text-[#0EA5E9] active:scale-95 py-1"
                   >
                     <Plus size={12} /> Add equipment
                   </button>
@@ -684,7 +684,7 @@ export default function AircraftModal({
                       >
                         {DOC_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
                       </select>
-                      <button type="button" onClick={() => setDocFiles(prev => prev.filter((_, idx) => idx !== i))} className="text-gray-400 hover:text-[#CE3732] p-0.5 shrink-0">
+                      <button type="button" onClick={() => setDocFiles(prev => prev.filter((_, idx) => idx !== i))} className="text-gray-400 hover:text-danger p-0.5 shrink-0">
                         <Trash2 size={12} />
                       </button>
                     </div>

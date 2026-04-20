@@ -209,8 +209,8 @@ export default function FleetSummary({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pb-4">
         {fleetData.map(ac => {
           const fuelGals = ac.current_fuel_gallons || 0;
-          const statusColor = ac.status === 'grounded' ? 'bg-[#CE3732]' : ac.status === 'issues' ? 'bg-mxOrange' : 'bg-success';
-          const borderColor = ac.status === 'grounded' ? 'border-[#CE3732]' : ac.status === 'issues' ? 'border-mxOrange' : 'border-success';
+          const statusColor = ac.status === 'grounded' ? 'bg-danger' : ac.status === 'issues' ? 'bg-mxOrange' : 'bg-success';
+          const borderColor = ac.status === 'grounded' ? 'border-danger' : ac.status === 'issues' ? 'border-mxOrange' : 'border-success';
           return (
             <div key={ac.id} onClick={() => onSelectAircraft(ac.tail_number)} className={`bg-white shadow-md rounded-sm border-t-4 ${borderColor} overflow-hidden cursor-pointer hover:shadow-xl transition-all active:scale-[0.98] flex flex-col`}>
               <div className="flex justify-between items-center p-4 border-b border-gray-100 bg-gray-50">
@@ -253,13 +253,13 @@ export default function FleetSummary({
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-bold text-navy truncate leading-tight">{ac.nextMxName}</p>
                     {ac.nextMxDueLabel && (
-                      <p className={`text-[10px] font-bold uppercase tracking-widest mt-0.5 ${ac.nextMxIsExpired ? 'text-[#CE3732]' : 'text-gray-500'}`}>
+                      <p className={`text-[10px] font-bold uppercase tracking-widest mt-0.5 ${ac.nextMxIsExpired ? 'text-danger' : 'text-gray-500'}`}>
                         {ac.nextMxDueLabel}
                       </p>
                     )}
                   </div>
                   {ac.squawkCount > 0 && (
-                    <span className="text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded bg-[#CE3732]/15 text-[#CE3732] flex items-center gap-1 shrink-0">
+                    <span className="text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded bg-danger/15 text-danger flex items-center gap-1 shrink-0">
                       <AlertTriangle size={10} /> {ac.squawkCount} {ac.squawkCount === 1 ? 'Squawk' : 'Squawks'}
                     </span>
                   )}

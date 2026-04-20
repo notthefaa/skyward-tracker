@@ -219,7 +219,7 @@ export default function TireTab({
                   {isAdmin && (
                     <td className="py-3 text-right">
                       {page === 1 && i === 0 && (
-                        <button onClick={() => handleDelete(c)} className="text-gray-400 hover:text-[#CE3732] transition-colors"><Trash2 size={14} /></button>
+                        <button onClick={() => handleDelete(c)} className="text-gray-400 hover:text-danger transition-colors"><Trash2 size={14} /></button>
                       )}
                     </td>
                   )}
@@ -246,7 +246,7 @@ export default function TireTab({
             <div className="bg-white rounded-lg shadow-2xl w-full max-w-sm p-5 border-t-4 border-[#525659] animate-slide-up" onClick={e => e.stopPropagation()}>
               <div className="flex justify-between items-center mb-4">
                 <h3 className="font-oswald text-lg font-bold uppercase tracking-widest text-navy">Log Tire Check</h3>
-                <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-[#CE3732]"><X size={20} /></button>
+                <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-danger"><X size={20} /></button>
               </div>
               <form onSubmit={handleSubmit} className="flex flex-col gap-4">
                 <label className={`flex items-center gap-2 p-2.5 rounded border cursor-pointer text-sm ${allGood ? 'bg-[#56B94A]/10 border-[#56B94A]/40 text-navy' : 'bg-white border-gray-200 text-navy hover:bg-gray-50'}`}>

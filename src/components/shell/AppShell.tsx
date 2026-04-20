@@ -523,12 +523,12 @@ export default function AppShell({ session }: AppShellProps) {
   // always match (e.g., tab.id='log' while activeTab='times'), so a
   // check here would incorrectly return gray on valid active states.
   const getTabColor = (id: string) => {
-    const m: Record<string, string> = { summary: 'text-navy', log: 'text-[#3AB0FF]', times: 'text-[#3AB0FF]', calendar: 'text-[#56B94A]', mx: 'text-mxOrange', notes: 'text-[#525659]', more: 'text-[#525659]' };
+    const m: Record<string, string> = { summary: 'text-navy', log: 'text-info', times: 'text-info', calendar: 'text-[#56B94A]', mx: 'text-mxOrange', notes: 'text-[#525659]', more: 'text-[#525659]' };
     return m[id] || 'text-brandOrange';
   };
 
   const getIndicatorColor = (id: string) => {
-    const m: Record<string, string> = { summary: 'bg-navy', log: 'bg-[#3AB0FF]', times: 'bg-[#3AB0FF]', calendar: 'bg-[#56B94A]', mx: 'bg-mxOrange', notes: 'bg-[#525659]', more: 'bg-[#525659]' };
+    const m: Record<string, string> = { summary: 'bg-navy', log: 'bg-info', times: 'bg-info', calendar: 'bg-[#56B94A]', mx: 'bg-mxOrange', notes: 'bg-[#525659]', more: 'bg-[#525659]' };
     return m[id] || 'bg-brandOrange';
   };
 
@@ -631,12 +631,12 @@ export default function AppShell({ session }: AppShellProps) {
       {showLogItModal && (
         <div className="fixed inset-0 bg-black/80 z-[10000] overflow-y-auto animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => setShowLogItModal(false)}>
           <div className="flex min-h-full items-center justify-center p-4">
-          <div role="dialog" aria-label="Install Log It companion app" className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 border-t-8 border-[#3AB0FF] animate-slide-up relative" onClick={e => e.stopPropagation()}>
-            <button onClick={() => setShowLogItModal(false)} aria-label="Close" className="absolute top-4 right-4 text-gray-400 hover:text-[#CE3732]"><X size={24}/></button>
+          <div role="dialog" aria-label="Install Log It companion app" className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 border-t-8 border-info animate-slide-up relative" onClick={e => e.stopPropagation()}>
+            <button onClick={() => setShowLogItModal(false)} aria-label="Close" className="absolute top-4 right-4 text-gray-400 hover:text-danger"><X size={24}/></button>
             <h3 className="font-oswald text-2xl font-bold uppercase tracking-widest text-navy mb-4">Install Log It</h3>
             <p className="text-sm text-gray-600 font-roboto mb-4 leading-relaxed">Log It is a companion app that is designed to make logging times and squawks easy on the go.</p>
             <ol className="text-left text-sm text-gray-600 font-roboto mb-8 space-y-2 max-w-xs mx-auto list-decimal pl-4"><li>Tap below to copy the app link.</li><li>Open your phone&apos;s browser and paste the link.</li><li>Use the Share menu <Share size={14} className="inline text-blue-500 mb-1"/> to Add to Home Screen.</li></ol>
-            <button onClick={handleCopyQuickLink} className="w-full bg-[#3AB0FF] text-white font-oswald text-xl font-bold uppercase tracking-widest py-4 rounded-xl shadow-lg active:scale-95 transition-transform flex items-center justify-center gap-2"><Copy size={20} /> Copy App Link</button>
+            <button onClick={handleCopyQuickLink} className="w-full bg-info text-white font-oswald text-xl font-bold uppercase tracking-widest py-4 rounded-xl shadow-lg active:scale-95 transition-transform flex items-center justify-center gap-2"><Copy size={20} /> Copy App Link</button>
           </div>
           </div>
         </div>
@@ -649,7 +649,7 @@ export default function AppShell({ session }: AppShellProps) {
             <div className="flex items-center gap-3">
               <div className={`w-3.5 h-3.5 rounded-full shrink-0 shadow-inner ${aircraftStatus === 'grounded' ? 'bg-red-500' : aircraftStatus === 'issues' ? 'bg-mxOrange' : 'bg-success'}`} role="status" aria-label={`Aircraft status: ${aircraftStatus}`} />
               <div className="relative flex items-center">
-                <button onClick={() => navigateTab('summary')} aria-label={`View ${activeTail || 'aircraft'} summary`} className="text-xl font-oswald font-bold uppercase tracking-wide text-white hover:text-[#3AB0FF] transition-colors active:scale-95">
+                <button onClick={() => navigateTab('summary')} aria-label={`View ${activeTail || 'aircraft'} summary`} className="text-xl font-oswald font-bold uppercase tracking-wide text-white hover:text-info transition-colors active:scale-95">
                   {activeTail || '—'}
                 </button>
                 {dropdownOptions.length > 0 && (
@@ -664,13 +664,13 @@ export default function AppShell({ session }: AppShellProps) {
                       {dropdownOptions.map(a => (
                         <button key={a.id} role="option" aria-selected={a.tail_number === activeTail} onClick={() => handleTailChange(a.tail_number)} className={`w-full text-left px-4 py-3 flex items-center justify-between hover:bg-gray-50 active:bg-gray-100 transition-colors ${a.tail_number === activeTail ? 'bg-blue-50' : ''}`}>
                           <div>
-                            <span className={`font-oswald font-bold uppercase text-sm ${a.tail_number === activeTail ? 'text-[#3AB0FF]' : 'text-navy'}`}>{a.tail_number}</span>
+                            <span className={`font-oswald font-bold uppercase text-sm ${a.tail_number === activeTail ? 'text-info' : 'text-navy'}`}>{a.tail_number}</span>
                             <span className="block text-[10px] text-gray-400 uppercase tracking-widest">{a.aircraft_type}</span>
                           </div>
-                          {a.tail_number === activeTail && <div className="w-2 h-2 rounded-full bg-[#3AB0FF] shrink-0" />}
+                          {a.tail_number === activeTail && <div className="w-2 h-2 rounded-full bg-info shrink-0" />}
                         </button>
                       ))}
-                      <button onClick={() => handleTailChange('__add_new__')} className="w-full text-left px-4 py-3 text-[#3AB0FF] font-oswald font-bold uppercase text-sm hover:bg-blue-50 active:bg-blue-100 transition-colors border-t border-gray-100">+ Add Aircraft</button>
+                      <button onClick={() => handleTailChange('__add_new__')} className="w-full text-left px-4 py-3 text-info font-oswald font-bold uppercase text-sm hover:bg-blue-50 active:bg-blue-100 transition-colors border-t border-gray-100">+ Add Aircraft</button>
                     </div>
                   </>
                 )}
@@ -678,8 +678,8 @@ export default function AppShell({ session }: AppShellProps) {
             </div>
           </div>
           <div className="flex gap-4">
-            {showFleetButton && <button onClick={() => navigateTab('fleet')} aria-label="Fleet overview" className={`hover:text-white transition-colors flex flex-col items-center active:scale-95 shrink-0 ${activeTab === 'fleet' ? 'text-[#3AB0FF]' : 'text-gray-300'}`}><LayoutGrid size={18} /><span className="text-[8px] font-bold uppercase tracking-widest mt-1">Fleet</span></button>}
-            <button onClick={() => setShowLogItModal(true)} aria-label="Install Log It companion app" className="text-gray-300 hover:text-[#3AB0FF] transition-colors flex flex-col items-center active:scale-95 shrink-0"><Send size={18} /><span className="text-[8px] font-bold uppercase tracking-widest mt-1">Log It</span></button>
+            {showFleetButton && <button onClick={() => navigateTab('fleet')} aria-label="Fleet overview" className={`hover:text-white transition-colors flex flex-col items-center active:scale-95 shrink-0 ${activeTab === 'fleet' ? 'text-info' : 'text-gray-300'}`}><LayoutGrid size={18} /><span className="text-[8px] font-bold uppercase tracking-widest mt-1">Fleet</span></button>}
+            <button onClick={() => setShowLogItModal(true)} aria-label="Install Log It companion app" className="text-gray-300 hover:text-info transition-colors flex flex-col items-center active:scale-95 shrink-0"><Send size={18} /><span className="text-[8px] font-bold uppercase tracking-widest mt-1">Log It</span></button>
             {role === 'admin' && <button onClick={() => setShowAdminMenu(true)} aria-label="Admin tools" className="text-gray-300 hover:text-white transition-colors flex flex-col items-center active:scale-95 shrink-0"><ShieldCheck size={18} /><span className="text-[8px] font-bold uppercase tracking-widest mt-1">Admin</span></button>}
             <button onClick={() => setShowSettingsModal(true)} aria-label="Settings" className="text-gray-300 hover:text-white transition-colors flex flex-col items-center active:scale-95 shrink-0"><Settings size={18} /><span className="text-[8px] font-bold uppercase tracking-widest mt-1">Settings</span></button>
             <button onClick={handleLogout} aria-label="Log out" className="text-gray-300 hover:text-white transition-colors flex flex-col items-center active:scale-95 shrink-0"><LogOut size={18} /><span className="text-[8px] font-bold uppercase tracking-widest mt-1">Logout</span></button>
@@ -688,7 +688,7 @@ export default function AppShell({ session }: AppShellProps) {
       </header>
 
       {aircraftStatus === 'grounded' && (
-        <div role="alert" className="bg-[#CE3732] text-white text-center py-2 px-4 shadow-md z-10 flex flex-col justify-center items-center shrink-0 w-full">
+        <div role="alert" className="bg-danger text-white text-center py-2 px-4 shadow-md z-10 flex flex-col justify-center items-center shrink-0 w-full">
           <div className="flex items-center gap-2"><AlertTriangle size={16} /><span className="font-oswald tracking-widest font-bold uppercase text-sm">Not Flight Ready</span><AlertTriangle size={16} /></div>
           {groundedReason && <span className="text-[10px] font-bold uppercase tracking-widest text-white/80 mt-0.5">{groundedReason}</span>}
         </div>
@@ -909,7 +909,7 @@ export default function AppShell({ session }: AppShellProps) {
                 : undefined
               }
               className={`flex-1 pb-1 flex flex-col items-center justify-center transition-all relative active:scale-95 ${isActive || (tab.id === 'log' && expandedNav === 'log') || (tab.id === 'mx' && expandedNav === 'mx') || (tab.id === 'more' && expandedNav === 'more') ? (tab.id === 'summary' ? 'text-navy' : getTabColor(tab.id)) : 'text-gray-400 hover:bg-gray-50'}`}>
-              <div className="relative mb-1"><tab.icon size={20} />{tab.badge > 0 && <span className="absolute -top-1 -right-2 flex h-3 w-3"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#CE3732] opacity-75"></span><span className="relative inline-flex rounded-full h-3 w-3 bg-[#CE3732] text-[8px] text-white font-bold items-center justify-center border border-white"></span></span>}</div>
+              <div className="relative mb-1"><tab.icon size={20} />{tab.badge > 0 && <span className="absolute -top-1 -right-2 flex h-3 w-3"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-danger opacity-75"></span><span className="relative inline-flex rounded-full h-3 w-3 bg-danger text-[8px] text-white font-bold items-center justify-center border border-white"></span></span>}</div>
               <span className="text-[10px] font-bold uppercase tracking-widest">{tab.label}</span>
               {isActive && <div className={`absolute bottom-0 w-12 h-1 rounded-t-full ${getIndicatorColor(tab.id)}`}></div>}
             </button>

@@ -27,13 +27,13 @@ type GuideSection =
 
 const SECTIONS: { id: GuideSection; title: string; icon: React.ReactNode; color: string }[] = [
   { id: 'overview', title: 'How It Works', icon: <Wrench size={18} />, color: 'text-mxOrange' },
-  { id: 'tracking', title: 'Item Tracking', icon: <Clock size={18} />, color: 'text-[#3AB0FF]' },
+  { id: 'tracking', title: 'Item Tracking', icon: <Clock size={18} />, color: 'text-info' },
   { id: 'automation', title: 'Auto-Scheduling & Forecasts', icon: <TrendingUp size={18} />, color: 'text-mxOrange' },
   { id: 'workpackage', title: 'Work Packages', icon: <Package size={18} />, color: 'text-navy' },
   { id: 'portal', title: 'Mechanic Portal', icon: <ExternalLink size={18} />, color: 'text-[#091F3C]' },
   { id: 'completion', title: 'Completing Service', icon: <CheckCircle size={18} />, color: 'text-success' },
-  { id: 'conflicts', title: 'Calendar Conflicts', icon: <Calendar size={18} />, color: 'text-[#CE3732]' },
-  { id: 'notifications', title: 'Who Gets Notified', icon: <Users size={18} />, color: 'text-[#3AB0FF]' },
+  { id: 'conflicts', title: 'Calendar Conflicts', icon: <Calendar size={18} />, color: 'text-danger' },
+  { id: 'notifications', title: 'Who Gets Notified', icon: <Users size={18} />, color: 'text-info' },
   { id: 'exports', title: 'Reports & Exports', icon: <Download size={18} />, color: 'text-navy' },
 ];
 
@@ -57,7 +57,7 @@ export default function MxGuideModal({ show, onClose }: MxGuideModalProps) {
                 {[
                   { label: 'Draft', desc: 'You\u2019ve built a work package, or we auto-drafted one when items got close to due', color: 'bg-mxOrange' },
                   { label: 'Scheduling', desc: 'Sent to your mechanic \u2014 waiting on proposed dates and how long the work will take', color: 'bg-gray-500' },
-                  { label: 'Confirmed', desc: 'You and your mechanic agreed on a date. We automatically cancel reservations that overlap the service window.', color: 'bg-[#3AB0FF]' },
+                  { label: 'Confirmed', desc: 'You and your mechanic agreed on a date. We automatically cancel reservations that overlap the service window.', color: 'bg-info' },
                   { label: 'In Progress', desc: 'Mechanic is working on the aircraft', color: 'bg-[#56B94A]' },
                   { label: 'Ready for Pickup', desc: 'All work is done \u2014 mechanic has signaled the airplane is ready', color: 'bg-[#56B94A]' },
                   { label: 'Complete', desc: 'You entered the logbook data. Tracking resets for the next interval.', color: 'bg-navy' },
@@ -69,7 +69,7 @@ export default function MxGuideModal({ show, onClose }: MxGuideModalProps) {
                 ))}
               </div>
               <div className="mt-3 pt-3 border-t border-gray-200 flex items-center gap-3">
-                <span className="bg-[#CE3732] text-white text-[8px] font-bold uppercase tracking-widest px-2 py-1 rounded w-28 text-center shrink-0">Cancelled</span>
+                <span className="bg-danger text-white text-[8px] font-bold uppercase tracking-widest px-2 py-1 rounded w-28 text-center shrink-0">Cancelled</span>
                 <span className="text-xs text-gray-600 font-roboto">You or your mechanic called it off at any point</span>
               </div>
             </div>
@@ -86,12 +86,12 @@ export default function MxGuideModal({ show, onClose }: MxGuideModalProps) {
               Each maintenance item is tracked by engine hours, calendar dates, or both. When you complete an item, we recalculate the next due point automatically.
             </p>
             <div className="bg-blue-50 rounded p-4 border border-blue-200">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-[#3AB0FF] mb-2 flex items-center gap-2"><Clock size={14} /> Time-Based Tracking</p>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-info mb-2 flex items-center gap-2"><Clock size={14} /> Time-Based Tracking</p>
               <ul className="text-sm text-gray-600 font-roboto space-y-2">
-                <li className="flex items-start gap-2"><span className="text-[#3AB0FF] font-bold shrink-0">•</span> Enter the engine time at last completion and the hour interval.</li>
-                <li className="flex items-start gap-2"><span className="text-[#3AB0FF] font-bold shrink-0">•</span> We work out the next due time: last completed + interval.</li>
-                <li className="flex items-start gap-2"><span className="text-[#3AB0FF] font-bold shrink-0">•</span> You see both hours remaining and an estimated day count based on how much you've been flying.</li>
-                <li className="flex items-start gap-2"><span className="text-[#3AB0FF] font-bold shrink-0">•</span> Steady flying gives you a tight projection (e.g., "~45 days"). Irregular flying widens the range (e.g., "~30-60 days") so you know the number is softer.</li>
+                <li className="flex items-start gap-2"><span className="text-info font-bold shrink-0">•</span> Enter the engine time at last completion and the hour interval.</li>
+                <li className="flex items-start gap-2"><span className="text-info font-bold shrink-0">•</span> We work out the next due time: last completed + interval.</li>
+                <li className="flex items-start gap-2"><span className="text-info font-bold shrink-0">•</span> You see both hours remaining and an estimated day count based on how much you've been flying.</li>
+                <li className="flex items-start gap-2"><span className="text-info font-bold shrink-0">•</span> Steady flying gives you a tight projection (e.g., "~45 days"). Irregular flying widens the range (e.g., "~30-60 days") so you know the number is softer.</li>
               </ul>
             </div>
             <div className="bg-orange-50 rounded p-4 border border-orange-200">
@@ -103,7 +103,7 @@ export default function MxGuideModal({ show, onClose }: MxGuideModalProps) {
               </ul>
             </div>
             <div className="bg-red-50 rounded p-4 border border-red-200">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-[#CE3732] mb-2 flex items-center gap-2"><AlertTriangle size={14} /> Required vs Optional</p>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-danger mb-2 flex items-center gap-2"><AlertTriangle size={14} /> Required vs Optional</p>
               <p className="text-sm text-gray-600 font-roboto">
                 Items marked <strong>Required</strong> ground the airplane when they go past due — the status dot turns red and a "Not Flight Ready" banner appears across the app for every pilot. Items marked <strong>Optional</strong> still show as past due, but they don't affect the airworthiness status.
               </p>
@@ -127,7 +127,7 @@ export default function MxGuideModal({ show, onClose }: MxGuideModalProps) {
               <p className="text-[10px] font-bold uppercase tracking-widest text-navy mb-3">How Forecasts Work</p>
               <ul className="text-sm text-gray-600 font-roboto space-y-3">
                 <li className="flex items-start gap-2"><TrendingUp size={16} className="text-mxOrange shrink-0 mt-0.5" /> <span><strong>Hours per day:</strong> We work out how many engine hours you put on the airplane in a typical day, weighting by how often it actually flies so long idle stretches don't drag the number down.</span></li>
-                <li className="flex items-start gap-2"><TrendingUp size={16} className="text-[#3AB0FF] shrink-0 mt-0.5" /> <span><strong>Projection range:</strong> Steady flying gives a tight window (e.g., "~45 days"). Irregular flying widens it (e.g., "~30-60 days") so you know the estimate is softer.</span></li>
+                <li className="flex items-start gap-2"><TrendingUp size={16} className="text-info shrink-0 mt-0.5" /> <span><strong>Projection range:</strong> Steady flying gives a tight window (e.g., "~45 days"). Irregular flying widens it (e.g., "~30-60 days") so you know the estimate is softer.</span></li>
               </ul>
             </div>
             <div className="bg-gray-50 rounded p-4 border border-gray-200">
@@ -151,7 +151,7 @@ export default function MxGuideModal({ show, onClose }: MxGuideModalProps) {
               </ul>
             </div>
             <div className="bg-blue-50 rounded p-4 border border-blue-200">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-[#3AB0FF] mb-2 flex items-center gap-2"><Layers size={14} /> Bundled drafts</p>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-info mb-2 flex items-center gap-2"><Layers size={14} /> Bundled drafts</p>
               <p className="text-sm text-gray-600 font-roboto">
                 When one item triggers a draft, we don't stop there. We look ahead and pull in <strong>every other item due within the next 30 days</strong> — so your mechanic gets one package, not a drip of emails for each item.
               </p>
@@ -175,13 +175,13 @@ export default function MxGuideModal({ show, onClose }: MxGuideModalProps) {
               <p className="text-[10px] font-bold uppercase tracking-widest text-navy mb-3">What Goes in a Work Package</p>
               <ul className="text-sm text-gray-600 font-roboto space-y-3">
                 <li className="flex items-start gap-3"><Wrench size={16} className="text-mxOrange shrink-0 mt-0.5" /> <span><strong>Maintenance items:</strong> Pick any tracked items that are close to due. "Select all" grabs everything at once.</span></li>
-                <li className="flex items-start gap-3"><AlertTriangle size={16} className="text-[#CE3732] shrink-0 mt-0.5" /> <span><strong>Open squawks:</strong> Include any active squawks you want addressed on the visit. They'll be marked resolved when your mechanic completes them.</span></li>
-                <li className="flex items-start gap-3"><Sparkles size={16} className="text-[#3AB0FF] shrink-0 mt-0.5" /> <span><strong>Add-ons:</strong> Request extras like wash &amp; detail, oil change, fluid top-off, nav database update, tire inspection, interior cleaning, pitot-static check, or battery check.</span></li>
+                <li className="flex items-start gap-3"><AlertTriangle size={16} className="text-danger shrink-0 mt-0.5" /> <span><strong>Open squawks:</strong> Include any active squawks you want addressed on the visit. They'll be marked resolved when your mechanic completes them.</span></li>
+                <li className="flex items-start gap-3"><Sparkles size={16} className="text-info shrink-0 mt-0.5" /> <span><strong>Add-ons:</strong> Request extras like wash &amp; detail, oil change, fluid top-off, nav database update, tire inspection, interior cleaning, pitot-static check, or battery check.</span></li>
                 <li className="flex items-start gap-3"><Calendar size={16} className="text-navy shrink-0 mt-0.5" /> <span><strong>Service date:</strong> Propose a preferred date, or choose "Request Availability" to let the mechanic propose dates that fit their shop.</span></li>
               </ul>
             </div>
             <div className="bg-blue-50 rounded p-4 border border-blue-200">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-[#3AB0FF] mb-2">Preview before sending</p>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-info mb-2">Preview before sending</p>
               <p className="text-sm text-gray-600 font-roboto">
                 You can preview the exact email your mechanic will get before you send — every line item, contact info, and the portal link. The email is CC'd to the primary contact so you have a copy.
               </p>
@@ -211,13 +211,13 @@ export default function MxGuideModal({ show, onClose }: MxGuideModalProps) {
               <p className="text-[10px] font-bold uppercase tracking-widest text-navy mb-3">What Your Mechanic Can Do</p>
               <ul className="text-sm text-gray-600 font-roboto space-y-3">
                 <li className="flex items-start gap-3"><Calendar size={16} className="text-mxOrange shrink-0 mt-0.5" /> <span><strong>Propose or confirm a date:</strong> Accept the date you proposed or counter with a different one. They have to enter <strong>how many days the work will take</strong> — that's how we block out the calendar and show an estimated completion date.</span></li>
-                <li className="flex items-start gap-3"><Edit2 size={16} className="text-[#3AB0FF] shrink-0 mt-0.5" /> <span><strong>Update each item:</strong> Mark each item Pending, In Progress, Complete, or Deferred. You get an email on every status change with a progress summary.</span></li>
+                <li className="flex items-start gap-3"><Edit2 size={16} className="text-info shrink-0 mt-0.5" /> <span><strong>Update each item:</strong> Mark each item Pending, In Progress, Complete, or Deferred. You get an email on every status change with a progress summary.</span></li>
                 <li className="flex items-start gap-3"><Plus size={16} className="text-mxOrange shrink-0 mt-0.5" /> <span><strong>Add discovered work:</strong> If they find something during the visit, they can add it to the package with a name and description. You get an email alert right away.</span></li>
-                <li className="flex items-start gap-3"><Upload size={16} className="text-[#3AB0FF] shrink-0 mt-0.5" /> <span><strong>Upload files:</strong> Attach photos, PDFs, or Word documents (up to 5 files per upload, 10MB each). Great for work order estimates, photos of what they found, or inspection reports. You get an email when files arrive.</span></li>
+                <li className="flex items-start gap-3"><Upload size={16} className="text-info shrink-0 mt-0.5" /> <span><strong>Upload files:</strong> Attach photos, PDFs, or Word documents (up to 5 files per upload, 10MB each). Great for work order estimates, photos of what they found, or inspection reports. You get an email when files arrive.</span></li>
                 <li className="flex items-start gap-3"><Clock size={16} className="text-navy shrink-0 mt-0.5" /> <span><strong>Set estimated completion:</strong> Give an expected ready date and notes (parts on order, weather delays, etc.).</span></li>
                 <li className="flex items-start gap-3"><Plane size={16} className="text-success shrink-0 mt-0.5" /> <span><strong>Mark ready for pickup:</strong> When all work is done, they signal the airplane is ready. You get an email asking you to come enter logbook data.</span></li>
-                <li className="flex items-start gap-3"><MessageSquare size={16} className="text-[#3AB0FF] shrink-0 mt-0.5" /> <span><strong>Send messages:</strong> Message back and forth through the portal. Every message is timestamped and visible to both sides.</span></li>
-                <li className="flex items-start gap-3"><XCircle size={16} className="text-[#CE3732] shrink-0 mt-0.5" /> <span><strong>Decline the job:</strong> If they can't take it, they can decline with a reason. You're notified and can reach out to a different mechanic.</span></li>
+                <li className="flex items-start gap-3"><MessageSquare size={16} className="text-info shrink-0 mt-0.5" /> <span><strong>Send messages:</strong> Message back and forth through the portal. Every message is timestamped and visible to both sides.</span></li>
+                <li className="flex items-start gap-3"><XCircle size={16} className="text-danger shrink-0 mt-0.5" /> <span><strong>Decline the job:</strong> If they can't take it, they can decline with a reason. You're notified and can reach out to a different mechanic.</span></li>
               </ul>
             </div>
             <p className="text-xs text-gray-500 font-roboto italic">
@@ -243,16 +243,16 @@ export default function MxGuideModal({ show, onClose }: MxGuideModalProps) {
               </ul>
             </div>
             <div className="bg-blue-50 rounded p-4 border border-blue-200">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-[#3AB0FF] mb-2 flex items-center gap-2"><Layers size={14} /> Finishing items one at a time</p>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-info mb-2 flex items-center gap-2"><Layers size={14} /> Finishing items one at a time</p>
               <p className="text-sm text-gray-600 font-roboto mb-3">
                 You don't have to close everything at once. Finish items as they're signed off:
               </p>
               <ul className="text-sm text-gray-600 font-roboto space-y-2">
-                <li className="flex items-start gap-2"><span className="text-[#3AB0FF] font-bold shrink-0">•</span> Check the boxes next to the items you want to complete now.</li>
-                <li className="flex items-start gap-2"><span className="text-[#3AB0FF] font-bold shrink-0">•</span> Those items reset their tracking right away.</li>
-                <li className="flex items-start gap-2"><span className="text-[#3AB0FF] font-bold shrink-0">•</span> The event stays open for the rest.</li>
-                <li className="flex items-start gap-2"><span className="text-[#3AB0FF] font-bold shrink-0">•</span> Come back later to complete or defer whatever's left.</li>
-                <li className="flex items-start gap-2"><span className="text-[#3AB0FF] font-bold shrink-0">•</span> Once every item is either complete or deferred, a "Close Service Event" button appears to wrap it up.</li>
+                <li className="flex items-start gap-2"><span className="text-info font-bold shrink-0">•</span> Check the boxes next to the items you want to complete now.</li>
+                <li className="flex items-start gap-2"><span className="text-info font-bold shrink-0">•</span> Those items reset their tracking right away.</li>
+                <li className="flex items-start gap-2"><span className="text-info font-bold shrink-0">•</span> The event stays open for the rest.</li>
+                <li className="flex items-start gap-2"><span className="text-info font-bold shrink-0">•</span> Come back later to complete or defer whatever's left.</li>
+                <li className="flex items-start gap-2"><span className="text-info font-bold shrink-0">•</span> Once every item is either complete or deferred, a "Close Service Event" button appears to wrap it up.</li>
               </ul>
               <p className="text-sm text-gray-600 font-roboto mt-3">
                 Useful when your mechanic signs off items over several days, or when some items get pushed to the next visit.
@@ -280,11 +280,11 @@ export default function MxGuideModal({ show, onClose }: MxGuideModalProps) {
               When a service date gets confirmed — by owner or mechanic — we check the calendar for conflicts and handle them automatically.
             </p>
             <div className="bg-red-50 rounded p-4 border border-red-200">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-[#CE3732] mb-2 flex items-center gap-2"><Calendar size={14} /> What we handle automatically</p>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-danger mb-2 flex items-center gap-2"><Calendar size={14} /> What we handle automatically</p>
               <ul className="text-sm text-gray-600 font-roboto space-y-2">
-                <li className="flex items-start gap-2"><span className="text-[#CE3732] font-bold shrink-0">•</span> We find every confirmed reservation that overlaps the service window (confirmed start date through estimated completion).</li>
-                <li className="flex items-start gap-2"><span className="text-[#CE3732] font-bold shrink-0">•</span> Each overlapping reservation gets cancelled.</li>
-                <li className="flex items-start gap-2"><span className="text-[#CE3732] font-bold shrink-0">•</span> Every affected pilot gets an email listing their cancelled booking(s) and the maintenance dates, so they can rebook for after the service.</li>
+                <li className="flex items-start gap-2"><span className="text-danger font-bold shrink-0">•</span> We find every confirmed reservation that overlaps the service window (confirmed start date through estimated completion).</li>
+                <li className="flex items-start gap-2"><span className="text-danger font-bold shrink-0">•</span> Each overlapping reservation gets cancelled.</li>
+                <li className="flex items-start gap-2"><span className="text-danger font-bold shrink-0">•</span> Every affected pilot gets an email listing their cancelled booking(s) and the maintenance dates, so they can rebook for after the service.</li>
               </ul>
             </div>
             <div className="bg-gray-50 rounded p-4 border border-gray-200">
@@ -294,7 +294,7 @@ export default function MxGuideModal({ show, onClose }: MxGuideModalProps) {
               </p>
             </div>
             <div className="bg-blue-50 rounded p-4 border border-blue-200">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-[#3AB0FF] mb-2">How long the work takes matters</p>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-info mb-2">How long the work takes matters</p>
               <p className="text-sm text-gray-600 font-roboto">
                 The mechanic has to enter how many days the work will take when they propose or confirm a date. That's how many calendar days we block. Example: a 3-day service starting March 10 blocks March 10-12 inclusive. If they don't enter a duration, we only block the single confirmed date.
               </p>
@@ -343,7 +343,7 @@ export default function MxGuideModal({ show, onClose }: MxGuideModalProps) {
               </ul>
             </div>
             <div className="bg-blue-50 rounded p-4 border border-blue-200">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-[#3AB0FF] mb-2 flex items-center gap-2"><Bell size={14} /> Turning emails on or off</p>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-info mb-2 flex items-center gap-2"><Bell size={14} /> Turning emails on or off</p>
               <p className="text-sm text-gray-600 font-roboto">
                 Each pilot controls their own email preferences from the Settings screen (gear icon in the header). The maintenance-specific toggles (reminders, service updates) only show up if you're the primary contact on at least one aircraft — those emails only go to the primary contact anyway.
               </p>
@@ -392,7 +392,7 @@ export default function MxGuideModal({ show, onClose }: MxGuideModalProps) {
           <h2 className="font-oswald text-2xl font-bold uppercase text-navy flex items-center gap-2">
             <Wrench size={20} className="text-mxOrange" /> Maintenance Guide
           </h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-[#CE3732] p-2 -mr-2"><X size={24}/></button>
+          <button onClick={onClose} className="text-gray-400 hover:text-danger p-2 -mr-2"><X size={24}/></button>
         </div>
 
         <div className="space-y-2 mb-6">

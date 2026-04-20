@@ -69,7 +69,7 @@ export function ModalCloseButton({ onClick, ariaLabel = "Close" }: { onClick: ()
     <button
       onClick={onClick}
       aria-label={ariaLabel}
-      className="text-gray-400 hover:text-[#CE3732] p-2 -mr-2 active:scale-95 transition-colors"
+      className="text-gray-400 hover:text-danger p-2 -mr-2 active:scale-95 transition-colors"
     >
       <X size={24} />
     </button>

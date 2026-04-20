@@ -275,7 +275,7 @@ export default function MaintenanceTab({
   if (!aircraft) return null;
 
   const statusLabel = (s: string) => ({ draft: 'Draft — Review & Send', scheduling: 'Scheduling', confirmed: 'Confirmed', in_progress: 'In Progress', ready_for_pickup: 'Ready for Pickup', cancelled: 'Cancelled' }[s] || s);
-  const statusColor = (s: string) => ({ draft: 'bg-mxOrange', scheduling: 'bg-gray-500', confirmed: 'bg-[#3AB0FF]', in_progress: 'bg-[#56B94A]', ready_for_pickup: 'bg-[#56B94A]', cancelled: 'bg-[#CE3732]' }[s] || 'bg-gray-400');
+  const statusColor = (s: string) => ({ draft: 'bg-mxOrange', scheduling: 'bg-gray-500', confirmed: 'bg-info', in_progress: 'bg-[#56B94A]', ready_for_pickup: 'bg-[#56B94A]', cancelled: 'bg-danger' }[s] || 'bg-gray-400');
 
   /** Format interval for display in needs-setup items */
   const formatItemInterval = (item: any): string => {
@@ -339,7 +339,7 @@ export default function MaintenanceTab({
           {canEditMx && activeEvents.length > 0 && (
             <div className="mb-4 space-y-2">
               {activeEvents.map(ev => (
-                <div key={ev.id} className={`bg-white shadow-lg rounded-sm p-4 border-t-4 ${ev.status === 'draft' ? 'border-mxOrange' : ev.status === 'confirmed' ? 'border-[#3AB0FF]' : ev.status === 'in_progress' || ev.status === 'ready_for_pickup' ? 'border-[#56B94A]' : 'border-gray-400'}`}>
+                <div key={ev.id} className={`bg-white shadow-lg rounded-sm p-4 border-t-4 ${ev.status === 'draft' ? 'border-mxOrange' : ev.status === 'confirmed' ? 'border-info' : ev.status === 'in_progress' || ev.status === 'ready_for_pickup' ? 'border-[#56B94A]' : 'border-gray-400'}`}>
                   <div className="flex justify-between items-start">
                     <div>
                       <span className={`text-[8px] font-bold uppercase tracking-widest px-2 py-0.5 rounded text-white ${statusColor(ev.status)}`}>{statusLabel(ev.status)}</span>
@@ -348,7 +348,7 @@ export default function MaintenanceTab({
                       <p className="text-[10px] text-gray-400 mt-1">MX Contact: {ev.mx_contact_name || 'N/A'}</p>
                     </div>
                     <div className="flex flex-col gap-2 items-end shrink-0 ml-3">
-                      <button onClick={() => setShowServiceModal(true)} className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-[#3AB0FF] bg-blue-50 border border-blue-200 px-2.5 py-1.5 rounded transition-colors active:scale-95">View <ChevronRight size={12} /></button>
+                      <button onClick={() => setShowServiceModal(true)} className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-info bg-blue-50 border border-blue-200 px-2.5 py-1.5 rounded transition-colors active:scale-95">View <ChevronRight size={12} /></button>
                       {ev.status !== 'draft' && <button onClick={() => setConfirmResendId(ev.id)} disabled={resendingEventId === ev.id} className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-mxOrange bg-orange-50 border border-orange-200 px-2.5 py-1.5 rounded transition-colors active:scale-95 disabled:opacity-50"><Send size={10} /> {resendingEventId === ev.id ? '...' : 'Resend'}</button>}
                       {ev.access_token && ev.status !== 'draft' && <a href={`/service/${ev.access_token}`} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-navy bg-gray-50 border border-gray-200 px-2.5 py-1.5 rounded transition-colors active:scale-95"><ExternalLink size={10} /> Portal</a>}
                     </div>
@@ -376,7 +376,7 @@ export default function MaintenanceTab({
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <h4 className="font-oswald font-bold uppercase text-sm text-navy truncate">{item.item_name}</h4>
-                        {item.is_required && <span className="text-[7px] font-bold uppercase tracking-widest px-1 py-0.5 rounded bg-red-100 text-[#CE3732] shrink-0">Required</span>}
+                        {item.is_required && <span className="text-[7px] font-bold uppercase tracking-widest px-1 py-0.5 rounded bg-red-100 text-danger shrink-0">Required</span>}
                       </div>
                       <div className="flex items-center gap-3 mt-1">
                         <span className="text-[10px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-orange-100 text-mxOrange">Setup Required</span>
@@ -388,7 +388,7 @@ export default function MaintenanceTab({
                     {canEditMx && (
                       <div className="flex gap-3 pl-3 shrink-0">
                         <button onClick={() => openMxForm(item)} className="text-mxOrange hover:text-orange-600 transition-colors active:scale-95" title="Configure"><Edit2 size={16}/></button>
-                        <button onClick={() => deleteMxItem(item.id)} className="text-gray-400 hover:text-[#CE3732] transition-colors active:scale-95"><Trash2 size={16}/></button>
+                        <button onClick={() => deleteMxItem(item.id)} className="text-gray-400 hover:text-danger transition-colors active:scale-95"><Trash2 size={16}/></button>
                       </div>
                     )}
                   </div>
@@ -419,15 +419,15 @@ export default function MaintenanceTab({
                 <div key={item.id} className={`p-4 border rounded flex justify-between items-center ${containerClass}`}>
                   <div className="w-full">
                     <div className="flex items-center gap-2">
-                      <h4 className={`font-oswald font-bold uppercase text-sm ${processed.isExpired ? 'text-[#CE3732]' : 'text-navy'}`}>{item.item_name}</h4>
-                      {!item.is_required && <span className={`text-[8px] border px-1 rounded uppercase tracking-widest opacity-70 ${processed.isExpired ? 'border-[#CE3732] text-[#CE3732]' : 'border-navy text-navy'}`}>Optional</span>}
+                      <h4 className={`font-oswald font-bold uppercase text-sm ${processed.isExpired ? 'text-danger' : 'text-navy'}`}>{item.item_name}</h4>
+                      {!item.is_required && <span className={`text-[8px] border px-1 rounded uppercase tracking-widest opacity-70 ${processed.isExpired ? 'border-danger text-danger' : 'border-navy text-navy'}`}>Optional</span>}
                     </div>
                     <p className={`text-xs mt-1 font-roboto font-bold ${dueTextColor}`}>{processed.dueText}</p>
                     {item.primary_heads_up_sent && !item.mx_schedule_sent && (
                       <div className="mt-3 bg-red-50 border border-red-200 p-3 rounded w-full max-w-sm">
-                        <p className="text-[10px] text-[#CE3732] font-bold uppercase mb-1 leading-tight">Heads up — coming due based on recent flying</p>
-                        <p className="text-[10px] text-[#CE3732] mb-2 leading-tight" title="How sure we are about the projection, based on how much recent flight history we have to work with.">Forecast confidence: {aircraft.confidenceScore || 0}% <span className="opacity-60">(from recent flight activity)</span></p>
-                        <button onClick={() => handleManualMxTrigger(item)} disabled={isSubmitting} className="w-full bg-[#CE3732] text-white text-[10px] font-bold uppercase px-3 py-2 rounded shadow active:scale-95 transition-transform disabled:opacity-50">Review &amp; Schedule</button>
+                        <p className="text-[10px] text-danger font-bold uppercase mb-1 leading-tight">Heads up — coming due based on recent flying</p>
+                        <p className="text-[10px] text-danger mb-2 leading-tight" title="How sure we are about the projection, based on how much recent flight history we have to work with.">Forecast confidence: {aircraft.confidenceScore || 0}% <span className="opacity-60">(from recent flight activity)</span></p>
+                        <button onClick={() => handleManualMxTrigger(item)} disabled={isSubmitting} className="w-full bg-danger text-white text-[10px] font-bold uppercase px-3 py-2 rounded shadow active:scale-95 transition-transform disabled:opacity-50">Review &amp; Schedule</button>
                       </div>
                     )}
                   </div>
@@ -435,7 +435,7 @@ export default function MaintenanceTab({
                     {canEditMx && (
                       <>
                         <button onClick={() => openMxForm(item)} className="text-gray-400 hover:text-mxOrange transition-colors active:scale-95"><Edit2 size={16}/></button>
-                        <button onClick={() => deleteMxItem(item.id)} className="text-gray-400 hover:text-[#CE3732] transition-colors active:scale-95"><Trash2 size={16}/></button>
+                        <button onClick={() => deleteMxItem(item.id)} className="text-gray-400 hover:text-danger transition-colors active:scale-95"><Trash2 size={16}/></button>
                       </>
                     )}
                   </div>
@@ -443,11 +443,11 @@ export default function MaintenanceTab({
               );
             };
             return (
-          <div className={`bg-cream shadow-lg rounded-sm p-4 md:p-6 border-t-4 mb-6 ${isGroundedLocally ? 'border-[#CE3732]' : 'border-mxOrange'}`}>
+          <div className={`bg-cream shadow-lg rounded-sm p-4 md:p-6 border-t-4 mb-6 ${isGroundedLocally ? 'border-danger' : 'border-mxOrange'}`}>
             <div className="flex justify-between items-end mb-6">
               <h2 className="font-oswald text-2xl md:text-3xl font-bold uppercase text-navy m-0 leading-none">Maintenance</h2>
               <div className="flex items-center gap-3">
-                <button onClick={exportMxHistory} disabled={isExportingMx} className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-[#3AB0FF] hover:opacity-80 transition-colors active:scale-95 disabled:opacity-50"><Download size={14} /> {isExportingMx ? 'Exporting...' : 'History'}</button>
+                <button onClick={exportMxHistory} disabled={isExportingMx} className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-info hover:opacity-80 transition-colors active:scale-95 disabled:opacity-50"><Download size={14} /> {isExportingMx ? 'Exporting...' : 'History'}</button>
                 <button onClick={() => setShowGuideModal(true)} className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-mxOrange hover:opacity-80 transition-colors active:scale-95"><HelpCircle size={14} /> Guide</button>
               </div>
             </div>
@@ -459,7 +459,7 @@ export default function MaintenanceTab({
               <div className="space-y-5">
                 {blocking.length > 0 && (
                   <div>
-                    <h3 className="text-[11px] font-bold uppercase tracking-widest text-[#CE3732] mb-2 flex items-center gap-1.5">
+                    <h3 className="text-[11px] font-bold uppercase tracking-widest text-danger mb-2 flex items-center gap-1.5">
                       <ShieldAlert size={13} /> Grounds the airplane today ({blocking.length})
                     </h3>
                     <div className="space-y-3">{blocking.map(renderRow)}</div>
@@ -493,7 +493,7 @@ export default function MaintenanceTab({
               <div className="bg-white rounded shadow-2xl w-full max-w-md p-5 border-t-4 border-mxOrange animate-slide-up">
                 <div className="flex justify-between items-center mb-6">
                   <h2 className="font-oswald text-2xl font-bold uppercase text-navy">{editingId ? 'Edit Maintenance Item' : 'Track New Item'}</h2>
-                  <button onClick={() => setShowMxModal(false)} className="text-gray-400 hover:text-[#CE3732] transition-colors"><X size={24}/></button>
+                  <button onClick={() => setShowMxModal(false)} className="text-gray-400 hover:text-danger transition-colors"><X size={24}/></button>
                 </div>
                 <form onSubmit={submitMxItem} className="space-y-4">
                   <div className="grid grid-cols-3 gap-3">
@@ -655,7 +655,7 @@ function ServiceEventsList({
         <div className="flex flex-col gap-1.5 shrink-0">
           <button
             onClick={onOpenModal}
-            className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-[#3AB0FF] bg-blue-50 border border-blue-200 px-2.5 py-1.5 rounded active:scale-95"
+            className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-info bg-blue-50 border border-blue-200 px-2.5 py-1.5 rounded active:scale-95"
           >
             View <ChevronRight size={12} />
           </button>

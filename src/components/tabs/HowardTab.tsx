@@ -617,7 +617,7 @@ export default function HowardTab({
                   disabled={isSending}
                   title="Clear conversation"
                   aria-label="Clear conversation"
-                  className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-gray-500 hover:text-[#CE3732] active:scale-95 transition-colors disabled:opacity-40"
+                  className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-gray-500 hover:text-danger active:scale-95 transition-colors disabled:opacity-40"
                 >
                   <Trash2 size={14} />
                   <span className="hidden sm:inline">Clear</span>

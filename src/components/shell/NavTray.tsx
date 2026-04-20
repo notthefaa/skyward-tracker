@@ -164,8 +164,8 @@ function SortableItem({
         <Icon size={20} style={{ color: iconColor }} />
         {!reordering && item.key === unreadBadgeKey && (unreadCount ?? 0) > 0 && (
           <span className="absolute -top-1 -right-2 flex h-3 w-3">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#CE3732] opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-3 w-3 bg-[#CE3732] text-[8px] text-white font-bold items-center justify-center border border-white"></span>
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-danger opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-3 w-3 bg-danger text-[8px] text-white font-bold items-center justify-center border border-white"></span>
           </span>
         )}
       </div>
@@ -305,7 +305,7 @@ export default function NavTray({
               <span className="text-[9px] font-bold uppercase tracking-widest text-gray-400">Hold & drag to reorder</span>
               <button
                 onClick={() => setReordering(false)}
-                className="text-[10px] font-bold uppercase tracking-widest text-[#3AB0FF] active:scale-95 px-2 py-0.5"
+                className="text-[10px] font-bold uppercase tracking-widest text-info active:scale-95 px-2 py-0.5"
               >
                 Done
               </button>

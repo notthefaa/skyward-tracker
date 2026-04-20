@@ -17,6 +17,15 @@
 
   --color-brandYellow: #F4C458;
   --color-success: #56B94A;
+
+  /* Grounded / destructive red. Used for AOG badges, delete buttons,
+     danger-zone borders, error toasts, and close-X hover. */
+  --color-danger: #CE3732;
+
+  /* Sky blue. Links, info banners, "next up" accents, awaiting status,
+     and confirmation-pending chips. */
+  --color-info: #3AB0FF;
+
   --color-slateGray: #525659;
 
   /* Google Fonts */

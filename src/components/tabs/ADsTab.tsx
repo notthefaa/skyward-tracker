@@ -225,8 +225,8 @@ export default function ADsTab({ aircraft, role, aircraftRole }: Props) {
 
       {/* Overdue */}
       {overdue.length > 0 && (
-        <div className="bg-cream shadow-lg rounded-sm p-4 md:p-6 border-t-4 border-[#CE3732]">
-          <h3 className="font-oswald text-lg font-bold uppercase text-[#CE3732] mb-4 flex items-center gap-2"><ShieldAlert size={16} /> Overdue ({overdue.length})</h3>
+        <div className="bg-cream shadow-lg rounded-sm p-4 md:p-6 border-t-4 border-danger">
+          <h3 className="font-oswald text-lg font-bold uppercase text-danger mb-4 flex items-center gap-2"><ShieldAlert size={16} /> Overdue ({overdue.length})</h3>
           <div className="space-y-2">
             {overdue.map(c => renderAdRow(c, canEdit, openEdit, handleDelete))}
           </div>
@@ -259,7 +259,7 @@ export default function ADsTab({ aircraft, role, aircraftRole }: Props) {
       {untracked.length > 0 && (
         <div className="bg-gray-100 shadow-inner rounded-sm p-4 md:p-6">
           <h3 className="font-oswald text-sm font-bold uppercase text-gray-500 mb-3">Needs compliance data ({untracked.length})</h3>
-          <p className="text-xs text-gray-500 mb-3">These ADs were added but don&apos;t yet have compliance dates logged. Handle the <span className="text-[#CE3732] font-bold">Grounds aircraft</span> ones first — until their compliance is recorded, the aircraft may not be legal to fly.</p>
+          <p className="text-xs text-gray-500 mb-3">These ADs were added but don&apos;t yet have compliance dates logged. Handle the <span className="text-danger font-bold">Grounds aircraft</span> ones first — until their compliance is recorded, the aircraft may not be legal to fly.</p>
           <div className="space-y-2">
             {untracked.map(c => renderAdRow(c, canEdit, openEdit, handleDelete, true))}
           </div>
@@ -280,7 +280,7 @@ export default function ADsTab({ aircraft, role, aircraftRole }: Props) {
             <div className="bg-white rounded shadow-2xl w-full max-w-md p-5 border-t-4 border-[#7C3AED] animate-slide-up">
               <div className="flex justify-between items-center mb-6">
                 <h2 className="font-oswald text-2xl font-bold uppercase text-navy">{editingId ? 'Edit AD' : 'Add AD'}</h2>
-                <button onClick={() => setShowForm(false)} className="text-gray-400 hover:text-[#CE3732]"><X size={24} /></button>
+                <button onClick={() => setShowForm(false)} className="text-gray-400 hover:text-danger"><X size={24} /></button>
               </div>
               <form onSubmit={handleSubmit} className="space-y-3">
                 <div className="grid grid-cols-2 gap-3">
@@ -341,9 +341,9 @@ function renderAdRow(
         <div className="flex items-center gap-2 flex-wrap">
           <p className="font-oswald font-bold text-sm uppercase text-navy leading-tight">AD {ad.ad_number}</p>
           {ad.source === 'drs_sync' && <span className="text-[8px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-[#7C3AED]/10 text-[#7C3AED] border border-[#7C3AED]/20">DRS</span>}
-          {ad.compliance_type === 'recurring' && <span className="text-[8px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-[#3AB0FF]/10 text-[#3AB0FF] border border-[#3AB0FF]/20">Recurring</span>}
+          {ad.compliance_type === 'recurring' && <span className="text-[8px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-info/10 text-info border border-info/20">Recurring</span>}
           {showGroundingPill && ad.affects_airworthiness && (
-            <span className="text-[8px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-[#CE3732]/10 text-[#CE3732] border border-[#CE3732]/30">Grounds aircraft</span>
+            <span className="text-[8px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-danger/10 text-danger border border-danger/30">Grounds aircraft</span>
           )}
           {!ad.affects_airworthiness && <span className="text-[8px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 border border-gray-200">Non-AW</span>}
         </div>
@@ -359,13 +359,13 @@ function renderAdRow(
           <p className="text-[10px] text-gray-500 mt-1 italic">Method: {ad.compliance_method}</p>
         )}
         {ad.source_url && (
-          <a href={ad.source_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[10px] text-[#3AB0FF] underline mt-1"><ExternalLink size={10} /> FAA source</a>
+          <a href={ad.source_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[10px] text-info underline mt-1"><ExternalLink size={10} /> FAA source</a>
         )}
       </div>
       {canEdit && (
         <div className="flex gap-2 shrink-0">
           <button onClick={() => openEdit(ad)} title="Edit" className="text-gray-400 hover:text-mxOrange"><Edit2 size={14} /></button>
-          <button onClick={() => handleDelete(ad)} title="Remove" className="text-gray-400 hover:text-[#CE3732]"><Trash2 size={14} /></button>
+          <button onClick={() => handleDelete(ad)} title="Remove" className="text-gray-400 hover:text-danger"><Trash2 size={14} /></button>
         </div>
       )}
     </div>

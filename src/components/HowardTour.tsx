@@ -361,7 +361,7 @@ export default function HowardTour({
             </button>
           </div>
           {finishError && (
-            <p className="mt-3 text-[10px] text-[#CE3732] leading-tight">
+            <p className="mt-3 text-[10px] text-danger leading-tight">
               {finishError}
             </p>
           )}

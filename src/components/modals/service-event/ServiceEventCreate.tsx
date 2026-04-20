@@ -159,18 +159,18 @@ export default function ServiceEventCreate({
       {availableSquawks.length > 0 && (
         <div>
           <div className="flex justify-between items-center mb-2">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-navy flex items-center gap-2"><AlertTriangle size={14} className="text-[#CE3732]" /> Open Squawks</p>
-            <button type="button" onClick={toggleSelectAllSquawks} className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-[#CE3732] hover:opacity-80 active:scale-95 transition-all">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-navy flex items-center gap-2"><AlertTriangle size={14} className="text-danger" /> Open Squawks</p>
+            <button type="button" onClick={toggleSelectAllSquawks} className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-danger hover:opacity-80 active:scale-95 transition-all">
               <CheckSquare size={12} /> {availableSquawks.every(sq => selectedSquawkIds.includes(sq.id)) ? 'Deselect All' : 'Select All'}
             </button>
           </div>
           <div className="space-y-3 pb-1">
             {availableSquawks.map(sq => (
               <label key={sq.id} className="flex items-start gap-3 p-3 border border-gray-200 rounded cursor-pointer hover:bg-gray-50">
-                <input type="checkbox" checked={selectedSquawkIds.includes(sq.id)} onChange={() => setSelectedSquawkIds(prev => prev.includes(sq.id) ? prev.filter(id => id !== sq.id) : [...prev, sq.id])} className="mt-1 w-4 h-4 text-[#CE3732] border-gray-300 rounded" />
+                <input type="checkbox" checked={selectedSquawkIds.includes(sq.id)} onChange={() => setSelectedSquawkIds(prev => prev.includes(sq.id) ? prev.filter(id => id !== sq.id) : [...prev, sq.id])} className="mt-1 w-4 h-4 text-danger border-gray-300 rounded" />
                 <div>
                   <span className="font-bold text-sm text-navy">{sq.description || 'No description'}</span>
-                  {sq.affects_airworthiness && sq.location && <span className="block text-[10px] font-bold text-[#CE3732]">⚠ Grounded at {sq.location}</span>}
+                  {sq.affects_airworthiness && sq.location && <span className="block text-[10px] font-bold text-danger">⚠ Grounded at {sq.location}</span>}
                   <span className="block text-[10px] text-gray-500">Reported {new Date(sq.created_at).toLocaleDateString()}</span>
                 </div>
               </label>
@@ -194,11 +194,11 @@ export default function ServiceEventCreate({
 
       {/* Add-on Services */}
       <div>
-        <p className="text-[10px] font-bold uppercase tracking-widest text-navy mb-2 flex items-center gap-2"><Sparkles size={14} className="text-[#3AB0FF]" /> Additional Services</p>
+        <p className="text-[10px] font-bold uppercase tracking-widest text-navy mb-2 flex items-center gap-2"><Sparkles size={14} className="text-info" /> Additional Services</p>
         <div className="grid grid-cols-2 gap-2">
           {ADDON_OPTIONS.map(addon => (
             <label key={addon} className="flex items-center gap-2 p-2 border border-gray-200 rounded cursor-pointer hover:bg-blue-50 text-xs">
-              <input type="checkbox" checked={selectedAddons.includes(addon)} onChange={() => setSelectedAddons(prev => prev.includes(addon) ? prev.filter(a => a !== addon) : [...prev, addon])} className="w-3.5 h-3.5 text-[#3AB0FF] border-gray-300 rounded" />
+              <input type="checkbox" checked={selectedAddons.includes(addon)} onChange={() => setSelectedAddons(prev => prev.includes(addon) ? prev.filter(a => a !== addon) : [...prev, addon])} className="w-3.5 h-3.5 text-info border-gray-300 rounded" />
               <span className="text-navy font-bold">{addon}</span>
             </label>
           ))}
@@ -208,7 +208,7 @@ export default function ServiceEventCreate({
       <DateProposalSection wantsToPropose={wantsToPropose} setWantsToPropose={setWantsToPropose} proposedDate={proposedDate} setProposedDate={setProposedDate} />
 
       {!showPreview ? (
-        <button onClick={() => setShowPreview(true)} className="w-full text-[10px] font-bold uppercase tracking-widest text-[#3AB0FF] hover:underline py-2">Preview Email Before Sending</button>
+        <button onClick={() => setShowPreview(true)} className="w-full text-[10px] font-bold uppercase tracking-widest text-info hover:underline py-2">Preview Email Before Sending</button>
       ) : (
         <EmailPreview aircraft={aircraft} mxItems={mxItems.filter(mx => selectedMxIds.includes(mx.id))} squawks={squawks.filter(sq => selectedSquawkIds.includes(sq.id))} selectedAddons={selectedAddons} proposedDate={wantsToPropose ? proposedDate : null} onClose={() => setShowPreview(false)} />
       )}

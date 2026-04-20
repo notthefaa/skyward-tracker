@@ -197,7 +197,7 @@ export default function DocumentsTab({
                   <td className="py-3 pr-4">
                     <div className="flex items-center gap-2">
                       <FileText size={14} className="text-[#56B94A] shrink-0" />
-                      <a href={resolve(doc.file_url) || '#'} target="_blank" rel="noopener noreferrer" className="text-[#3AB0FF] underline truncate max-w-[180px]">{doc.filename}</a>
+                      <a href={resolve(doc.file_url) || '#'} target="_blank" rel="noopener noreferrer" className="text-info underline truncate max-w-[180px]">{doc.filename}</a>
                     </div>
                   </td>
                   <td className="py-3 pr-4 whitespace-nowrap text-[10px] font-bold uppercase tracking-wider">{doc.doc_type}</td>
@@ -205,13 +205,13 @@ export default function DocumentsTab({
                   <td className="py-3 pr-4 whitespace-nowrap">
                     {doc.status === 'ready' && <span className="inline-flex items-center gap-1 text-[#56B94A] font-bold"><CheckCircle size={12} /> Ready</span>}
                     {doc.status === 'processing' && <span className="inline-flex items-center gap-1 text-mxOrange font-bold"><Loader2 size={12} className="animate-spin" /> Processing</span>}
-                    {doc.status === 'error' && <span className="inline-flex items-center gap-1 text-[#CE3732] font-bold"><AlertCircle size={12} /> Error</span>}
+                    {doc.status === 'error' && <span className="inline-flex items-center gap-1 text-danger font-bold"><AlertCircle size={12} /> Error</span>}
                   </td>
                   <td className="py-3 pr-4 whitespace-nowrap">{new Date(doc.created_at).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: '2-digit' })}</td>
                   <td className="py-3 pr-4 whitespace-nowrap" />
                   {isAdmin && (
                     <td className="py-3 text-right">
-                      <button onClick={() => handleDelete(doc)} className="text-gray-400 hover:text-[#CE3732] transition-colors"><Trash2 size={14} /></button>
+                      <button onClick={() => handleDelete(doc)} className="text-gray-400 hover:text-danger transition-colors"><Trash2 size={14} /></button>
                     </td>
                   )}
                 </tr>

@@ -139,9 +139,9 @@ export default function UpdatePassword() {
   if (!session) {
     return (
       <div className="flex flex-col items-center justify-center p-4 bg-slateGray h-[100dvh] w-full overflow-hidden">
-        <div className="bg-cream shadow-2xl rounded-sm p-8 w-full max-w-md text-center animate-slide-up border-t-4 border-[#CE3732]">
-          <AlertTriangle size={48} className="mx-auto text-[#CE3732] mb-4" />
-          <h2 className="font-oswald text-2xl font-bold uppercase tracking-widest text-[#CE3732] mb-4">
+        <div className="bg-cream shadow-2xl rounded-sm p-8 w-full max-w-md text-center animate-slide-up border-t-4 border-danger">
+          <AlertTriangle size={48} className="mx-auto text-danger mb-4" />
+          <h2 className="font-oswald text-2xl font-bold uppercase tracking-widest text-danger mb-4">
             Link Expired
           </h2>
           

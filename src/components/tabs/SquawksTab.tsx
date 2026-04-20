@@ -456,10 +456,10 @@ export default function SquawksTab({
         <PrimaryButton onClick={() => openForm()}><Plus size={18} /> Report New Squawk</PrimaryButton>
       </div>
 
-      <div className="bg-cream shadow-lg rounded-sm p-4 md:p-6 border-t-4 border-[#CE3732] mb-6">
+      <div className="bg-cream shadow-lg rounded-sm p-4 md:p-6 border-t-4 border-danger mb-6">
         <div className="flex justify-between items-end mb-6">
           <h2 className="font-oswald text-2xl md:text-3xl font-bold uppercase text-navy m-0 leading-none">Active Squawks</h2>
-          <button onClick={() => { setSelectedForExport([]); setShowExportModal(true); }} className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-[#CE3732] hover:opacity-80 transition-colors active:scale-95">
+          <button onClick={() => { setSelectedForExport([]); setShowExportModal(true); }} className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-danger hover:opacity-80 transition-colors active:scale-95">
             <Download size={14} /> Export PDF
           </button>
         </div>
@@ -467,10 +467,10 @@ export default function SquawksTab({
           {activeSquawks.length === 0 ? (<p className="text-center text-sm text-gray-400 italic py-4">No active squawks.</p>) : (
             activeSquawks.map(sq => (
               <div key={sq.id} className="relative">
-                <button onClick={() => openDetailModal(sq)} className={`w-full text-left p-4 border rounded transition-colors active:scale-[0.98] ${sq.affects_airworthiness ? 'border-[#CE3732]/30 bg-[#CE3732]/10 hover:bg-[#CE3732]/15' : 'border-mxOrange/30 bg-mxOrange/10 hover:bg-mxOrange/15'}`}>
+                <button onClick={() => openDetailModal(sq)} className={`w-full text-left p-4 border rounded transition-colors active:scale-[0.98] ${sq.affects_airworthiness ? 'border-danger/30 bg-danger/10 hover:bg-danger/15' : 'border-mxOrange/30 bg-mxOrange/10 hover:bg-mxOrange/15'}`}>
                 <div className="flex justify-between items-start mb-2">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded text-white flex items-center gap-1 ${sq.affects_airworthiness ? 'bg-[#CE3732]' : 'bg-mxOrange'}`}>
+                    <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded text-white flex items-center gap-1 ${sq.affects_airworthiness ? 'bg-danger' : 'bg-mxOrange'}`}>
                       {sq.affects_airworthiness && <AlertTriangle size={10} />}
                       {sq.affects_airworthiness ? 'AOG / GROUNDED' : 'OPEN'}
                     </span>
@@ -549,21 +549,21 @@ export default function SquawksTab({
       {detailSquawk && (
         <div className="fixed inset-0 bg-black/60 z-[10000] overflow-y-auto animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={closeDetailModal}>
           <div className="flex min-h-full items-center justify-center p-3">
-          <div className="bg-white rounded shadow-2xl w-full max-w-lg p-5 border-t-4 border-[#CE3732] animate-slide-up" style={{ overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch' }} onClick={e => e.stopPropagation()}>
+          <div className="bg-white rounded shadow-2xl w-full max-w-lg p-5 border-t-4 border-danger animate-slide-up" style={{ overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch' }} onClick={e => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-4">
               <h2 className="font-oswald text-2xl font-bold uppercase text-navy">Squawk Detail</h2>
-              <button onClick={closeDetailModal} className="text-gray-400 hover:text-[#CE3732]"><X size={24}/></button>
+              <button onClick={closeDetailModal} className="text-gray-400 hover:text-danger"><X size={24}/></button>
             </div>
 
             <div className="flex items-center gap-2 mb-4">
-              <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded text-white ${detailSquawk.status === 'resolved' ? 'bg-[#56B94A]' : detailSquawk.affects_airworthiness ? 'bg-[#CE3732]' : 'bg-mxOrange'}`}>
+              <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded text-white ${detailSquawk.status === 'resolved' ? 'bg-[#56B94A]' : detailSquawk.affects_airworthiness ? 'bg-danger' : 'bg-mxOrange'}`}>
                 {detailSquawk.status === 'resolved' ? 'RESOLVED' : detailSquawk.affects_airworthiness ? 'AOG / GROUNDED' : 'OPEN'}
               </span>
               {detailSquawk.is_deferred && <span className="text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded bg-blue-600 text-white">DEFERRED ({detailSquawk.deferral_category})</span>}
             </div>
 
             <div className="grid grid-cols-2 gap-3 mb-4 text-sm">
-              <div className="flex items-start gap-2"><MapPin size={14} className="text-[#CE3732] shrink-0 mt-0.5" /><div><span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 block">Location</span><span className="font-bold text-navy">{detailSquawk.location}</span></div></div>
+              <div className="flex items-start gap-2"><MapPin size={14} className="text-danger shrink-0 mt-0.5" /><div><span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 block">Location</span><span className="font-bold text-navy">{detailSquawk.location}</span></div></div>
               <div className="flex items-start gap-2"><User size={14} className="text-gray-500 shrink-0 mt-0.5" /><div><span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 block">Reported By</span><span className="font-bold text-navy">{detailSquawk.reporter_initials || 'Unknown'}</span></div></div>
               <div className="flex items-start gap-2"><Clock size={14} className="text-gray-500 shrink-0 mt-0.5" /><div><span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 block">Date</span><span className="font-bold text-navy">{new Date(detailSquawk.created_at).toLocaleDateString()}</span></div></div>
               {detailSquawk.edited_at && (
@@ -639,7 +639,7 @@ export default function SquawksTab({
               <div className="flex gap-2">
                 <button onClick={() => { handleShareMx(detailSquawk); closeDetailModal(); }} className="flex-1 border border-gray-300 text-navy font-bold py-2.5 rounded text-xs uppercase tracking-widest active:scale-95 flex items-center justify-center gap-2"><Mail size={14} /> Email MX</button>
                 {canModify(detailSquawk) && (
-                  <button onClick={() => deleteSquawk(detailSquawk.id)} className="flex-1 border border-[#CE3732] text-[#CE3732] font-bold py-2.5 rounded text-xs uppercase tracking-widest active:scale-95 flex items-center justify-center gap-2"><Trash2 size={14} /> Delete</button>
+                  <button onClick={() => deleteSquawk(detailSquawk.id)} className="flex-1 border border-danger text-danger font-bold py-2.5 rounded text-xs uppercase tracking-widest active:scale-95 flex items-center justify-center gap-2"><Trash2 size={14} /> Delete</button>
                 )}
               </div>
             </div>
@@ -651,20 +651,20 @@ export default function SquawksTab({
       {showExportModal && (
         <div className="fixed inset-0 bg-black/60 z-[10000] overflow-y-auto animate-fade-in" style={{ overscrollBehavior: 'contain' }}>
           <div className="flex min-h-full items-center justify-center p-3">
-          <div className="bg-white rounded shadow-2xl w-full max-w-md p-5 border-t-4 border-[#CE3732] animate-slide-up flex flex-col" style={{ overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch' }}>
+          <div className="bg-white rounded shadow-2xl w-full max-w-md p-5 border-t-4 border-danger animate-slide-up flex flex-col" style={{ overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch' }}>
             <div className="flex justify-between items-center mb-4">
-              <h2 className="font-oswald text-2xl font-bold uppercase text-navy flex items-center gap-2"><CheckSquare size={20} className="text-[#CE3732]" /> Export to PDF</h2>
-              <button onClick={() => setShowExportModal(false)} className="text-gray-400 hover:text-[#CE3732] transition-colors"><X size={24}/></button>
+              <h2 className="font-oswald text-2xl font-bold uppercase text-navy flex items-center gap-2"><CheckSquare size={20} className="text-danger" /> Export to PDF</h2>
+              <button onClick={() => setShowExportModal(false)} className="text-gray-400 hover:text-danger transition-colors"><X size={24}/></button>
             </div>
             <p className="text-xs text-gray-500 mb-4">Pick the squawks to include in the PDF report.</p>
             <div className="flex justify-between items-center mb-2 pb-2 border-b border-gray-200">
-              <button onClick={() => setSelectedForExport(squawks.map(s => s.id))} className="text-[10px] font-bold uppercase tracking-widest text-[#CE3732] hover:opacity-80">Select All</button>
+              <button onClick={() => setSelectedForExport(squawks.map(s => s.id))} className="text-[10px] font-bold uppercase tracking-widest text-danger hover:opacity-80">Select All</button>
               <button onClick={() => setSelectedForExport([])} className="text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:text-gray-600">Clear All</button>
             </div>
             <div className="space-y-2 mb-6 overflow-y-auto flex-1 max-h-[40vh]">
               {squawks.map(sq => (
                 <label key={sq.id} className="flex items-start gap-3 p-3 border border-gray-200 rounded cursor-pointer hover:bg-gray-50 transition-colors">
-                  <input type="checkbox" checked={selectedForExport.includes(sq.id)} onChange={() => toggleExportSelection(sq.id)} className="mt-1 w-4 h-4 text-[#CE3732] border-gray-300 rounded focus:ring-[#CE3732]" />
+                  <input type="checkbox" checked={selectedForExport.includes(sq.id)} onChange={() => toggleExportSelection(sq.id)} className="mt-1 w-4 h-4 text-danger border-gray-300 rounded focus:ring-danger" />
                   <div className="flex-1">
                     <p className="text-xs font-bold text-navy">{new Date(sq.created_at).toLocaleDateString()} - {sq.location}</p>
                     <p className="text-[10px] text-gray-500 line-clamp-1">{sq.description}</p>
@@ -696,10 +696,10 @@ export default function SquawksTab({
       {showModal && (
         <div className="fixed inset-0 bg-black/60 z-[10000] overflow-y-auto animate-fade-in" style={{ overscrollBehavior: 'contain' }}>
           <div className="flex min-h-full items-center justify-center p-3">
-          <div className="bg-white rounded shadow-2xl w-full max-w-lg p-5 border-t-4 border-[#CE3732] animate-slide-up" style={{ overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch' }}>
+          <div className="bg-white rounded shadow-2xl w-full max-w-lg p-5 border-t-4 border-danger animate-slide-up" style={{ overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch' }}>
             <div className="flex justify-between items-center mb-4">
               <h2 className="font-oswald text-2xl font-bold uppercase text-navy">{editingId ? 'Edit Squawk' : 'Report Squawk'}</h2>
-              <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-[#CE3732]"><X size={24}/></button>
+              <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-danger"><X size={24}/></button>
             </div>
             <div className="bg-gray-50 p-3 rounded border border-gray-200 mb-4 grid grid-cols-2 gap-2 text-xs">
               <div><span className="font-bold text-gray-500 uppercase">Date:</span> {new Date().toLocaleDateString()}</div>
@@ -707,11 +707,11 @@ export default function SquawksTab({
             </div>
             <form onSubmit={submitSquawk} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
-                <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Status</label><select value={status} onChange={e=>setStatus(e.target.value as any)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#CE3732] font-bold outline-none"><option value="open">Open</option><option value="resolved">Resolved</option></select></div>
+                <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Status</label><select value={status} onChange={e=>setStatus(e.target.value as any)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-danger font-bold outline-none"><option value="open">Open</option><option value="resolved">Resolved</option></select></div>
                 <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Affects Airworthiness?</label><select value={affectsAirworthiness ? "yes" : "no"} onChange={e=>setAffectsAirworthiness(e.target.value === "yes")} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-red-500 font-bold outline-none"><option value="no">No (Monitor)</option><option value="yes">YES (GROUNDED)</option></select></div>
               </div>
-              <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Location (Airport) *</label><input type="text" required value={location} onChange={e=>setLocation(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#CE3732] outline-none" placeholder="e.g. KDFW" /></div>
-              <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Description *</label><textarea required value={description} onChange={e=>setDescription(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 min-h-[100px] focus:border-[#CE3732] outline-none" /></div>
+              <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Location (Airport) *</label><input type="text" required value={location} onChange={e=>setLocation(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-danger outline-none" placeholder="e.g. KDFW" /></div>
+              <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Description *</label><textarea required value={description} onChange={e=>setDescription(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 min-h-[100px] focus:border-danger outline-none" /></div>
               <div>
                 <label className="text-[10px] font-bold uppercase tracking-widest text-navy flex items-center gap-2 mb-2"><Upload size={14}/> Attach Photos (Max {MAX_UPLOAD_SIZE_LABEL} each)</label>
                 <input type="file" multiple accept="image/*" onChange={handleImageSelection} className="text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:bg-gray-100 file:text-navy cursor-pointer" />
@@ -725,14 +725,14 @@ export default function SquawksTab({
                   {isDeferred && (
                     <div className="space-y-4 animate-fade-in">
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                        <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">MEL #</label><input type="text" value={mel} onChange={e=>setMel(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-[#CE3732] outline-none" /></div>
-                        <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">CDL #</label><input type="text" value={cdl} onChange={e=>setCdl(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-[#CE3732] outline-none" /></div>
-                        <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">NEF #</label><input type="text" value={nef} onChange={e=>setNef(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-[#CE3732] outline-none" /></div>
-                        <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">MDL #</label><input type="text" value={mdl} onChange={e=>setMdl(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-[#CE3732] outline-none" /></div>
+                        <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">MEL #</label><input type="text" value={mel} onChange={e=>setMel(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-danger outline-none" /></div>
+                        <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">CDL #</label><input type="text" value={cdl} onChange={e=>setCdl(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-danger outline-none" /></div>
+                        <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">NEF #</label><input type="text" value={nef} onChange={e=>setNef(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-danger outline-none" /></div>
+                        <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">MDL #</label><input type="text" value={mdl} onChange={e=>setMdl(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-danger outline-none" /></div>
                       </div>
                       <div className="grid grid-cols-2 gap-3">
-                        <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Control #</label><input type="text" value={melControl} onChange={e=>setMelControl(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-[#CE3732] outline-none" /></div>
-                        <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Category</label><select value={category} onChange={e=>setCategory(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-[#CE3732] outline-none"><option value="">Select...</option><option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option><option value="NA">N/A</option></select></div>
+                        <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Control #</label><input type="text" value={melControl} onChange={e=>setMelControl(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-danger outline-none" /></div>
+                        <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Category</label><select value={category} onChange={e=>setCategory(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-danger outline-none"><option value="">Select...</option><option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option><option value="NA">N/A</option></select></div>
                       </div>
                       <div className="pt-2">
                         <label className="flex items-start gap-2 text-xs font-bold text-navy cursor-pointer">
@@ -742,11 +742,11 @@ export default function SquawksTab({
                       <div className="pt-4 border-t border-gray-200">
                         <label className="text-[10px] font-bold uppercase tracking-widest text-navy block mb-2">Signature *</label>
                         <div className="border border-gray-300 rounded bg-white"><SignatureCanvas ref={sigCanvas} penColor="black" canvasProps={{ className: 'w-full h-32 rounded' }} /></div>
-                        <button type="button" onClick={() => sigCanvas.current?.clear()} className="text-[10px] font-bold uppercase text-gray-500 mt-1 hover:text-[#CE3732]">Clear Signature</button>
+                        <button type="button" onClick={() => sigCanvas.current?.clear()} className="text-[10px] font-bold uppercase text-gray-500 mt-1 hover:text-danger">Clear Signature</button>
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Name (Full Name) *</label><input type="text" required value={fullName} onChange={e=>setFullName(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#CE3732] outline-none" /></div>
-                        <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Certificate Number *</label><input type="text" required value={certNum} onChange={e=>setCertNum(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#CE3732] outline-none" /></div>
+                        <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Name (Full Name) *</label><input type="text" required value={fullName} onChange={e=>setFullName(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-danger outline-none" /></div>
+                        <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Certificate Number *</label><input type="text" required value={certNum} onChange={e=>setCertNum(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-danger outline-none" /></div>
                       </div>
                     </div>
                   )}
@@ -756,7 +756,7 @@ export default function SquawksTab({
               {!editingId && (
                 <div className="pt-2 pb-2">
                   <label className="flex items-start gap-2 text-xs font-bold text-navy cursor-pointer">
-                    <input type="checkbox" checked={notifyMx} onChange={e=>setNotifyMx(e.target.checked)} className="mt-0.5 w-4 h-4 text-[#CE3732] border-gray-300 rounded focus:ring-[#CE3732] cursor-pointer" />
+                    <input type="checkbox" checked={notifyMx} onChange={e=>setNotifyMx(e.target.checked)} className="mt-0.5 w-4 h-4 text-danger border-gray-300 rounded focus:ring-danger cursor-pointer" />
                     Notify MX? (Emails squawk details to maintenance contact)
                   </label>
                 </div>

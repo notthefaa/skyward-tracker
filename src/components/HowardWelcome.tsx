@@ -43,7 +43,7 @@ export default function HowardWelcome({
             (wrong account, shared device) and need a way back out. */}
         <button
           onClick={onLogout}
-          className="absolute top-3 right-3 flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:text-[#CE3732] active:scale-95 transition-colors px-2 py-1"
+          className="absolute top-3 right-3 flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:text-danger active:scale-95 transition-colors px-2 py-1"
           aria-label="Log out"
         >
           <LogOut size={12} />

@@ -420,13 +420,13 @@ export default function TimesTab({
         <PrimaryButton onClick={() => openLogForm()}><Plus size={18} /> Log New Flight</PrimaryButton>
       </div>
 
-      <div className="bg-cream shadow-lg rounded-sm p-4 md:p-6 border-t-4 border-[#3AB0FF] flex flex-col mb-6">
+      <div className="bg-cream shadow-lg rounded-sm p-4 md:p-6 border-t-4 border-info flex flex-col mb-6">
         <div className="flex justify-between items-end mb-6">
           <div>
-            <span className="text-[10px] font-bold uppercase tracking-widest text-[#3AB0FF] block mb-1">{isTurbine ? 'TURBINE' : 'PISTON'} LOGBOOK</span>
+            <span className="text-[10px] font-bold uppercase tracking-widest text-info block mb-1">{isTurbine ? 'TURBINE' : 'PISTON'} LOGBOOK</span>
             <h2 className="font-oswald text-2xl md:text-3xl font-bold uppercase text-navy m-0 leading-none">Flight Log</h2>
           </div>
-          <button onClick={exportCSV} disabled={isExporting} className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-[#3AB0FF] hover:opacity-80 transition-colors disabled:opacity-50">
+          <button onClick={exportCSV} disabled={isExporting} className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-info hover:opacity-80 transition-colors disabled:opacity-50">
             <Download size={14} /> {isExporting ? "Exporting..." : "Export CSV"}
           </button>
         </div>
@@ -452,7 +452,7 @@ export default function TimesTab({
                 <tr key={log.id} className="border-b border-gray-200 hover:bg-blue-50/50 transition-colors">
                   <td className="py-3 pr-4 whitespace-nowrap">{new Date(log.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</td>
                   <td className="py-3 pr-4 font-bold">{log.initials}</td>
-                  <td className="py-3 pr-4 text-[#3AB0FF] font-bold">
+                  <td className="py-3 pr-4 text-info font-bold">
                     {log.pod || log.poa ? (
                       <button onClick={() => setViewRouting({ pod: log.pod, poa: log.poa })} className="underline active:scale-95 transition-transform" title="View Routing">{log.fltTime}</button>
                     ) : <span>{log.fltTime}</span>}
@@ -463,13 +463,13 @@ export default function TimesTab({
                   {isTurbine && <td className="py-3 pr-4">{log.engine_cycles}</td>}
                   <td className="py-3 pr-4">{log.trip_reason || "-"}</td>
                   <td className="py-3 text-center">
-                    {log.pax_info ? <button onClick={() => setViewPax(log.pax_info)} className="text-[#3AB0FF] font-bold underline active:scale-95 transition-transform">Y</button> : <span className="text-gray-400 font-medium">N</span>}
+                    {log.pax_info ? <button onClick={() => setViewPax(log.pax_info)} className="text-info font-bold underline active:scale-95 transition-transform">Y</button> : <span className="text-gray-400 font-medium">N</span>}
                   </td>
                   {role === 'admin' && (
                     <td className="py-3 text-right flex justify-end items-center gap-3">
-                      <button onClick={() => openLogForm(log)} className="text-gray-400 hover:text-[#3AB0FF] transition-colors" title="Edit Log"><Edit2 size={14}/></button>
+                      <button onClick={() => openLogForm(log)} className="text-gray-400 hover:text-info transition-colors" title="Edit Log"><Edit2 size={14}/></button>
                       {logPage === 1 && log.id === flightLogs[0]?.id && (
-                        <button onClick={() => deleteLatestLog(log)} className="text-gray-400 hover:text-[#CE3732] transition-colors" title="Delete Latest Log"><Trash2 size={14}/></button>
+                        <button onClick={() => deleteLatestLog(log)} className="text-gray-400 hover:text-danger transition-colors" title="Delete Latest Log"><Trash2 size={14}/></button>
                       )}
                     </td>
                   )}
@@ -480,9 +480,9 @@ export default function TimesTab({
         </div>
 
         <div className="flex justify-between items-center mt-4 border-t border-gray-200 pt-4">
-          <button onClick={() => setLogPage(p => Math.max(1, p - 1))} disabled={logPage === 1} className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-navy disabled:opacity-30 disabled:cursor-not-allowed hover:text-[#3AB0FF] transition-colors"><ChevronLeft size={14} /> Prev</button>
+          <button onClick={() => setLogPage(p => Math.max(1, p - 1))} disabled={logPage === 1} className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-navy disabled:opacity-30 disabled:cursor-not-allowed hover:text-info transition-colors"><ChevronLeft size={14} /> Prev</button>
           <span className="text-[10px] font-bold uppercase text-gray-400">Page {logPage} / {data?.totalPages ?? 1}</span>
-          <button onClick={() => setLogPage(p => p + 1)} disabled={!hasMoreLogs} className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-navy disabled:opacity-30 disabled:cursor-not-allowed hover:text-[#3AB0FF] transition-colors">Next <ChevronRight size={14} /></button>
+          <button onClick={() => setLogPage(p => p + 1)} disabled={!hasMoreLogs} className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-navy disabled:opacity-30 disabled:cursor-not-allowed hover:text-info transition-colors">Next <ChevronRight size={14} /></button>
         </div>
         {role === 'admin' && flightLogs.length > 0 && (
           <p className="text-[10px] text-gray-400 italic mt-3 leading-tight">
@@ -494,8 +494,8 @@ export default function TimesTab({
       {viewPax && (
         <div className="fixed inset-0 z-[60] overflow-y-auto bg-black/60 animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => setViewPax(null)}>
           <div className="flex min-h-full items-center justify-center p-4">
-          <div className="bg-white rounded shadow-2xl w-full max-w-sm p-6 border-t-4 border-[#3AB0FF] animate-slide-up relative" onClick={(e) => e.stopPropagation()}>
-            <button onClick={() => setViewPax(null)} className="absolute top-4 right-4 text-gray-400 hover:text-[#CE3732] transition-colors"><X size={20}/></button>
+          <div className="bg-white rounded shadow-2xl w-full max-w-sm p-6 border-t-4 border-info animate-slide-up relative" onClick={(e) => e.stopPropagation()}>
+            <button onClick={() => setViewPax(null)} className="absolute top-4 right-4 text-gray-400 hover:text-danger transition-colors"><X size={20}/></button>
             <h3 className="font-oswald text-xl font-bold uppercase tracking-widest text-navy mb-4">Passenger Info</h3>
             <p className="text-sm text-navy font-roboto whitespace-pre-wrap">{viewPax}</p>
           </div>
@@ -506,8 +506,8 @@ export default function TimesTab({
       {viewRouting && (
         <div className="fixed inset-0 z-[60] overflow-y-auto bg-black/60 animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => setViewRouting(null)}>
           <div className="flex min-h-full items-center justify-center p-4">
-          <div className="bg-white rounded shadow-2xl w-full max-w-sm p-6 border-t-4 border-[#3AB0FF] animate-slide-up relative" onClick={(e) => e.stopPropagation()}>
-            <button onClick={() => setViewRouting(null)} className="absolute top-4 right-4 text-gray-400 hover:text-[#CE3732] transition-colors"><X size={20}/></button>
+          <div className="bg-white rounded shadow-2xl w-full max-w-sm p-6 border-t-4 border-info animate-slide-up relative" onClick={(e) => e.stopPropagation()}>
+            <button onClick={() => setViewRouting(null)} className="absolute top-4 right-4 text-gray-400 hover:text-danger transition-colors"><X size={20}/></button>
             <h3 className="font-oswald text-xl font-bold uppercase tracking-widest text-navy mb-4">Flight Routing</h3>
             <div className="flex items-center gap-4 text-navy">
               <div className="flex-1 bg-gray-50 border border-gray-200 rounded p-3 text-center">
@@ -528,14 +528,14 @@ export default function TimesTab({
       {showLegend && (
         <div className="fixed inset-0 z-[60] overflow-y-auto bg-black/60 animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => setShowLegend(false)}>
           <div className="flex min-h-full items-center justify-center p-4">
-          <div className="bg-white rounded shadow-2xl w-full max-w-sm p-6 border-t-4 border-[#3AB0FF] animate-slide-up relative" onClick={(e) => e.stopPropagation()}>
-            <button type="button" onClick={() => setShowLegend(false)} className="absolute top-4 right-4 text-gray-400 hover:text-[#CE3732] transition-colors"><X size={20}/></button>
+          <div className="bg-white rounded shadow-2xl w-full max-w-sm p-6 border-t-4 border-info animate-slide-up relative" onClick={(e) => e.stopPropagation()}>
+            <button type="button" onClick={() => setShowLegend(false)} className="absolute top-4 right-4 text-gray-400 hover:text-danger transition-colors"><X size={20}/></button>
             <h3 className="font-oswald text-xl font-bold uppercase tracking-widest text-navy mb-4">Reason Codes</h3>
             <ul className="text-sm text-navy font-roboto space-y-3">
-              <li><strong className="text-[#3AB0FF] w-8 inline-block">PE:</strong> Personal Entertainment</li>
-              <li><strong className="text-[#3AB0FF] w-8 inline-block">BE:</strong> Business Entertainment</li>
-              <li><strong className="text-[#3AB0FF] w-8 inline-block">MX:</strong> Maintenance</li>
-              <li><strong className="text-[#3AB0FF] w-8 inline-block">T:</strong> Training</li>
+              <li><strong className="text-info w-8 inline-block">PE:</strong> Personal Entertainment</li>
+              <li><strong className="text-info w-8 inline-block">BE:</strong> Business Entertainment</li>
+              <li><strong className="text-info w-8 inline-block">MX:</strong> Maintenance</li>
+              <li><strong className="text-info w-8 inline-block">T:</strong> Training</li>
             </ul>
           </div>
           </div>
@@ -545,18 +545,18 @@ export default function TimesTab({
       {showLogModal && (
         <div className="fixed inset-0 bg-black/60 z-[10000] overflow-y-auto animate-fade-in" style={{ overscrollBehavior: 'contain' }}>
           <div className="flex min-h-full items-center justify-center p-4">
-          <div className="bg-white rounded shadow-2xl w-full max-w-md p-6 border-t-4 border-[#3AB0FF] animate-slide-up">
+          <div className="bg-white rounded shadow-2xl w-full max-w-md p-6 border-t-4 border-info animate-slide-up">
             <div className="flex justify-between items-center mb-2">
               <h2 className="font-oswald text-2xl font-bold uppercase text-navy">{editingId ? 'Edit Flight Log' : 'Log New Flight'}</h2>
-              <button onClick={() => setShowLogModal(false)} className="text-gray-400 hover:text-[#CE3732] transition-colors"><X size={24}/></button>
+              <button onClick={() => setShowLogModal(false)} className="text-gray-400 hover:text-danger transition-colors"><X size={24}/></button>
             </div>
             <p className="text-[10px] text-gray-500 mb-4 leading-tight">
-              <span className="text-[#CE3732] font-bold">*</span> required &middot; <span className="font-bold">(Opt)</span> optional
+              <span className="text-danger font-bold">*</span> required &middot; <span className="font-bold">(Opt)</span> optional
             </p>
             <form onSubmit={submitFlightLog} className="space-y-4">
               <div className="grid grid-cols-2 gap-4 border-b border-gray-100 pb-4 mb-2">
-                <div><label className="block text-[10px] font-bold uppercase tracking-widest text-navy mb-1">POD (Depart)</label><input type="text" style={whiteBg} maxLength={4} value={logPod} onChange={e=>setLogPod(e.target.value.toUpperCase())} className="w-full border border-gray-300 rounded p-3 text-sm uppercase focus:border-[#3AB0FF] outline-none bg-white text-center font-bold" placeholder="ICAO" /></div>
-                <div><label className="block text-[10px] font-bold uppercase tracking-widest text-navy mb-1">POA (Arrive)</label><input type="text" style={whiteBg} maxLength={4} value={logPoa} onChange={e=>setLogPoa(e.target.value.toUpperCase())} className="w-full border border-gray-300 rounded p-3 text-sm uppercase focus:border-[#3AB0FF] outline-none bg-white text-center font-bold" placeholder="ICAO" /></div>
+                <div><label className="block text-[10px] font-bold uppercase tracking-widest text-navy mb-1">POD (Depart)</label><input type="text" style={whiteBg} maxLength={4} value={logPod} onChange={e=>setLogPod(e.target.value.toUpperCase())} className="w-full border border-gray-300 rounded p-3 text-sm uppercase focus:border-info outline-none bg-white text-center font-bold" placeholder="ICAO" /></div>
+                <div><label className="block text-[10px] font-bold uppercase tracking-widest text-navy mb-1">POA (Arrive)</label><input type="text" style={whiteBg} maxLength={4} value={logPoa} onChange={e=>setLogPoa(e.target.value.toUpperCase())} className="w-full border border-gray-300 rounded p-3 text-sm uppercase focus:border-info outline-none bg-white text-center font-bold" placeholder="ICAO" /></div>
               </div>
 
               <div className={`grid ${hasAirframeMeter ? 'grid-cols-2' : 'grid-cols-1'} gap-4`}>
@@ -565,12 +565,12 @@ export default function TimesTab({
                     {hasAirframeMeter && (
                       <div>
                         <div className="flex justify-between items-center mb-1"><label className="text-[10px] font-bold uppercase tracking-widest text-navy">AFTT (Opt)</label><span className="text-[9px] font-bold uppercase text-gray-400">Last: {aircraft?.total_airframe_time?.toFixed(1) || 0} hrs</span></div>
-                        <input type="number" min="0" style={whiteBg} step="0.1" value={logAftt} onChange={e=>setLogAftt(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-[#3AB0FF] outline-none bg-white" />
+                        <input type="number" min="0" style={whiteBg} step="0.1" value={logAftt} onChange={e=>setLogAftt(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-info outline-none bg-white" />
                       </div>
                     )}
                     <div>
-                      <div className="flex justify-between items-center mb-1"><label className="text-[10px] font-bold uppercase tracking-widest text-navy">FTT <span className="text-[#CE3732]">*</span></label><span className="text-[9px] font-bold uppercase text-gray-400">Last: {aircraft?.total_engine_time?.toFixed(1) || 0} hrs</span></div>
-                      <input type="number" min="0" style={whiteBg} step="0.1" required value={logFtt} onChange={e=>setLogFtt(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-[#3AB0FF] outline-none bg-white" />
+                      <div className="flex justify-between items-center mb-1"><label className="text-[10px] font-bold uppercase tracking-widest text-navy">FTT <span className="text-danger">*</span></label><span className="text-[9px] font-bold uppercase text-gray-400">Last: {aircraft?.total_engine_time?.toFixed(1) || 0} hrs</span></div>
+                      <input type="number" min="0" style={whiteBg} step="0.1" required value={logFtt} onChange={e=>setLogFtt(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-info outline-none bg-white" />
                     </div>
                   </>
                 ) : (
@@ -578,12 +578,12 @@ export default function TimesTab({
                     {hasAirframeMeter && (
                       <div>
                         <div className="flex justify-between items-center mb-1"><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Hobbs (Opt)</label><span className="text-[9px] font-bold uppercase text-gray-400">Last: {aircraft?.total_airframe_time?.toFixed(1) || 0} hrs</span></div>
-                        <input type="number" min="0" style={whiteBg} step="0.1" value={logHobbs} onChange={e=>setLogHobbs(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-[#3AB0FF] outline-none bg-white" />
+                        <input type="number" min="0" style={whiteBg} step="0.1" value={logHobbs} onChange={e=>setLogHobbs(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-info outline-none bg-white" />
                       </div>
                     )}
                     <div>
-                      <div className="flex justify-between items-center mb-1"><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Tach <span className="text-[#CE3732]">*</span></label><span className="text-[9px] font-bold uppercase text-gray-400">Last: {aircraft?.total_engine_time?.toFixed(1) || 0} hrs</span></div>
-                      <input type="number" min="0" style={whiteBg} step="0.1" required value={logTach} onChange={e=>setLogTach(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-[#3AB0FF] outline-none bg-white" />
+                      <div className="flex justify-between items-center mb-1"><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Tach <span className="text-danger">*</span></label><span className="text-[9px] font-bold uppercase text-gray-400">Last: {aircraft?.total_engine_time?.toFixed(1) || 0} hrs</span></div>
+                      <input type="number" min="0" style={whiteBg} step="0.1" required value={logTach} onChange={e=>setLogTach(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-info outline-none bg-white" />
                     </div>
                   </>
                 )}
@@ -591,19 +591,19 @@ export default function TimesTab({
 
               <div className={`grid ${isTurbine ? 'grid-cols-2' : 'grid-cols-1'} gap-4`}>
                 <div>
-                  <div className="flex items-center justify-between mb-1 h-4"><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Landings <span className="text-[#CE3732]">*</span></label></div>
-                  <input type="number" min="0" style={whiteBg} required value={logLandings} onChange={e=>setLogLandings(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-[#3AB0FF] outline-none bg-white" placeholder="0 for ferry / reposition" />
+                  <div className="flex items-center justify-between mb-1 h-4"><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Landings <span className="text-danger">*</span></label></div>
+                  <input type="number" min="0" style={whiteBg} required value={logLandings} onChange={e=>setLogLandings(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-info outline-none bg-white" placeholder="0 for ferry / reposition" />
                 </div>
                 {isTurbine && (
                   <div>
-                    <div className="flex items-center justify-between mb-1 h-4"><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Engine Cycles <span className="text-[#CE3732]">*</span></label></div>
-                    <input type="number" min="0" style={whiteBg} required value={logCycles} onChange={e=>setLogCycles(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-[#3AB0FF] outline-none bg-white" placeholder="0" />
+                    <div className="flex items-center justify-between mb-1 h-4"><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Engine Cycles <span className="text-danger">*</span></label></div>
+                    <input type="number" min="0" style={whiteBg} required value={logCycles} onChange={e=>setLogCycles(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-info outline-none bg-white" placeholder="0" />
                   </div>
                 )}
               </div>
 
-              <div className="grid grid-cols-2 gap-4 border border-[#3AB0FF]/30 bg-[#3AB0FF]/5 p-3 rounded mt-2">
-                <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Current Fuel State (Opt)</label><input type="number" min="0" style={whiteBg} step="0.1" value={logFuel} onChange={e=>setLogFuel(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#3AB0FF] outline-none bg-white" placeholder="Quantity" /></div>
+              <div className="grid grid-cols-2 gap-4 border border-info/30 bg-info/5 p-3 rounded mt-2">
+                <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Current Fuel State (Opt)</label><input type="number" min="0" style={whiteBg} step="0.1" value={logFuel} onChange={e=>setLogFuel(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-info outline-none bg-white" placeholder="Quantity" /></div>
                 <div>
                   <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Fuel Unit</label>
                   {editingId ? (
@@ -612,26 +612,26 @@ export default function TimesTab({
                       <p className="text-[9px] text-gray-500 mt-1 italic leading-tight">Flight logs are stored in gallons. Enter the edited value in gallons.</p>
                     </>
                   ) : (
-                    <select value={logFuelUnit} onChange={e=>{ const v = e.target.value as 'gallons' | 'lbs'; setLogFuelUnit(v); if (typeof window !== 'undefined') window.localStorage.setItem('aft_fuel_unit', v); }} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 bg-white focus:border-[#3AB0FF] outline-none"><option value="gallons">Gallons</option><option value="lbs">Lbs</option></select>
+                    <select value={logFuelUnit} onChange={e=>{ const v = e.target.value as 'gallons' | 'lbs'; setLogFuelUnit(v); if (typeof window !== 'undefined') window.localStorage.setItem('aft_fuel_unit', v); }} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 bg-white focus:border-info outline-none"><option value="gallons">Gallons</option><option value="lbs">Lbs</option></select>
                   )}
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <div className="flex items-center justify-between mb-1 h-4"><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Initials <span className="text-[#CE3732]">*</span></label></div>
-                  <input type="text" style={whiteBg} maxLength={3} required value={logInitials} onChange={e=>setLogInitials(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm uppercase focus:border-[#3AB0FF] outline-none bg-white" placeholder="ABC" />
+                  <div className="flex items-center justify-between mb-1 h-4"><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Initials <span className="text-danger">*</span></label></div>
+                  <input type="text" style={whiteBg} maxLength={3} required value={logInitials} onChange={e=>setLogInitials(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm uppercase focus:border-info outline-none bg-white" placeholder="ABC" />
                 </div>
                 <div>
                   <div className="flex items-center justify-between mb-1 h-4">
                     <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Reason (Opt)</label>
-                    <button type="button" onClick={() => setShowLegend(true)} className="text-[10px] text-[#3AB0FF] hover:text-blue-600 flex items-center gap-1 font-bold uppercase"><Info size={10} /> Legend</button>
+                    <button type="button" onClick={() => setShowLegend(true)} className="text-[10px] text-info hover:text-blue-600 flex items-center gap-1 font-bold uppercase"><Info size={10} /> Legend</button>
                   </div>
-                  <select value={logReason} onChange={e=>setLogReason(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm bg-white focus:border-[#3AB0FF] outline-none"><option value="">Select...</option><option value="PE">PE</option><option value="BE">BE</option><option value="MX">MX</option><option value="T">T</option></select>
+                  <select value={logReason} onChange={e=>setLogReason(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm bg-white focus:border-info outline-none"><option value="">Select...</option><option value="PE">PE</option><option value="BE">BE</option><option value="MX">MX</option><option value="T">T</option></select>
                 </div>
               </div>
 
-              <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Passengers (Opt)</label><input type="text" style={whiteBg} value={logPax} onChange={e=>setLogPax(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#3AB0FF] outline-none bg-white" placeholder="Names or notes..." /></div>
+              <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Passengers (Opt)</label><input type="text" style={whiteBg} value={logPax} onChange={e=>setLogPax(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-info outline-none bg-white" placeholder="Names or notes..." /></div>
               <div className="pt-4"><PrimaryButton disabled={isSubmitting}>{isSubmitting ? "Saving..." : "Save Flight Log"}</PrimaryButton></div>
             </form>
           </div>

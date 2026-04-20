@@ -163,7 +163,7 @@ export default function ServiceEventComplete({
           <div className="flex items-center gap-3">
             <input type="checkbox" checked={item.markComplete} onChange={e => updateItem(idx, 'markComplete', e.target.checked)} className="w-5 h-5 text-[#56B94A] border-gray-300 rounded cursor-pointer shrink-0" />
             <div className="flex items-center gap-2 flex-1">
-              {item.item_type === 'maintenance' ? <Wrench size={14} className="text-mxOrange" /> : <AlertTriangle size={14} className="text-[#CE3732]" />}
+              {item.item_type === 'maintenance' ? <Wrench size={14} className="text-mxOrange" /> : <AlertTriangle size={14} className="text-danger" />}
               <h4 className="font-oswald font-bold uppercase text-sm text-navy">{item.item_name}</h4>
             </div>
           </div>

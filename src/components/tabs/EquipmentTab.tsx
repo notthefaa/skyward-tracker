@@ -51,7 +51,7 @@ function EquipmentDueTag({ label, date }: { label: string; date: string }) {
   const due = new Date(normalized + 'T00:00:00');
   const days = Math.floor((due.getTime() - today.getTime()) / 86400000);
   let className = 'text-gray-500';
-  if (days < 0) className = 'text-[#CE3732] font-bold';
+  if (days < 0) className = 'text-danger font-bold';
   else if (days <= 30) className = 'text-mxOrange font-bold';
   return (
     <span className={className}>
@@ -288,7 +288,7 @@ export default function EquipmentTab({ aircraft, role, aircraftRole }: Props) {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="font-oswald font-bold text-sm uppercase text-navy leading-tight">{e.name}</p>
-                      {e.ifr_capable && <span className="text-[8px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-[#3AB0FF]/10 text-[#3AB0FF] border border-[#3AB0FF]/20">IFR</span>}
+                      {e.ifr_capable && <span className="text-[8px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-info/10 text-info border border-info/20">IFR</span>}
                       {e.adsb_out && <span className="text-[8px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-[#56B94A]/10 text-[#56B94A] border border-[#56B94A]/20">ADS-B Out</span>}
                       {e.is_elt && <span className="text-[8px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-mxOrange/10 text-mxOrange border border-mxOrange/20">ELT</span>}
                     </div>
@@ -308,7 +308,7 @@ export default function EquipmentTab({ aircraft, role, aircraftRole }: Props) {
                     <div className="flex gap-2 shrink-0">
                       <button onClick={() => openEdit(e)} title="Edit" className="text-gray-400 hover:text-mxOrange transition-colors"><Edit2 size={14} /></button>
                       <button onClick={() => handleRemove(e)} title="Mark as removed" className="text-gray-400 hover:text-[#525659] transition-colors"><PowerOff size={14} /></button>
-                      <button onClick={() => handleDelete(e)} title="Delete record" className="text-gray-400 hover:text-[#CE3732] transition-colors"><Trash2 size={14} /></button>
+                      <button onClick={() => handleDelete(e)} title="Delete record" className="text-gray-400 hover:text-danger transition-colors"><Trash2 size={14} /></button>
                     </div>
                   )}
                 </div>
@@ -346,7 +346,7 @@ export default function EquipmentTab({ aircraft, role, aircraftRole }: Props) {
             <div className="bg-white rounded shadow-2xl w-full max-w-md p-5 border-t-4 border-[#56B94A] animate-slide-up">
               <div className="flex justify-between items-center mb-6">
                 <h2 className="font-oswald text-2xl font-bold uppercase text-navy">{editingId ? 'Edit Equipment' : 'Add Equipment'}</h2>
-                <button onClick={() => setShowForm(false)} className="text-gray-400 hover:text-[#CE3732]"><X size={24} /></button>
+                <button onClick={() => setShowForm(false)} className="text-gray-400 hover:text-danger"><X size={24} /></button>
               </div>
               <form onSubmit={handleSubmit} className="space-y-3">
                 <div>

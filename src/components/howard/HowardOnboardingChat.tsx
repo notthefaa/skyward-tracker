@@ -64,7 +64,7 @@ export default function HowardOnboardingChat({
             </button>
             <button
               onClick={onLogout}
-              className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:text-[#CE3732] active:scale-95 px-2 py-1.5"
+              className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:text-danger active:scale-95 px-2 py-1.5"
             >
               <LogOut size={12} />
               <span className="hidden sm:inline">Log out</span>

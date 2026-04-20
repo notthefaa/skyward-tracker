@@ -249,8 +249,8 @@ export default function SummaryTab({
 
   const isGrounded = (nextMx?.isExpired) || activeSquawks.some(sq => sq.affects_airworthiness);
   const hasIssues = activeSquawks.length > 0;
-  const statusBorderColor = isGrounded ? 'border-[#CE3732]' : hasIssues ? 'border-mxOrange' : 'border-success';
-  const statusIconColor = isGrounded ? 'text-[#CE3732]' : hasIssues ? 'text-mxOrange' : 'text-success';
+  const statusBorderColor = isGrounded ? 'border-danger' : hasIssues ? 'border-mxOrange' : 'border-success';
+  const statusIconColor = isGrounded ? 'text-danger' : hasIssues ? 'text-mxOrange' : 'text-success';
   const mxTextColor = nextMx ? getMxTextColor(nextMx, sysSettings) : 'text-gray-500';
 
   const lastFlownLabel = (() => {
@@ -268,12 +268,12 @@ export default function SummaryTab({
       {showDeleteModal && (
         <div className="fixed inset-0 z-[70] overflow-y-auto bg-black/80 animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => setShowDeleteModal(false)}>
           <div className="flex min-h-full items-center justify-center p-4">
-          <div className="bg-white rounded shadow-2xl w-full max-w-sm p-6 border-t-4 border-[#CE3732] animate-slide-up relative" onClick={(e) => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-4"><h2 className="font-oswald text-2xl font-bold uppercase text-[#CE3732] flex items-center gap-2"><AlertTriangle size={24} /> Delete Aircraft</h2><button onClick={() => setShowDeleteModal(false)} className="text-gray-400 hover:text-[#CE3732] transition-colors"><X size={24}/></button></div>
-            <p className="text-sm text-navy font-roboto mb-6 leading-relaxed"><strong>Heads up:</strong> no undo on this one.<br/><br/>Every flight log, maintenance item, squawk, and note tied to <strong className="text-[#CE3732]">{aircraft.tail_number}</strong> goes with it.</p>
+          <div className="bg-white rounded shadow-2xl w-full max-w-sm p-6 border-t-4 border-danger animate-slide-up relative" onClick={(e) => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-4"><h2 className="font-oswald text-2xl font-bold uppercase text-danger flex items-center gap-2"><AlertTriangle size={24} /> Delete Aircraft</h2><button onClick={() => setShowDeleteModal(false)} className="text-gray-400 hover:text-danger transition-colors"><X size={24}/></button></div>
+            <p className="text-sm text-navy font-roboto mb-6 leading-relaxed"><strong>Heads up:</strong> no undo on this one.<br/><br/>Every flight log, maintenance item, squawk, and note tied to <strong className="text-danger">{aircraft.tail_number}</strong> goes with it.</p>
             <div className="flex gap-4">
               <button onClick={() => setShowDeleteModal(false)} className="flex-1 border border-gray-300 text-gray-600 font-bold uppercase tracking-widest text-[10px] py-3 rounded hover:bg-gray-50 transition-colors active:scale-95">Cancel</button>
-              <button onClick={() => { setShowDeleteModal(false); onDeleteAircraft(aircraft.id); }} className="flex-1 bg-[#CE3732] text-white font-bold uppercase tracking-widest text-[10px] py-3 rounded hover:bg-red-700 transition-colors shadow-md active:scale-95">Confirm Delete</button>
+              <button onClick={() => { setShowDeleteModal(false); onDeleteAircraft(aircraft.id); }} className="flex-1 bg-danger text-white font-bold uppercase tracking-widest text-[10px] py-3 rounded hover:bg-red-700 transition-colors shadow-md active:scale-95">Confirm Delete</button>
             </div>
           </div>
           </div>
@@ -285,7 +285,7 @@ export default function SummaryTab({
         <div className="fixed inset-0 z-[70] overflow-y-auto bg-black/80 animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => setShowFuelModal(false)}>
           <div className="flex min-h-full items-center justify-center p-4">
           <div className="bg-white rounded shadow-2xl w-full max-w-sm p-6 border-t-4 border-blue-500 animate-slide-up" onClick={e => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-4"><h2 className="font-oswald text-xl font-bold uppercase text-navy flex items-center gap-2"><Droplet size={20} className="text-blue-500" /> Update Fuel State</h2><button onClick={() => setShowFuelModal(false)} className="text-gray-400 hover:text-[#CE3732]"><X size={24} /></button></div>
+            <div className="flex justify-between items-center mb-4"><h2 className="font-oswald text-xl font-bold uppercase text-navy flex items-center gap-2"><Droplet size={20} className="text-blue-500" /> Update Fuel State</h2><button onClick={() => setShowFuelModal(false)} className="text-gray-400 hover:text-danger"><X size={24} /></button></div>
             <form onSubmit={handleFuelUpdate} className="space-y-4">
               <div className="grid grid-cols-5 gap-3">
                 <div className="col-span-3"><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Current Fuel *</label><input type="number" step="0.1" required value={fuelAmount} onChange={e => setFuelAmount(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-blue-500 outline-none" placeholder="Quantity" /></div>
@@ -302,12 +302,12 @@ export default function SummaryTab({
       {showInviteModal && (
         <div className="fixed inset-0 z-[70] overflow-y-auto bg-black/80 animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => setShowInviteModal(false)}>
           <div className="flex min-h-full items-center justify-center p-4">
-          <div className="bg-white rounded shadow-2xl w-full max-w-sm p-6 border-t-4 border-[#3AB0FF] animate-slide-up" onClick={e => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-4"><h2 className="font-oswald text-xl font-bold uppercase text-navy flex items-center gap-2"><UserPlus size={20} className="text-[#3AB0FF]" /> Invite Pilot</h2><button onClick={() => setShowInviteModal(false)} className="text-gray-400 hover:text-[#CE3732]"><X size={24} /></button></div>
+          <div className="bg-white rounded shadow-2xl w-full max-w-sm p-6 border-t-4 border-info animate-slide-up" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-4"><h2 className="font-oswald text-xl font-bold uppercase text-navy flex items-center gap-2"><UserPlus size={20} className="text-info" /> Invite Pilot</h2><button onClick={() => setShowInviteModal(false)} className="text-gray-400 hover:text-danger"><X size={24} /></button></div>
             <p className="text-xs text-gray-500 mb-4">Give a pilot access to <strong>{aircraft.tail_number}</strong>.</p>
             <form onSubmit={handleInvitePilot} className="space-y-4">
-              <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Email Address *</label><input type="email" required value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#3AB0FF] outline-none" placeholder="pilot@example.com" /></div>
-              <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Role for {aircraft.tail_number}</label><select value={inviteRole} onChange={e => setInviteRole(e.target.value as 'admin' | 'pilot')} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#3AB0FF] outline-none"><option value="pilot">Aircraft Pilot</option><option value="admin">Aircraft Admin</option></select></div>
+              <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Email Address *</label><input type="email" required value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-info outline-none" placeholder="pilot@example.com" /></div>
+              <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Role for {aircraft.tail_number}</label><select value={inviteRole} onChange={e => setInviteRole(e.target.value as 'admin' | 'pilot')} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-info outline-none"><option value="pilot">Aircraft Pilot</option><option value="admin">Aircraft Admin</option></select></div>
               <div className="pt-2"><PrimaryButton disabled={isInviting}>{isInviting ? <><Loader2 size={16} className="animate-spin" /> Sending...</> : "Send Invitation"}</PrimaryButton></div>
             </form>
           </div>
@@ -321,9 +321,9 @@ export default function SummaryTab({
           {aircraft.avatar_url ? <img src={resolve(aircraft.avatar_url) || aircraft.avatar_url} alt="Aircraft Avatar" className="w-full h-full object-cover" /> : <PlaneTakeoff size={64} className="text-white/20" />}
           {canEdit && (
             <div className="absolute top-4 right-4 flex flex-col gap-2 z-10">
-              <button onClick={() => setShowInviteModal(true)} className="bg-[#3AB0FF] text-white p-2.5 rounded-full shadow-[0_4px_10px_rgba(0,0,0,0.5)] hover:bg-blue-600 active:scale-95 transition-all" title="Invite Pilot"><UserPlus size={18} /></button>
+              <button onClick={() => setShowInviteModal(true)} className="bg-info text-white p-2.5 rounded-full shadow-[0_4px_10px_rgba(0,0,0,0.5)] hover:bg-blue-600 active:scale-95 transition-all" title="Invite Pilot"><UserPlus size={18} /></button>
               <button onClick={onEditAircraft} className="bg-slateGray text-white p-2.5 rounded-full shadow-[0_4px_10px_rgba(0,0,0,0.5)] hover:bg-gray-500 active:scale-95 transition-all" title="Edit Aircraft"><Edit2 size={18} /></button>
-              <button onClick={() => setShowDeleteModal(true)} className="bg-[#CE3732] text-white p-2.5 rounded-full shadow-[0_4px_10px_rgba(0,0,0,0.5)] hover:bg-red-700 active:scale-95 transition-all" title="Delete Aircraft"><Trash2 size={18} /></button>
+              <button onClick={() => setShowDeleteModal(true)} className="bg-danger text-white p-2.5 rounded-full shadow-[0_4px_10px_rgba(0,0,0,0.5)] hover:bg-red-700 active:scale-95 transition-all" title="Delete Aircraft"><Trash2 size={18} /></button>
             </div>
           )}
           <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent flex flex-col justify-end p-4 md:p-6 pointer-events-none">
@@ -392,7 +392,7 @@ export default function SummaryTab({
         const who = isYou ? 'You have' : `${currentStatus.pilot_name || currentStatus.pilot_initials} has`;
         return (
           <div onClick={() => setActiveTab('calendar')} className={`${isYou ? 'bg-emerald-50 border-emerald-200' : 'bg-sky-50 border-sky-200'} shadow-lg border rounded-sm p-3 flex items-center gap-3 cursor-pointer hover:shadow-xl active:scale-[0.98] transition-all`}>
-            <div className={`${isYou ? 'bg-[#56B94A]' : 'bg-[#3AB0FF]'} text-white p-2 rounded-full shrink-0`}><Calendar size={16} /></div>
+            <div className={`${isYou ? 'bg-[#56B94A]' : 'bg-info'} text-white p-2 rounded-full shrink-0`}><Calendar size={16} /></div>
             <p className="text-sm font-roboto text-navy flex-1 min-w-0 break-words"><span className="font-bold">{who}</span> the airplane booked {sameDay ? 'until' : 'through'} {endLabel}</p>
           </div>
         );
@@ -439,8 +439,8 @@ export default function SummaryTab({
         </div>
 
         <div onClick={onNavigateToSquawks} className={`bg-white border shadow-sm rounded-sm p-4 flex gap-4 items-center transition-colors cursor-pointer active:scale-[0.98] ${activeSquawks.length > 0 ? 'border-red-200 hover:bg-red-50' : 'border-gray-200 opacity-70 hover:bg-gray-50'}`}>
-          <div className={`p-3 rounded-full shrink-0 ${activeSquawks.length > 0 ? 'bg-red-50 text-[#CE3732]' : 'bg-gray-100 text-gray-400'}`}><AlertTriangle size={20}/></div>
-          <div className="flex-1"><span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Active Squawks</span>{activeSquawks.length > 0 ? (<><p className="text-sm font-bold text-navy leading-tight">{activeSquawks.length} Open Issue{activeSquawks.length > 1 ? 's' : ''}</p>{activeSquawks.some(sq => sq.affects_airworthiness) && <p className="text-xs font-bold text-[#CE3732] mt-0.5">Aircraft Grounded</p>}</>) : <p className="text-sm font-bold text-gray-500 leading-tight">No Active Squawks</p>}</div>
+          <div className={`p-3 rounded-full shrink-0 ${activeSquawks.length > 0 ? 'bg-red-50 text-danger' : 'bg-gray-100 text-gray-400'}`}><AlertTriangle size={20}/></div>
+          <div className="flex-1"><span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Active Squawks</span>{activeSquawks.length > 0 ? (<><p className="text-sm font-bold text-navy leading-tight">{activeSquawks.length} Open Issue{activeSquawks.length > 1 ? 's' : ''}</p>{activeSquawks.some(sq => sq.affects_airworthiness) && <p className="text-xs font-bold text-danger mt-0.5">Aircraft Grounded</p>}</>) : <p className="text-sm font-bold text-gray-500 leading-tight">No Active Squawks</p>}</div>
         </div>
 
         {latestNote && (
@@ -453,7 +453,7 @@ export default function SummaryTab({
               <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => setShowNoteModal(false)}>
                 <div className="flex min-h-full items-center justify-center p-4">
                 <div className="bg-white rounded shadow-2xl w-full max-w-md p-6 border-t-4 border-navy animate-slide-up relative" onClick={(e) => e.stopPropagation()}>
-                  <button onClick={() => setShowNoteModal(false)} className="absolute top-4 right-4 text-gray-400 hover:text-[#CE3732]"><X size={20}/></button>
+                  <button onClick={() => setShowNoteModal(false)} className="absolute top-4 right-4 text-gray-400 hover:text-danger"><X size={20}/></button>
                   <div className="mb-4"><span className="text-[10px] font-bold uppercase tracking-widest text-navy block">{latestNote.author_email || 'Pilot'}</span><span className="text-[10px] uppercase text-gray-400 font-bold">{new Date(latestNote.created_at).toLocaleString()}</span></div>
                   <p className="text-sm text-navy font-roboto whitespace-pre-wrap leading-relaxed">{latestNote.content}</p>
                 </div>
@@ -489,23 +489,23 @@ export default function SummaryTab({
                       <div className="flex gap-2 shrink-0">
                         {changingRoleUserId === member.user_id ? (
                           <div className="flex gap-1 animate-fade-in">
-                            <button onClick={() => handleChangeRole(member.user_id, member.aircraft_role === 'admin' ? 'pilot' : 'admin')} disabled={isCrewUpdating} className="text-[8px] font-bold uppercase tracking-widest bg-[#3AB0FF] text-white px-2 py-1 rounded active:scale-95 disabled:opacity-50">{member.aircraft_role === 'admin' ? 'Make Pilot' : 'Make Admin'}</button>
+                            <button onClick={() => handleChangeRole(member.user_id, member.aircraft_role === 'admin' ? 'pilot' : 'admin')} disabled={isCrewUpdating} className="text-[8px] font-bold uppercase tracking-widest bg-info text-white px-2 py-1 rounded active:scale-95 disabled:opacity-50">{member.aircraft_role === 'admin' ? 'Make Pilot' : 'Make Admin'}</button>
                             <button onClick={() => setChangingRoleUserId(null)} className="text-[8px] font-bold uppercase tracking-widest text-gray-500 px-2 py-1 active:scale-95">Cancel</button>
                           </div>
                         ) : removingUserId === member.user_id ? (
                           <div className="flex gap-1 animate-fade-in">
-                            <button onClick={() => handleRemovePilot(member.user_id)} disabled={isCrewUpdating} className="text-[8px] font-bold uppercase tracking-widest bg-[#CE3732] text-white px-2 py-1 rounded active:scale-95 disabled:opacity-50">Remove</button>
+                            <button onClick={() => handleRemovePilot(member.user_id)} disabled={isCrewUpdating} className="text-[8px] font-bold uppercase tracking-widest bg-danger text-white px-2 py-1 rounded active:scale-95 disabled:opacity-50">Remove</button>
                             <button onClick={() => setRemovingUserId(null)} className="text-[8px] font-bold uppercase tracking-widest text-gray-500 px-2 py-1 active:scale-95">Cancel</button>
                           </div>
                         ) : (
-                          <><button onClick={() => setChangingRoleUserId(member.user_id)} className="text-gray-300 hover:text-[#3AB0FF] active:scale-95" title="Change Role"><Edit2 size={14}/></button><button onClick={() => setRemovingUserId(member.user_id)} className="text-gray-300 hover:text-[#CE3732] active:scale-95" title="Remove"><X size={14}/></button></>
+                          <><button onClick={() => setChangingRoleUserId(member.user_id)} className="text-gray-300 hover:text-info active:scale-95" title="Change Role"><Edit2 size={14}/></button><button onClick={() => setRemovingUserId(member.user_id)} className="text-gray-300 hover:text-danger active:scale-95" title="Remove"><X size={14}/></button></>
                         )}
                       </div>
                     )}
                   </div>
                 );
               })}
-              {canEdit && <button onClick={() => setShowInviteModal(true)} className="w-full px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-[#3AB0FF] hover:bg-blue-50 transition-colors active:scale-95 flex items-center justify-center gap-2"><UserPlus size={14} /> Invite Pilot</button>}
+              {canEdit && <button onClick={() => setShowInviteModal(true)} className="w-full px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-info hover:bg-blue-50 transition-colors active:scale-95 flex items-center justify-center gap-2"><UserPlus size={14} /> Invite Pilot</button>}
               <div ref={crewListEndRef} />
             </div>
           )}

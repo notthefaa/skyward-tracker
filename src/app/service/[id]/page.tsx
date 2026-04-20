@@ -234,7 +234,7 @@ export default function ServicePortal() {
             </>
           ) : (
             <>
-              <XCircle size={32} className="mx-auto text-[#CE3732] mb-3" />
+              <XCircle size={32} className="mx-auto text-danger mb-3" />
               <h2 className="font-oswald text-2xl font-bold uppercase tracking-widest text-navy mb-3">Service Event Not Found</h2>
               <p className="text-sm text-gray-600 font-roboto leading-relaxed">
                 The link you followed doesn&apos;t match an active service event — it may have been revoked or typed wrong. Contact the aircraft owner for a fresh one.
@@ -246,7 +246,7 @@ export default function ServicePortal() {
     );
   }
 
-  const statusColor = event.status === 'complete' ? 'bg-[#56B94A]' : event.status === 'ready_for_pickup' ? 'bg-[#56B94A]' : event.status === 'confirmed' ? 'bg-[#3AB0FF]' : event.status === 'cancelled' ? 'bg-[#CE3732]' : 'bg-mxOrange';
+  const statusColor = event.status === 'complete' ? 'bg-[#56B94A]' : event.status === 'ready_for_pickup' ? 'bg-[#56B94A]' : event.status === 'confirmed' ? 'bg-info' : event.status === 'cancelled' ? 'bg-danger' : 'bg-mxOrange';
   const statusLabel = event.status === 'ready_for_pickup' ? 'Ready for Pickup' : event.status;
   const mxLines = lineItems.filter(li => li.item_type === 'maintenance');
   const squawkLines = lineItems.filter(li => li.item_type === 'squawk');
@@ -263,7 +263,7 @@ export default function ServicePortal() {
 
       {isAppUser && (
         <div className="fixed top-0 left-0 right-0 z-50 bg-navy" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
-          <button onClick={() => router.push('/')} className="flex items-center gap-2 px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-white hover:text-[#3AB0FF] active:scale-95 transition-all">
+          <button onClick={() => router.push('/')} className="flex items-center gap-2 px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-white hover:text-info active:scale-95 transition-all">
             <ArrowLeft size={14} /> Back to App
           </button>
         </div>
@@ -299,12 +299,12 @@ export default function ServicePortal() {
               <div>
                 <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 block">Primary Contact</span>
                 <span className="font-roboto font-bold text-navy">{event.primary_contact_name || 'N/A'}</span>
-                {event.primary_contact_email && <a href={`mailto:${event.primary_contact_email}`} className="block text-xs text-[#3AB0FF] mt-1">{event.primary_contact_email}</a>}
+                {event.primary_contact_email && <a href={`mailto:${event.primary_contact_email}`} className="block text-xs text-info mt-1">{event.primary_contact_email}</a>}
               </div>
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Current Times</span>
-                  <button onClick={handleRefreshTimes} disabled={isRefreshing} className="text-[#3AB0FF] hover:text-blue-600 active:scale-95 transition-all disabled:opacity-50" title="Refresh aircraft times">
+                  <button onClick={handleRefreshTimes} disabled={isRefreshing} className="text-info hover:text-blue-600 active:scale-95 transition-all disabled:opacity-50" title="Refresh aircraft times">
                     <RefreshCw size={14} className={isRefreshing ? 'animate-spin' : ''} />
                   </button>
                 </div>
@@ -439,7 +439,7 @@ export default function ServicePortal() {
                       <div>
                         <h4 className="font-oswald font-bold uppercase text-sm text-navy">{li.item_name}</h4>
                         {li.item_description && <p className="text-xs text-gray-500 mt-1">{li.item_description}</p>}
-                        {li.mechanic_comment && <p className="text-xs text-[#3AB0FF] mt-2 italic">Note: {li.mechanic_comment}</p>}
+                        {li.mechanic_comment && <p className="text-xs text-info mt-2 italic">Note: {li.mechanic_comment}</p>}
                       </div>
                       {event.status !== 'complete' && (
                         <select value={li.line_status} onChange={e => handleLineStatusUpdate(li.id, e.target.value)} style={whiteBg} className="text-[10px] font-bold uppercase border border-gray-300 rounded px-2 py-1 focus:border-mxOrange outline-none">
@@ -458,8 +458,8 @@ export default function ServicePortal() {
 
           {/* SQUAWKS WITH PHOTOS */}
           {squawkLines.length > 0 && (
-            <div className="bg-white shadow-lg rounded-sm p-6 border-t-4 border-[#CE3732]">
-              <h3 className="font-oswald text-lg font-bold uppercase tracking-widest text-navy mb-4 flex items-center gap-2"><AlertTriangle size={18} className="text-[#CE3732]"/> Squawks</h3>
+            <div className="bg-white shadow-lg rounded-sm p-6 border-t-4 border-danger">
+              <h3 className="font-oswald text-lg font-bold uppercase tracking-widest text-navy mb-4 flex items-center gap-2"><AlertTriangle size={18} className="text-danger"/> Squawks</h3>
               <div className="space-y-3">
                 {squawkLines.map((li: any) => {
                   const photos = li.squawk_id ? (squawkPhotos[li.squawk_id] || []) : [];
@@ -469,13 +469,13 @@ export default function ServicePortal() {
                         <div className="flex-1 min-w-0">
                           <h4 className="font-oswald font-bold uppercase text-sm text-navy">{li.item_name}</h4>
                           {li.item_description && <p className="text-xs text-gray-600 mt-1 whitespace-pre-wrap">{li.item_description}</p>}
-                          {li.mechanic_comment && <p className="text-xs text-[#3AB0FF] mt-2 italic">Note: {li.mechanic_comment}</p>}
+                          {li.mechanic_comment && <p className="text-xs text-info mt-2 italic">Note: {li.mechanic_comment}</p>}
                           {photos.length > 0 && (
                             <div className="mt-3">
                               <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2 flex items-center gap-1"><Image size={12} /> {photos.length} Photo{photos.length > 1 ? 's' : ''} Attached</p>
                               <div className="flex gap-2 flex-wrap">
                                 {photos.map((url: string, idx: number) => (
-                                  <button key={idx} onClick={() => setViewingPhoto(url)} className="w-20 h-20 rounded border-2 border-gray-200 overflow-hidden hover:border-[#CE3732] transition-colors active:scale-95">
+                                  <button key={idx} onClick={() => setViewingPhoto(url)} className="w-20 h-20 rounded border-2 border-gray-200 overflow-hidden hover:border-danger transition-colors active:scale-95">
                                     <img src={url} alt={`Squawk photo ${idx + 1}`} className="w-full h-full object-cover" />
                                   </button>
                                 ))}
@@ -484,7 +484,7 @@ export default function ServicePortal() {
                           )}
                         </div>
                         {event.status !== 'complete' && (
-                          <select value={li.line_status} onChange={e => handleLineStatusUpdate(li.id, e.target.value)} style={whiteBg} className="text-[10px] font-bold uppercase border border-gray-300 rounded px-2 py-1 focus:border-[#CE3732] outline-none ml-3 shrink-0">
+                          <select value={li.line_status} onChange={e => handleLineStatusUpdate(li.id, e.target.value)} style={whiteBg} className="text-[10px] font-bold uppercase border border-gray-300 rounded px-2 py-1 focus:border-danger outline-none ml-3 shrink-0">
                             <option value="pending">Pending</option>
                             <option value="in_progress">In Progress</option>
                             <option value="complete">Complete</option>
@@ -501,15 +501,15 @@ export default function ServicePortal() {
 
           {/* ADDITIONAL SERVICES */}
           {addonLines.length > 0 && (
-            <div className="bg-white shadow-lg rounded-sm p-6 border-t-4 border-[#3AB0FF]">
-              <h3 className="font-oswald text-lg font-bold uppercase tracking-widest text-navy mb-4 flex items-center gap-2"><Sparkles size={18} className="text-[#3AB0FF]"/> Additional Services</h3>
+            <div className="bg-white shadow-lg rounded-sm p-6 border-t-4 border-info">
+              <h3 className="font-oswald text-lg font-bold uppercase tracking-widest text-navy mb-4 flex items-center gap-2"><Sparkles size={18} className="text-info"/> Additional Services</h3>
               <div className="space-y-3">
                 {addonLines.map((li: any) => (
                   <div key={li.id} className={`p-4 border rounded ${li.line_status === 'complete' ? 'bg-green-50 border-green-200' : 'bg-white border-gray-200'}`}>
                     <div className="flex justify-between items-center">
                       <span className="font-bold text-sm text-navy">{li.item_name}</span>
                       {event.status !== 'complete' && (
-                        <select value={li.line_status} onChange={e => handleLineStatusUpdate(li.id, e.target.value)} style={whiteBg} className="text-[10px] font-bold uppercase border border-gray-300 rounded px-2 py-1 focus:border-[#3AB0FF] outline-none">
+                        <select value={li.line_status} onChange={e => handleLineStatusUpdate(li.id, e.target.value)} style={whiteBg} className="text-[10px] font-bold uppercase border border-gray-300 rounded px-2 py-1 focus:border-info outline-none">
                           <option value="pending">Pending</option>
                           <option value="complete">Complete</option>
                         </select>
@@ -548,10 +548,10 @@ export default function ServicePortal() {
 
           {/* UPLOAD FILES / DOCUMENTS */}
           {event.status !== 'complete' && event.status !== 'cancelled' && (
-            <div className="bg-white shadow-lg rounded-sm p-6 border-t-4 border-[#3AB0FF]">
-              <h3 className="font-oswald text-lg font-bold uppercase tracking-widest text-navy mb-4 flex items-center gap-2"><Upload size={18} className="text-[#3AB0FF]"/> Upload Photos &amp; Documents</h3>
+            <div className="bg-white shadow-lg rounded-sm p-6 border-t-4 border-info">
+              <h3 className="font-oswald text-lg font-bold uppercase tracking-widest text-navy mb-4 flex items-center gap-2"><Upload size={18} className="text-info"/> Upload Photos &amp; Documents</h3>
               {!showUploadForm ? (
-                <button onClick={() => setShowUploadForm(true)} className="w-full border-2 border-dashed border-gray-300 text-gray-500 font-bold py-3 rounded hover:bg-gray-50 hover:border-[#3AB0FF] active:scale-95 transition-all text-sm uppercase tracking-widest">+ Attach Files</button>
+                <button onClick={() => setShowUploadForm(true)} className="w-full border-2 border-dashed border-gray-300 text-gray-500 font-bold py-3 rounded hover:bg-gray-50 hover:border-info active:scale-95 transition-all text-sm uppercase tracking-widest">+ Attach Files</button>
               ) : (
                 <div className="space-y-3 animate-fade-in">
                   <div>
@@ -569,18 +569,18 @@ export default function ServicePortal() {
                             <div className="w-10 h-10 rounded bg-gray-200 flex items-center justify-center shrink-0"><FileText size={18} className="text-gray-500" /></div>
                           )}
                           <div className="flex-1 min-w-0"><p className="text-xs font-bold text-navy truncate">{file.name}</p><p className="text-[10px] text-gray-400">{formatFileSize(file.size)}</p></div>
-                          <button onClick={() => removeUploadFile(idx)} className="text-gray-400 hover:text-[#CE3732] shrink-0 active:scale-95"><X size={16} /></button>
+                          <button onClick={() => removeUploadFile(idx)} className="text-gray-400 hover:text-danger shrink-0 active:scale-95"><X size={16} /></button>
                         </div>
                       ))}
                     </div>
                   )}
                   <div>
                     <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Description (Optional)</label>
-                    <textarea value={uploadDescription} onChange={e => setUploadDescription(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#3AB0FF] outline-none min-h-[60px]" placeholder="e.g. Photos of corroded exhaust gasket, work order estimate attached..." />
+                    <textarea value={uploadDescription} onChange={e => setUploadDescription(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-info outline-none min-h-[60px]" placeholder="e.g. Photos of corroded exhaust gasket, work order estimate attached..." />
                   </div>
                   <div className="flex gap-2">
                     <button onClick={() => { setShowUploadForm(false); setUploadFiles([]); setUploadDescription(""); }} className="flex-1 border border-gray-300 text-gray-600 font-bold py-2 rounded text-xs uppercase tracking-widest hover:bg-gray-50 active:scale-95">Cancel</button>
-                    <button onClick={handleFileUpload} disabled={isUploading || uploadFiles.length === 0} className="flex-[2] bg-[#3AB0FF] text-white font-bold py-2 rounded text-xs uppercase tracking-widest active:scale-95 transition-transform disabled:opacity-50 flex items-center justify-center gap-2">{isUploading ? <><Loader2 size={14} className="animate-spin" /> Uploading...</> : `Upload & Notify Owner`}</button>
+                    <button onClick={handleFileUpload} disabled={isUploading || uploadFiles.length === 0} className="flex-[2] bg-info text-white font-bold py-2 rounded text-xs uppercase tracking-widest active:scale-95 transition-transform disabled:opacity-50 flex items-center justify-center gap-2">{isUploading ? <><Loader2 size={14} className="animate-spin" /> Uploading...</> : `Upload & Notify Owner`}</button>
                   </div>
                 </div>
               )}
@@ -637,15 +637,15 @@ export default function ServicePortal() {
           {event.status !== 'complete' && event.status !== 'cancelled' && event.status !== 'ready_for_pickup' && (
             <div className="bg-white shadow-lg rounded-sm p-6 border-t-4 border-red-200">
               {!showDeclineConfirm ? (
-                <button onClick={() => setShowDeclineConfirm(true)} className="w-full text-[10px] font-bold uppercase tracking-widest text-[#CE3732] border border-red-200 bg-red-50 rounded py-2.5 hover:bg-red-100 active:scale-95 transition-all flex items-center justify-center gap-1.5"><XCircle size={12} /> Unable to Accommodate — Decline Service</button>
+                <button onClick={() => setShowDeclineConfirm(true)} className="w-full text-[10px] font-bold uppercase tracking-widest text-danger border border-red-200 bg-red-50 rounded py-2.5 hover:bg-red-100 active:scale-95 transition-all flex items-center justify-center gap-1.5"><XCircle size={12} /> Unable to Accommodate — Decline Service</button>
               ) : (
                 <div className="space-y-3 animate-fade-in">
                   <p className="text-sm font-bold text-navy">Decline this service request?</p>
                   <p className="text-xs text-gray-500">The owner will be notified by email.</p>
-                  <textarea value={declineReason} onChange={e => setDeclineReason(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-[#CE3732] outline-none min-h-[60px]" placeholder="Reason (optional) — e.g. shop fully booked through Q2, recommend contacting..." />
+                  <textarea value={declineReason} onChange={e => setDeclineReason(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-danger outline-none min-h-[60px]" placeholder="Reason (optional) — e.g. shop fully booked through Q2, recommend contacting..." />
                   <div className="flex gap-2">
                     <button onClick={() => { setShowDeclineConfirm(false); setDeclineReason(""); }} className="flex-1 border border-gray-300 text-gray-600 font-bold py-2 rounded text-xs uppercase tracking-widest hover:bg-gray-50 active:scale-95">Keep Event</button>
-                    <button onClick={() => handleAction('decline', { message: declineReason })} disabled={isSubmitting} className="flex-[2] bg-[#CE3732] text-white font-bold py-2 rounded text-xs uppercase tracking-widest active:scale-95 transition-transform disabled:opacity-50">{isSubmitting ? "Declining..." : "Decline & Notify Owner"}</button>
+                    <button onClick={() => handleAction('decline', { message: declineReason })} disabled={isSubmitting} className="flex-[2] bg-danger text-white font-bold py-2 rounded text-xs uppercase tracking-widest active:scale-95 transition-transform disabled:opacity-50">{isSubmitting ? "Declining..." : "Decline & Notify Owner"}</button>
                   </div>
                 </div>
               )}
@@ -655,7 +655,7 @@ export default function ServicePortal() {
           {/* CANCELLED STATE */}
           {event.status === 'cancelled' && (
             <div className="bg-red-50 border-2 border-red-200 rounded-sm p-6 text-center">
-              <XCircle size={48} className="mx-auto text-[#CE3732] mb-4" />
+              <XCircle size={48} className="mx-auto text-danger mb-4" />
               <h3 className="font-oswald text-2xl font-bold uppercase tracking-widest text-navy mb-2">Service Cancelled</h3>
               <p className="text-sm text-gray-600">This service event has been cancelled.</p>
             </div>
@@ -669,7 +669,7 @@ export default function ServicePortal() {
                 <p className="text-center text-sm text-gray-400 italic py-4">No messages yet.</p>
               ) : (
                 messages.map((msg: any) => (
-                  <div key={msg.id} className={`p-3 rounded text-sm ${msg.sender === 'mechanic' ? 'bg-blue-50 border-l-4 border-[#3AB0FF]' : msg.sender === 'owner' ? 'bg-orange-50 border-l-4 border-mxOrange' : 'bg-gray-50 border-l-4 border-gray-300'}`}>
+                  <div key={msg.id} className={`p-3 rounded text-sm ${msg.sender === 'mechanic' ? 'bg-blue-50 border-l-4 border-info' : msg.sender === 'owner' ? 'bg-orange-50 border-l-4 border-mxOrange' : 'bg-gray-50 border-l-4 border-gray-300'}`}>
                     <div className="flex justify-between items-center mb-1">
                       <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500">{msg.sender === 'mechanic' ? 'Maintenance' : msg.sender === 'owner' ? 'Owner' : 'System'}</span>
                       <span className="text-[10px] text-gray-400">{new Date(msg.created_at).toLocaleString()}</span>
@@ -681,8 +681,8 @@ export default function ServicePortal() {
                         <div className="flex gap-2 flex-wrap">
                           {msg.attachments.map((att: any, idx: number) => {
                             const isImg = att.type && att.type.startsWith('image/');
-                            if (isImg) return (<button key={idx} onClick={() => setViewingPhoto(att.url)} className="w-20 h-20 rounded border-2 border-gray-200 overflow-hidden hover:border-[#3AB0FF] transition-colors active:scale-95"><img src={att.url} alt={att.filename} className="w-full h-full object-cover" /></button>);
-                            return (<a key={idx} href={att.url} target="_blank" rel="noreferrer" className="flex items-center gap-2 p-2 bg-white border border-gray-200 rounded hover:border-[#3AB0FF] transition-colors"><FileText size={16} className="text-gray-500 shrink-0" /><div className="min-w-0"><p className="text-xs font-bold text-navy truncate max-w-[120px]">{att.filename}</p>{att.size && <p className="text-[10px] text-gray-400">{att.size < 1024 * 1024 ? (att.size / 1024).toFixed(0) + ' KB' : (att.size / (1024 * 1024)).toFixed(1) + ' MB'}</p>}</div></a>);
+                            if (isImg) return (<button key={idx} onClick={() => setViewingPhoto(att.url)} className="w-20 h-20 rounded border-2 border-gray-200 overflow-hidden hover:border-info transition-colors active:scale-95"><img src={att.url} alt={att.filename} className="w-full h-full object-cover" /></button>);
+                            return (<a key={idx} href={att.url} target="_blank" rel="noreferrer" className="flex items-center gap-2 p-2 bg-white border border-gray-200 rounded hover:border-info transition-colors"><FileText size={16} className="text-gray-500 shrink-0" /><div className="min-w-0"><p className="text-xs font-bold text-navy truncate max-w-[120px]">{att.filename}</p>{att.size && <p className="text-[10px] text-gray-400">{att.size < 1024 * 1024 ? (att.size / 1024).toFixed(0) + ' KB' : (att.size / (1024 * 1024)).toFixed(1) + ' MB'}</p>}</div></a>);
                           })}
                         </div>
                       </div>
@@ -693,8 +693,8 @@ export default function ServicePortal() {
             </div>
             {event.status !== 'complete' && (
               <div className="flex gap-2">
-                <textarea value={commentText} onChange={e => setCommentText(e.target.value)} style={whiteBg} className="flex-1 border border-gray-300 rounded p-3 text-sm focus:border-[#3AB0FF] outline-none min-h-[60px]" placeholder="Send a message..." />
-                <button onClick={() => handleAction('comment', { message: commentText })} disabled={isSubmitting || !commentText.trim()} className="bg-[#3AB0FF] text-white px-4 rounded active:scale-95 transition-transform disabled:opacity-50"><Send size={18}/></button>
+                <textarea value={commentText} onChange={e => setCommentText(e.target.value)} style={whiteBg} className="flex-1 border border-gray-300 rounded p-3 text-sm focus:border-info outline-none min-h-[60px]" placeholder="Send a message..." />
+                <button onClick={() => handleAction('comment', { message: commentText })} disabled={isSubmitting || !commentText.trim()} className="bg-info text-white px-4 rounded active:scale-95 transition-transform disabled:opacity-50"><Send size={18}/></button>
               </div>
             )}
           </div>

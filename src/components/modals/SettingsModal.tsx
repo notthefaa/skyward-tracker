@@ -241,7 +241,7 @@ export default function SettingsModal({
           <h2 className="font-oswald text-2xl font-bold uppercase text-navy flex items-center gap-2">
             <Settings size={20} className="text-gray-500" /> Settings
           </h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-[#CE3732]"><X size={24} /></button>
+          <button onClick={onClose} className="text-gray-400 hover:text-danger"><X size={24} /></button>
         </div>
 
         <div className="p-6 space-y-8">
@@ -339,7 +339,7 @@ export default function SettingsModal({
           {/* ─── NOTIFICATION PREFERENCES ─── */}
           <div className="border-t border-gray-200 pt-6">
             <h3 className="font-oswald text-lg font-bold uppercase text-navy mb-1 flex items-center gap-2">
-              <Bell size={18} className="text-[#3AB0FF]" /> Notifications
+              <Bell size={18} className="text-info" /> Notifications
             </h3>
             <p className="text-[10px] text-gray-500 uppercase tracking-widest mb-4">Choose which email notifications you receive</p>
 
@@ -356,14 +356,14 @@ export default function SettingsModal({
                         type="checkbox" 
                         checked={prefs[nt.type] !== false} 
                         onChange={() => togglePref(nt.type)} 
-                        className="w-5 h-5 rounded border-gray-300 text-[#3AB0FF] focus:ring-[#3AB0FF] cursor-pointer" 
+                        className="w-5 h-5 rounded border-gray-300 text-info focus:ring-info cursor-pointer" 
                       />
                       {savingPref === nt.type && (
                         <Loader2 size={12} className="absolute -right-5 top-1 text-gray-400 animate-spin" />
                       )}
                     </div>
                     <div>
-                      <span className="text-sm font-bold text-navy block group-hover:text-[#3AB0FF] transition-colors">{nt.label}</span>
+                      <span className="text-sm font-bold text-navy block group-hover:text-info transition-colors">{nt.label}</span>
                       <span className="text-[10px] text-gray-500 leading-tight">{nt.description}</span>
                     </div>
                   </label>
@@ -435,22 +435,22 @@ export default function SettingsModal({
 
           {/* ─── DELETE ACCOUNT ─── */}
           <div className="border-t border-gray-200 pt-6">
-            <h3 className="font-oswald text-lg font-bold uppercase text-[#CE3732] mb-1 flex items-center gap-2">
+            <h3 className="font-oswald text-lg font-bold uppercase text-danger mb-1 flex items-center gap-2">
               <Trash2 size={18} /> Danger Zone
             </h3>
 
             {!showDeleteSection ? (
-              <button onClick={loadDeleteImpact} className="text-sm font-bold text-[#CE3732] hover:underline mt-2">
+              <button onClick={loadDeleteImpact} className="text-sm font-bold text-danger hover:underline mt-2">
                 Delete my account...
               </button>
             ) : (
               <div className="mt-4 bg-red-50 border border-red-200 rounded p-4 animate-fade-in">
                 {isLoadingImpact ? (
-                  <div className="flex items-center justify-center py-4"><Loader2 size={24} className="text-[#CE3732] animate-spin" /></div>
+                  <div className="flex items-center justify-center py-4"><Loader2 size={24} className="text-danger animate-spin" /></div>
                 ) : (
                   <>
                     <div className="flex items-start gap-2 mb-4">
-                      <AlertTriangle size={18} className="text-[#CE3732] shrink-0 mt-0.5" />
+                      <AlertTriangle size={18} className="text-danger shrink-0 mt-0.5" />
                       <div>
                         <p className="text-sm font-bold text-navy">Once your account is deleted, it&apos;s gone — no undo.</p>
                         <p className="text-xs text-gray-600 mt-2">Deleting your account will:</p>
@@ -458,12 +458,12 @@ export default function SettingsModal({
                           <li>Remove your profile and all preferences</li>
                           <li>Cancel all your future reservations</li>
                           {deleteImpact?.ownedAircraft?.length > 0 && (
-                            <li className="text-[#CE3732] font-bold">
+                            <li className="text-danger font-bold">
                               Permanently delete {deleteImpact.ownedAircraft.length} aircraft you created: {deleteImpact.ownedAircraft.map((a: any) => a.tail_number).join(', ')} — including all their flight logs, maintenance records, squawks, notes, and service events
                             </li>
                           )}
                           {deleteImpact?.affectedUserCount > 0 && (
-                            <li className="text-[#CE3732] font-bold">
+                            <li className="text-danger font-bold">
                               {deleteImpact.affectedUserCount} other user{deleteImpact.affectedUserCount > 1 ? 's' : ''} will lose access to those aircraft
                             </li>
                           )}
@@ -472,12 +472,12 @@ export default function SettingsModal({
                     </div>
 
                     <div className="mt-4">
-                      <label className="text-[10px] font-bold uppercase tracking-widest text-[#CE3732] block mb-1">Type DELETE to confirm</label>
+                      <label className="text-[10px] font-bold uppercase tracking-widest text-danger block mb-1">Type DELETE to confirm</label>
                       <input 
                         type="text" 
                         value={deleteConfirmText} 
                         onChange={e => setDeleteConfirmText(e.target.value)} 
-                        className="w-full border border-red-300 rounded p-3 text-sm focus:border-[#CE3732] outline-none bg-white" 
+                        className="w-full border border-red-300 rounded p-3 text-sm focus:border-danger outline-none bg-white" 
                         placeholder="DELETE"
                       />
                     </div>
@@ -489,7 +489,7 @@ export default function SettingsModal({
                       <button 
                         onClick={handleDeleteAccount} 
                         disabled={deleteConfirmText !== 'DELETE' || isDeleting} 
-                        className="flex-1 bg-[#CE3732] text-white font-oswald font-bold uppercase tracking-widest py-3 rounded text-xs active:scale-95 disabled:opacity-50"
+                        className="flex-1 bg-danger text-white font-oswald font-bold uppercase tracking-widest py-3 rounded text-xs active:scale-95 disabled:opacity-50"
                       >
                         {isDeleting ? 'Deleting...' : 'Delete My Account'}
                       </button>
