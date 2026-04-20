@@ -337,9 +337,9 @@ export async function POST(req: Request) {
           html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
               <h2 style="color: #CE3732;">Service Declined</h2>
-              <p>${safeMxName} has indicated they are unable to accommodate this service request.</p>
+              <p>${safeMxName} can&apos;t accommodate this service request.</p>
               ${safeMessage ? `<p style="margin-top: 15px; padding: 15px; background: #f9f9f9; border-left: 4px solid #CE3732; border-radius: 4px;"><em>${safeMessage}</em></p>` : ''}
-              <p style="margin-top: 15px; color: #666;">You may wish to contact an alternative maintenance provider or reschedule.</p>
+              <p style="margin-top: 15px; color: #666;">You might want to reach out to a different mechanic or reschedule.</p>
               ${ctaButton(appUrl, 'OPEN AIRCRAFT MANAGER')}
             </div>
           `

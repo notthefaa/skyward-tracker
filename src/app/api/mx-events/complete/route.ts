@@ -76,7 +76,7 @@ export async function POST(req: Request) {
       p_partial:     !!partial,
     });
     if (rpcErr) {
-      return NextResponse.json({ error: rpcErr.message || 'Failed to apply completions.' }, { status: 500 });
+      return NextResponse.json({ error: rpcErr.message || "Couldn't apply completions." }, { status: 500 });
     }
 
     const allResolved = !!(rpcData as any)?.all_resolved;

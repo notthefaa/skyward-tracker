@@ -54,7 +54,7 @@ export async function POST(req: Request) {
       .single();
 
     if (evErr || !event) {
-      return NextResponse.json({ error: 'Failed to create maintenance block.' }, { status: 500 });
+      return NextResponse.json({ error: "Couldn't create the maintenance block." }, { status: 500 });
     }
 
     // Log a system message

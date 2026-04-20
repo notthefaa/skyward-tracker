@@ -200,7 +200,7 @@ export async function POST(req: Request) {
               <p>Hello ${safeMxName},</p>
               <p>${safePrimaryName} has cancelled the pending service event.</p>
               ${safeMessage ? `<p style="margin-top: 15px; padding: 15px; background: #f9f9f9; border-left: 4px solid #CE3732; border-radius: 4px;"><em>${safeMessage}</em></p>` : ''}
-              <p style="margin-top: 15px; color: #666;">No further action is needed on your end. We apologize for any inconvenience.</p>
+              <p style="margin-top: 15px; color: #666;">Nothing more to do on your end. Sorry for the inconvenience.</p>
             </div>
           `
         });

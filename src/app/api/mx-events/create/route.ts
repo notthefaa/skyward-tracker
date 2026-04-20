@@ -47,7 +47,7 @@ export async function POST(req: Request) {
       if (rpcErr.code === 'P0002') {
         return NextResponse.json({ error: 'Aircraft not found.' }, { status: 404 });
       }
-      return NextResponse.json({ error: 'Failed to create maintenance event.' }, { status: 500 });
+      return NextResponse.json({ error: "Couldn't create the maintenance event." }, { status: 500 });
     }
 
     const body = { success: true, eventId: rpcData as string };

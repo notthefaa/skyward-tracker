@@ -214,7 +214,7 @@ export async function POST(req: Request) {
       if (err?.message === 'pdf_timeout') {
         return NextResponse.json({ error: 'PDF took too long to parse. Try a smaller or simpler file.' }, { status: 400 });
       }
-      return NextResponse.json({ error: 'Failed to parse PDF. The file may be scanned/image-based.' }, { status: 400 });
+      return NextResponse.json({ error: "Couldn't read the PDF — it might be a scan or image-based file that we can't extract text from." }, { status: 400 });
     }
 
     if (taggedChunks.length === 0) {

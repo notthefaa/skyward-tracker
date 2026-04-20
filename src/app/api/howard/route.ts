@@ -293,7 +293,7 @@ export async function POST(req: Request) {
           const partial = streamedSoFar.trim();
           const content = partial
             ? `${partial}\n\n⚠️ Howard got cut off before finishing. (${reason})`
-            : `⚠️ I ran into a problem responding to that. (${reason}) Please try again.`;
+            : `⚠️ I hit a snag answering that. (${reason}) Try again.`;
           try {
             const { data: errorMsg } = await supabaseAdmin
               .from('aft_howard_messages')
