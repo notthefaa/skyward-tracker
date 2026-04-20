@@ -358,7 +358,7 @@ export default function AircraftModal({
       <div className="bg-white rounded shadow-2xl w-full max-w-md p-6 border-t-4 border-mxOrange animate-slide-up">
         
         <div className="flex justify-between items-center mb-4">
-          <h2 className="font-oswald text-2xl font-bold uppercase text-[#1B4869]">
+          <h2 className="font-oswald text-2xl font-bold uppercase text-navy">
             {isEditing ? 'Edit Aircraft' : 'Add Aircraft'}
           </h2>
           <button onClick={onClose} className="text-gray-400 hover:text-[#CE3732] transition-colors">
@@ -451,22 +451,22 @@ export default function AircraftModal({
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">Tail Number</label>
+              <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Tail Number</label>
               <input type="text" required value={newTail} onChange={e => setNewTail(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 uppercase focus:border-mxOrange outline-none" />
             </div>
             <div>
-              <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">Serial Num</label>
+              <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Serial Num</label>
               <input type="text" value={newSerial} onChange={e => setNewSerial(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 uppercase focus:border-mxOrange outline-none" />
             </div>
           </div>
           
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">Model Name</label>
+              <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Model Name</label>
               <input type="text" required value={newModel} onChange={e => setNewModel(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none" />
             </div>
             <div>
-              <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">Engine Type</label>
+              <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Engine Type</label>
               <select value={newType} onChange={e => setNewType(e.target.value as 'Piston'|'Turbine')} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none">
                 <option value="Piston">Piston</option>
                 <option value="Turbine">Turbine</option>
@@ -476,11 +476,11 @@ export default function AircraftModal({
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">Home Airport</label>
+              <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Home Airport</label>
               <input type="text" value={newHomeAirport} onChange={e => setNewHomeAirport(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 uppercase focus:border-mxOrange outline-none" placeholder="ICAO" />
             </div>
             <div>
-              <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">Time Zone</label>
+              <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Time Zone</label>
               {/* Affects how server-generated MX-reminder emails and
                   Howard airworthiness verdicts compute "today". Client
                   displays already use the pilot's browser TZ. */}
@@ -523,37 +523,37 @@ export default function AircraftModal({
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
-              <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">Main Contact</label>
+              <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Main Contact</label>
               <input type="text" value={newMainContact} onChange={e => setNewMainContact(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none" />
             </div>
             <div>
-              <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">Phone</label>
+              <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Phone</label>
               <input type="tel" value={newMainContactPhone} onChange={e => setNewMainContactPhone(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none" />
             </div>
             <div>
-              <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">Email</label>
+              <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Email</label>
               <input type="email" value={newMainContactEmail} onChange={e => setNewMainContactEmail(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none" />
             </div>
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
-              <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">MX Contact</label>
+              <label className="text-[10px] font-bold uppercase tracking-widest text-navy">MX Contact</label>
               <input type="text" value={newMxContact} onChange={e => setNewMxContact(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none" />
             </div>
             <div>
-              <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">MX Phone</label>
+              <label className="text-[10px] font-bold uppercase tracking-widest text-navy">MX Phone</label>
               <input type="tel" value={newMxContactPhone} onChange={e => setNewMxContactPhone(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none" />
             </div>
             <div>
-              <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">MX Email</label>
+              <label className="text-[10px] font-bold uppercase tracking-widest text-navy">MX Email</label>
               <input type="email" value={newMxContactEmail} onChange={e => setNewMxContactEmail(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none" />
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4 border-t border-gray-200 pt-4 mt-2">
             <div>
-              <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">
+              <label className="text-[10px] font-bold uppercase tracking-widest text-navy">
                 {timeFieldsLocked && !airframeMeterMissing ? 'Setup' : 'Current'} {newType === 'Turbine' ? 'AFTT' : 'Hobbs'} (Opt)
               </label>
               <input
@@ -568,7 +568,7 @@ export default function AircraftModal({
               />
             </div>
             <div>
-              <label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">
+              <label className="text-[10px] font-bold uppercase tracking-widest text-navy">
                 {timeFieldsLocked ? 'Setup' : 'Current'} {newType === 'Turbine' ? 'FTT' : 'Tach'} *
               </label>
               <input
