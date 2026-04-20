@@ -258,10 +258,12 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
 
       <div className="fixed inset-0 bg-black/60 z-[10000] animate-fade-in" onClick={onClose}>
         <div
-          className="absolute left-0 right-0 overflow-y-auto"
+          className="absolute left-0 right-0 overflow-y-auto modal-scroll"
           style={{
-            top: 'calc(3.5rem + env(safe-area-inset-top, 0px))',
-            bottom: 'calc(3.5rem + env(safe-area-inset-bottom, 0px))',
+            /* Actual chrome heights — header is 60px (min-h-[60px]),
+               nav is 52px (pt-1 + h-12). Safe-area insets add to each. */
+            top: 'calc(60px + env(safe-area-inset-top, 0px))',
+            bottom: 'calc(52px + env(safe-area-inset-bottom, 0px))',
             overscrollBehavior: 'contain',
             WebkitOverflowScrolling: 'touch',
           }}
