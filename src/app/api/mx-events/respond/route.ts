@@ -368,7 +368,7 @@ export async function POST(req: Request) {
               <h2 style="color: #56B94A;">Aircraft Ready for Pickup!</h2>
               <p>${safeMxName} has completed all work and your aircraft is ready.</p>
               ${safeMessage ? `<p style="margin-top: 15px; padding: 15px; background: #f0fdf4; border-left: 4px solid #56B94A; border-radius: 4px;"><em>${safeMessage}</em></p>` : ''}
-              <p style="margin-top: 15px; color: #666;">Please log in to enter the logbook data from your mechanic's sign-off to complete this service event and reset maintenance tracking.</p>
+              <p style="margin-top: 15px; color: #666;">Log in to enter the logbook data from your mechanic&apos;s sign-off. That closes out the service event and resets maintenance tracking.</p>
               ${ctaButton(appUrl, 'OPEN AIRCRAFT MANAGER')}
             </div>
           `

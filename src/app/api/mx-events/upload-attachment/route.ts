@@ -132,7 +132,7 @@ export async function POST(req: Request) {
       // so a magic-byte check is the real gate.
       if (!fileBytesMatchType(buffer.subarray(0, 16), file.type, file.name)) {
         return NextResponse.json(
-          { error: `File "${file.name}" does not match its declared type. Please re-upload a valid ${file.type} file.` },
+          { error: `File "${file.name}" doesn't match its declared type. Re-upload a valid ${file.type} file.` },
           { status: 400 }
         );
       }

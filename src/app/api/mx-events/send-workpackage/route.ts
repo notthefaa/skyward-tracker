@@ -174,7 +174,7 @@ export async function POST(req: Request) {
       const effectiveDate = proposedDate || event.proposed_date;
       const dateSection = effectiveDate
         ? `<p style="margin-top: 20px;"><strong>Requested Service Date:</strong> ${escapeHtml(effectiveDate)}</p>`
-        : `<p style="margin-top: 20px;">No preferred date has been specified. Please propose dates that work for your schedule, along with the estimated duration of service.</p>`;
+        : `<p style="margin-top: 20px;">No preferred date on our end. Propose dates that work for your shop, along with the estimated service duration.</p>`;
 
       const subjectPrefix = isResend ? 'Reminder — ' : '';
 
