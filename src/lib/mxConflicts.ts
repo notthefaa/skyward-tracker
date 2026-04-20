@@ -157,7 +157,7 @@ export async function cancelConflictingReservations({
             <p style="margin: 4px 0 0 0; color: #666; font-size: 13px;">Serviced by ${mechanicLabel}</p>
           </div>
 
-          <p style="color: #666; font-size: 14px;">Please rebook your flight for after the maintenance period. We apologize for the inconvenience.</p>
+          <p style="color: #666; font-size: 14px;">Rebook your flight for after the maintenance period. Sorry for the inconvenience.</p>
 
           <div style="margin-top: 25px; text-align: center;">
             <a href="${appUrl}" style="display: inline-block; background-color: #091F3C; color: white; text-decoration: none; padding: 12px 28px; border-radius: 6px; font-weight: bold; font-size: 14px; letter-spacing: 1px;">OPEN AIRCRAFT MANAGER</a>

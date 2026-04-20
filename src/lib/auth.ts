@@ -62,7 +62,7 @@ export async function requireAuth(req: Request, requiredRole?: AppRole): Promise
   const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
 
   if (error || !user) {
-    throw { status: 401, message: 'Invalid or expired session. Please log in again.', requestId };
+    throw { status: 401, message: 'Session expired. Log in again.', requestId };
   }
 
   // If a specific role is required, check aft_user_roles
@@ -183,7 +183,7 @@ export function handleApiError(error: unknown, req?: Request): NextResponse {
   // Unexpected errors — log structured and forward to Sentry when wired.
   logError('[API Error]', error, { requestId, route: req?.url });
   return NextResponse.json(
-    { ok: false, error: 'An unexpected error occurred. Please try again.', ...(requestId ? { requestId } : {}) },
+    { ok: false, error: 'Something unexpected happened. Try again.', ...(requestId ? { requestId } : {}) },
     { status: 500, headers: requestId ? { 'x-request-id': requestId } : undefined }
   );
 }
