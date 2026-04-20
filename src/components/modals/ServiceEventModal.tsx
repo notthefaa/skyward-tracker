@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { supabase } from "@/lib/supabase";
 import { authFetch } from "@/lib/authFetch";
 import { useModalScrollLock } from "@/hooks/useModalScrollLock";
@@ -230,6 +231,7 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
   };
 
   if (!show) return null;
+  if (typeof document === 'undefined') return null;
 
   // Compute drafted item IDs for the create flow
   const draftedMxIds = allActiveLineItems.filter(li => li.maintenance_item_id).map(li => li.maintenance_item_id);
@@ -247,7 +249,7 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
     counter: 'Counter Proposal',
   }[view];
 
-  return (
+  return createPortal(
     <>
       {viewingAttachment && (
         <div className="fixed inset-0 z-[10002] bg-black/90 flex items-center justify-center p-4 animate-fade-in" onClick={() => setViewingAttachment(null)}>
@@ -374,6 +376,7 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
         </div>
         </div>
       </div>
-    </>
+    </>,
+    document.body
   );
 }
