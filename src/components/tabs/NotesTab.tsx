@@ -193,7 +193,7 @@ export default function NotesTab({ aircraft, session, role, aircraftRole, userIn
   const deleteNote = async (id: string) => {
     const ok = await confirm({
       title: "Delete Note?",
-      message: "This note will be permanently removed from the crew whiteboard.",
+      message: "This note will be permanently removed from the message board.",
       confirmText: "Delete",
       variant: "danger",
     });

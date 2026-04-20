@@ -22,7 +22,7 @@ import { HOWARD_LOGO_PATH } from "@/lib/howard/persona";
  *   - Howard's onboarding closer mentions it
  *
  * Cards are grouped into five sections that match the app's mental
- * model — Fleet basics, Logging, Maintenance, Team, Tools. Each card
+ * model — Fleet basics, Logging, Maintenance, Shared aircraft, Tools. Each card
  * has an icon, a name, a 1–2 sentence blurb, and a "Where to find it"
  * tag so the user can actually navigate to the feature after reading.
  */
@@ -62,7 +62,7 @@ const SECTIONS: Section[] = [
   },
   {
     title: "Logging",
-    subtitle: "Log what you fly — totals stay in sync across the crew",
+    subtitle: "Log what you fly — totals stay in sync across every pilot on the airplane",
     cards: [
       {
         icon: PenLine, accent: '#3AB0FF',
@@ -115,8 +115,8 @@ const SECTIONS: Section[] = [
     ],
   },
   {
-    title: "Team",
-    subtitle: "Scheduling, crew messages, and who's on the airplane",
+    title: "Shared aircraft",
+    subtitle: "Scheduling, shared notes, and who has access",
     cards: [
       {
         icon: Calendar, accent: '#56B94A',
@@ -132,7 +132,7 @@ const SECTIONS: Section[] = [
       },
       {
         icon: Users, accent: '#091F3C',
-        name: "Crew & access",
+        name: "Pilots & access",
         blurb: "Invite a pilot by email — they get a link, no app store. Grant access by aircraft. Promote to admin when they should own the numbers. Global admins see the whole fleet.",
         where: "Settings → cog → Users / Access",
       },

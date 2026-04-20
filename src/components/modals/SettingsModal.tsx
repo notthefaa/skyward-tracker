@@ -251,7 +251,7 @@ export default function SettingsModal({
             <h3 className="font-oswald text-lg font-bold uppercase text-navy mb-1 flex items-center gap-2">
               <User size={18} className="text-navy" /> Profile
             </h3>
-            <p className="text-[10px] text-gray-500 uppercase tracking-widest mb-4">Your name and initials as shown to your crew</p>
+            <p className="text-[10px] text-gray-500 uppercase tracking-widest mb-4">Your name and initials as shown to the other pilots</p>
 
             {isLoadingProfile ? (
               <div className="flex items-center justify-center py-6">

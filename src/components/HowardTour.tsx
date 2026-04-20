@@ -52,7 +52,7 @@ const STEPS: Step[] = [
     bullets: [
       { icon: Home, text: "Status at a glance — airworthy, issues, or grounded. The header turns red if something's blocking." },
       { icon: PenLine, text: "Current hours, fuel on board, last flight, next inspection due." },
-      { icon: Wrench, text: "Any open squawks, plus quick links to the full lists and your crew." },
+      { icon: Wrench, text: "Any open squawks, plus quick links to the full lists and the other pilots on the airplane." },
     ],
   },
   {
@@ -103,7 +103,7 @@ const STEPS: Step[] = [
     bullets: [
       { icon: FolderOpen, text: "Documents: upload POH, registration, W&B, MEL — keep the airplane's paper trail in one place." },
       { icon: Wrench, text: "Equipment: list what's installed and when each piece is next due for inspection." },
-      { icon: MessageSquare, text: "Notes: crew message board with photos. Stays tied to the aircraft, not a group text that scrolls away." },
+      { icon: MessageSquare, text: "Notes: shared message board with photos. Stays tied to the aircraft, not a group text that scrolls away." },
     ],
   },
   {
@@ -126,8 +126,8 @@ const STEPS: Step[] = [
     accent: '#091F3C',
     hero: Settings,
     eyebrow: "Step 7 of 7",
-    title: "Settings & crew",
-    lead: "Your profile, your team, and the full feature guide.",
+    title: "Settings & pilots",
+    lead: "Your profile, your pilots, and the full feature guide.",
     bullets: [
       { icon: Settings, text: "Set your FAA ratings so the app (and Howard) match the level of detail you need." },
       { icon: MessageSquare, text: "Maintenance reminder thresholds — choose how early you get heads-up emails on upcoming inspections." },
