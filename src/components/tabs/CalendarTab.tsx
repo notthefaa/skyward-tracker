@@ -311,8 +311,8 @@ export default function CalendarTab({
   };
 
   const handleSubmitReservation = async () => {
-    if (!bookingStartDate || !bookingEndDate) return showWarning("Please select dates.");
-    if (bookingForOther && !bookingForUserId) return showWarning("Please select the pilot to book for.");
+    if (!bookingStartDate || !bookingEndDate) return showWarning("Pick a start and end date.");
+    if (bookingForOther && !bookingForUserId) return showWarning("Pick which pilot this booking is for.");
     if (bookingRepeat === 'custom' && bookingRepeatDays.length === 0) return showWarning("Pick at least one day of the week.");
     if (bookingRepeat !== 'none' && bookingRepeatEnd === 'until') {
       if (!bookingRepeatUntil) return showWarning("Pick an end date for the recurrence.");
@@ -335,7 +335,7 @@ export default function CalendarTab({
         interval: bookingRepeatInterval,
       };
       const occurrences = generateOccurrences(baseStart, baseEnd, spec);
-      if (occurrences.length === 0) { showError("Recurrence settings produced no occurrences."); setIsSubmitting(false); return; }
+      if (occurrences.length === 0) { showError("Those settings don't produce any bookings. Check the dates and days and try again."); setIsSubmitting(false); return; }
       if (occurrences.length > HARD_RECUR_CAP) { showError(`Recurrence is capped at ${HARD_RECUR_CAP} occurrences.`); setIsSubmitting(false); return; }
 
       if (editingReservationId) {
@@ -401,7 +401,7 @@ export default function CalendarTab({
   };
 
   const handleCreateMxBlock = async () => {
-    if (!mxBlockStartDate) return showWarning("Please select a start date.");
+    if (!mxBlockStartDate) return showWarning("Pick a start date for the maintenance block.");
     setIsSubmitting(true);
     try {
       const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -626,7 +626,7 @@ export default function CalendarTab({
                     <div className="mt-3 animate-fade-in">
                       <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Pilot *</label>
                       {otherCrew.length === 0 ? (
-                        <p className="text-[11px] text-gray-500 mt-1.5 italic">No other pilots assigned to this aircraft.</p>
+                        <p className="text-[11px] text-gray-500 mt-1.5 italic">No other pilots on this aircraft yet.</p>
                       ) : (
                         <select value={bookingForUserId} onChange={e => setBookingForUserId(e.target.value)} style={wb} className="w-full border border-gray-300 rounded p-2.5 text-sm mt-1 focus:border-[#56B94A] outline-none">
                           <option value="">Select pilot…</option>
