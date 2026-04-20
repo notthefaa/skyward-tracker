@@ -168,14 +168,22 @@ export default function ADsTab({ aircraft, role, aircraftRole }: Props) {
     if (!aircraft) return;
     setIsSyncing(true);
     try {
-      const res = await authFetch('/api/howard', {
+      const res = await authFetch('/api/ads/sync', {
         method: 'POST',
-        body: JSON.stringify({ aircraftId: aircraft.id, message: 'Refresh the ADs for this aircraft from the FAA DRS.' }),
+        body: JSON.stringify({ aircraftId: aircraft.id }),
       });
-      if (!res.ok) throw new Error('Refresh failed');
-      // Let Howard's response handle the reply; just revalidate the list.
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || 'Sync failed');
       await mutate();
-      showSuccess('AD refresh requested. Howard will report back shortly.');
+      const { inserted = 0, updated = 0 } = body;
+      if (inserted === 0 && updated === 0) {
+        showSuccess('Up to date — no new ADs found.');
+      } else {
+        const parts = [];
+        if (inserted) parts.push(`${inserted} new`);
+        if (updated) parts.push(`${updated} updated`);
+        showSuccess(`Synced: ${parts.join(', ')}.`);
+      }
     } catch (err: any) { showError(err.message); }
     finally { setIsSyncing(false); }
   };
