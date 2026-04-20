@@ -50,7 +50,7 @@ const STEPS: Step[] = [
     title: "Summary — your pre-flight snapshot",
     lead: "Check the airplane's status before you head out.",
     bullets: [
-      { icon: Home, text: "Status at a glance — airworthy, issues, or grounded. The header turns red if something's blocking." },
+      { icon: Home, text: "Status at a glance — is the airplane good to go, or is there maintenance to address? Header runs green, orange, or red so you know before you walk out to the ramp." },
       { icon: PenLine, text: "Current hours, fuel on board, last flight, next inspection due." },
       { icon: Wrench, text: "Any open squawks, plus quick links to the full lists and the other pilots on the airplane." },
     ],
@@ -73,7 +73,7 @@ const STEPS: Step[] = [
     hero: Calendar,
     eyebrow: "Step 3 of 7",
     title: "Calendar — book the airplane",
-    lead: "Shared scheduling so nobody collides.",
+    lead: "One calendar for everybody on the airplane — so two pilots don't grab the same slot, and you can see when it's in the shop.",
     bullets: [
       { icon: Calendar, text: "See reservations and confirmed maintenance on one timeline — book around shop visits without overlap." },
       { icon: MessageSquare, text: "If a shop visit bumps your reservation, you get an email explaining what happened." },
@@ -90,7 +90,7 @@ const STEPS: Step[] = [
       { icon: Wrench, text: "Maintenance items: track by hours, by date, or both — whichever comes first." },
       { icon: MessageSquare, text: "Squawks: log issues with photos. Flag one as airworthiness-affecting and it grounds the airplane." },
       { icon: Calendar, text: "Service events: email your mechanic a portal link so they can propose dates, upload photos, and sign off items. No login needed." },
-      { icon: BookOpen, text: "Airworthiness Directives: auto-synced from the FAA nightly. Export a compliance list for your IA anytime." },
+      { icon: BookOpen, text: "Airworthiness Directives: pulled from the FAA every night. Export a compliance list for your IA anytime." },
     ],
   },
   {
@@ -114,7 +114,7 @@ const STEPS: Step[] = [
     title: "Meet Howard — your aviation mentor",
     lead: "The orange button is me. I sit on top of everything you just saw — ask me anything, I pull real data instead of guessing.",
     bullets: [
-      { icon: Wrench, text: "Airworthiness reads: I combine your equipment, MX, squawks, and ADs against 91.205, 91.411, 91.413, and 91.207 — and cite the specific reg blocking you." },
+      { icon: Wrench, text: "Airworthiness reads: I check your equipment, MX, squawks, and ADs against 91.205, 91.411, 91.413, and 91.207 — and cite the specific reg keeping the airplane on the ground." },
       { icon: Calendar, text: "Flight briefings with official METARs, TAFs, NOTAMs, PIREPs — decoded into plain English. Source is NOAA AWC and the FAA, never guesswork." },
       { icon: FolderOpen, text: "Search inside your own documents — ask \"what's the Vne?\" and I'll find it in your POH and cite the page." },
       { icon: PenLine, text: "Pull flight history, squawk details, maintenance status, fuel trends — anything on the aircraft's record." },
