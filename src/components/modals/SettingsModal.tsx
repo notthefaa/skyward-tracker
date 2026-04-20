@@ -215,7 +215,7 @@ export default function SettingsModal({
       });
       if (!res.ok) {
         const data = await res.json();
-        throw new Error(data.error || 'Failed to delete account');
+        throw new Error(data.error || "Couldn't delete the account");
       }
       await supabase.auth.signOut();
     } catch (err: any) {
@@ -452,7 +452,7 @@ export default function SettingsModal({
                     <div className="flex items-start gap-2 mb-4">
                       <AlertTriangle size={18} className="text-[#CE3732] shrink-0 mt-0.5" />
                       <div>
-                        <p className="text-sm font-bold text-navy">This action is permanent and cannot be undone.</p>
+                        <p className="text-sm font-bold text-navy">Once your account is deleted, it&apos;s gone — no undo.</p>
                         <p className="text-xs text-gray-600 mt-2">Deleting your account will:</p>
                         <ul className="text-xs text-gray-600 mt-1 space-y-1 ml-4 list-disc">
                           <li>Remove your profile and all preferences</li>

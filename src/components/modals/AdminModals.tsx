@@ -88,17 +88,17 @@ export default function AdminModals({
   const handleDatabaseCleanup = async () => {
     const ok = await confirm({
       title: "Run Health Check?",
-      message: "This will safely purge old read-receipts (older than 30 days) to keep the database fast and optimized.",
+      message: "Deletes read-receipts older than 30 days. Keeps the database fast.",
       confirmText: "Run Check",
     });
     if (!ok) return;
     setIsSubmitting(true);
     try {
       const res = await authFetch('/api/admin/db-health', { method: 'POST' });
-      if (!res.ok) { const errData = await res.json(); throw new Error(errData.error || 'Cleanup failed'); }
+      if (!res.ok) { const errData = await res.json(); throw new Error(errData.error || "Cleanup didn't finish"); }
       const data = await res.json();
       showSuccess("Database cleanup completed");
-    } catch (e: any) { showError("Cleanup failed: " + e.message); }
+    } catch (e: any) { showError("Cleanup didn't finish: " + e.message); }
     setIsSubmitting(false);
   };
 
@@ -106,7 +106,7 @@ export default function AdminModals({
     e.preventDefault(); setIsSubmitting(true);
     await supabase.from('aft_system_settings').upsert({ id: 1, ...sysSettings });
     setIsSubmitting(false); setShowSettingsModal(false); setSysSettings({ ...sysSettings });
-    showSuccess("Global maintenance triggers updated!");
+    showSuccess("Global maintenance triggers updated.");
   };
 
   const openGlobalFleetModal = async () => {
@@ -158,7 +158,7 @@ export default function AdminModals({
         .delete().match({ user_id: selectedAccessUserId, aircraft_id: aircraftId });
       if (error) {
         setUserAccessList(prev => prev.includes(aircraftId) ? prev : [...prev, aircraftId]);
-        showError("Failed to revoke access: " + error.message);
+        showError("Couldn't revoke access: " + error.message);
       }
     } else {
       setUserAccessList(prev => [...prev, aircraftId]);
@@ -166,7 +166,7 @@ export default function AdminModals({
         .insert({ user_id: selectedAccessUserId, aircraft_id: aircraftId });
       if (error) {
         setUserAccessList(prev => prev.filter(id => id !== aircraftId));
-        showError("Failed to grant access: " + error.message);
+        showError("Couldn't grant access: " + error.message);
       }
     }
   };
@@ -178,14 +178,14 @@ export default function AdminModals({
     if (!selectedUserEmail) return;
     const ok = await confirm({
       title: "Send Password Reset?",
-      message: `A secure password reset link will be emailed to ${selectedUserEmail}.`,
+      message: `We'll email a password reset link to ${selectedUserEmail}.`,
       confirmText: "Send Reset Link",
     });
     if (!ok) return;
     setIsSubmitting(true);
     const { error } = await supabase.auth.resetPasswordForEmail(selectedUserEmail, { redirectTo: `${window.location.origin}/update-password` });
     setIsSubmitting(false);
-    if (error) showError("Error: " + error.message); else showInfo("Password reset link sent securely to " + selectedUserEmail);
+    if (error) showError("Error: " + error.message); else showInfo("Password reset link sent to " + selectedUserEmail);
   };
 
   const handleDeleteUser = async () => {
@@ -195,7 +195,7 @@ export default function AdminModals({
     const label = selectedUser?.full_name ? `${selectedUser.full_name} (${selectedUserEmail})` : selectedUserEmail;
     const ok = await confirm({
       title: "Permanently Delete User?",
-      message: `${label} will be deleted and all of their aircraft access revoked. This cannot be undone.`,
+      message: `${label} will be deleted and all of their aircraft access revoked. No undo.`,
       confirmText: "Delete User",
       variant: "danger",
     });
@@ -203,11 +203,11 @@ export default function AdminModals({
     setIsSubmitting(true);
     try {
       const res = await authFetch('/api/users', { method: 'DELETE', body: JSON.stringify({ userId: selectedAccessUserId }) });
-      if (!res.ok) { const errData = await res.json(); throw new Error(errData.error || 'Failed to delete user'); }
-      showSuccess("User successfully deleted.");
+      if (!res.ok) { const errData = await res.json(); throw new Error(errData.error || "Couldn't delete the user"); }
+      showSuccess("User deleted.");
       const { data } = await supabase.from('aft_user_roles').select('*').order('role').order('email');
       if (data) setAllUsers(data); setSelectedAccessUserId(""); setUserAccessList([]);
-    } catch (error: any) { showError("Failed to delete user: " + error.message); }
+    } catch (error: any) { showError("Couldn't delete user: " + error.message); }
     setIsSubmitting(false);
   };
 
@@ -215,10 +215,10 @@ export default function AdminModals({
     e.preventDefault(); setIsSubmitting(true);
     try {
       const res = await authFetch('/api/invite', { method: 'POST', body: JSON.stringify({ email: inviteEmail, role: inviteRole, aircraftIds: inviteAircraftIds }) });
-      if (!res.ok) { const errData = await res.json(); throw new Error(errData.error || 'Failed to invite user'); }
-      showSuccess(`Invitation successfully sent to ${inviteEmail}!`);
+      if (!res.ok) { const errData = await res.json(); throw new Error(errData.error || "Couldn't send invitation"); }
+      showSuccess(`Invitation sent to ${inviteEmail}.`);
       setShowInviteModal(false); setInviteEmail(""); setInviteAircraftIds([]);
-    } catch (error: any) { showError("Failed to invite user: " + error.message); }
+    } catch (error: any) { showError("Couldn't send invitation: " + error.message); }
     setIsSubmitting(false);
   };
 
@@ -229,9 +229,9 @@ export default function AdminModals({
       const res = await authFetch('/api/admin/users');
       const data = await res.json();
       if (res.ok) setGlobalUsers(data.users || []);
-      else showError(data.error || 'Failed to load users.');
+      else showError(data.error || "Couldn't load users.");
     } catch (e: any) {
-      showError('Failed to load users: ' + (e?.message || 'unknown error'));
+      showError("Couldn't load users: " + (e?.message || 'unknown error'));
     }
     setIsLoadingUsers(false);
   };
@@ -241,9 +241,9 @@ export default function AdminModals({
       const res = await authFetch('/api/admin/users');
       const data = await res.json();
       if (res.ok) setGlobalUsers(data.users || []);
-      else showError(data.error || 'Failed to refresh users.');
+      else showError(data.error || "Couldn't refresh users.");
     } catch (e: any) {
-      showError('Failed to refresh users: ' + (e?.message || 'unknown error'));
+      showError("Couldn't refresh users: " + (e?.message || 'unknown error'));
     }
   };
 
@@ -272,7 +272,7 @@ export default function AdminModals({
     const label = u.full_name ? `${u.full_name} (${u.email})` : u.email;
     const ok = await confirm({
       title: "Permanently Delete User?",
-      message: `${label} will be deleted and all access revoked. This cannot be undone.`,
+      message: `${label} will be deleted and all access revoked. No undo.`,
       confirmText: "Delete User",
       variant: "danger",
     });
@@ -291,7 +291,7 @@ export default function AdminModals({
     if (!u?.email) return;
     const ok = await confirm({
       title: "Send Password Reset?",
-      message: `A secure password reset link will be emailed to ${u.email}.`,
+      message: `We'll email a password reset link to ${u.email}.`,
       confirmText: "Send Reset Link",
     });
     if (!ok) return;
