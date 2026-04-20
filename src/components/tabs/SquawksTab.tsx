@@ -273,7 +273,7 @@ export default function SquawksTab({
               // the badge won't appear so the pilot doesn't assume
               // the app will remind them later.
               console.error('Failed to persist mx_notify_failed flag', flagErr);
-              showWarning('MX notification failed to send AND we couldn\u2019t mark the squawk for resend. Contact maintenance directly and consider editing the squawk to re-trigger the email.');
+              showWarning("The email to MX didn't send, and we couldn't set the resend reminder either. Reach out to your mechanic directly — and if you want the reminder badge to show, edit the squawk to try the email again.");
               notifyMxFailed = false; // already warned above; suppress duplicate toast
             }
           }
@@ -284,7 +284,7 @@ export default function SquawksTab({
       if (notifyMxFailed) {
         // Squawk saved but the mechanic notification didn't go out —
         // tell the pilot so they can follow up manually.
-        showWarning("Squawk saved, but the MX notification email failed to send. Contact maintenance directly.");
+        showWarning("Squawk saved, but the email to MX didn't go through. Reach out to your mechanic directly.");
       } else {
         showSuccess(editingId ? "Squawk updated" : "Squawk reported");
       }
@@ -292,7 +292,7 @@ export default function SquawksTab({
       // Squawk row never landed — remove the images we just uploaded
       // so they don't sit in storage forever with no referencing row.
       await cleanupUploadedImages(uploadedPathsToRollback);
-      showError(err?.message || 'Failed to save squawk.');
+      showError(err?.message || "Couldn't save the squawk.");
     } finally {
       setIsSubmitting(false);
     }
@@ -310,7 +310,7 @@ export default function SquawksTab({
       });
       if (!emailRes.ok) {
         const d = await emailRes.json().catch(() => ({}));
-        throw new Error(d.error || 'Email send failed');
+        throw new Error(d.error || "Couldn't send the email");
       }
       // Clear the persistent flag so the badge disappears.
       await authFetch('/api/squawks', {
@@ -318,7 +318,7 @@ export default function SquawksTab({
         body: JSON.stringify({ squawkId: sq.id, aircraftId: aircraft.id, squawkData: { mx_notify_failed: false } }),
       });
       await mutate();
-      showSuccess('MX notification resent.');
+      showSuccess('Email sent to MX.');
     } catch (err: any) {
       showError(err?.message || 'Still couldn\u2019t reach MX. Contact them directly.');
     } finally {
@@ -329,7 +329,7 @@ export default function SquawksTab({
   const deleteSquawk = async (id: string) => {
     const ok = await confirm({
       title: "Delete Squawk?",
-      message: "This squawk will be permanently removed from the record.",
+      message: "We'll delete this squawk and any attached photos. No undo.",
       confirmText: "Delete",
       variant: "danger",
     });
@@ -339,12 +339,12 @@ export default function SquawksTab({
         method: 'DELETE',
         body: JSON.stringify({ squawkId: id, aircraftId: aircraft!.id })
       });
-      if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || 'Failed to delete squawk'); }
+      if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || "Couldn't delete the squawk"); }
       await mutate(); onGroundedStatusChange();
       closeDetailModal();
       showSuccess("Squawk deleted");
     } catch (err: any) {
-      showError(err?.message || 'Failed to delete squawk.');
+      showError(err?.message || "Couldn't delete the squawk.");
     }
   };
 
@@ -367,12 +367,12 @@ export default function SquawksTab({
           }
         })
       });
-      if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || 'Failed to resolve squawk'); }
+      if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || "Couldn't resolve the squawk"); }
       await mutate(); onGroundedStatusChange();
       closeDetailModal();
       showSuccess("Squawk resolved");
     } catch (err: any) {
-      showError(err?.message || 'Failed to resolve squawk.');
+      showError(err?.message || "Couldn't resolve the squawk.");
     } finally {
       setIsSubmitting(false);
     }
@@ -426,7 +426,7 @@ export default function SquawksTab({
         y += 5; doc.setDrawColor(200); doc.line(14, y, 196, y); y += 10;
       }
       doc.save(`${aircraft!.tail_number}_Squawk_Report.pdf`); 
-    } catch (error) { console.error("Error generating PDF:", error); showError("There was an error generating the PDF."); }
+    } catch (error) { console.error("Error generating PDF:", error); showError("Couldn't build the PDF. Try again."); }
     setIsExportingPdf(false); setShowExportModal(false);
   };
 
@@ -464,7 +464,7 @@ export default function SquawksTab({
           </button>
         </div>
         <div className="space-y-4">
-          {activeSquawks.length === 0 ? (<p className="text-center text-sm text-gray-400 italic py-4">No active squawks!</p>) : (
+          {activeSquawks.length === 0 ? (<p className="text-center text-sm text-gray-400 italic py-4">No active squawks.</p>) : (
             activeSquawks.map(sq => (
               <div key={sq.id} className="relative">
                 <button onClick={() => openDetailModal(sq)} className={`w-full text-left p-4 border rounded transition-colors active:scale-[0.98] ${sq.affects_airworthiness ? 'border-[#CE3732]/30 bg-[#CE3732]/10 hover:bg-[#CE3732]/15' : 'border-[#F08B46]/30 bg-[#F08B46]/10 hover:bg-[#F08B46]/15'}`}>
@@ -656,7 +656,7 @@ export default function SquawksTab({
               <h2 className="font-oswald text-2xl font-bold uppercase text-navy flex items-center gap-2"><CheckSquare size={20} className="text-[#CE3732]" /> Export to PDF</h2>
               <button onClick={() => setShowExportModal(false)} className="text-gray-400 hover:text-red-500 transition-colors"><X size={24}/></button>
             </div>
-            <p className="text-xs text-gray-500 mb-4">Select the squawks you wish to include in the formal PDF report.</p>
+            <p className="text-xs text-gray-500 mb-4">Pick the squawks to include in the PDF report.</p>
             <div className="flex justify-between items-center mb-2 pb-2 border-b border-gray-200">
               <button onClick={() => setSelectedForExport(squawks.map(s => s.id))} className="text-[10px] font-bold uppercase tracking-widest text-[#CE3732] hover:opacity-80">Select All</button>
               <button onClick={() => setSelectedForExport([])} className="text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:text-gray-600">Clear All</button>
