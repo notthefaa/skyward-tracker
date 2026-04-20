@@ -175,13 +175,14 @@ export default function ADsTab({ aircraft, role, aircraftRole }: Props) {
       const body = await res.json();
       if (!res.ok) throw new Error(body.error || 'Sync failed');
       await mutate();
-      const { inserted = 0, updated = 0 } = body;
-      if (inserted === 0 && updated === 0) {
+      const { inserted = 0, updated = 0, pruned = 0 } = body;
+      if (inserted === 0 && updated === 0 && pruned === 0) {
         showSuccess('Up to date — no new ADs found.');
       } else {
         const parts = [];
         if (inserted) parts.push(`${inserted} new`);
         if (updated) parts.push(`${updated} updated`);
+        if (pruned) parts.push(`${pruned} removed (no longer applicable)`);
         showSuccess(`Synced: ${parts.join(', ')}.`);
       }
     } catch (err: any) { showError(err.message); }

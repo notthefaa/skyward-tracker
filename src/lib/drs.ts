@@ -83,28 +83,54 @@ function extractAmendment(excerpts: string | null): string | null {
   return m ? m[1] : null;
 }
 
-/** Turn a model like "172N" into ["172n", "172"] — trailing letter
- *  variants are the same airframe for AD purposes. */
+/** Return substring variants of a model string so we match both
+ *  "PA-28-181" (full) and "PA-28" (series) / "172N" (full) and "172"
+ *  (digit base). Variants under 3 chars are dropped — they'd flood
+ *  the hay with false positives (e.g. plain "22" in any part number). */
 function modelVariants(model: string): string[] {
-  const lower = model.toLowerCase().trim();
-  const base = lower.replace(/[a-z]+$/, '');
-  return base && base !== lower ? [lower, base] : [lower];
+  const m = model.toLowerCase().trim();
+  const out = new Set<string>();
+  if (m.length >= 3) out.add(m);
+  const noTrailingLetters = m.replace(/[a-z]+$/i, '').trim();
+  if (noTrailingLetters && noTrailingLetters !== m && noTrailingLetters.length >= 3) out.add(noTrailingLetters);
+  const noTrailingSegment = m.replace(/[\s-]+\d+[a-z]?$/i, '').trim();
+  if (noTrailingSegment && noTrailingSegment !== m && noTrailingSegment.length >= 3) out.add(noTrailingSegment);
+  return Array.from(out);
 }
 
-/** Case-insensitive substring match against the FR abstract + title.
- *  Permissive by design — false positives are easy for a pilot to
- *  dismiss; false negatives quietly leave the aircraft un-airworthy. */
+/** Case-insensitive substring match against the FR title + abstract.
+ *
+ *  Requires a make match (ADs are type-certificate-specific and the
+ *  TC holder is always named in the rule), then sharpens with model
+ *  where possible. Separate engine path for engine-family ADs that
+ *  don't name the airframe manufacturer.
+ *
+ *  Does NOT match on aircraft_type / generic words like "Airplane"
+ *  or "Taildragger" — those appear in almost every AD abstract and
+ *  generate runaway false positives. */
 function applies(raw: RawAd, ac: AircraftMatchInfo): boolean {
   const hay = [raw.subject, raw.applicability].filter(Boolean).join(' ').toLowerCase();
   if (!hay) return false;
 
-  const needles: string[] = [];
-  if (ac.make) needles.push(ac.make.toLowerCase());
-  if (ac.model) needles.push(...modelVariants(ac.model));
-  if (ac.aircraft_type) needles.push(ac.aircraft_type.toLowerCase());
-  if (ac.engine_type) needles.push(ac.engine_type.toLowerCase());
+  const make = ac.make?.toLowerCase().trim();
+  const model = ac.model?.toLowerCase().trim();
+  const engine = ac.engine_type?.toLowerCase().trim();
 
-  return needles.some(n => n.length >= 2 && hay.includes(n));
+  // Airframe path: make must appear. If a model is recorded, at least
+  // one model variant must also appear; otherwise the make alone suffices.
+  if (make && make.length >= 3 && hay.includes(make)) {
+    if (!model) return true;
+    const variants = modelVariants(model);
+    if (variants.length === 0) return true;
+    if (variants.some(v => hay.includes(v))) return true;
+  }
+
+  // Engine path: engine string must be specific enough (contains a
+  // digit, ≥5 chars) and appear verbatim. Covers cases where the
+  // airframe maker isn't named (engine-only ADs).
+  if (engine && engine.length >= 5 && /\d/.test(engine) && hay.includes(engine)) return true;
+
+  return false;
 }
 
 function hashRaw(raw: RawAd): string {
@@ -176,28 +202,45 @@ async function fetchFederalRegisterAds(): Promise<RawAd[]> {
 export async function syncAdsForAircraft(
   sb: SupabaseClient,
   aircraft: AircraftMatchInfo,
-): Promise<{ inserted: number; updated: number; skipped: number; error?: string }> {
+): Promise<{ inserted: number; updated: number; skipped: number; pruned: number; error?: string }> {
   let rawAds: RawAd[];
   try {
     rawAds = await fetchFederalRegisterAds();
   } catch (err: any) {
-    return { inserted: 0, updated: 0, skipped: 0, error: `Feed fetch failed: ${err.message}` };
+    return { inserted: 0, updated: 0, skipped: 0, pruned: 0, error: `Feed fetch failed: ${err.message}` };
   }
 
+  // Sanity guard: if the feed came back empty or tiny, don't prune — we
+  // might have just hit a bad FR API response.
+  const feedHealthy = rawAds.length >= 50;
+
   const applicable = rawAds.filter(r => applies(r, aircraft));
+  const applicableNumbers = new Set(applicable.map(a => a.ad_number));
 
   const { data: existing } = await sb
     .from('aft_airworthiness_directives')
-    .select('id, ad_number, sync_hash, source')
+    .select('id, ad_number, sync_hash, source, last_complied_date, last_complied_time, next_due_date, next_due_time')
     .eq('aircraft_id', aircraft.id)
     .is('deleted_at', null);
 
-  const existingByNumber = new Map<string, { id: string; sync_hash: string | null; source: string }>();
-  for (const e of existing || []) existingByNumber.set(e.ad_number, e);
+  type ExistingAd = {
+    id: string;
+    ad_number: string;
+    sync_hash: string | null;
+    source: string;
+    last_complied_date: string | null;
+    last_complied_time: number | null;
+    next_due_date: string | null;
+    next_due_time: number | null;
+  };
+  const existingRows = (existing || []) as ExistingAd[];
+  const existingByNumber = new Map<string, ExistingAd>();
+  for (const e of existingRows) existingByNumber.set(e.ad_number, e);
 
   let inserted = 0;
   let updated = 0;
   let skipped = 0;
+  let pruned = 0;
   const now = new Date().toISOString();
 
   for (const raw of applicable) {
@@ -245,5 +288,26 @@ export async function syncAdsForAircraft(
     }
   }
 
-  return { inserted, updated, skipped };
+  // Prune: DRS-synced rows that no longer match AND have no compliance
+  // data logged. Safe because (a) compliance-logged rows are preserved,
+  // (b) we skip pruning if the feed looks unhealthy.
+  if (feedHealthy) {
+    for (const row of existingRows) {
+      if (row.source !== 'drs_sync') continue;
+      if (applicableNumbers.has(row.ad_number)) continue;
+      const hasCompliance =
+        row.last_complied_date != null ||
+        row.last_complied_time != null ||
+        row.next_due_date != null ||
+        row.next_due_time != null;
+      if (hasCompliance) continue;
+      const { error } = await sb
+        .from('aft_airworthiness_directives')
+        .update({ deleted_at: now })
+        .eq('id', row.id);
+      if (!error) pruned += 1;
+    }
+  }
+
+  return { inserted, updated, skipped, pruned };
 }
