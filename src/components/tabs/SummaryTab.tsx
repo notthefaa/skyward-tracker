@@ -266,7 +266,7 @@ export default function SummaryTab({
     <div className="flex flex-col gap-4 animate-fade-in relative">
       {/* Delete confirmation modal */}
       {showDeleteModal && (
-        <div className="fixed inset-0 z-[70] overflow-y-auto bg-black/80 animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => setShowDeleteModal(false)}>
+        <div className="fixed inset-0 z-[10000] overflow-y-auto bg-black/80 animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => setShowDeleteModal(false)}>
           <div className="flex min-h-full items-center justify-center p-4">
           <div className="bg-white rounded shadow-2xl w-full max-w-sm p-6 border-t-4 border-danger animate-slide-up relative" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-4"><h2 className="font-oswald text-2xl font-bold uppercase text-danger flex items-center gap-2"><AlertTriangle size={24} /> Delete Aircraft</h2><button onClick={() => setShowDeleteModal(false)} className="text-gray-400 hover:text-danger transition-colors"><X size={24}/></button></div>
@@ -282,7 +282,7 @@ export default function SummaryTab({
 
       {/* Fuel modal */}
       {showFuelModal && (
-        <div className="fixed inset-0 z-[70] overflow-y-auto bg-black/80 animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => setShowFuelModal(false)}>
+        <div className="fixed inset-0 z-[10000] overflow-y-auto bg-black/80 animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => setShowFuelModal(false)}>
           <div className="flex min-h-full items-center justify-center p-4">
           <div className="bg-white rounded shadow-2xl w-full max-w-sm p-6 border-t-4 border-blue-500 animate-slide-up" onClick={e => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-4"><h2 className="font-oswald text-xl font-bold uppercase text-navy flex items-center gap-2"><Droplet size={20} className="text-blue-500" /> Update Fuel State</h2><button onClick={() => setShowFuelModal(false)} className="text-gray-400 hover:text-danger"><X size={24} /></button></div>
@@ -300,7 +300,7 @@ export default function SummaryTab({
 
       {/* Invite modal */}
       {showInviteModal && (
-        <div className="fixed inset-0 z-[70] overflow-y-auto bg-black/80 animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => setShowInviteModal(false)}>
+        <div className="fixed inset-0 z-[10000] overflow-y-auto bg-black/80 animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => setShowInviteModal(false)}>
           <div className="flex min-h-full items-center justify-center p-4">
           <div className="bg-white rounded shadow-2xl w-full max-w-sm p-6 border-t-4 border-info animate-slide-up" onClick={e => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-4"><h2 className="font-oswald text-xl font-bold uppercase text-navy flex items-center gap-2"><UserPlus size={20} className="text-info" /> Invite Pilot</h2><button onClick={() => setShowInviteModal(false)} className="text-gray-400 hover:text-danger"><X size={24} /></button></div>

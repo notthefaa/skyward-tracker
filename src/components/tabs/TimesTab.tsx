@@ -492,7 +492,7 @@ export default function TimesTab({
       </div>
 
       {viewPax && (
-        <div className="fixed inset-0 z-[60] overflow-y-auto bg-black/60 animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => setViewPax(null)}>
+        <div className="fixed inset-0 z-[10000] overflow-y-auto bg-black/60 animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => setViewPax(null)}>
           <div className="flex min-h-full items-center justify-center p-4">
           <div className="bg-white rounded shadow-2xl w-full max-w-sm p-6 border-t-4 border-info animate-slide-up relative" onClick={(e) => e.stopPropagation()}>
             <button onClick={() => setViewPax(null)} className="absolute top-4 right-4 text-gray-400 hover:text-danger transition-colors"><X size={20}/></button>
@@ -504,7 +504,7 @@ export default function TimesTab({
       )}
 
       {viewRouting && (
-        <div className="fixed inset-0 z-[60] overflow-y-auto bg-black/60 animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => setViewRouting(null)}>
+        <div className="fixed inset-0 z-[10000] overflow-y-auto bg-black/60 animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => setViewRouting(null)}>
           <div className="flex min-h-full items-center justify-center p-4">
           <div className="bg-white rounded shadow-2xl w-full max-w-sm p-6 border-t-4 border-info animate-slide-up relative" onClick={(e) => e.stopPropagation()}>
             <button onClick={() => setViewRouting(null)} className="absolute top-4 right-4 text-gray-400 hover:text-danger transition-colors"><X size={20}/></button>
@@ -526,7 +526,7 @@ export default function TimesTab({
       )}
 
       {showLegend && (
-        <div className="fixed inset-0 z-[60] overflow-y-auto bg-black/60 animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => setShowLegend(false)}>
+        <div className="fixed inset-0 z-[10000] overflow-y-auto bg-black/60 animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => setShowLegend(false)}>
           <div className="flex min-h-full items-center justify-center p-4">
           <div className="bg-white rounded shadow-2xl w-full max-w-sm p-6 border-t-4 border-info animate-slide-up relative" onClick={(e) => e.stopPropagation()}>
             <button type="button" onClick={() => setShowLegend(false)} className="absolute top-4 right-4 text-gray-400 hover:text-danger transition-colors"><X size={20}/></button>
