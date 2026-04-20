@@ -92,38 +92,53 @@ main {
   animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
-/* ─── MODAL SAFE-AREA + NAV-CHROME INSETS ───
-   Every popup/modal in the app uses the pattern
-     <div className="fixed inset-0 ... animate-fade-in">
-   on its outer wrapper. `fixed inset-0` covers the full viewport,
-   including the iOS dynamic-island/notch and the home-indicator
-   bar — AND the fixed app chrome (3.5rem navy header at the top,
-   3.5rem nav bar at the bottom).
+/* ─── MODAL CHROME-INSET SCROLL REGION ───
+   Every popup/modal in the app uses the shared structure:
+     <div className="fixed inset-0 ... overflow-y-auto animate-fade-in">   ← overlay
+       <div className="flex min-h-full items-center justify-center p-4">  ← scroll content
+         <div className="card">...</div>
+       </div>
+     </div>
 
-   Without padding here, a tall modal's scroll content extends into
-   the header/nav bands, and on mobile browsers where stacking
-   contexts get fussy (backdrop-filter on the bottom nav, fixed
-   ancestors, iOS Safari quirks) the chrome can actually paint
-   over the modal content. Padding keeps modal content in the
-   middle region regardless of z-index stacking behavior.
+   The overlay is `fixed inset-0` so its dimmed backdrop paints the
+   full viewport — including under the 3.5rem navy header and the
+   3.5rem bottom nav. That part we want: the whole app dims when a
+   modal is open.
 
-   The top padding is: notch inset + header height (3.5rem).
-   The bottom padding is: home-indicator inset + nav height
-   (3.5rem).
+   But when the modal card is tall, the OVERLAY itself is the scroll
+   container (overflow-y-auto). That means modal content can scroll
+   right up to the top and bottom edges of the viewport. On paper
+   the overlay's z-[10000] paints above the chrome's z-[9999], but
+   mobile browsers are unreliable about that (backdrop-filter on
+   the bottom nav, iOS Safari quirks with fixed ancestors inside
+   `-webkit-overflow-scrolling: touch` scroll containers), and tall
+   modals ended up with content visually clipped behind the navs.
 
-   `background-color` on the overlay still fills the full viewport
-   (it paints the padded area too), so the dimmed backdrop stays
-   edge-to-edge while the scroll content is inset. Sticky `top: 0`
-   children stick to the top of the padding box — just below the
-   header.
+   Rewire the scroll so the OUTER div just paints the dim backdrop
+   and the INNER flex container is the actual scroll viewport —
+   absolutely positioned to sit between the header and nav. Content
+   physically cannot render in those bands regardless of stacking.
 
-   `.modal-overlay` is the manual escape hatch for wrappers that
-   don't use `animate-fade-in` (e.g. HowardLauncher's custom
-   animation). Attach it explicitly on those. */
+   `background-color` on the overlay still fills edge-to-edge, so
+   the visual dim is unchanged. The attribute-selector specificity
+   (0-2-0) beats Tailwind utility classes (0-1-0), so this wins
+   without !important. */
 [class~="animate-fade-in"][class*="fixed inset-0"],
 .modal-overlay {
-  padding-top: calc(env(safe-area-inset-top, 0px) + 3.5rem);
-  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 3.5rem);
+  /* Overlay no longer scrolls — it's just the dim layer */
+  overflow: hidden;
+}
+
+[class~="animate-fade-in"][class*="fixed inset-0"] > [class*="min-h-full"],
+.modal-overlay > [class*="min-h-full"] {
+  position: absolute;
+  top: calc(env(safe-area-inset-top, 0px) + 3.5rem);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 3.5rem);
+  left: 0;
+  right: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
 }
 
 /* Hide scrollbar for nav tray */
