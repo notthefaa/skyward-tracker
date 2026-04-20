@@ -123,20 +123,20 @@ main {
    the visual dim is unchanged. The attribute-selector specificity
    (0-2-0) beats Tailwind utility classes (0-1-0), so this wins
    without !important. */
-[class~="animate-fade-in"][class*="fixed inset-0"],
+.animate-fade-in.fixed.inset-0,
 .modal-overlay {
   /* Overlay no longer scrolls — it's just the dim layer */
-  overflow: hidden;
+  overflow: hidden !important;
 }
 
-[class~="animate-fade-in"][class*="fixed inset-0"] > [class*="min-h-full"],
-.modal-overlay > [class*="min-h-full"] {
-  position: absolute;
-  top: calc(env(safe-area-inset-top, 0px) + 3.5rem);
-  bottom: calc(env(safe-area-inset-bottom, 0px) + 3.5rem);
-  left: 0;
-  right: 0;
-  overflow-y: auto;
+.animate-fade-in.fixed.inset-0 > .min-h-full,
+.modal-overlay > .min-h-full {
+  position: absolute !important;
+  top: calc(env(safe-area-inset-top, 0px) + 3.5rem) !important;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 3.5rem) !important;
+  left: 0 !important;
+  right: 0 !important;
+  overflow-y: auto !important;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
 }

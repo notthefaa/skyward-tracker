@@ -18,7 +18,28 @@ import SquawksTab from "@/components/tabs/SquawksTab";
 import SectionSelector from "@/components/shell/SectionSelector";
 import { MX_ADS_SELECTOR_ITEMS, emitMxAdsNavigate } from "@/components/shell/mxAdsNav";
 
-export default function MaintenanceTab({ 
+/** Shared labels so the Maintenance-tab banner and the Service-subtab
+ *  cards describe the same underlying service event with the same
+ *  vocabulary. Previously the banner said "Draft — Review & Send"
+ *  while the Service card showed raw "draft" — same row, two
+ *  different reads. */
+const mxEventStatusLabel = (s: string) =>
+  ({ draft: 'Draft — Review & Send', scheduling: 'Scheduling', confirmed: 'Confirmed', in_progress: 'In Progress', ready_for_pickup: 'Ready for Pickup', complete: 'Complete', cancelled: 'Cancelled' }[s] || s);
+
+const mxEventStatusBgClass = (s: string) =>
+  ({ draft: 'bg-mxOrange', scheduling: 'bg-gray-500', confirmed: 'bg-info', in_progress: 'bg-[#56B94A]', ready_for_pickup: 'bg-[#56B94A]', complete: 'bg-[#56B94A]', cancelled: 'bg-danger' }[s] || 'bg-gray-400');
+
+/** One-line summary to pair with the status chip. Drafts show the
+ *  "Work Package Ready for Review" prompt instead of a date; other
+ *  statuses show the date/proposal they carry. */
+const mxEventSummary = (ev: any) => {
+  if (ev.status === 'draft') return 'Work Package Ready for Review';
+  if (ev.confirmed_date) return `Service: ${ev.confirmed_date}`;
+  if (ev.proposed_date) return `Proposed: ${ev.proposed_date}${ev.proposed_by ? ` (by ${ev.proposed_by})` : ''}`;
+  return 'Awaiting date';
+};
+
+export default function MaintenanceTab({
   aircraft, role, aircraftRole, onGroundedStatusChange, sysSettings, session, userInitials, initialSubTab
 }: { 
   aircraft: AircraftWithMetrics | null, 
@@ -274,8 +295,8 @@ export default function MaintenanceTab({
 
   if (!aircraft) return null;
 
-  const statusLabel = (s: string) => ({ draft: 'Draft — Review & Send', scheduling: 'Scheduling', confirmed: 'Confirmed', in_progress: 'In Progress', ready_for_pickup: 'Ready for Pickup', cancelled: 'Cancelled' }[s] || s);
-  const statusColor = (s: string) => ({ draft: 'bg-mxOrange', scheduling: 'bg-gray-500', confirmed: 'bg-info', in_progress: 'bg-[#56B94A]', ready_for_pickup: 'bg-[#56B94A]', cancelled: 'bg-danger' }[s] || 'bg-gray-400');
+  const statusLabel = mxEventStatusLabel;
+  const statusColor = mxEventStatusBgClass;
 
   /** Format interval for display in needs-setup items */
   const formatItemInterval = (item: any): string => {
@@ -347,7 +368,7 @@ export default function MaintenanceTab({
                   <div className="flex justify-between items-start">
                     <div>
                       <span className={`text-[8px] font-bold uppercase tracking-widest px-2 py-0.5 rounded text-white ${statusColor(ev.status)}`}>{statusLabel(ev.status)}</span>
-                      <p className="font-oswald font-bold text-navy text-sm mt-2">{ev.status === 'draft' ? 'Work Package Ready for Review' : ev.confirmed_date ? `Service: ${ev.confirmed_date}` : ev.proposed_date ? `Proposed: ${ev.proposed_date} (by ${ev.proposed_by})` : 'Awaiting Date'}</p>
+                      <p className="font-oswald font-bold text-navy text-sm mt-2">{mxEventSummary(ev)}</p>
                       {ev.estimated_completion && <p className="text-[10px] text-gray-500 mt-1">Est. completion: {ev.estimated_completion}</p>}
                       <p className="text-[10px] text-gray-400 mt-1">MX Contact: {ev.mx_contact_name || 'N/A'}</p>
                     </div>
@@ -641,11 +662,6 @@ function ServiceEventsList({
       : ev.status === 'complete' ? '#56B94A'
       : ev.status === 'cancelled' ? '#CE3732'
       : '#9CA3AF';
-    const dateLabel = ev.confirmed_date
-      ? `Service: ${ev.confirmed_date}`
-      : ev.proposed_date
-      ? `Proposed: ${ev.proposed_date}`
-      : 'Awaiting date';
     return (
       <div
         key={ev.id}
@@ -658,9 +674,9 @@ function ServiceEventsList({
             className="text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded text-white inline-block"
             style={{ backgroundColor: statusColor }}
           >
-            {ev.status.replace(/_/g, ' ')}
+            {mxEventStatusLabel(ev.status)}
           </span>
-          <p className="font-oswald font-bold text-navy text-sm mt-2 truncate">{dateLabel}</p>
+          <p className="font-oswald font-bold text-navy text-sm mt-2 truncate">{mxEventSummary(ev)}</p>
           {ev.estimated_completion && (
             <p className="text-[10px] text-gray-500 mt-0.5">Est. completion: {ev.estimated_completion}</p>
           )}
