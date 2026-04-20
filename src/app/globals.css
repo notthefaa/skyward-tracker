@@ -4,8 +4,17 @@
   /* Brand Colors */
   --color-navy: #091F3C;
   --color-cream: #FDFCF4;
-  --color-brandOrange: #E68E2D;
-  --color-brandOrange-alt: #FF8C00;
+
+  /* brandOrange is the sunset tone that anchors Howard's persona and the
+     overall brand identity. Use this for Howard accents, the primary FAB,
+     and any "branded" surface. */
+  --color-brandOrange: #e6651b;
+
+  /* mxOrange is the single maintenance tone — borders, icons, buttons, and
+     status chips that signal "maintenance context." Distinct from
+     brandOrange on purpose: mx is task-colored; brand is identity-colored. */
+  --color-mxOrange: #F08B46;
+
   --color-brandYellow: #F4C458;
   --color-success: #56B94A;
   --color-slateGray: #525659;
