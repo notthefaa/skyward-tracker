@@ -339,7 +339,11 @@ export default function MaintenanceTab({
           {canEditMx && activeEvents.length > 0 && (
             <div className="mb-4 space-y-2">
               {activeEvents.map(ev => (
-                <div key={ev.id} className={`bg-white shadow-lg rounded-sm p-4 border-t-4 ${ev.status === 'draft' ? 'border-mxOrange' : ev.status === 'confirmed' ? 'border-info' : ev.status === 'in_progress' || ev.status === 'ready_for_pickup' ? 'border-[#56B94A]' : 'border-gray-400'}`}>
+                <div
+                  key={ev.id}
+                  onClick={() => setShowServiceModal(true)}
+                  className={`bg-white shadow-lg rounded-sm p-4 border-t-4 cursor-pointer hover:shadow-xl active:scale-[0.99] transition-all ${ev.status === 'draft' ? 'border-mxOrange' : ev.status === 'confirmed' ? 'border-info' : ev.status === 'in_progress' || ev.status === 'ready_for_pickup' ? 'border-[#56B94A]' : 'border-gray-400'}`}
+                >
                   <div className="flex justify-between items-start">
                     <div>
                       <span className={`text-[8px] font-bold uppercase tracking-widest px-2 py-0.5 rounded text-white ${statusColor(ev.status)}`}>{statusLabel(ev.status)}</span>
@@ -348,9 +352,9 @@ export default function MaintenanceTab({
                       <p className="text-[10px] text-gray-400 mt-1">MX Contact: {ev.mx_contact_name || 'N/A'}</p>
                     </div>
                     <div className="flex flex-col gap-2 items-end shrink-0 ml-3">
-                      <button onClick={() => setShowServiceModal(true)} className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-info bg-blue-50 border border-blue-200 px-2.5 py-1.5 rounded transition-colors active:scale-95">View <ChevronRight size={12} /></button>
-                      {ev.status !== 'draft' && <button onClick={() => setConfirmResendId(ev.id)} disabled={resendingEventId === ev.id} className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-mxOrange bg-orange-50 border border-orange-200 px-2.5 py-1.5 rounded transition-colors active:scale-95 disabled:opacity-50"><Send size={10} /> {resendingEventId === ev.id ? '...' : 'Resend'}</button>}
-                      {ev.access_token && ev.status !== 'draft' && <a href={`/service/${ev.access_token}`} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-navy bg-gray-50 border border-gray-200 px-2.5 py-1.5 rounded transition-colors active:scale-95"><ExternalLink size={10} /> Portal</a>}
+                      <button onClick={(e) => { e.stopPropagation(); setShowServiceModal(true); }} className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-info bg-blue-50 border border-blue-200 px-2.5 py-1.5 rounded transition-colors active:scale-95">View <ChevronRight size={12} /></button>
+                      {ev.status !== 'draft' && <button onClick={(e) => { e.stopPropagation(); setConfirmResendId(ev.id); }} disabled={resendingEventId === ev.id} className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-mxOrange bg-orange-50 border border-orange-200 px-2.5 py-1.5 rounded transition-colors active:scale-95 disabled:opacity-50"><Send size={10} /> {resendingEventId === ev.id ? '...' : 'Resend'}</button>}
+                      {ev.access_token && ev.status !== 'draft' && <a href={`/service/${ev.access_token}`} onClick={(e) => e.stopPropagation()} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-navy bg-gray-50 border border-gray-200 px-2.5 py-1.5 rounded transition-colors active:scale-95"><ExternalLink size={10} /> Portal</a>}
                     </div>
                   </div>
                 </div>
@@ -372,7 +376,11 @@ export default function MaintenanceTab({
               </div>
               <div className="space-y-2">
                 {needsSetupItems.map(item => (
-                  <div key={item.id} className="p-3 border border-orange-200 bg-white rounded flex justify-between items-center">
+                  <div
+                    key={item.id}
+                    onClick={() => canEditMx && openMxForm(item)}
+                    className={`p-3 border border-orange-200 bg-white rounded flex justify-between items-center ${canEditMx ? 'cursor-pointer hover:bg-orange-50 active:scale-[0.99] transition-all' : ''}`}
+                  >
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <h4 className="font-oswald font-bold uppercase text-sm text-navy truncate">{item.item_name}</h4>
@@ -387,8 +395,8 @@ export default function MaintenanceTab({
                     </div>
                     {canEditMx && (
                       <div className="flex gap-3 pl-3 shrink-0">
-                        <button onClick={() => openMxForm(item)} className="text-mxOrange hover:text-orange-600 transition-colors active:scale-95" title="Configure"><Edit2 size={16}/></button>
-                        <button onClick={() => deleteMxItem(item.id)} className="text-gray-400 hover:text-danger transition-colors active:scale-95"><Trash2 size={16}/></button>
+                        <button onClick={(e) => { e.stopPropagation(); openMxForm(item); }} className="text-mxOrange hover:text-orange-600 transition-colors active:scale-95" title="Configure"><Edit2 size={16}/></button>
+                        <button onClick={(e) => { e.stopPropagation(); deleteMxItem(item.id); }} className="text-gray-400 hover:text-danger transition-colors active:scale-95"><Trash2 size={16}/></button>
                       </div>
                     )}
                   </div>
@@ -415,8 +423,15 @@ export default function MaintenanceTab({
               const containerClass = processed.isExpired
                 ? (item.is_required ? 'bg-red-50 border-red-200' : 'bg-orange-50 border-orange-200')
                 : 'bg-white border-gray-200';
+              const hoverClass = processed.isExpired
+                ? (item.is_required ? 'hover:bg-red-100' : 'hover:bg-orange-100')
+                : 'hover:bg-gray-50';
               return (
-                <div key={item.id} className={`p-4 border rounded flex justify-between items-center ${containerClass}`}>
+                <div
+                  key={item.id}
+                  onClick={() => canEditMx && openMxForm(item)}
+                  className={`p-4 border rounded flex justify-between items-center ${containerClass} ${canEditMx ? `cursor-pointer ${hoverClass} active:scale-[0.99] transition-all` : ''}`}
+                >
                   <div className="w-full">
                     <div className="flex items-center gap-2">
                       <h4 className={`font-oswald font-bold uppercase text-sm ${processed.isExpired ? 'text-danger' : 'text-navy'}`}>{item.item_name}</h4>
@@ -427,15 +442,15 @@ export default function MaintenanceTab({
                       <div className="mt-3 bg-red-50 border border-red-200 p-3 rounded w-full max-w-sm">
                         <p className="text-[10px] text-danger font-bold uppercase mb-1 leading-tight">Heads up — coming due based on recent flying</p>
                         <p className="text-[10px] text-danger mb-2 leading-tight" title="How sure we are about the projection, based on how much recent flight history we have to work with.">Forecast confidence: {aircraft.confidenceScore || 0}% <span className="opacity-60">(from recent flight activity)</span></p>
-                        <button onClick={() => handleManualMxTrigger(item)} disabled={isSubmitting} className="w-full bg-danger text-white text-[10px] font-bold uppercase px-3 py-2 rounded shadow active:scale-95 transition-transform disabled:opacity-50">Review &amp; Schedule</button>
+                        <button onClick={(e) => { e.stopPropagation(); handleManualMxTrigger(item); }} disabled={isSubmitting} className="w-full bg-danger text-white text-[10px] font-bold uppercase px-3 py-2 rounded shadow active:scale-95 transition-transform disabled:opacity-50">Review &amp; Schedule</button>
                       </div>
                     )}
                   </div>
                   <div className="flex items-center gap-3 pl-4 shrink-0">
                     {canEditMx && (
                       <>
-                        <button onClick={() => openMxForm(item)} className="text-gray-400 hover:text-mxOrange transition-colors active:scale-95"><Edit2 size={16}/></button>
-                        <button onClick={() => deleteMxItem(item.id)} className="text-gray-400 hover:text-danger transition-colors active:scale-95"><Trash2 size={16}/></button>
+                        <button onClick={(e) => { e.stopPropagation(); openMxForm(item); }} className="text-gray-400 hover:text-mxOrange transition-colors active:scale-95"><Edit2 size={16}/></button>
+                        <button onClick={(e) => { e.stopPropagation(); deleteMxItem(item.id); }} className="text-gray-400 hover:text-danger transition-colors active:scale-95"><Trash2 size={16}/></button>
                       </>
                     )}
                   </div>
