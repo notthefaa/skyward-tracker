@@ -43,7 +43,7 @@ export default function PilotOnboarding({
 
   const handleFile = (file: File) => {
     if (!file.type.startsWith('image/')) {
-      showError('Please select an image file.');
+      showError('Pick an image file (JPG or PNG).');
       return;
     }
     const sizeError = validateFileSize(file);
@@ -135,7 +135,7 @@ export default function PilotOnboarding({
       });
       if (!res.ok) {
         const errData = await res.json();
-        throw new Error(errData.error || "Failed to create aircraft.");
+        throw new Error(errData.error || "Couldn't create the aircraft.");
       }
       onSuccess();
     } catch (err: any) {
@@ -158,7 +158,7 @@ export default function PilotOnboarding({
         <div className="bg-cream shadow-2xl rounded-sm w-full max-w-lg p-6 md:p-8 border-t-4 border-[#F08B46] animate-slide-up">
           <div className="text-center mb-8">
             <h2 className="font-oswald text-3xl font-bold uppercase tracking-widest text-navy mb-2">Set Up Your Aircraft</h2>
-            <p className="text-sm text-gray-500 font-roboto">Please enter your aircraft details to initialize your flight log and maintenance tracking.</p>
+            <p className="text-sm text-gray-500 font-roboto">Start with the airplane&apos;s basics. Once it&apos;s set up, flight logs and maintenance tracking kick in.</p>
           </div>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div
@@ -210,7 +210,7 @@ export default function PilotOnboarding({
               <div><label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">Current {newType === 'Turbine' ? 'AFTT' : 'Hobbs'} (Opt)</label><input type="number" step="0.1" value={newAirframeTime} onChange={e => setNewAirframeTime(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none bg-white" placeholder={`Leave blank if no ${newType === 'Turbine' ? 'AFTT' : 'Hobbs'} meter`} /></div>
               <div><label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">Current {newType === 'Turbine' ? 'FTT' : 'Tach'} *</label><input type="number" step="0.1" required value={newEngineTime} onChange={e => setNewEngineTime(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none bg-white" /></div>
             </div>
-            <div className="pt-4"><PrimaryButton disabled={isSubmitting}>{isSubmitting ? "Creating..." : "Create Aircraft & Enter Portal"}</PrimaryButton></div>
+            <div className="pt-4"><PrimaryButton disabled={isSubmitting}>{isSubmitting ? "Creating..." : "Save and start using Skyward"}</PrimaryButton></div>
           </form>
         </div>
       </div>
