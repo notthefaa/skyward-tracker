@@ -180,8 +180,8 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
   const handleSendDraft = async () => {
     if (!selectedEvent) return;
     if (isSubmitting) return;
-    if (wantsToPropose === null) return showWarning("Please choose whether you'd like to propose a date or request availability.");
-    if (wantsToPropose && !proposedDate) return showWarning("Please select a preferred service date or choose 'Request Availability' instead.");
+    if (wantsToPropose === null) return showWarning("Pick a preferred date, or choose 'Request Availability' to let your mechanic propose.");
+    if (wantsToPropose && !proposedDate) return showWarning("Enter a date, or switch to 'Request Availability'.");
     setIsSubmitting(true);
     try {
       // Remove any line items the user unchecked from the draft
@@ -207,7 +207,7 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
       fetchEvents();
       onRefresh();
     } catch (err: any) {
-      showError("Failed to send work package: " + err.message);
+      showError("Couldn't send the work package: " + err.message);
     }
     setIsSubmitting(false);
   };
@@ -239,7 +239,7 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
   const visibleLineItems = eventLineItems.filter(li => !removedLineItemIds.includes(li.id));
 
   const viewTitle = {
-    list: 'Maintenance Events',
+    list: 'Service Events',
     create: 'Schedule Service',
     detail: 'Service Event',
     complete: 'Enter Logbook Data',
@@ -287,7 +287,7 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
           {view === 'review_draft' && selectedEvent && (
             <div className="space-y-6">
               <button onClick={() => handleNavigate('list')} className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-[#F08B46] bg-orange-50 border border-orange-200 rounded px-3 py-1.5 hover:bg-orange-100 active:scale-95 transition-all"><ChevronDown size={12} className="rotate-90" /> Back to Events</button>
-              <div className="bg-orange-50 border border-orange-200 rounded p-4"><p className="text-sm text-navy font-bold mb-1">Draft Work Package</p><p className="text-xs text-gray-600">Review the items below, add or remove as needed, then send to your mechanic. Nothing is sent until you click the button at the bottom.</p></div>
+              <div className="bg-orange-50 border border-orange-200 rounded p-4"><p className="text-sm text-navy font-bold mb-1">Draft Work Package</p><p className="text-xs text-gray-600">Review what's bundled, add or remove items, then send. Nothing goes out to your mechanic until you tap send.</p></div>
 
               {/* Existing line items — removable */}
               {visibleLineItems.length > 0 && (
@@ -311,7 +311,7 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
 
               {visibleLineItems.length === 0 && eventLineItems.length > 0 && (
                 <div className="bg-red-50 border border-red-200 rounded p-3">
-                  <p className="text-xs text-[#CE3732] font-bold text-center">All items removed. Add at least one item below or go back.</p>
+                  <p className="text-xs text-[#CE3732] font-bold text-center">Every item has been removed. Add at least one below, or go back.</p>
                 </div>
               )}
 

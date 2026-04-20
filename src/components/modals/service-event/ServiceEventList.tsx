@@ -97,7 +97,7 @@ export default function ServiceEventList({
       )}
 
       {events.length === 0 && (
-        <p className="text-center text-sm text-gray-400 italic py-4">No maintenance events yet.</p>
+        <p className="text-center text-sm text-gray-400 italic py-4">No service events yet.</p>
       )}
     </div>
   );

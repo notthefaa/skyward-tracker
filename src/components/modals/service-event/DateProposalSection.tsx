@@ -55,7 +55,7 @@ export default function DateProposalSection({ wantsToPropose, setWantsToPropose,
       )}
       {wantsToPropose === false && (
         <div className="animate-fade-in bg-blue-50 border border-blue-200 rounded-lg p-3">
-          <p className="text-xs text-[#3AB0FF] font-bold text-center">The mechanic will propose dates that work for their schedule.</p>
+          <p className="text-xs text-[#3AB0FF] font-bold text-center">Your mechanic will propose dates that fit their shop.</p>
         </div>
       )}
     </div>

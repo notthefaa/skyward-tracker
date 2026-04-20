@@ -53,9 +53,9 @@ export default function ServiceEventCreate({
 
   const handleCreateAndSend = async () => {
     if (isSubmitting || isSavingDraft) return;
-    if (selectedMxIds.length === 0 && selectedSquawkIds.length === 0 && selectedAddons.length === 0) return showWarning("Please select at least one item for the work package.");
-    if (wantsToPropose === null) return showWarning("Please choose whether you'd like to propose a date or request availability.");
-    if (wantsToPropose && !proposedDate) return showWarning("Please select a preferred service date or choose 'Request Availability' instead.");
+    if (selectedMxIds.length === 0 && selectedSquawkIds.length === 0 && selectedAddons.length === 0) return showWarning("Pick at least one item for the work package.");
+    if (wantsToPropose === null) return showWarning("Pick a preferred date, or choose 'Request Availability' to let your mechanic propose.");
+    if (wantsToPropose && !proposedDate) return showWarning("Enter a date, or switch to 'Request Availability'.");
     setIsSubmitting(true);
     // Two-step call. The create step returns an event row; only the
     // send step actually emails the mechanic. If send fails *after*
@@ -89,7 +89,7 @@ export default function ServiceEventCreate({
         onRefresh();
         onNavigate('list');
       } else {
-        showError("Failed to send work package: " + err.message);
+        showError("Couldn't send the work package: " + err.message);
       }
     }
     setIsSubmitting(false);
@@ -97,7 +97,7 @@ export default function ServiceEventCreate({
 
   const handleSaveAsDraft = async () => {
     if (isSubmitting || isSavingDraft) return;
-    if (selectedMxIds.length === 0 && selectedSquawkIds.length === 0 && selectedAddons.length === 0) return showWarning("Please select at least one item for the work package.");
+    if (selectedMxIds.length === 0 && selectedSquawkIds.length === 0 && selectedAddons.length === 0) return showWarning("Pick at least one item for the work package.");
     setIsSavingDraft(true);
     try {
       const res = await authFetch('/api/mx-events/create', { method: 'POST', body: JSON.stringify({ aircraftId: aircraft.id, mxItemIds: selectedMxIds, squawkIds: selectedSquawkIds, addonServices: selectedAddons, proposedDate: (wantsToPropose && proposedDate) ? proposedDate : null }) });
@@ -105,7 +105,7 @@ export default function ServiceEventCreate({
       onRefresh();
       showSuccess("Draft saved");
       onNavigate('list');
-    } catch (err: any) { showError("Failed to save draft: " + err.message); }
+    } catch (err: any) { showError("Couldn't save the draft: " + err.message); }
     setIsSavingDraft(false);
   };
 
@@ -143,7 +143,7 @@ export default function ServiceEventCreate({
       {/* Items already in a draft — shown as non-selectable for awareness */}
       {draftedMxIds.length > 0 && (
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Already in an Existing Draft</p>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Already included in another draft</p>
           <div className="space-y-2">
             {mxItems.filter(mx => draftedMxIds.includes(mx.id)).map(mx => (
               <div key={mx.id} className="p-3 border border-gray-100 rounded bg-gray-50 opacity-50">
@@ -181,7 +181,7 @@ export default function ServiceEventCreate({
 
       {draftedSquawkIds.length > 0 && (
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Squawks Already in a Draft</p>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Squawks already in another draft</p>
           <div className="space-y-2">
             {squawks.filter(sq => draftedSquawkIds.includes(sq.id)).map(sq => (
               <div key={sq.id} className="p-3 border border-gray-100 rounded bg-gray-50 opacity-50">

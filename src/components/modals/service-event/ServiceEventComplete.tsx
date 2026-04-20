@@ -93,7 +93,7 @@ export default function ServiceEventComplete({
       }));
       showSuccess('Logbook entry scanned — review the pre-filled fields below.');
     } catch (err: any) {
-      showError('Scan failed: ' + (err?.message || 'unknown error'));
+      showError("Scan didn't work: " + (err?.message || 'unknown error'));
     } finally {
       setScanningIdx(null);
     }
@@ -101,11 +101,11 @@ export default function ServiceEventComplete({
 
   const handleCompleteItems = async () => {
     const itemsToComplete = completionItems.filter(c => c.markComplete);
-    if (itemsToComplete.length === 0) return showWarning("Please select at least one item to complete.");
+    if (itemsToComplete.length === 0) return showWarning("Check at least one item to mark complete.");
 
     const mxCompletions = itemsToComplete.filter(c => c.item_type === 'maintenance');
     for (const c of mxCompletions) {
-      if (!c.completionDate && !c.completionTime) return showWarning(`Please enter logbook completion data for: ${c.item_name}`);
+      if (!c.completionDate && !c.completionTime) return showWarning(`Enter logbook completion data for: ${c.item_name}`);
     }
 
     setIsSubmitting(true);
@@ -147,7 +147,7 @@ export default function ServiceEventComplete({
         showSuccess(`${itemsToComplete.length} item${itemsToComplete.length > 1 ? 's' : ''} completed — remaining items still open`);
         onNavigate('detail', selectedEvent);
       }
-    } catch (err: any) { showError("Failed to complete items: " + err.message); }
+    } catch (err: any) { showError("Couldn't complete the items: " + err.message); }
     setIsSubmitting(false);
   };
 
@@ -156,7 +156,7 @@ export default function ServiceEventComplete({
       <button onClick={() => onNavigate('detail', selectedEvent)} className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-[#F08B46] bg-orange-50 border border-orange-200 rounded px-3 py-1.5 hover:bg-orange-100 active:scale-95 transition-all">
         <ChevronDown size={12} className="rotate-90" /> Back to Event
       </button>
-      <p className="text-sm text-gray-600">Enter the logbook data from your mechanic&apos;s sign-off. You can complete items individually — uncheck any items you want to leave open for now.</p>
+      <p className="text-sm text-gray-600">Enter the logbook data from your mechanic&apos;s sign-off. Finish items one at a time if you need to — uncheck anything you want to leave open for a later visit.</p>
 
       {completionItems.map((item, idx) => (
         <div key={item.id} className={`border rounded p-4 space-y-3 transition-all ${item.markComplete ? 'bg-gray-50 border-gray-200' : 'bg-gray-50/50 border-gray-100 opacity-60'}`}>
@@ -182,7 +182,7 @@ export default function ServiceEventComplete({
                     ? <><Loader2 size={12} className="animate-spin" /> Scanning...</>
                     : <><Camera size={12} /> Scan logbook entry</>}
                 </button>
-                <span className="text-[9px] text-gray-400">Photo of the mechanic&apos;s signoff — AI reads and pre-fills</span>
+                <span className="text-[9px] text-gray-400">Snap the mechanic&apos;s logbook entry — we&apos;ll pre-fill the fields below.</span>
                 <input
                   ref={el => { scanInputRefs.current[idx] = el; }}
                   type="file"
@@ -253,7 +253,7 @@ export default function ServiceEventComplete({
       ))}
 
       {completionItems.length === 0 && (
-        <p className="text-center text-sm text-gray-400 italic py-4">All items have already been completed or deferred.</p>
+        <p className="text-center text-sm text-gray-400 italic py-4">Every item is either completed or deferred.</p>
       )}
 
       {completionItems.length > 0 && (

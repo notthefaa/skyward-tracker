@@ -41,12 +41,12 @@ export default function ServiceEventDetail({
       setOwnerMessage("");
       await fetchEventDetail(selectedEvent.id);
       showSuccess("Date confirmed");
-    } catch (err) { showError("Failed to confirm date."); }
+    } catch (err) { showError("Couldn't confirm the date."); }
     setIsSubmitting(false);
   };
 
   const handleOwnerCounter = async () => {
-    if (!proposedDate) return showError("Please select a date.");
+    if (!proposedDate) return showError("Pick a date first.");
     setIsSubmitting(true);
     try {
       const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -54,7 +54,7 @@ export default function ServiceEventDetail({
       setOwnerMessage(""); setProposedDate("");
       await fetchEventDetail(selectedEvent.id);
       showSuccess("Counter proposal sent");
-    } catch (err) { showError("Failed to send counter proposal."); }
+    } catch (err) { showError("Couldn't send the counter proposal."); }
     setIsSubmitting(false);
   };
 
@@ -67,7 +67,7 @@ export default function ServiceEventDetail({
       setOwnerMessage("");
       await fetchEventDetail(selectedEvent.id);
       showSuccess("Message sent");
-    } catch (err) { showError("Failed to send message."); }
+    } catch (err) { showError("Couldn't send the message."); }
     setIsSubmitting(false);
   };
 
@@ -80,7 +80,7 @@ export default function ServiceEventDetail({
       onRefresh();
       showSuccess("Service event cancelled");
       onNavigate('list');
-    } catch (err) { showError("Failed to cancel event."); }
+    } catch (err) { showError("Couldn't cancel the event."); }
     setIsSubmitting(false);
   };
 
@@ -92,7 +92,7 @@ export default function ServiceEventDetail({
       onRefresh();
       showSuccess("Service event closed");
       onNavigate('list');
-    } catch (err) { showError("Failed to close event."); }
+    } catch (err) { showError("Couldn't close the event."); }
     setIsSubmitting(false);
   };
 
@@ -244,14 +244,14 @@ export default function ServiceEventDetail({
         <div className="bg-green-50 border-2 border-green-200 rounded p-4 text-center">
           <CheckCircle size={32} className="mx-auto text-[#56B94A] mb-2" />
           <p className="font-oswald text-lg font-bold uppercase tracking-widest text-navy mb-2">All Items Resolved</p>
-          <p className="text-xs text-gray-600 mb-4">Every line item has been completed or deferred. Close this event to finalize.</p>
+          <p className="text-xs text-gray-600 mb-4">Every item is either completed or deferred. Close the event to wrap it up.</p>
           <button onClick={handleCloseEvent} disabled={isSubmitting} className="w-full bg-[#56B94A] text-white font-oswald font-bold uppercase tracking-widest py-3 rounded active:scale-95 disabled:opacity-50">{isSubmitting ? "Closing..." : "Close Service Event"}</button>
         </div>
       )}
 
       {/* Ready for pickup banner */}
       {selectedEvent.status === 'ready_for_pickup' && (
-        <div className="bg-green-50 border-2 border-green-200 rounded p-4 text-center"><Plane size={32} className="mx-auto text-[#56B94A] mb-2" /><p className="font-oswald text-lg font-bold uppercase tracking-widest text-navy">Aircraft Ready</p><p className="text-sm text-gray-600 mt-1">Your mechanic has marked all work as complete. Enter logbook data above to finalize.</p></div>
+        <div className="bg-green-50 border-2 border-green-200 rounded p-4 text-center"><Plane size={32} className="mx-auto text-[#56B94A] mb-2" /><p className="font-oswald text-lg font-bold uppercase tracking-widest text-navy">Aircraft Ready</p><p className="text-sm text-gray-600 mt-1">Your mechanic marked every item complete. Enter logbook data above to finish out the event.</p></div>
       )}
       {selectedEvent.status === 'cancelled' && (
         <div className="bg-red-50 border-2 border-red-200 rounded p-4 text-center"><XCircle size={32} className="mx-auto text-[#CE3732] mb-2" /><p className="font-oswald text-lg font-bold uppercase tracking-widest text-navy">Event Cancelled</p></div>
@@ -263,8 +263,8 @@ export default function ServiceEventDetail({
       )}
       {showCancelConfirm && (
         <div className="bg-red-50 border-2 border-red-200 rounded p-4 space-y-3 animate-fade-in">
-          <p className="text-sm font-bold text-navy">Are you sure you want to cancel this service event?</p>
-          <textarea value={cancelReason} onChange={e => setCancelReason(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-2 text-sm focus:border-[#CE3732] outline-none min-h-[50px]" placeholder="Reason for cancellation (optional)..." />
+          <p className="text-sm font-bold text-navy">Cancel this service event?</p>
+          <textarea value={cancelReason} onChange={e => setCancelReason(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-2 text-sm focus:border-[#CE3732] outline-none min-h-[50px]" placeholder="Reason for the cancellation (optional) — your mechanic will see this." />
           <div className="flex gap-2">
             <button onClick={() => { setShowCancelConfirm(false); setCancelReason(""); }} className="flex-1 border border-gray-300 text-gray-600 font-oswald font-bold uppercase tracking-widest py-2 rounded text-xs active:scale-95">Keep Event</button>
             <button onClick={handleCancelEvent} disabled={isSubmitting} className="flex-1 bg-[#CE3732] text-white font-oswald font-bold uppercase tracking-widest py-2 rounded text-xs active:scale-95 disabled:opacity-50">{isSubmitting ? "Cancelling..." : "Cancel Event"}</button>

@@ -42,7 +42,7 @@ export default function EmailPreview({ aircraft, mxItems, squawks, selectedAddon
         <p className="text-navy">Hello {aircraft.mx_contact || ''},</p>
         <p className="text-gray-600">We&apos;d like to schedule service for <strong>{aircraft.tail_number}</strong> ({aircraft.aircraft_type}).</p>
         {proposedDate && <p className="text-navy font-bold">Requested Service Date: {proposedDate}</p>}
-        {!proposedDate && <p className="text-gray-500 italic">No preferred date — please propose dates that work for your schedule.</p>}
+        {!proposedDate && <p className="text-gray-500 italic">No preferred date on our end — propose dates that work for your shop.</p>}
         {allMx.length > 0 && <div><p className="text-[10px] font-bold uppercase tracking-widest text-[#F08B46] mb-1">Maintenance Items Due</p>{allMx.map((m, i) => <p key={i} className="text-navy ml-3">• <strong>{m.name}</strong>{m.desc ? ` — ${m.desc}` : ''}</p>)}</div>}
         {allSq.length > 0 && <div><p className="text-[10px] font-bold uppercase tracking-widest text-[#CE3732] mb-1">Squawks</p>{allSq.map((s, i) => <p key={i} className="text-navy ml-3">• <strong>{s.name}</strong>{s.desc ? ` — ${s.desc}` : ''}</p>)}</div>}
         {allAddons.length > 0 && <div><p className="text-[10px] font-bold uppercase tracking-widest text-[#3AB0FF] mb-1">Additional Services</p>{allAddons.map((a, i) => <p key={i} className="text-navy ml-3">• {a}</p>)}</div>}
