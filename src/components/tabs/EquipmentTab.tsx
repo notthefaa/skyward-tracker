@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { authFetch } from "@/lib/authFetch";
 import useSWR from "swr";
 import { Plus, X, Edit2, Trash2, Power, PowerOff, Plane, Radio, Gauge, Wind, ShieldCheck } from "lucide-react";
-import { PrimaryButton } from "@/components/AppButtons";
+import { PrimaryButton, SecondaryButton } from "@/components/AppButtons";
 import { useToast } from "@/components/ToastProvider";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { useModalScrollLock } from "@/hooks/useModalScrollLock";
@@ -13,7 +13,7 @@ import { swrKeys } from "@/lib/swrKeys";
 import type { AircraftWithMetrics, AircraftEquipment, EquipmentCategory, AircraftRole } from "@/lib/types";
 import SectionSelector from "@/components/shell/SectionSelector";
 import { MORE_SELECTOR_ITEMS, emitMoreNavigate } from "@/components/shell/moreNav";
-import { EQUIPMENT_MAKES, filterCatalog, findCatalogEntry } from "@/lib/equipmentCatalog";
+import { EQUIPMENT_MAKES, findCatalogEntry, searchCatalog, type EquipmentCatalogEntry } from "@/lib/equipmentCatalog";
 
 const CATEGORIES: Array<{ value: EquipmentCategory; label: string }> = [
   { value: 'engine', label: 'Engine' },
@@ -118,6 +118,15 @@ export default function EquipmentTab({ aircraft, role, aircraftRole }: Props) {
   const [fAltimeterDueDate, setFAltimeterDueDate] = useState("");
   const [fNotes, setFNotes] = useState("");
 
+  // Catalog combobox state. Native <datalist> was unreliable on mobile
+  // and filtered Model options by value (= model number) so typing a
+  // manufacturer name like "Continental" returned nothing. This
+  // visible combobox searches make+model together and auto-fills the
+  // form on select.
+  const [catalogQuery, setCatalogQuery] = useState("");
+  const [catalogOpen, setCatalogOpen] = useState(false);
+  const catalogResults = useMemo(() => searchCatalog(catalogQuery, 8), [catalogQuery]);
+
   // Close any open edit/create modal on aircraft switch so the pilot
   // can't accidentally save an equipment row onto the wrong tail.
   useEffect(() => {
@@ -132,6 +141,7 @@ export default function EquipmentTab({ aircraft, role, aircraftRole }: Props) {
     setFEltBatteryExpires('');
     setFPitotStaticDueDate(''); setFTransponderDueDate(''); setFAltimeterDueDate('');
     setFNotes('');
+    setCatalogQuery(''); setCatalogOpen(false);
   }, [aircraft?.id]);
 
   useModalScrollLock(showForm);
@@ -144,6 +154,24 @@ export default function EquipmentTab({ aircraft, role, aircraftRole }: Props) {
     setFEltBatteryExpires("");
     setFPitotStaticDueDate(""); setFTransponderDueDate(""); setFAltimeterDueDate("");
     setFNotes("");
+    setCatalogQuery(""); setCatalogOpen(false);
+  };
+
+  /** Catalog combobox pick. Fills every field the catalog knows about
+   * — including capability flags that are no longer exposed as
+   * checkboxes — and clears the query so the pilot sees the populated
+   * fields below confirming the match landed. */
+  const pickFromCatalog = (entry: EquipmentCatalogEntry) => {
+    setFMake(entry.make);
+    setFModel(entry.model);
+    setFCategory(entry.category);
+    setFIfrCapable(!!entry.ifr_capable);
+    setFAdsbOut(!!entry.adsb_out);
+    setFAdsbIn(!!entry.adsb_in);
+    setFTransponderClass(entry.transponder_class || "");
+    if (!fName.trim()) setFName(`${entry.make} ${entry.model}`);
+    setCatalogQuery("");
+    setCatalogOpen(false);
   };
 
   const openAdd = () => { resetForm(); setShowForm(true); };
@@ -373,6 +401,49 @@ export default function EquipmentTab({ aircraft, role, aircraftRole }: Props) {
                   <label className="text-[10px] font-bold uppercase tracking-widest text-navy block">Name *</label>
                   <input type="text" required value={fName} onChange={e => setFName(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#56B94A] outline-none" placeholder="e.g. Primary Transponder" />
                 </div>
+                <div className="relative">
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-navy block">Quick fill from catalog</label>
+                  <input
+                    type="text"
+                    value={catalogQuery}
+                    onChange={e => { setCatalogQuery(e.target.value); setCatalogOpen(true); }}
+                    onFocus={() => setCatalogOpen(true)}
+                    onBlur={() => setCatalogOpen(false)}
+                    style={INPUT_WHITE_BG}
+                    className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#56B94A] outline-none"
+                    placeholder="Search make or model — e.g. Continental IO-360"
+                  />
+                  {catalogOpen && catalogQuery.trim() !== '' && (
+                    <div className="absolute left-0 right-0 top-full mt-1 z-20 bg-white border border-gray-300 rounded shadow-lg max-h-64 overflow-y-auto">
+                      {catalogResults.length === 0 ? (
+                        <div className="px-3 py-2 text-xs text-gray-500 italic">Not in the catalog — fill the fields manually below.</div>
+                      ) : (
+                        catalogResults.map(entry => {
+                          const catLabel = CATEGORIES.find(c => c.value === entry.category)?.label || entry.category;
+                          return (
+                            // onMouseDown + preventDefault fires before the
+                            // input's blur, keeping focus long enough for
+                            // the pick handler to run. Plain onClick would
+                            // race the blur-close and often miss.
+                            <button
+                              key={`${entry.make}-${entry.model}`}
+                              type="button"
+                              onMouseDown={ev => { ev.preventDefault(); pickFromCatalog(entry); }}
+                              className="w-full text-left px-3 py-2 hover:bg-gray-50 flex items-center justify-between gap-2 border-b border-gray-100 last:border-0"
+                            >
+                              <span className="text-sm">
+                                <span className="font-bold text-navy">{entry.make}</span>{' '}
+                                <span className="text-gray-700">{entry.model}</span>
+                              </span>
+                              <span className="text-[9px] font-bold uppercase tracking-widest text-gray-500 shrink-0">{catLabel}</span>
+                            </button>
+                          );
+                        })
+                      )}
+                    </div>
+                  )}
+                  <p className="text-[10px] text-gray-500 mt-1">Picks a make + model and fills everything it knows. Skip this for equipment not in the catalog.</p>
+                </div>
                 <div>
                   <label className="text-[10px] font-bold uppercase tracking-widest text-navy block">Category *</label>
                   <select required value={fCategory} onChange={e => setFCategory(e.target.value as EquipmentCategory)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#56B94A] outline-none">
@@ -399,18 +470,12 @@ export default function EquipmentTab({ aircraft, role, aircraftRole }: Props) {
                     <label className="text-[10px] font-bold uppercase tracking-widest text-navy block">Model</label>
                     <input
                       type="text"
-                      list="equipment-model-options"
                       value={fModel}
                       onChange={e => { setFModel(e.target.value); applyCatalogMatch(e.target.value, fMake); }}
                       style={INPUT_WHITE_BG}
                       className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#56B94A] outline-none"
                       placeholder="GTX 345"
                     />
-                    <datalist id="equipment-model-options">
-                      {filterCatalog(fCategory, fMake).map(entry => (
-                        <option key={`${entry.make}-${entry.model}`} value={entry.model}>{entry.make}</option>
-                      ))}
-                    </datalist>
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
@@ -444,8 +509,10 @@ export default function EquipmentTab({ aircraft, role, aircraftRole }: Props) {
                 </div>
 
                 <div className="pt-2 flex gap-2">
-                  <button type="button" onClick={() => setShowForm(false)} className="flex-1 border border-gray-300 text-gray-600 font-oswald font-bold uppercase tracking-widest py-3 rounded text-xs active:scale-95">Cancel</button>
-                  <PrimaryButton disabled={isSubmitting}>{isSubmitting ? "Saving..." : editingId ? "Update" : "Add Equipment"}</PrimaryButton>
+                  <SecondaryButton onClick={() => setShowForm(false)} className="flex-1">Cancel</SecondaryButton>
+                  <div className="flex-1">
+                    <PrimaryButton disabled={isSubmitting}>{isSubmitting ? "Saving..." : editingId ? "Update" : "Add Equipment"}</PrimaryButton>
+                  </div>
                 </div>
               </form>
             </div>
