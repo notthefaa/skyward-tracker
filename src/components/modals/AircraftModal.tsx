@@ -31,6 +31,8 @@ export default function AircraftModal({
   const { showError, showWarning } = useToast();
   const [newTail, setNewTail] = useState("");
   const [newSerial, setNewSerial] = useState("");
+  const [newMake, setNewMake] = useState("");
+  const [newTypeCert, setNewTypeCert] = useState("");
   const [newModel, setNewModel] = useState("");
   const [newType, setNewType] = useState<'Piston' | 'Turbine'>('Piston');
   const [newAirframeTime, setNewAirframeTime] = useState("");
@@ -76,9 +78,11 @@ export default function AircraftModal({
 
   useEffect(() => {
     if (existingAircraft) {
-      setNewTail(existingAircraft.tail_number); 
-      setNewSerial(existingAircraft.serial_number || ""); 
-      setNewModel(existingAircraft.aircraft_type); 
+      setNewTail(existingAircraft.tail_number);
+      setNewSerial(existingAircraft.serial_number || "");
+      setNewMake(existingAircraft.make || "");
+      setNewTypeCert(existingAircraft.type_certificate || "");
+      setNewModel(existingAircraft.aircraft_type);
       setNewType(existingAircraft.engine_type); 
 
       if (existingAircraft.engine_type === 'Turbine') {
@@ -200,6 +204,8 @@ export default function AircraftModal({
     const basePayload: Record<string, any> = {
       tail_number: newTail.toUpperCase(),
       serial_number: newSerial,
+      make: newMake.trim() || null,
+      type_certificate: newTypeCert.trim() || null,
       aircraft_type: newModel,
       engine_type: newType,
       home_airport: newHomeAirport,
@@ -459,7 +465,18 @@ export default function AircraftModal({
               <input type="text" value={newSerial} onChange={e => setNewSerial(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 uppercase focus:border-mxOrange outline-none" />
             </div>
           </div>
-          
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Make</label>
+              <input type="text" value={newMake} onChange={e => setNewMake(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none" placeholder="Cessna, Piper, ..." />
+            </div>
+            <div>
+              <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Type Cert</label>
+              <input type="text" value={newTypeCert} onChange={e => setNewTypeCert(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 uppercase focus:border-mxOrange outline-none" placeholder="A13WE (optional)" />
+            </div>
+          </div>
+
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Model Name</label>

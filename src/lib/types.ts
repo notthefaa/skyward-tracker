@@ -32,6 +32,9 @@ export interface Aircraft {
   make?: string | null;
   model?: string | null;
   year_mfg?: number | null;
+  /** FAA Type Certificate number (e.g. "A13WE"). Optional. Improves
+   *  AD matching accuracy when the make name drifts between TC holders. */
+  type_certificate?: string | null;
   is_ifr_equipped?: boolean | null;
   is_for_hire?: boolean | null;
 }
@@ -98,6 +101,12 @@ export interface AirworthinessDirective {
   notes?: string | null;
   affects_airworthiness: boolean;
   synced_at?: string | null;
+  /** Per-aircraft applicability verdict. 'applies' = serial/engine in range,
+   *  'does_not_apply' = out of range, 'review_required' = matched make/model
+   *  but serial-level check was ambiguous. Null = never checked. */
+  applicability_status?: 'applies' | 'does_not_apply' | 'review_required' | null;
+  applicability_reason?: string | null;
+  applicability_checked_at?: string | null;
   created_at: string;
   updated_at: string;
   deleted_at?: string | null;

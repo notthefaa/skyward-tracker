@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { authFetch } from "@/lib/authFetch";
 import useSWR from "swr";
-import { Plus, X, Edit2, Trash2, Download, RefreshCw, ExternalLink, ShieldAlert, CheckCircle, AlertTriangle } from "lucide-react";
+import { Plus, X, Edit2, Trash2, Download, RefreshCw, ExternalLink, ShieldAlert, CheckCircle, AlertTriangle, Sparkles, Info } from "lucide-react";
 import { PrimaryButton } from "@/components/AppButtons";
 import { useToast } from "@/components/ToastProvider";
 import { useConfirm } from "@/components/ConfirmProvider";
@@ -32,6 +32,22 @@ export default function ADsTab({ aircraft, role, aircraftRole }: Props) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [syncYears, setSyncYears] = useState<5 | 10 | 20 | 'all'>(5);
+  const [checkingId, setCheckingId] = useState<string | null>(null);
+
+  // Equipment for missing-info banner. Also drives the engine/prop
+  // match path server-side — warning the pilot when it's incomplete.
+  type EqRow = { id: string; category: string; make: string | null; model: string | null; serial: string | null };
+  const { data: equipmentData } = useSWR(
+    aircraft ? ['equipment', aircraft.id] : null,
+    async () => {
+      const res = await authFetch(`/api/equipment?aircraftId=${aircraft!.id}`);
+      if (!res.ok) return { equipment: [] as EqRow[] };
+      const d = await res.json();
+      return { equipment: (d.equipment || []) as EqRow[] };
+    }
+  );
+  const equipment = equipmentData?.equipment || [];
 
   const { data, mutate } = useSWR(
     aircraft ? swrKeys.ads(aircraft.id) : null,
@@ -168,14 +184,15 @@ export default function ADsTab({ aircraft, role, aircraftRole }: Props) {
     if (!aircraft) return;
     setIsSyncing(true);
     try {
+      const yearsPayload = syncYears === 'all' ? null : syncYears;
       const res = await authFetch('/api/ads/sync', {
         method: 'POST',
-        body: JSON.stringify({ aircraftId: aircraft.id }),
+        body: JSON.stringify({ aircraftId: aircraft.id, years: yearsPayload }),
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error || 'Sync failed');
       await mutate();
-      const { inserted = 0, updated = 0, pruned = 0 } = body;
+      const { inserted = 0, updated = 0, pruned = 0, reviewRequired = 0 } = body;
       if (inserted === 0 && updated === 0 && pruned === 0) {
         showSuccess('Up to date — no new ADs found.');
       } else {
@@ -183,11 +200,48 @@ export default function ADsTab({ aircraft, role, aircraftRole }: Props) {
         if (inserted) parts.push(`${inserted} new`);
         if (updated) parts.push(`${updated} updated`);
         if (pruned) parts.push(`${pruned} removed (no longer applicable)`);
+        if (reviewRequired) parts.push(`${reviewRequired} need review`);
         showSuccess(`Synced: ${parts.join(', ')}.`);
       }
     } catch (err: any) { showError(err.message); }
     finally { setIsSyncing(false); }
   };
+
+  const handleCheckApplicability = async (adId: string) => {
+    setCheckingId(adId);
+    try {
+      const res = await authFetch('/api/ads/check-applicability', {
+        method: 'POST',
+        body: JSON.stringify({ adId }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || "Couldn't check applicability.");
+      await mutate();
+      const label =
+        body.status === 'applies' ? 'Applies to this aircraft' :
+        body.status === 'does_not_apply' ? 'Does not apply' :
+        'Still needs review';
+      showSuccess(`${label}: ${body.reason}`);
+    } catch (err: any) { showError(err.message); }
+    finally { setCheckingId(null); }
+  };
+
+  // Missing-info banner: list fields that, if filled, would improve
+  // AD matching accuracy for this aircraft.
+  const missingFields: string[] = [];
+  if (aircraft) {
+    if (!aircraft.make) missingFields.push('make');
+    if (!aircraft.serial_number) missingFields.push('serial number');
+    if (!aircraft.type_certificate) missingFields.push('type certificate');
+    const engines = equipment.filter(e => e.category === 'engine');
+    if (engines.length === 0) missingFields.push('engine (add via Equipment)');
+    else if (engines.some(e => !e.make || !e.model)) missingFields.push('engine make/model');
+    else if (engines.some(e => !e.serial)) missingFields.push('engine serial');
+    const props = equipment.filter(e => e.category === 'propeller');
+    if (props.length === 0) missingFields.push('propeller (add via Equipment)');
+    else if (props.some(e => !e.make || !e.model)) missingFields.push('propeller make/model');
+    else if (props.some(e => !e.serial)) missingFields.push('propeller serial');
+  }
 
   const handleExport = () => {
     if (!aircraft) return;
@@ -220,6 +274,17 @@ export default function ADsTab({ aircraft, role, aircraftRole }: Props) {
           <span className="text-[10px] font-bold uppercase tracking-widest text-[#7C3AED]">{ads.length} tracked on {aircraft.tail_number}</span>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          <select
+            value={syncYears}
+            onChange={e => setSyncYears(e.target.value === 'all' ? 'all' : parseInt(e.target.value, 10) as 5 | 10 | 20)}
+            className="text-[10px] font-bold uppercase tracking-widest text-navy bg-white border border-gray-300 rounded px-2 py-1 focus:border-[#7C3AED] outline-none"
+            title="How far back to pull ADs"
+          >
+            <option value={5}>Last 5 yrs</option>
+            <option value={10}>Last 10 yrs</option>
+            <option value={20}>Last 20 yrs</option>
+            <option value="all">All history</option>
+          </select>
           <button onClick={handleRefresh} disabled={isSyncing} className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-[#7C3AED] bg-purple-50 border border-purple-200 rounded px-2.5 py-1 hover:bg-purple-100 active:scale-95 disabled:opacity-50">
             <RefreshCw size={12} className={isSyncing ? 'animate-spin' : ''} /> Sync from DRS
           </button>
@@ -232,12 +297,26 @@ export default function ADsTab({ aircraft, role, aircraftRole }: Props) {
         </div>
       </div>
 
+      {/* Missing-info banner — aircraft fields that would improve AD match accuracy */}
+      {missingFields.length > 0 && (
+        <div className="bg-info/5 border border-info/20 rounded p-3 flex items-start gap-2">
+          <Info size={14} className="text-info shrink-0 mt-0.5" />
+          <div className="text-xs text-navy leading-relaxed">
+            <p className="font-bold text-[11px] uppercase tracking-widest text-info mb-1">Improve AD match accuracy</p>
+            <p>
+              Add the following to this aircraft so engine and propeller ADs can be evaluated for your specific
+              equipment: <span className="font-bold">{missingFields.join(', ')}</span>.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Overdue */}
       {overdue.length > 0 && (
         <div className="bg-cream shadow-lg rounded-sm p-4 md:p-6 border-t-4 border-danger">
           <h3 className="font-oswald text-lg font-bold uppercase text-danger mb-4 flex items-center gap-2"><ShieldAlert size={16} /> Overdue ({overdue.length})</h3>
           <div className="space-y-2">
-            {overdue.map(c => renderAdRow(c, canEdit, openEdit, handleDelete))}
+            {overdue.map(c => renderAdRow(c, canEdit, openEdit, handleDelete, handleCheckApplicability, checkingId))}
           </div>
         </div>
       )}
@@ -247,7 +326,7 @@ export default function ADsTab({ aircraft, role, aircraftRole }: Props) {
         <div className="bg-cream shadow-lg rounded-sm p-4 md:p-6 border-t-4 border-mxOrange">
           <h3 className="font-oswald text-lg font-bold uppercase text-mxOrange mb-4 flex items-center gap-2"><AlertTriangle size={16} /> Due Soon ({dueSoon.length})</h3>
           <div className="space-y-2">
-            {dueSoon.map(c => renderAdRow(c, canEdit, openEdit, handleDelete))}
+            {dueSoon.map(c => renderAdRow(c, canEdit, openEdit, handleDelete, handleCheckApplicability, checkingId))}
           </div>
         </div>
       )}
@@ -259,7 +338,7 @@ export default function ADsTab({ aircraft, role, aircraftRole }: Props) {
           <p className="text-sm text-gray-400 italic text-center py-4">No ADs currently compliant.</p>
         ) : (
           <div className="space-y-2">
-            {compliant.map(c => renderAdRow(c, canEdit, openEdit, handleDelete))}
+            {compliant.map(c => renderAdRow(c, canEdit, openEdit, handleDelete, handleCheckApplicability, checkingId))}
           </div>
         )}
       </div>
@@ -270,7 +349,7 @@ export default function ADsTab({ aircraft, role, aircraftRole }: Props) {
           <h3 className="font-oswald text-sm font-bold uppercase text-gray-500 mb-3">Needs compliance data ({untracked.length})</h3>
           <p className="text-xs text-gray-500 mb-3">These ADs were added but don&apos;t yet have compliance dates logged. Handle the <span className="text-danger font-bold">Grounds aircraft</span> ones first — until their compliance is recorded, the aircraft may not be legal to fly.</p>
           <div className="space-y-2">
-            {untracked.map(c => renderAdRow(c, canEdit, openEdit, handleDelete, true))}
+            {untracked.map(c => renderAdRow(c, canEdit, openEdit, handleDelete, handleCheckApplicability, checkingId, true))}
           </div>
         </div>
       )}
@@ -341,15 +420,27 @@ function renderAdRow(
   canEdit: boolean,
   openEdit: (a: AirworthinessDirective) => void,
   handleDelete: (a: AirworthinessDirective) => void,
+  handleCheckApplicability: (adId: string) => void,
+  checkingId: string | null,
   showGroundingPill = false,
 ) {
   const { ad, status, daysOut, hrsOut } = c;
+  const appStatus = ad.applicability_status;
+  const appPill =
+    appStatus === 'applies' ? { label: 'Applies', cls: 'bg-danger/10 text-danger border-danger/30' } :
+    appStatus === 'does_not_apply' ? { label: 'N/A to this aircraft', cls: 'bg-gray-100 text-gray-500 border-gray-200' } :
+    appStatus === 'review_required' ? { label: 'Review required', cls: 'bg-mxOrange/10 text-mxOrange border-mxOrange/30' } :
+    null;
+  const isChecking = checkingId === ad.id;
   return (
     <div key={ad.id} className="bg-white border border-gray-200 rounded p-3 flex items-start gap-3">
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
           <p className="font-oswald font-bold text-sm uppercase text-navy leading-tight">AD {ad.ad_number}</p>
           {ad.source === 'drs_sync' && <span className="text-[8px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-[#7C3AED]/10 text-[#7C3AED] border border-[#7C3AED]/20">DRS</span>}
+          {appPill && (
+            <span className={`text-[8px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded border ${appPill.cls}`}>{appPill.label}</span>
+          )}
           {ad.compliance_type === 'recurring' && <span className="text-[8px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-info/10 text-info border border-info/20">Recurring</span>}
           {showGroundingPill && ad.affects_airworthiness && (
             <span className="text-[8px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-danger/10 text-danger border border-danger/30">Grounds aircraft</span>
@@ -357,6 +448,9 @@ function renderAdRow(
           {!ad.affects_airworthiness && <span className="text-[8px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 border border-gray-200">Non-AW</span>}
         </div>
         <p className="text-sm text-navy mt-1 leading-tight">{ad.subject}</p>
+        {ad.applicability_reason && (
+          <p className="text-[10px] text-gray-500 mt-1 italic">{ad.applicability_reason}</p>
+        )}
         {(ad.next_due_date || ad.next_due_time != null) && (
           <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mt-1">
             {status === 'overdue' ? 'Overdue' : 'Due'}:
@@ -367,9 +461,22 @@ function renderAdRow(
         {ad.compliance_method && (
           <p className="text-[10px] text-gray-500 mt-1 italic">Method: {ad.compliance_method}</p>
         )}
-        {ad.source_url && (
-          <a href={ad.source_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[10px] text-info underline mt-1"><ExternalLink size={10} /> FAA source</a>
-        )}
+        <div className="flex items-center gap-3 mt-1 flex-wrap">
+          {ad.source_url && (
+            <a href={ad.source_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[10px] text-info underline"><ExternalLink size={10} /> FAA source</a>
+          )}
+          {ad.source === 'drs_sync' && appStatus === 'review_required' && canEdit && (
+            <button
+              onClick={() => handleCheckApplicability(ad.id)}
+              disabled={isChecking}
+              className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-[#7C3AED] hover:underline disabled:opacity-50"
+              title="Have Howard parse this AD's applicability against your aircraft's serials and equipment"
+            >
+              <Sparkles size={10} className={isChecking ? 'animate-pulse' : ''} />
+              {isChecking ? 'Checking…' : 'Check applicability'}
+            </button>
+          )}
+        </div>
       </div>
       {canEdit && (
         <div className="flex gap-2 shrink-0">
