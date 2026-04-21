@@ -13,6 +13,7 @@ import { swrKeys } from "@/lib/swrKeys";
 import type { AircraftWithMetrics, AircraftEquipment, EquipmentCategory, AircraftRole } from "@/lib/types";
 import SectionSelector from "@/components/shell/SectionSelector";
 import { MORE_SELECTOR_ITEMS, emitMoreNavigate } from "@/components/shell/moreNav";
+import { EQUIPMENT_MAKES, filterCatalog, findCatalogEntry } from "@/lib/equipmentCatalog";
 
 const CATEGORIES: Array<{ value: EquipmentCategory; label: string }> = [
   { value: 'engine', label: 'Engine' },
@@ -111,7 +112,6 @@ export default function EquipmentTab({ aircraft, role, aircraftRole }: Props) {
   const [fAdsbOut, setFAdsbOut] = useState(false);
   const [fAdsbIn, setFAdsbIn] = useState(false);
   const [fTransponderClass, setFTransponderClass] = useState("");
-  const [fIsElt, setFIsElt] = useState(false);
   const [fEltBatteryExpires, setFEltBatteryExpires] = useState("");
   const [fPitotStaticDueDate, setFPitotStaticDueDate] = useState("");
   const [fTransponderDueDate, setFTransponderDueDate] = useState("");
@@ -129,7 +129,7 @@ export default function EquipmentTab({ aircraft, role, aircraftRole }: Props) {
     setFRemovedAt(''); setFRemovedReason('');
     setFIfrCapable(false); setFAdsbOut(false); setFAdsbIn(false);
     setFTransponderClass('');
-    setFIsElt(false); setFEltBatteryExpires('');
+    setFEltBatteryExpires('');
     setFPitotStaticDueDate(''); setFTransponderDueDate(''); setFAltimeterDueDate('');
     setFNotes('');
   }, [aircraft?.id]);
@@ -141,12 +141,29 @@ export default function EquipmentTab({ aircraft, role, aircraftRole }: Props) {
     setFName(""); setFCategory('avionics'); setFMake(""); setFModel(""); setFSerial(""); setFPartNumber("");
     setFInstalledAt(""); setFInstalledBy(""); setFRemovedAt(""); setFRemovedReason("");
     setFIfrCapable(false); setFAdsbOut(false); setFAdsbIn(false); setFTransponderClass("");
-    setFIsElt(false); setFEltBatteryExpires("");
+    setFEltBatteryExpires("");
     setFPitotStaticDueDate(""); setFTransponderDueDate(""); setFAltimeterDueDate("");
     setFNotes("");
   };
 
   const openAdd = () => { resetForm(); setShowForm(true); };
+
+  /** Look up a catalog match and auto-fill make, category, capability
+   * flags, and (if the Name field is still blank) a reasonable default
+   * name. Called whenever the pilot changes the Make or Model field —
+   * no match means we leave the form alone, so free-form equipment
+   * still works. */
+  const applyCatalogMatch = (model: string, make: string) => {
+    const hit = findCatalogEntry(model, make);
+    if (!hit) return;
+    if (!fMake) setFMake(hit.make);
+    setFCategory(hit.category);
+    setFIfrCapable(!!hit.ifr_capable);
+    setFAdsbOut(!!hit.adsb_out);
+    setFAdsbIn(!!hit.adsb_in);
+    if (hit.transponder_class) setFTransponderClass(hit.transponder_class);
+    if (!fName.trim()) setFName(`${hit.make} ${hit.model}`);
+  };
 
   const openEdit = (e: AircraftEquipment) => {
     setEditingId(e.id);
@@ -157,7 +174,7 @@ export default function EquipmentTab({ aircraft, role, aircraftRole }: Props) {
     setFRemovedAt(e.removed_at || ""); setFRemovedReason(e.removed_reason || "");
     setFIfrCapable(!!e.ifr_capable); setFAdsbOut(!!e.adsb_out); setFAdsbIn(!!e.adsb_in);
     setFTransponderClass(e.transponder_class || "");
-    setFIsElt(!!e.is_elt); setFEltBatteryExpires(e.elt_battery_expires || "");
+    setFEltBatteryExpires(e.elt_battery_expires || "");
     setFPitotStaticDueDate(e.pitot_static_due_date || "");
     setFTransponderDueDate(e.transponder_due_date || "");
     setFAltimeterDueDate(e.altimeter_due_date || "");
@@ -170,6 +187,9 @@ export default function EquipmentTab({ aircraft, role, aircraftRole }: Props) {
     if (!aircraft) return;
     setIsSubmitting(true);
     try {
+      // is_elt is always derived from category — the "This is the ELT"
+      // checkbox was removed from the form because picking category=ELT
+      // already says so. Keep the DB column in sync on every save.
       const payload = {
         name: fName.trim(),
         category: fCategory,
@@ -185,7 +205,7 @@ export default function EquipmentTab({ aircraft, role, aircraftRole }: Props) {
         adsb_out: fAdsbOut,
         adsb_in: fAdsbIn,
         transponder_class: fTransponderClass.trim() || null,
-        is_elt: fIsElt,
+        is_elt: fCategory === 'elt',
         elt_battery_expires: fEltBatteryExpires || null,
         pitot_static_due_date: fPitotStaticDueDate || null,
         transponder_due_date: fTransponderDueDate || null,
@@ -290,7 +310,7 @@ export default function EquipmentTab({ aircraft, role, aircraftRole }: Props) {
                       <p className="font-oswald font-bold text-sm uppercase text-navy leading-tight">{e.name}</p>
                       {e.ifr_capable && <span className="text-[8px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-info/10 text-info border border-info/20">IFR</span>}
                       {e.adsb_out && <span className="text-[8px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-[#56B94A]/10 text-[#56B94A] border border-[#56B94A]/20">ADS-B Out</span>}
-                      {e.is_elt && <span className="text-[8px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-mxOrange/10 text-mxOrange border border-mxOrange/20">ELT</span>}
+                      {(e.is_elt || e.category === 'elt') && <span className="text-[8px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-mxOrange/10 text-mxOrange border border-mxOrange/20">ELT</span>}
                     </div>
                     <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mt-1">
                       {[CATEGORIES.find(c => c.value === e.category)?.label, e.make, e.model, e.serial ? `S/N ${e.serial}` : null].filter(Boolean).join(' · ')}
@@ -360,8 +380,38 @@ export default function EquipmentTab({ aircraft, role, aircraftRole }: Props) {
                   </select>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
-                  <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy block">Make</label><input type="text" value={fMake} onChange={e => setFMake(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#56B94A] outline-none" placeholder="Garmin" /></div>
-                  <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy block">Model</label><input type="text" value={fModel} onChange={e => setFModel(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#56B94A] outline-none" placeholder="GTX 345" /></div>
+                  <div>
+                    <label className="text-[10px] font-bold uppercase tracking-widest text-navy block">Make</label>
+                    <input
+                      type="text"
+                      list="equipment-make-options"
+                      value={fMake}
+                      onChange={e => { setFMake(e.target.value); applyCatalogMatch(fModel, e.target.value); }}
+                      style={INPUT_WHITE_BG}
+                      className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#56B94A] outline-none"
+                      placeholder="Garmin"
+                    />
+                    <datalist id="equipment-make-options">
+                      {EQUIPMENT_MAKES.map(m => <option key={m} value={m} />)}
+                    </datalist>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold uppercase tracking-widest text-navy block">Model</label>
+                    <input
+                      type="text"
+                      list="equipment-model-options"
+                      value={fModel}
+                      onChange={e => { setFModel(e.target.value); applyCatalogMatch(e.target.value, fMake); }}
+                      style={INPUT_WHITE_BG}
+                      className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#56B94A] outline-none"
+                      placeholder="GTX 345"
+                    />
+                    <datalist id="equipment-model-options">
+                      {filterCatalog(fCategory, fMake).map(entry => (
+                        <option key={`${entry.make}-${entry.model}`} value={entry.model}>{entry.make}</option>
+                      ))}
+                    </datalist>
+                  </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy block">Serial</label><input type="text" value={fSerial} onChange={e => setFSerial(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#56B94A] outline-none" /></div>
@@ -372,19 +422,11 @@ export default function EquipmentTab({ aircraft, role, aircraftRole }: Props) {
                   <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy block">Installed By</label><input type="text" value={fInstalledBy} onChange={e => setFInstalledBy(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#56B94A] outline-none" placeholder="A&P name" /></div>
                 </div>
 
-                <div className="bg-gray-50 p-3 rounded border border-gray-200 space-y-2">
-                  <p className="text-[9px] font-bold uppercase tracking-widest text-gray-500">Capability</p>
-                  <label className="flex items-center gap-2 text-xs font-bold text-navy"><input type="checkbox" checked={fIfrCapable} onChange={e => setFIfrCapable(e.target.checked)} /> IFR capable</label>
-                  <label className="flex items-center gap-2 text-xs font-bold text-navy"><input type="checkbox" checked={fAdsbOut} onChange={e => setFAdsbOut(e.target.checked)} /> ADS-B Out</label>
-                  <label className="flex items-center gap-2 text-xs font-bold text-navy"><input type="checkbox" checked={fAdsbIn} onChange={e => setFAdsbIn(e.target.checked)} /> ADS-B In</label>
-                  <label className="flex items-center gap-2 text-xs font-bold text-navy"><input type="checkbox" checked={fIsElt} onChange={e => setFIsElt(e.target.checked)} /> This is the ELT</label>
-                </div>
-
                 {fCategory === 'transponder' && (
                   <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy block">Transponder Class</label><input type="text" value={fTransponderClass} onChange={e => setFTransponderClass(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#56B94A] outline-none" placeholder="e.g. Class 1A Mode S/ES" /></div>
                 )}
 
-                {fIsElt && (
+                {fCategory === 'elt' && (
                   <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy block">ELT Battery Expires</label><input type="date" value={fEltBatteryExpires} onChange={e => setFEltBatteryExpires(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#56B94A] outline-none" /></div>
                 )}
 
