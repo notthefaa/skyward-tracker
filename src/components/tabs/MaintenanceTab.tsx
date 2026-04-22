@@ -101,6 +101,15 @@ export default function MaintenanceTab({
   const [isScanningNewItem, setIsScanningNewItem] = useState(false);
   const [scanPrefillHint, setScanPrefillHint] = useState<string | null>(null);
   const scanNewItemInputRef = useRef<HTMLInputElement | null>(null);
+  // Multi-item scan pipeline: detectedItems holds every item Claude
+  // pulled off the logbook page; pickerSelections is the checkbox
+  // state over that list; editQueue is the ordered list of indices
+  // the pilot committed to (after confirming the picker); queueCursor
+  // tracks which one the form is currently showing.
+  const [detectedItems, setDetectedItems] = useState<any[] | null>(null);
+  const [pickerSelections, setPickerSelections] = useState<boolean[]>([]);
+  const [editQueue, setEditQueue] = useState<number[]>([]);
+  const [queueCursor, setQueueCursor] = useState(0);
 
   // Reset modal + editing state when the aircraft changes — otherwise
   // a partially-edited MX row from Aircraft A would land on Aircraft
@@ -119,6 +128,10 @@ export default function MaintenanceTab({
     setAutomateScheduling(false);
     setIsScanningNewItem(false);
     setScanPrefillHint(null);
+    setDetectedItems(null);
+    setPickerSelections([]);
+    setEditQueue([]);
+    setQueueCursor(0);
   }, [aircraft?.id]);
 
   useModalScrollLock(showMxModal || !!confirmResendId);
@@ -223,14 +236,53 @@ export default function MaintenanceTab({
       setAutomateScheduling(false);
     }
     setScanPrefillHint(null);
+    setDetectedItems(null);
+    setPickerSelections([]);
+    setEditQueue([]);
+    setQueueCursor(0);
     setShowMxModal(true);
   };
 
-  // Scan a logbook entry and prefill the "Track New Item" form.
-  // Only overwrites blank text inputs, so if the pilot has already
-  // typed something we keep their version. Tracking type + required
-  // flag are authoritative from the scan since they're classifications
-  // rather than free text.
+  // Everything below is the multi-item scan pipeline.
+
+  const resetScanAndQueue = () => {
+    setDetectedItems(null);
+    setPickerSelections([]);
+    setEditQueue([]);
+    setQueueCursor(0);
+    setScanPrefillHint(null);
+  };
+
+  // Fully overwrite the form from a detected item. Used when the
+  // pilot has committed to the queue — each iteration is a fresh
+  // item, so preserving prior values would bleed one item's fields
+  // into the next.
+  const prefillFormFromItem = (item: any) => {
+    setMxName(item?.item_name || '');
+    const tt = item?.tracking_type;
+    setMxTrackingType(tt === 'time' || tt === 'date' || tt === 'both' ? tt : 'date');
+    setMxIsRequired(typeof item?.is_required === 'boolean' ? item.is_required : true);
+    setMxLastTime(item?.last_completed_time != null ? String(item.last_completed_time) : '');
+    setMxLastDate(item?.last_completed_date || '');
+    setMxIntervalTime(item?.time_interval != null ? String(item.time_interval) : '');
+    setMxIntervalDays(item?.date_interval_days != null ? String(item.date_interval_days) : '');
+    setMxDueTime('');
+    setMxDueDate('');
+    setAutomateScheduling(false);
+    setScanPrefillHint(
+      item?.work_description
+        ? `Prefilled from scan — ${item.work_description}`
+        : 'Prefilled from scan — review every field before saving.'
+    );
+  };
+
+  // Scan a logbook entry. One entry can describe multiple items, so
+  // we ask for an array and branch:
+  //   0 items → warn, leave the form alone
+  //   1 item  → prefill the form in place, respecting any values the
+  //             pilot has already typed (classifications overwrite)
+  //   N items → open the picker so the pilot chooses which ones to
+  //             track before we walk through them one at a time
   const handleScanForNewItem = async (file: File) => {
     if (!aircraft) return;
     setIsScanningNewItem(true);
@@ -243,29 +295,87 @@ export default function MaintenanceTab({
         const d = await res.json().catch(() => ({}));
         throw new Error(d.error || 'Scan failed');
       }
-      const { fields, warning } = await res.json();
+      const { items, warning } = await res.json();
       if (warning) { showWarning(warning); return; }
 
-      if (fields.item_name && !mxName) setMxName(fields.item_name);
-      if (fields.tracking_type && ['time', 'date', 'both'].includes(fields.tracking_type)) {
-        setMxTrackingType(fields.tracking_type);
+      const detected: any[] = Array.isArray(items) ? items : [];
+      if (detected.length === 0) {
+        showWarning("We couldn't read a trackable item from that page. Try a sharper photo or fill in the form manually.");
+        return;
       }
-      if (typeof fields.is_required === 'boolean') setMxIsRequired(fields.is_required);
-      if (fields.last_completed_time != null && !mxLastTime) setMxLastTime(String(fields.last_completed_time));
-      if (fields.last_completed_date && !mxLastDate) setMxLastDate(fields.last_completed_date);
-      if (fields.time_interval != null && !mxIntervalTime) setMxIntervalTime(String(fields.time_interval));
-      if (fields.date_interval_days != null && !mxIntervalDays) setMxIntervalDays(String(fields.date_interval_days));
-
-      const hint = fields.work_description
-        ? `Prefilled from scan — ${fields.work_description}`
-        : 'Prefilled from scan — review every field before saving.';
-      setScanPrefillHint(hint);
-      showSuccess('Logbook entry scanned — review the fields before saving.');
+      if (detected.length === 1) {
+        const f = detected[0];
+        if (f.item_name && !mxName) setMxName(f.item_name);
+        if (f.tracking_type && ['time', 'date', 'both'].includes(f.tracking_type)) {
+          setMxTrackingType(f.tracking_type);
+        }
+        if (typeof f.is_required === 'boolean') setMxIsRequired(f.is_required);
+        if (f.last_completed_time != null && !mxLastTime) setMxLastTime(String(f.last_completed_time));
+        if (f.last_completed_date && !mxLastDate) setMxLastDate(f.last_completed_date);
+        if (f.time_interval != null && !mxIntervalTime) setMxIntervalTime(String(f.time_interval));
+        if (f.date_interval_days != null && !mxIntervalDays) setMxIntervalDays(String(f.date_interval_days));
+        setScanPrefillHint(
+          f.work_description
+            ? `Prefilled from scan — ${f.work_description}`
+            : 'Prefilled from scan — review every field before saving.'
+        );
+        showSuccess('Logbook entry scanned — review the fields before saving.');
+      } else {
+        setDetectedItems(detected);
+        setPickerSelections(detected.map(() => true));
+        setEditQueue([]);
+        setQueueCursor(0);
+        showSuccess(`Found ${detected.length} items — pick which ones to track.`);
+      }
     } catch (err: any) {
       showError("Scan didn't work: " + (err?.message || 'unknown error'));
     } finally {
       setIsScanningNewItem(false);
     }
+  };
+
+  // Commit picker selection → begin the queue walk-through.
+  const startEditQueue = () => {
+    if (!detectedItems) return;
+    const queue = pickerSelections
+      .map((v, i) => (v ? i : -1))
+      .filter(i => i >= 0);
+    if (queue.length === 0) {
+      showWarning("Select at least one item to track.");
+      return;
+    }
+    setEditQueue(queue);
+    setQueueCursor(0);
+    prefillFormFromItem(detectedItems[queue[0]]);
+  };
+
+  // Advance the queue without saving the current item. Closes the
+  // modal if this was the last one.
+  const skipCurrentQueueItem = () => {
+    const next = queueCursor + 1;
+    if (!detectedItems || next >= editQueue.length) {
+      setShowMxModal(false);
+      resetScanAndQueue();
+      return;
+    }
+    setQueueCursor(next);
+    prefillFormFromItem(detectedItems[editQueue[next]]);
+  };
+
+  // One-liner interval summary for the picker row so the pilot can
+  // tell at a glance what the model inferred before deciding to
+  // include it.
+  const describeDetectedItemInterval = (item: any): string => {
+    const parts: string[] = [];
+    if ((item?.tracking_type === 'time' || item?.tracking_type === 'both') && item?.time_interval) {
+      parts.push(`Every ${item.time_interval} hrs`);
+    }
+    if ((item?.tracking_type === 'date' || item?.tracking_type === 'both') && item?.date_interval_days) {
+      const d = item.date_interval_days;
+      parts.push(d >= 365 ? `Every ${Math.round(d / 365)} year${Math.round(d / 365) > 1 ? 's' : ''}` : `Every ${d} days`);
+    }
+    if (item?.is_required) parts.push('Required');
+    return parts.join(' · ') || 'Interval not detected — you can set it in the next step.';
   };
 
   const handleManualMxTrigger = (item: any) => {
@@ -317,8 +427,22 @@ export default function MaintenanceTab({
         const res = await authFetch('/api/maintenance-items', { method: 'POST', body: JSON.stringify({ aircraftId: aircraft!.id, itemData: payload }) });
         if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || "Couldn't create the maintenance item"); }
       }
-      await mutate(); onGroundedStatusChange(); setShowMxModal(false);
-      showSuccess(editingId ? 'Maintenance item updated.' : 'Maintenance item added.');
+      await mutate(); onGroundedStatusChange();
+      if (!editingId && editQueue.length > 0) {
+        const next = queueCursor + 1;
+        if (next < editQueue.length) {
+          if (detectedItems) prefillFormFromItem(detectedItems[editQueue[next]]);
+          setQueueCursor(next);
+          showSuccess(`Saved (${queueCursor + 1} of ${editQueue.length}).`);
+          return;
+        }
+        setShowMxModal(false);
+        showSuccess(`${editQueue.length} item${editQueue.length > 1 ? 's' : ''} tracked.`);
+        resetScanAndQueue();
+      } else {
+        setShowMxModal(false);
+        showSuccess(editingId ? 'Maintenance item updated.' : 'Maintenance item added.');
+      }
     } catch (err: any) {
       showError(err?.message || "Couldn't save the maintenance item.");
     } finally {
@@ -579,11 +703,72 @@ export default function MaintenanceTab({
             <div className="flex min-h-full items-center justify-center p-3">
               <div className="bg-white rounded shadow-2xl w-full max-w-md p-5 border-t-4 border-mxOrange animate-slide-up">
                 <div className="flex justify-between items-center mb-6">
-                  <h2 className="font-oswald text-2xl font-bold uppercase text-navy">{editingId ? 'Edit Maintenance Item' : 'Track New Item'}</h2>
-                  <button onClick={() => setShowMxModal(false)} className="text-gray-400 hover:text-danger transition-colors"><X size={24}/></button>
+                  <h2 className="font-oswald text-2xl font-bold uppercase text-navy">
+                    {editingId
+                      ? 'Edit Maintenance Item'
+                      : editQueue.length > 0
+                        ? `Track Item (${queueCursor + 1} of ${editQueue.length})`
+                        : detectedItems && editQueue.length === 0
+                          ? 'Items Detected'
+                          : 'Track New Item'}
+                  </h2>
+                  <button onClick={() => { setShowMxModal(false); resetScanAndQueue(); }} className="text-gray-400 hover:text-danger transition-colors"><X size={24}/></button>
                 </div>
+                {detectedItems && editQueue.length === 0 ? (
+                  <div className="space-y-4">
+                    <p className="text-sm text-gray-600">
+                      We found {detectedItems.length} items on this page. Pick the ones you want to track — we&apos;ll walk through them one at a time so you can review each before saving.
+                    </p>
+                    <div className="flex items-center gap-3 text-[10px] font-bold uppercase tracking-widest">
+                      <button type="button" onClick={() => setPickerSelections(detectedItems.map(() => true))} className="text-info hover:opacity-80 active:scale-95">Select all</button>
+                      <span className="text-gray-300">|</span>
+                      <button type="button" onClick={() => setPickerSelections(detectedItems.map(() => false))} className="text-info hover:opacity-80 active:scale-95">None</button>
+                    </div>
+                    <div className="space-y-2">
+                      {detectedItems.map((item, idx) => (
+                        <label key={idx} className="flex gap-3 items-start p-3 border border-gray-200 rounded cursor-pointer hover:bg-gray-50 transition-colors">
+                          <input
+                            type="checkbox"
+                            checked={!!pickerSelections[idx]}
+                            onChange={e => {
+                              const checked = e.target.checked;
+                              setPickerSelections(prev => prev.map((v, i) => (i === idx ? checked : v)));
+                            }}
+                            className="mt-1 w-5 h-5 text-mxOrange rounded border-gray-300 shrink-0"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <h4 className="font-oswald font-bold uppercase text-sm text-navy">{item?.item_name || 'Unnamed item'}</h4>
+                            <p className="text-[11px] text-gray-500 mt-0.5">{describeDetectedItemInterval(item)}</p>
+                            {item?.last_completed_date && (
+                              <p className="text-[10px] text-gray-400 mt-0.5">
+                                Last completed: {item.last_completed_date}
+                                {item.last_completed_time != null ? ` @ ${item.last_completed_time} hrs` : ''}
+                              </p>
+                            )}
+                            {item?.work_description && (
+                              <p className="text-[10px] text-gray-400 italic mt-1 leading-tight">{item.work_description}</p>
+                            )}
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+                    <div className="flex gap-2 pt-2">
+                      <button type="button" onClick={resetScanAndQueue} className="flex-1 border border-gray-300 text-gray-600 font-oswald font-bold uppercase tracking-widest py-3 rounded text-xs active:scale-95">
+                        Cancel scan
+                      </button>
+                      <button
+                        type="button"
+                        onClick={startEditQueue}
+                        disabled={pickerSelections.filter(Boolean).length === 0}
+                        className="flex-1 bg-mxOrange text-white font-oswald font-bold uppercase tracking-widest py-3 rounded text-xs active:scale-95 disabled:opacity-50"
+                      >
+                        Continue ({pickerSelections.filter(Boolean).length})
+                      </button>
+                    </div>
+                  </div>
+                ) : (
                 <form onSubmit={submitMxItem} className="space-y-4">
-                  {!editingId && (
+                  {!editingId && editQueue.length === 0 && (
                     <div className="bg-purple-50 border border-purple-200 rounded p-3">
                       <div className="flex items-center gap-2 flex-wrap">
                         <button
@@ -608,6 +793,25 @@ export default function MaintenanceTab({
                             e.target.value = '';
                           }}
                         />
+                      </div>
+                      {scanPrefillHint && (
+                        <p className="text-[10px] text-purple-900/80 italic mt-2 leading-tight">{scanPrefillHint}</p>
+                      )}
+                    </div>
+                  )}
+                  {editQueue.length > 0 && !editingId && (
+                    <div className="bg-purple-50 border border-purple-200 rounded p-3">
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <p className="text-[11px] font-bold uppercase tracking-widest text-purple-900">
+                          Item {queueCursor + 1} of {editQueue.length}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={skipCurrentQueueItem}
+                          className="text-[10px] font-bold uppercase tracking-widest text-purple-700 bg-white border border-purple-300 rounded px-2 py-1 active:scale-95 hover:bg-purple-100"
+                        >
+                          {queueCursor + 1 === editQueue.length ? 'Skip & Close' : 'Skip this one'}
+                        </button>
                       </div>
                       {scanPrefillHint && (
                         <p className="text-[10px] text-purple-900/80 italic mt-2 leading-tight">{scanPrefillHint}</p>
@@ -657,8 +861,19 @@ export default function MaintenanceTab({
                       </label>
                     </div>
                   )}
-                  <div className="pt-4"><PrimaryButton disabled={isSubmitting}>{isSubmitting ? "Saving..." : "Save Maintenance Item"}</PrimaryButton></div>
+                  <div className="pt-4">
+                    <PrimaryButton disabled={isSubmitting}>
+                      {isSubmitting
+                        ? 'Saving...'
+                        : editingId
+                          ? 'Save Maintenance Item'
+                          : editQueue.length > 0
+                            ? (queueCursor + 1 < editQueue.length ? 'Save & Next' : 'Save & Finish')
+                            : 'Save Maintenance Item'}
+                    </PrimaryButton>
+                  </div>
                 </form>
+                )}
               </div>
             </div>
             </div>

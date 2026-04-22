@@ -7,19 +7,24 @@ const client = new Anthropic();
 /**
  * POST /api/maintenance-items/scan-logentry
  *
- * Reads a scanned aircraft-logbook entry and extracts fields that
- * pre-fill the "Track New Item" form. Unlike the existing
- * /api/mx-events/scan-logentry route (which assumes an item is
- * already being tracked and the user is closing it out), this route
- * also asks the model to *classify* the work — so we can propose a
- * tracking_type + time_interval / date_interval_days for the new
- * item. The user always confirms before anything saves.
+ * Reads a scanned aircraft-logbook entry and extracts an array of
+ * distinct recurring maintenance items the pilot might want to
+ * track. Unlike the sibling /api/mx-events/scan-logentry route
+ * (which assumes one line item is being closed out), this route is
+ * classification-first: each returned item carries a suggested
+ * tracking_type + interval so the Track New Item form can prefill.
+ *
+ * A single logbook entry can cover multiple items (e.g. "Annual
+ * C/W, oil change, transponder cert renewed"). The prompt is
+ * carefully worded to avoid over-decomposing — a single inspection
+ * stays as one item, not one per sub-task. The UI shows a picker
+ * for multi-item scans so the pilot chooses which ones to track.
  *
  * Body: multipart/form-data with:
  *   - image: File (JPEG/PNG/WebP, max 10MB)
  *   - aircraftId: string (for access check)
  *
- * Response: { fields: { ... }, raw_text: string }
+ * Response: { items: [...], raw_text: string }
  */
 export async function POST(req: Request) {
   try {
@@ -56,24 +61,45 @@ export async function POST(req: Request) {
             },
             {
               type: 'text',
-              text: `You are reading a scanned aircraft maintenance logbook entry. The pilot wants to start TRACKING this item on a recurring schedule. Classify the work and return the fields below as JSON (use null when you can't read a value or the page doesn't give you enough to guess).
+              text: `You are reading a scanned aircraft maintenance logbook entry. The pilot wants to start TRACKING distinct recurring items from this entry on their own schedules.
+
+Return a JSON array of items the pilot would track SEPARATELY. One logbook entry can contain several; do NOT over-decompose.
+
+  - "Annual inspection C/W" is ONE item — do NOT list each sub-task (landing-gear lube, cable tension, etc.) as its own item. Those are part of the Annual.
+  - "Annual C/W, oil change C/W, transponder cert renewed" is THREE items (each has its own schedule).
+  - A one-off squawk repair with no recurring interval can still be returned (set time_interval and date_interval_days to null); the pilot decides whether to track it.
+
+Typical intervals (use these unless the entry contradicts them):
+  - Annual = tracking_type 'both', time_interval 100, date_interval_days 365 (the 100 hr is for commercial ops; leave null if clearly private-only)
+  - 100-hour = 'time', time_interval 100
+  - Oil change = 'time', time_interval 50 unless the entry states otherwise
+  - Pitot-Static 91.411 = 'date', date_interval_days 730 (24 months)
+  - Transponder 91.413 = 'date', date_interval_days 730
+  - ELT battery = 'date', date_interval_days 365 (check manufacturer for exact)
+  - Magneto 500hr = 'time', time_interval 500
+
+Return ONLY a JSON object in this exact shape. No prose outside the JSON, no markdown fences:
 
 {
-  "item_name": "short name for the recurring item (e.g. 'Annual Inspection', '100-hour Inspection', 'Oil Change', 'Pitot-Static 91.411', 'Transponder 91.413', 'ELT Battery', 'Magneto Inspection (500hr)') or null",
-  "tracking_type": "'time' | 'date' | 'both' — use 'time' for hour-based items (100hr, 50hr oil), 'date' for calendar-only (ELT battery, pitot-static, transponder), 'both' for items with a calendar OR hours limit (Annual: 12 mo or 100 hr for commercial)",
-  "time_interval": "interval in engine hours, or null if tracking_type is 'date'. Common: 100hr = 100, Oil = 50 or as specified, magneto 500hr = 500",
-  "date_interval_days": "interval in days, or null if tracking_type is 'time'. Common: Annual = 365, Pitot-Static/Transponder = 730 (24 months), ELT battery = typically 365 or per manufacturer",
-  "is_required": "true if this is a regulatory/required item (Annual, Pitot-Static, Transponder, ELT, 100hr for commercial), false otherwise (oil change, inspections beyond regs)",
-  "last_completed_date": "YYYY-MM-DD — the date the work was just completed (from the logbook entry), or null",
-  "last_completed_time": "engine/tach hours at completion (number) or null",
-  "work_description": "short prose from the logbook, plus any classification uncertainty you want to flag to the pilot (e.g. 'Looks like an Annual — couldn't read the hours clearly'). Keep under 300 chars."
+  "items": [
+    {
+      "item_name": "Annual Inspection",
+      "tracking_type": "time" | "date" | "both",
+      "time_interval": number | null,
+      "date_interval_days": number | null,
+      "is_required": boolean,
+      "last_completed_date": "YYYY-MM-DD" | null,
+      "last_completed_time": number | null,
+      "work_description": "short note from the logbook + any uncertainty you want to flag, <300 chars"
+    }
+  ]
 }
 
 Rules:
 - Be precise with numbers — don't round.
-- If the work looks like a one-off repair (squawk fix) rather than a recurring scheduled item, set item_name to a descriptive name and set tracking_type to 'time' with time_interval null — the pilot can decide whether to track it or discard.
-- If you genuinely can't tell what recurring interval applies (e.g. a non-standard inspection), leave the interval fields null and say so in work_description.
-- Return raw JSON only, no markdown fences.`,
+- If you can't read a field, use null for that field (don't guess numbers).
+- is_required = true for regulatory items (Annual, Pitot-Static, Transponder, ELT, 100hr for commercial); false for discretionary items.
+- If the page is blank, unreadable, or not a logbook entry, return { "items": [] }.`,
             },
           ],
         },
@@ -83,19 +109,28 @@ Rules:
     const textBlock = response.content.find((b: any) => b.type === 'text');
     const rawText = textBlock?.type === 'text' ? (textBlock as any).text : '';
 
-    let fields: any = {};
+    let parsed: any = {};
     try {
       const cleaned = rawText.replace(/```json?\n?/g, '').replace(/```/g, '').trim();
-      fields = JSON.parse(cleaned);
+      parsed = JSON.parse(cleaned);
     } catch {
       return NextResponse.json({
-        fields: {},
+        items: [],
         raw_text: rawText,
         warning: 'Could not parse structured fields from the scan. The raw text is included for manual reference.',
       });
     }
 
-    return NextResponse.json({ fields, raw_text: rawText });
+    // Accept either the new { items: [...] } shape or a legacy single-object
+    // response (which earlier iterations of this route returned) — wrap the
+    // legacy shape in an array so callers only need to handle one path.
+    const items = Array.isArray(parsed?.items)
+      ? parsed.items
+      : parsed && typeof parsed === 'object' && parsed.item_name
+        ? [parsed]
+        : [];
+
+    return NextResponse.json({ items, raw_text: rawText });
   } catch (error) {
     return handleApiError(error);
   }
