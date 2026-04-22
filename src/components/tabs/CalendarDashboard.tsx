@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
+import { swrKeys } from "@/lib/swrKeys";
 import type { AircraftWithMetrics, Reservation } from "@/lib/types";
 import useSWR from "swr";
 import { ChevronDown } from "lucide-react";
@@ -75,13 +76,13 @@ export default function CalendarDashboard({ aircraft, session }: CalendarDashboa
   const isTurbine = aircraft.engine_type === 'Turbine';
 
   const { data: dashData } = useSWR(
-    aircraft ? `cal-dash-${aircraft.id}` : null,
+    aircraft ? swrKeys.calDash(aircraft.id) : null,
     async () => {
       const now = new Date();
       const windowEnd = new Date(now.getTime() + WINDOW * 86400000);
       const [resRes, mxRes] = await Promise.all([
         supabase.from('aft_reservations').select('*').eq('aircraft_id', aircraft.id).eq('status', 'confirmed').gte('end_time', now.toISOString()).lte('start_time', windowEnd.toISOString()),
-        supabase.from('aft_maintenance_events').select('confirmed_date, estimated_completion, status').eq('aircraft_id', aircraft.id).in('status', ['confirmed', 'in_progress']),
+        supabase.from('aft_maintenance_events').select('confirmed_date, estimated_completion, status').eq('aircraft_id', aircraft.id).is('deleted_at', null).in('status', ['confirmed', 'in_progress']),
       ]);
       return {
         reservations: (resRes.data || []) as Reservation[],
@@ -100,10 +101,10 @@ export default function CalendarDashboard({ aircraft, session }: CalendarDashboa
   }, [hoursPeriod, customFrom, customTo, showCustom]);
 
   const { data: flightHours } = useSWR(
-    aircraft ? `cal-hours-${aircraft.id}-${hoursRange.from.getTime()}-${hoursRange.to.getTime()}` : null,
+    aircraft ? swrKeys.calHours(aircraft.id, hoursRange.from.getTime(), hoursRange.to.getTime()) : null,
     async () => {
-      const { data: baseline } = await supabase.from('aft_flight_logs').select('aftt, ftt, hobbs, tach').eq('aircraft_id', aircraft.id).lt('created_at', hoursRange.from.toISOString()).order('created_at', { ascending: false }).limit(1);
-      const { data: current } = await supabase.from('aft_flight_logs').select('aftt, ftt, hobbs, tach').eq('aircraft_id', aircraft.id).lte('created_at', hoursRange.to.toISOString()).order('created_at', { ascending: false }).limit(1);
+      const { data: baseline } = await supabase.from('aft_flight_logs').select('aftt, ftt, hobbs, tach').eq('aircraft_id', aircraft.id).is('deleted_at', null).lt('created_at', hoursRange.from.toISOString()).order('created_at', { ascending: false }).limit(1);
+      const { data: current } = await supabase.from('aft_flight_logs').select('aftt, ftt, hobbs, tach').eq('aircraft_id', aircraft.id).is('deleted_at', null).lte('created_at', hoursRange.to.toISOString()).order('created_at', { ascending: false }).limit(1);
       if (!current || current.length === 0) return 0;
       const endLog = current[0] as any;
       // Pick a consistent metric for both endpoints — only use hobbs/aftt

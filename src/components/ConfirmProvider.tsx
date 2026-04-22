@@ -46,11 +46,11 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
 
   const variant = pending?.variant ?? "default";
   const isDanger = variant === "danger";
-  const accentBorder = isDanger ? "border-[#CE3732]" : "border-navy";
-  const accentIconBg = isDanger ? "bg-[#CE3732]/10" : "bg-navy/5";
-  const accentIconColor = isDanger ? "text-[#CE3732]" : "text-navy";
+  const accentBorder = isDanger ? "border-danger" : "border-navy";
+  const accentIconBg = isDanger ? "bg-danger/10" : "bg-navy/5";
+  const accentIconColor = isDanger ? "text-danger" : "text-navy";
   const confirmBtnClass = isDanger
-    ? "flex-[2] bg-[#CE3732] border-2 border-[#CE3732] text-white font-oswald text-lg font-bold uppercase tracking-widest py-3 rounded hover:bg-opacity-90 active:scale-95 transition-all shadow-md"
+    ? "flex-[2] bg-danger border-2 border-danger text-white font-oswald text-lg font-bold uppercase tracking-widest py-3 rounded hover:bg-opacity-90 active:scale-95 transition-all shadow-md"
     : "";
 
   return (

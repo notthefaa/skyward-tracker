@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { supabase } from "@/lib/supabase";
 import { authFetch } from "@/lib/authFetch";
 import { useModalScrollLock } from "@/hooks/useModalScrollLock";
@@ -24,9 +25,13 @@ interface ServiceEventModalProps {
   onClose: () => void;
   onRefresh: () => void;
   canManageService?: boolean;
+  /** When set, opening the modal jumps directly to the create view with
+   * this maintenance item pre-selected. Used by the MX projected-due
+   * banner so the pilot still sees the review/send flow. */
+  preSelectMxItemId?: string | null;
 }
 
-export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, canManageService = true }: ServiceEventModalProps) {
+export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, canManageService = true, preSelectMxItemId }: ServiceEventModalProps) {
   useModalScrollLock(show);
   const [view, setView] = useState<ServiceEventView>('list');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -59,12 +64,22 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
   }, [show]);
 
   useEffect(() => {
-    if (show && aircraft) fetchEvents();
-  }, [show, aircraft]);
+    if (show && aircraft) {
+      if (preSelectMxItemId) {
+        // Jump into the create flow with this item pre-selected so
+        // the pilot still reviews/sends rather than firing an email
+        // on a single tap.
+        openCreateFlow();
+      } else {
+        fetchEvents();
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [show, aircraft, preSelectMxItemId]);
 
   const fetchEvents = async () => {
     const { data } = await supabase
-      .from('aft_maintenance_events').select('*').eq('aircraft_id', aircraft.id)
+      .from('aft_maintenance_events').select('*').eq('aircraft_id', aircraft.id).is('deleted_at', null)
       .neq('status', 'cancelled').order('created_at', { ascending: false });
     setEvents(data || []);
     setView('list');
@@ -72,8 +87,8 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
 
   const fetchEventDetail = async (eventId: string) => {
     const [{ data: ev }, { data: lines }, { data: msgs }] = await Promise.all([
-      supabase.from('aft_maintenance_events').select('*').eq('id', eventId).single(),
-      supabase.from('aft_event_line_items').select('*').eq('event_id', eventId).order('created_at'),
+      supabase.from('aft_maintenance_events').select('*').eq('id', eventId).is('deleted_at', null).maybeSingle(),
+      supabase.from('aft_event_line_items').select('*').eq('event_id', eventId).is('deleted_at', null).order('created_at'),
       supabase.from('aft_event_messages').select('*').eq('event_id', eventId).order('created_at'),
     ]);
     if (ev) setSelectedEvent(ev);
@@ -83,8 +98,8 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
 
   const loadMxAndSquawks = async () => {
     const [{ data: mx }, { data: sq }] = await Promise.all([
-      supabase.from('aft_maintenance_items').select('*').eq('aircraft_id', aircraft.id).order('due_time').order('due_date'),
-      supabase.from('aft_squawks').select('*').eq('aircraft_id', aircraft.id).eq('status', 'open').order('created_at', { ascending: false }),
+      supabase.from('aft_maintenance_items').select('*').eq('aircraft_id', aircraft.id).is('deleted_at', null).order('due_time').order('due_date'),
+      supabase.from('aft_squawks').select('*').eq('aircraft_id', aircraft.id).eq('status', 'open').is('deleted_at', null).order('created_at', { ascending: false }),
     ]);
     setMxItems(mx || []);
     setSquawks(sq || []);
@@ -166,8 +181,8 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
   const handleSendDraft = async () => {
     if (!selectedEvent) return;
     if (isSubmitting) return;
-    if (wantsToPropose === null) return showWarning("Please choose whether you'd like to propose a date or request availability.");
-    if (wantsToPropose && !proposedDate) return showWarning("Please select a preferred service date or choose 'Request Availability' instead.");
+    if (wantsToPropose === null) return showWarning("Pick a preferred date, or choose 'Request Availability' to let your mechanic propose.");
+    if (wantsToPropose && !proposedDate) return showWarning("Enter a date, or switch to 'Request Availability'.");
     setIsSubmitting(true);
     try {
       // Remove any line items the user unchecked from the draft
@@ -187,13 +202,13 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
       });
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error || 'Failed to send');
+        throw new Error(errData.error || "Couldn't send the work package");
       }
       showSuccess("Work package sent to mechanic");
       fetchEvents();
       onRefresh();
     } catch (err: any) {
-      showError("Failed to send work package: " + err.message);
+      showError("Couldn't send the work package: " + err.message);
     }
     setIsSubmitting(false);
   };
@@ -216,6 +231,7 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
   };
 
   if (!show) return null;
+  if (typeof document === 'undefined') return null;
 
   // Compute drafted item IDs for the create flow
   const draftedMxIds = allActiveLineItems.filter(li => li.maintenance_item_id).map(li => li.maintenance_item_id);
@@ -225,7 +241,7 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
   const visibleLineItems = eventLineItems.filter(li => !removedLineItemIds.includes(li.id));
 
   const viewTitle = {
-    list: 'Maintenance Events',
+    list: 'Service Events',
     create: 'Schedule Service',
     detail: 'Service Event',
     complete: 'Enter Logbook Data',
@@ -233,7 +249,7 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
     counter: 'Counter Proposal',
   }[view];
 
-  return (
+  return createPortal(
     <>
       {viewingAttachment && (
         <div className="fixed inset-0 z-[10002] bg-black/90 flex items-center justify-center p-4 animate-fade-in" onClick={() => setViewingAttachment(null)}>
@@ -242,15 +258,26 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
         </div>
       )}
 
-      <div className="fixed inset-0 bg-black/60 z-[10000] overflow-y-auto animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={onClose}>
+      <div className="fixed inset-0 bg-black/60 z-[10000] animate-fade-in" onClick={onClose}>
+        <div
+          className="absolute left-0 right-0 overflow-y-auto modal-scroll"
+          style={{
+            /* Actual chrome heights — header is 60px (min-h-[60px]),
+               nav is 52px (pt-1 + h-12). Safe-area insets add to each. */
+            top: 'calc(60px + env(safe-area-inset-top, 0px))',
+            bottom: 'calc(52px + env(safe-area-inset-bottom, 0px))',
+            overscrollBehavior: 'contain',
+            WebkitOverflowScrolling: 'touch',
+          }}
+        >
         <div className="flex min-h-full items-center justify-center p-4">
-        <div className="bg-white rounded shadow-2xl w-full max-w-lg p-5 border-t-4 border-[#F08B46] animate-slide-up" onClick={e => e.stopPropagation()}>
+        <div className="bg-white rounded shadow-2xl w-full max-w-lg p-5 border-t-4 border-mxOrange animate-slide-up" onClick={e => e.stopPropagation()}>
 
           <div className="flex justify-between items-center mb-6">
             <h2 className="font-oswald text-2xl font-bold uppercase text-navy flex items-center gap-2">
-              <Wrench size={20} className="text-[#F08B46]" /> {viewTitle}
+              <Wrench size={20} className="text-mxOrange" /> {viewTitle}
             </h2>
-            <button onClick={onClose} className="text-gray-400 hover:text-red-500 p-2 -mr-2"><X size={24}/></button>
+            <button onClick={onClose} className="text-gray-400 hover:text-danger p-2 -mr-2"><X size={24}/></button>
           </div>
 
           {view === 'list' && (
@@ -258,7 +285,7 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
           )}
 
           {view === 'create' && (
-            <ServiceEventCreate {...childProps} mxItems={mxItems} squawks={squawks} draftedMxIds={draftedMxIds} draftedSquawkIds={draftedSquawkIds} />
+            <ServiceEventCreate {...childProps} mxItems={mxItems} squawks={squawks} draftedMxIds={draftedMxIds} draftedSquawkIds={draftedSquawkIds} preSelectedMxIds={preSelectMxItemId ? [preSelectMxItemId] : undefined} />
           )}
 
           {view === 'detail' && selectedEvent && (
@@ -272,8 +299,8 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
           {/* Draft review — allows removing existing items, adding new ones, and setting date preference */}
           {view === 'review_draft' && selectedEvent && (
             <div className="space-y-6">
-              <button onClick={() => handleNavigate('list')} className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-[#F08B46] bg-orange-50 border border-orange-200 rounded px-3 py-1.5 hover:bg-orange-100 active:scale-95 transition-all"><ChevronDown size={12} className="rotate-90" /> Back to Events</button>
-              <div className="bg-orange-50 border border-orange-200 rounded p-4"><p className="text-sm text-navy font-bold mb-1">Draft Work Package</p><p className="text-xs text-gray-600">Review the items below, add or remove as needed, then send to your mechanic. Nothing is sent until you click the button at the bottom.</p></div>
+              <button onClick={() => handleNavigate('list')} className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-mxOrange bg-orange-50 border border-orange-200 rounded px-3 py-1.5 hover:bg-orange-100 active:scale-95 transition-all"><ChevronDown size={12} className="rotate-90" /> Back to Events</button>
+              <div className="bg-orange-50 border border-orange-200 rounded p-4"><p className="text-sm text-navy font-bold mb-1">Draft Work Package</p><p className="text-xs text-gray-600">Review what's bundled, add or remove items, then send. Nothing goes out to your mechanic until you tap send.</p></div>
 
               {/* Existing line items — removable */}
               {visibleLineItems.length > 0 && (
@@ -286,7 +313,7 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
                           <span className="font-bold text-sm text-navy">{li.item_name}</span>
                           {li.item_description && <span className="block text-[10px] text-gray-500">{li.item_description}</span>}
                         </div>
-                        <button onClick={() => handleRemoveLineItem(li.id)} className="text-gray-300 hover:text-[#CE3732] transition-colors active:scale-95 shrink-0 ml-3 p-1" title="Remove from draft">
+                        <button onClick={() => handleRemoveLineItem(li.id)} className="text-gray-300 hover:text-danger transition-colors active:scale-95 shrink-0 ml-3 p-1" title="Remove from draft">
                           <Trash2 size={14} />
                         </button>
                       </div>
@@ -297,7 +324,7 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
 
               {visibleLineItems.length === 0 && eventLineItems.length > 0 && (
                 <div className="bg-red-50 border border-red-200 rounded p-3">
-                  <p className="text-xs text-[#CE3732] font-bold text-center">All items removed. Add at least one item below or go back.</p>
+                  <p className="text-xs text-danger font-bold text-center">Every item has been removed. Add at least one below, or go back.</p>
                 </div>
               )}
 
@@ -309,10 +336,10 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
                 return (
                   <div>
                     <div className="flex justify-between items-center mb-2">
-                      <p className="text-[10px] font-bold uppercase tracking-widest text-navy flex items-center gap-2"><Wrench size={14} className="text-[#F08B46]" /> Add More Maintenance Items</p>
-                      <button type="button" onClick={() => { const ids = availableMx.map(mx => mx.id); if (allSelected) setSelectedMxIds(prev => prev.filter(id => !ids.includes(id))); else setSelectedMxIds(prev => Array.from(new Set([...prev, ...ids]))); }} className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-[#F08B46] hover:opacity-80 active:scale-95"><CheckSquare size={12} /> {allSelected ? 'Deselect All' : 'Select All'}</button>
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-navy flex items-center gap-2"><Wrench size={14} className="text-mxOrange" /> Add More Maintenance Items</p>
+                      <button type="button" onClick={() => { const ids = availableMx.map(mx => mx.id); if (allSelected) setSelectedMxIds(prev => prev.filter(id => !ids.includes(id))); else setSelectedMxIds(prev => Array.from(new Set([...prev, ...ids]))); }} className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-mxOrange hover:opacity-80 active:scale-95"><CheckSquare size={12} /> {allSelected ? 'Deselect All' : 'Select All'}</button>
                     </div>
-                    <div className="space-y-3 pb-1">{availableMx.map(mx => (<label key={mx.id} className="flex items-start gap-3 p-3 border border-gray-200 rounded cursor-pointer hover:bg-gray-50"><input type="checkbox" checked={selectedMxIds.includes(mx.id)} onChange={() => setSelectedMxIds(prev => prev.includes(mx.id) ? prev.filter(id => id !== mx.id) : [...prev, mx.id])} className="mt-1 w-4 h-4 text-[#F08B46] border-gray-300 rounded" /><div><span className="font-bold text-sm text-navy">{mx.item_name}</span><span className="block text-[10px] text-gray-500">{mx.tracking_type === 'time' ? `Due @ ${mx.due_time} hrs` : `Due ${mx.due_date}`}</span></div></label>))}</div>
+                    <div className="space-y-3 pb-1">{availableMx.map(mx => (<label key={mx.id} className="flex items-start gap-3 p-3 border border-gray-200 rounded cursor-pointer hover:bg-gray-50"><input type="checkbox" checked={selectedMxIds.includes(mx.id)} onChange={() => setSelectedMxIds(prev => prev.includes(mx.id) ? prev.filter(id => id !== mx.id) : [...prev, mx.id])} className="mt-1 w-4 h-4 text-mxOrange border-gray-300 rounded" /><div><span className="font-bold text-sm text-navy">{mx.item_name}</span><span className="block text-[10px] text-gray-500">{mx.tracking_type === 'time' ? `Due @ ${mx.due_time} hrs` : `Due ${mx.due_date}`}</span></div></label>))}</div>
                   </div>
                 );
               })()}
@@ -325,29 +352,31 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
                 return (
                   <div>
                     <div className="flex justify-between items-center mb-2">
-                      <p className="text-[10px] font-bold uppercase tracking-widest text-navy flex items-center gap-2"><AlertTriangle size={14} className="text-[#CE3732]" /> Add Squawks</p>
-                      <button type="button" onClick={() => { const ids = availableSquawks.map(sq => sq.id); if (allSelected) setSelectedSquawkIds(prev => prev.filter(id => !ids.includes(id))); else setSelectedSquawkIds(prev => Array.from(new Set([...prev, ...ids]))); }} className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-[#CE3732] hover:opacity-80 active:scale-95"><CheckSquare size={12} /> {allSelected ? 'Deselect All' : 'Select All'}</button>
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-navy flex items-center gap-2"><AlertTriangle size={14} className="text-danger" /> Add Squawks</p>
+                      <button type="button" onClick={() => { const ids = availableSquawks.map(sq => sq.id); if (allSelected) setSelectedSquawkIds(prev => prev.filter(id => !ids.includes(id))); else setSelectedSquawkIds(prev => Array.from(new Set([...prev, ...ids]))); }} className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-danger hover:opacity-80 active:scale-95"><CheckSquare size={12} /> {allSelected ? 'Deselect All' : 'Select All'}</button>
                     </div>
-                    <div className="space-y-3 pb-1">{availableSquawks.map(sq => (<label key={sq.id} className="flex items-start gap-3 p-3 border border-gray-200 rounded cursor-pointer hover:bg-gray-50"><input type="checkbox" checked={selectedSquawkIds.includes(sq.id)} onChange={() => setSelectedSquawkIds(prev => prev.includes(sq.id) ? prev.filter(id => id !== sq.id) : [...prev, sq.id])} className="mt-1 w-4 h-4 text-[#CE3732] border-gray-300 rounded" /><div><span className="font-bold text-sm text-navy">{sq.description || 'No description'}</span>{sq.affects_airworthiness && sq.location && <span className="block text-[10px] font-bold text-[#CE3732]">⚠ Grounded at {sq.location}</span>}<span className="block text-[10px] text-gray-500">Reported {new Date(sq.created_at).toLocaleDateString()}</span></div></label>))}</div>
+                    <div className="space-y-3 pb-1">{availableSquawks.map(sq => (<label key={sq.id} className="flex items-start gap-3 p-3 border border-gray-200 rounded cursor-pointer hover:bg-gray-50"><input type="checkbox" checked={selectedSquawkIds.includes(sq.id)} onChange={() => setSelectedSquawkIds(prev => prev.includes(sq.id) ? prev.filter(id => id !== sq.id) : [...prev, sq.id])} className="mt-1 w-4 h-4 text-danger border-gray-300 rounded" /><div><span className="font-bold text-sm text-navy">{sq.description || 'No description'}</span>{sq.affects_airworthiness && sq.location && <span className="block text-[10px] font-bold text-danger">⚠ Grounded at {sq.location}</span>}<span className="block text-[10px] text-gray-500">Reported {new Date(sq.created_at).toLocaleDateString()}</span></div></label>))}</div>
                   </div>
                 );
               })()}
 
               {/* Addons */}
               <div>
-                <p className="text-[10px] font-bold uppercase tracking-widest text-navy mb-2 flex items-center gap-2"><Sparkles size={14} className="text-[#3AB0FF]" /> Additional Services</p>
-                <div className="grid grid-cols-2 gap-2">{ADDON_OPTIONS.map(addon => (<label key={addon} className="flex items-center gap-2 p-2 border border-gray-200 rounded cursor-pointer hover:bg-blue-50 text-xs"><input type="checkbox" checked={selectedAddons.includes(addon)} onChange={() => setSelectedAddons(prev => prev.includes(addon) ? prev.filter(a => a !== addon) : [...prev, addon])} className="w-3.5 h-3.5 text-[#3AB0FF] border-gray-300 rounded" /><span className="text-navy font-bold">{addon}</span></label>))}</div>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-navy mb-2 flex items-center gap-2"><Sparkles size={14} className="text-info" /> Additional Services</p>
+                <div className="grid grid-cols-2 gap-2">{ADDON_OPTIONS.map(addon => (<label key={addon} className="flex items-center gap-2 p-2 border border-gray-200 rounded cursor-pointer hover:bg-blue-50 text-xs"><input type="checkbox" checked={selectedAddons.includes(addon)} onChange={() => setSelectedAddons(prev => prev.includes(addon) ? prev.filter(a => a !== addon) : [...prev, addon])} className="w-3.5 h-3.5 text-info border-gray-300 rounded" /><span className="text-navy font-bold">{addon}</span></label>))}</div>
               </div>
 
               <DateProposalSection wantsToPropose={wantsToPropose} setWantsToPropose={setWantsToPropose} proposedDate={proposedDate} setProposedDate={setProposedDate} />
-              {!showPreview ? (<button onClick={() => setShowPreview(true)} className="w-full text-[10px] font-bold uppercase tracking-widest text-[#3AB0FF] hover:underline py-2">Preview Email Before Sending</button>) : (<EmailPreview aircraft={aircraft} mxItems={mxItems.filter(mx => selectedMxIds.includes(mx.id))} squawks={squawks.filter(sq => selectedSquawkIds.includes(sq.id))} selectedAddons={selectedAddons} proposedDate={wantsToPropose ? proposedDate : null} existingLines={visibleLineItems} onClose={() => setShowPreview(false)} />)}
+              {!showPreview ? (<button onClick={() => setShowPreview(true)} className="w-full text-[10px] font-bold uppercase tracking-widest text-info hover:underline py-2">Preview Email Before Sending</button>) : (<EmailPreview aircraft={aircraft} mxItems={mxItems.filter(mx => selectedMxIds.includes(mx.id))} squawks={squawks.filter(sq => selectedSquawkIds.includes(sq.id))} selectedAddons={selectedAddons} proposedDate={wantsToPropose ? proposedDate : null} existingLines={visibleLineItems} onClose={() => setShowPreview(false)} />)}
               <PrimaryButton onClick={handleSendDraft} disabled={isSubmitting}>{isSubmitting ? "Sending to Mechanic..." : "Send Work Package to Mechanic"}</PrimaryButton>
             </div>
           )}
 
         </div>
         </div>
+        </div>
       </div>
-    </>
+    </>,
+    document.body
   );
 }

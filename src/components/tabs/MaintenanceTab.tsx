@@ -5,17 +5,41 @@ import { supabase } from "@/lib/supabase";
 import { authFetch } from "@/lib/authFetch";
 import { processMxItem, getMxTextColor, isMxExpired } from "@/lib/math";
 import { INPUT_WHITE_BG } from "@/lib/styles";
+import { swrKeys } from "@/lib/swrKeys";
 import type { AircraftWithMetrics, SystemSettings, AircraftRole, MxSubTab } from "@/lib/types";
 import useSWR from "swr";
-import { Wrench, Trash2, Plus, X, Edit2, Calendar, Send, ExternalLink, ChevronRight, HelpCircle, AlertTriangle, Download, Layers, Settings } from "lucide-react";
+import { Wrench, Trash2, Plus, X, Edit2, Calendar, Send, ExternalLink, ChevronRight, HelpCircle, AlertTriangle, Download, Layers, Settings, ClipboardList, ShieldAlert } from "lucide-react";
 import { PrimaryButton } from "@/components/AppButtons";
 import { useModalScrollLock } from "@/hooks/useModalScrollLock";
 import ServiceEventModal from "@/components/modals/ServiceEventModal";
 import MxGuideModal from "@/components/modals/MxGuideModal";
 import MxTemplatePickerModal from "@/components/modals/MxTemplatePickerModal";
 import SquawksTab from "@/components/tabs/SquawksTab";
+import SectionSelector from "@/components/shell/SectionSelector";
+import { MX_ADS_SELECTOR_ITEMS, emitMxAdsNavigate } from "@/components/shell/mxAdsNav";
 
-export default function MaintenanceTab({ 
+/** Shared labels so the Maintenance-tab banner and the Service-subtab
+ *  cards describe the same underlying service event with the same
+ *  vocabulary. Previously the banner said "Draft — Review & Send"
+ *  while the Service card showed raw "draft" — same row, two
+ *  different reads. */
+const mxEventStatusLabel = (s: string) =>
+  ({ draft: 'Draft — Review & Send', scheduling: 'Scheduling', confirmed: 'Confirmed', in_progress: 'In Progress', ready_for_pickup: 'Ready for Pickup', complete: 'Complete', cancelled: 'Cancelled' }[s] || s);
+
+const mxEventStatusBgClass = (s: string) =>
+  ({ draft: 'bg-mxOrange', scheduling: 'bg-gray-500', confirmed: 'bg-info', in_progress: 'bg-[#56B94A]', ready_for_pickup: 'bg-[#56B94A]', complete: 'bg-[#56B94A]', cancelled: 'bg-danger' }[s] || 'bg-gray-400');
+
+/** One-line summary to pair with the status chip. Drafts show the
+ *  "Work Package Ready for Review" prompt instead of a date; other
+ *  statuses show the date/proposal they carry. */
+const mxEventSummary = (ev: any) => {
+  if (ev.status === 'draft') return 'Work Package Ready for Review';
+  if (ev.confirmed_date) return `Service: ${ev.confirmed_date}`;
+  if (ev.proposed_date) return `Proposed: ${ev.proposed_date}${ev.proposed_by ? ` (by ${ev.proposed_by})` : ''}`;
+  return 'Awaiting date';
+};
+
+export default function MaintenanceTab({
   aircraft, role, aircraftRole, onGroundedStatusChange, sysSettings, session, userInitials, initialSubTab
 }: { 
   aircraft: AircraftWithMetrics | null, 
@@ -25,7 +49,7 @@ export default function MaintenanceTab({
   sysSettings: SystemSettings,
   session: any,
   userInitials: string,
-  initialSubTab?: 'maintenance' | 'squawks'
+  initialSubTab?: MxSubTab
 }) {
   const { showSuccess, showError, showWarning } = useToast();
   const confirm = useConfirm();
@@ -40,29 +64,30 @@ export default function MaintenanceTab({
   const isTurbine = aircraft?.engine_type === 'Turbine';
 
   const { data: mxItems = [], mutate } = useSWR(
-    aircraft ? `mx-${aircraft.id}` : null,
+    aircraft ? swrKeys.mxItems(aircraft.id) : null,
     async () => {
-      const { data } = await supabase.from('aft_maintenance_items').select('*').eq('aircraft_id', aircraft!.id).order('due_date').order('due_time');
+      const { data } = await supabase.from('aft_maintenance_items').select('*').eq('aircraft_id', aircraft!.id).is('deleted_at', null).order('due_date').order('due_time');
       return (data || []) as any[];
     }
   );
 
   const { data: activeEvents = [], mutate: mutateEvents } = useSWR(
-    aircraft ? `mx-events-${aircraft.id}` : null,
+    aircraft ? swrKeys.mxEvents(aircraft.id) : null,
     async () => {
-      const { data } = await supabase.from('aft_maintenance_events').select('*').eq('aircraft_id', aircraft!.id).in('status', ['draft', 'scheduling', 'confirmed', 'in_progress', 'ready_for_pickup']).order('created_at', { ascending: false });
+      const { data } = await supabase.from('aft_maintenance_events').select('*').eq('aircraft_id', aircraft!.id).is('deleted_at', null).in('status', ['draft', 'scheduling', 'confirmed', 'in_progress', 'ready_for_pickup']).order('created_at', { ascending: false });
       return data || [];
     }
   );
 
   const [showMxModal, setShowMxModal] = useState(false);
   const [showServiceModal, setShowServiceModal] = useState(false);
+  const [preSelectMxItemId, setPreSelectMxItemId] = useState<string | null>(null);
   const [showGuideModal, setShowGuideModal] = useState(false);
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [mxName, setMxName] = useState("");
-  const [mxTrackingType, setMxTrackingType] = useState<'time'|'date'>('date');
+  const [mxTrackingType, setMxTrackingType] = useState<'time'|'date'|'both'>('date');
   const [mxIsRequired, setMxIsRequired] = useState(true);
   const [mxLastTime, setMxLastTime] = useState(""); const [mxIntervalTime, setMxIntervalTime] = useState(""); const [mxDueTime, setMxDueTime] = useState("");
   const [mxLastDate, setMxLastDate] = useState(""); const [mxIntervalDays, setMxIntervalDays] = useState(""); const [mxDueDate, setMxDueDate] = useState("");
@@ -70,6 +95,23 @@ export default function MaintenanceTab({
   const [confirmResendId, setConfirmResendId] = useState<string | null>(null);
   const [resendingEventId, setResendingEventId] = useState<string | null>(null);
   const [isExportingMx, setIsExportingMx] = useState(false);
+
+  // Reset modal + editing state when the aircraft changes — otherwise
+  // a partially-edited MX row from Aircraft A would land on Aircraft
+  // B when the form submits.
+  useEffect(() => {
+    setShowMxModal(false);
+    setShowServiceModal(false);
+    setPreSelectMxItemId(null);
+    setShowGuideModal(false);
+    setShowTemplateModal(false);
+    setEditingId(null);
+    setConfirmResendId(null);
+    setResendingEventId(null);
+    setMxName(''); setMxLastTime(''); setMxIntervalTime(''); setMxDueTime('');
+    setMxLastDate(''); setMxIntervalDays(''); setMxDueDate('');
+    setAutomateScheduling(false);
+  }, [aircraft?.id]);
 
   useModalScrollLock(showMxModal || !!confirmResendId);
 
@@ -92,7 +134,7 @@ export default function MaintenanceTab({
     try {
       const { data: completedEvents } = await supabase
         .from('aft_maintenance_events').select('*')
-        .eq('aircraft_id', aircraft.id).eq('status', 'complete')
+        .eq('aircraft_id', aircraft.id).eq('status', 'complete').is('deleted_at', null)
         .order('completed_at', { ascending: false });
 
       if (!completedEvents || completedEvents.length === 0) {
@@ -175,19 +217,12 @@ export default function MaintenanceTab({
     setShowMxModal(true);
   };
 
-  const handleManualMxTrigger = async (item: any) => {
-    const ok = await confirm({
-      title: "Create Draft Work Package?",
-      message: `A draft work package will be created for "${item.item_name}" and the primary contact will be notified.`,
-      confirmText: "Create Draft",
-    });
-    if (!ok) return;
-    setIsSubmitting(true);
-    try {
-      await authFetch('/api/mx-events/manual-trigger', { method: 'POST', body: JSON.stringify({ mxItemId: item.id, aircraftId: aircraft!.id }) });
-      await mutate(); await mutateEvents();
-    } catch (err) { console.error(err); }
-    setIsSubmitting(false);
+  const handleManualMxTrigger = (item: any) => {
+    // Open the service-event review flow with this item pre-selected.
+    // The pilot then confirms items + date + mechanic email before
+    // anything is sent — no silent one-click email out the door.
+    setPreSelectMxItemId(item.id);
+    setShowServiceModal(true);
   };
 
   const handleResendWorkpackage = async (eventId: string) => {
@@ -201,45 +236,67 @@ export default function MaintenanceTab({
 
   const submitMxItem = async (e: React.FormEvent) => {
     e.preventDefault(); setIsSubmitting(true);
-    const payload: Record<string, any> = { aircraft_id: aircraft!.id, item_name: mxName, tracking_type: mxTrackingType, is_required: mxIsRequired, automate_scheduling: automateScheduling };
-    if (mxTrackingType === 'time') {
-      payload.last_completed_time = parseFloat(mxLastTime) || 0;
-      payload.time_interval = mxIntervalTime ? parseFloat(mxIntervalTime) : null;
-      payload.due_time = mxDueTime ? parseFloat(mxDueTime) : (parseFloat(mxLastTime) + parseFloat(mxIntervalTime || '0'));
-      payload.last_completed_date = null; payload.date_interval_days = null; payload.due_date = null;
-    } else {
-      payload.last_completed_date = mxLastDate;
-      payload.date_interval_days = mxIntervalDays ? parseInt(mxIntervalDays) : null;
-      payload.due_date = mxDueDate || (mxLastDate && mxIntervalDays ? new Date(new Date(mxLastDate).getTime() + parseInt(mxIntervalDays) * 86400000).toISOString().split('T')[0] : null);
-      payload.last_completed_time = null; payload.time_interval = null; payload.due_time = null;
+    // Wrap in try/catch/finally — a bare throw after setIsSubmitting(true)
+    // would leave the submit button frozen in "Saving…" forever.
+    try {
+      const payload: Record<string, any> = { aircraft_id: aircraft!.id, item_name: mxName, tracking_type: mxTrackingType, is_required: mxIsRequired, automate_scheduling: automateScheduling };
+
+      const wantTime = mxTrackingType === 'time' || mxTrackingType === 'both';
+      const wantDate = mxTrackingType === 'date' || mxTrackingType === 'both';
+
+      if (wantTime) {
+        payload.last_completed_time = parseFloat(mxLastTime) || 0;
+        payload.time_interval = mxIntervalTime ? parseFloat(mxIntervalTime) : null;
+        payload.due_time = mxDueTime ? parseFloat(mxDueTime) : (parseFloat(mxLastTime) + parseFloat(mxIntervalTime || '0'));
+      } else {
+        payload.last_completed_time = null; payload.time_interval = null; payload.due_time = null;
+      }
+
+      if (wantDate) {
+        payload.last_completed_date = mxLastDate || null;
+        payload.date_interval_days = mxIntervalDays ? parseInt(mxIntervalDays) : null;
+        payload.due_date = mxDueDate || (mxLastDate && mxIntervalDays ? new Date(new Date(mxLastDate).getTime() + parseInt(mxIntervalDays) * 86400000).toISOString().split('T')[0] : null);
+      } else {
+        payload.last_completed_date = null; payload.date_interval_days = null; payload.due_date = null;
+      }
+      if (editingId) {
+        const res = await authFetch('/api/maintenance-items', { method: 'PUT', body: JSON.stringify({ itemId: editingId, aircraftId: aircraft!.id, itemData: payload }) });
+        if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || "Couldn't update the maintenance item"); }
+      } else {
+        const res = await authFetch('/api/maintenance-items', { method: 'POST', body: JSON.stringify({ aircraftId: aircraft!.id, itemData: payload }) });
+        if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || "Couldn't create the maintenance item"); }
+      }
+      await mutate(); onGroundedStatusChange(); setShowMxModal(false);
+      showSuccess(editingId ? 'Maintenance item updated.' : 'Maintenance item added.');
+    } catch (err: any) {
+      showError(err?.message || "Couldn't save the maintenance item.");
+    } finally {
+      setIsSubmitting(false);
     }
-    if (editingId) {
-      const res = await authFetch('/api/maintenance-items', { method: 'PUT', body: JSON.stringify({ itemId: editingId, aircraftId: aircraft!.id, itemData: payload }) });
-      if (!res.ok) throw new Error('Failed to update maintenance item');
-    } else {
-      const res = await authFetch('/api/maintenance-items', { method: 'POST', body: JSON.stringify({ aircraftId: aircraft!.id, itemData: payload }) });
-      if (!res.ok) throw new Error('Failed to create maintenance item');
-    }
-    await mutate(); onGroundedStatusChange(); setShowMxModal(false); setIsSubmitting(false);
   };
 
   const deleteMxItem = async (id: string) => {
     const ok = await confirm({
       title: "Delete Maintenance Item?",
-      message: "This maintenance item will be permanently removed from tracking.",
+      message: "We'll stop tracking this item. History on completed work stays in your service-event records.",
       confirmText: "Delete",
       variant: "danger",
     });
     if (!ok) return;
-    const res = await authFetch('/api/maintenance-items', { method: 'DELETE', body: JSON.stringify({ itemId: id, aircraftId: aircraft!.id }) });
-    if (!res.ok) throw new Error('Failed to delete maintenance item');
-    await mutate(); onGroundedStatusChange();
+    try {
+      const res = await authFetch('/api/maintenance-items', { method: 'DELETE', body: JSON.stringify({ itemId: id, aircraftId: aircraft!.id }) });
+      if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || "Couldn't delete the maintenance item"); }
+      await mutate(); onGroundedStatusChange();
+      showSuccess('Maintenance item deleted.');
+    } catch (err: any) {
+      showError(err?.message || "Couldn't delete the maintenance item.");
+    }
   };
 
   if (!aircraft) return null;
 
-  const statusLabel = (s: string) => ({ draft: 'Draft — Review & Send', scheduling: 'Scheduling', confirmed: 'Confirmed', in_progress: 'In Progress', ready_for_pickup: 'Ready for Pickup', cancelled: 'Cancelled' }[s] || s);
-  const statusColor = (s: string) => ({ draft: 'bg-[#F08B46]', scheduling: 'bg-gray-500', confirmed: 'bg-[#3AB0FF]', in_progress: 'bg-[#56B94A]', ready_for_pickup: 'bg-[#56B94A]', cancelled: 'bg-[#CE3732]' }[s] || 'bg-gray-400');
+  const statusLabel = mxEventStatusLabel;
+  const statusColor = mxEventStatusBgClass;
 
   /** Format interval for display in needs-setup items */
   const formatItemInterval = (item: any): string => {
@@ -258,16 +315,22 @@ export default function MaintenanceTab({
   };
 
   return (
-    <>
-      {/* ─── MX / SQUAWKS TAB SELECTOR ─── */}
-      <div className="flex mb-4 border-b-2 border-gray-200">
-        <button onClick={() => setSubTab('maintenance')} className={`flex-1 py-3 text-xs font-oswald font-bold uppercase tracking-widest transition-colors active:scale-95 flex items-center justify-center gap-2 border-b-2 -mb-[2px] ${subTab === 'maintenance' ? 'border-[#F08B46] text-[#F08B46]' : 'border-transparent text-gray-400 hover:text-gray-600'}`}>
-          <Wrench size={16} /> Maintenance
-        </button>
-        <button onClick={() => setSubTab('squawks')} className={`flex-1 py-3 text-xs font-oswald font-bold uppercase tracking-widest transition-colors active:scale-95 flex items-center justify-center gap-2 border-b-2 -mb-[2px] ${subTab === 'squawks' ? 'border-[#CE3732] text-[#CE3732]' : 'border-transparent text-gray-400 hover:text-gray-600'}`}>
-          <AlertTriangle size={16} /> Squawks
-        </button>
-      </div>
+    <div className="flex flex-col">
+      {/* ─── MX / SQUAWKS / SERVICE / ADS SELECTOR ─── */}
+      <SectionSelector
+        items={MX_ADS_SELECTOR_ITEMS}
+        selectedKey={subTab}
+        onSelect={(key) => {
+          // Maintenance / squawks / service are local subtabs; ADs is
+          // a separate app tab so we hand off to AppShell via event.
+          if (key === 'maintenance' || key === 'squawks' || key === 'service') {
+            setSubTab(key);
+          } else {
+            emitMxAdsNavigate(key);
+          }
+        }}
+        compact
+      />
 
       {/* ─── MAINTENANCE SUB-VIEW ─── */}
       {subTab === 'maintenance' && (
@@ -277,39 +340,42 @@ export default function MaintenanceTab({
               <div className="flex gap-2">
                 <div className="flex-1"><PrimaryButton onClick={() => openMxForm()}><Plus size={18} /> Track New Item</PrimaryButton></div>
                 <div className="flex-1">
-                  <button onClick={() => setShowServiceModal(true)} className="w-full bg-[#F08B46] text-white font-oswald tracking-widest uppercase py-3 px-4 rounded hover:bg-opacity-90 active:scale-95 transition-all duration-150 ease-out flex justify-center items-center gap-2 text-sm">
+                  <button onClick={() => setShowServiceModal(true)} className="w-full bg-mxOrange text-white font-oswald tracking-widest uppercase py-3 px-4 rounded hover:bg-opacity-90 active:scale-95 transition-all duration-150 ease-out flex justify-center items-center gap-2 text-sm">
                     <Calendar size={18} /> Schedule Service
                   </button>
                 </div>
               </div>
               <button 
                 onClick={() => setShowTemplateModal(true)} 
-                className="w-full border-2 border-dashed border-[#F08B46] text-[#F08B46] font-oswald font-bold uppercase tracking-widest py-2.5 rounded hover:bg-orange-50 active:scale-95 transition-all text-xs flex justify-center items-center gap-2"
+                className="w-full border-2 border-dashed border-mxOrange text-mxOrange font-oswald font-bold uppercase tracking-widest py-2.5 rounded hover:bg-orange-50 active:scale-95 transition-all text-xs flex justify-center items-center gap-2"
               >
                 <Layers size={16} /> Start from Template
               </button>
             </div>
           )}
 
-          <ServiceEventModal aircraft={aircraft} show={showServiceModal} onClose={() => { setShowServiceModal(false); mutateEvents(); }} onRefresh={() => { mutate(); mutateEvents(); }} canManageService={canEditMx} />
           <MxGuideModal show={showGuideModal} onClose={() => setShowGuideModal(false)} />
           <MxTemplatePickerModal aircraft={aircraft} show={showTemplateModal} onClose={() => setShowTemplateModal(false)} onRefresh={() => { mutate(); onGroundedStatusChange(); }} />
 
           {canEditMx && activeEvents.length > 0 && (
             <div className="mb-4 space-y-2">
               {activeEvents.map(ev => (
-                <div key={ev.id} className={`bg-white shadow-lg rounded-sm p-4 border-t-4 ${ev.status === 'draft' ? 'border-[#F08B46]' : ev.status === 'confirmed' ? 'border-[#3AB0FF]' : ev.status === 'in_progress' || ev.status === 'ready_for_pickup' ? 'border-[#56B94A]' : 'border-gray-400'}`}>
+                <div
+                  key={ev.id}
+                  onClick={() => setShowServiceModal(true)}
+                  className={`bg-white shadow-lg rounded-sm p-4 border-t-4 cursor-pointer hover:shadow-xl active:scale-[0.99] transition-all ${ev.status === 'draft' ? 'border-mxOrange' : ev.status === 'confirmed' ? 'border-info' : ev.status === 'in_progress' || ev.status === 'ready_for_pickup' ? 'border-[#56B94A]' : 'border-gray-400'}`}
+                >
                   <div className="flex justify-between items-start">
                     <div>
                       <span className={`text-[8px] font-bold uppercase tracking-widest px-2 py-0.5 rounded text-white ${statusColor(ev.status)}`}>{statusLabel(ev.status)}</span>
-                      <p className="font-oswald font-bold text-navy text-sm mt-2">{ev.status === 'draft' ? 'Work Package Ready for Review' : ev.confirmed_date ? `Service: ${ev.confirmed_date}` : ev.proposed_date ? `Proposed: ${ev.proposed_date} (by ${ev.proposed_by})` : 'Awaiting Date'}</p>
+                      <p className="font-oswald font-bold text-navy text-sm mt-2">{mxEventSummary(ev)}</p>
                       {ev.estimated_completion && <p className="text-[10px] text-gray-500 mt-1">Est. completion: {ev.estimated_completion}</p>}
                       <p className="text-[10px] text-gray-400 mt-1">MX Contact: {ev.mx_contact_name || 'N/A'}</p>
                     </div>
                     <div className="flex flex-col gap-2 items-end shrink-0 ml-3">
-                      <button onClick={() => setShowServiceModal(true)} className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-[#3AB0FF] bg-blue-50 border border-blue-200 px-2.5 py-1.5 rounded transition-colors active:scale-95">View <ChevronRight size={12} /></button>
-                      {ev.status !== 'draft' && <button onClick={() => setConfirmResendId(ev.id)} disabled={resendingEventId === ev.id} className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-[#F08B46] bg-orange-50 border border-orange-200 px-2.5 py-1.5 rounded transition-colors active:scale-95 disabled:opacity-50"><Send size={10} /> {resendingEventId === ev.id ? '...' : 'Resend'}</button>}
-                      {ev.access_token && ev.status !== 'draft' && <a href={`/service/${ev.access_token}`} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-navy bg-gray-50 border border-gray-200 px-2.5 py-1.5 rounded transition-colors active:scale-95"><ExternalLink size={10} /> Portal</a>}
+                      <button onClick={(e) => { e.stopPropagation(); setShowServiceModal(true); }} className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-info bg-blue-50 border border-blue-200 px-2.5 py-1.5 rounded transition-colors active:scale-95">View <ChevronRight size={12} /></button>
+                      {ev.status !== 'draft' && <button onClick={(e) => { e.stopPropagation(); setConfirmResendId(ev.id); }} disabled={resendingEventId === ev.id} className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-mxOrange bg-orange-50 border border-orange-200 px-2.5 py-1.5 rounded transition-colors active:scale-95 disabled:opacity-50"><Send size={10} /> {resendingEventId === ev.id ? '...' : 'Resend'}</button>}
+                      {ev.access_token && ev.status !== 'draft' && <a href={`/service/${ev.access_token}`} onClick={(e) => e.stopPropagation()} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-navy bg-gray-50 border border-gray-200 px-2.5 py-1.5 rounded transition-colors active:scale-95"><ExternalLink size={10} /> Portal</a>}
                     </div>
                   </div>
                 </div>
@@ -319,26 +385,30 @@ export default function MaintenanceTab({
 
           {/* ─── NEEDS SETUP SECTION ─── */}
           {needsSetupItems.length > 0 && (
-            <div className="bg-[#FFF7ED] shadow-lg rounded-sm p-4 md:p-6 border-t-4 border-[#F08B46] mb-4">
+            <div className="bg-[#FFF7ED] shadow-lg rounded-sm p-4 md:p-6 border-t-4 border-mxOrange mb-4">
               <div className="flex justify-between items-end mb-4">
                 <div>
                   <h2 className="font-oswald text-xl font-bold uppercase text-navy m-0 leading-none flex items-center gap-2">
-                    <Settings size={18} className="text-[#F08B46]" /> Needs Setup
+                    <Settings size={18} className="text-mxOrange" /> Needs Setup
                   </h2>
-                  <p className="text-[10px] text-gray-500 mt-1">Enter last-completed data from your logbook to activate tracking</p>
+                  <p className="text-[10px] text-gray-500 mt-1">Enter when this was last done (from your logbook) and we'll start tracking it.</p>
                 </div>
-                <span className="text-[10px] font-bold uppercase tracking-widest bg-[#F08B46] text-white px-2 py-1 rounded">{needsSetupItems.length} item{needsSetupItems.length > 1 ? 's' : ''}</span>
+                <span className="text-[10px] font-bold uppercase tracking-widest bg-mxOrange text-white px-2 py-1 rounded">{needsSetupItems.length} item{needsSetupItems.length > 1 ? 's' : ''}</span>
               </div>
               <div className="space-y-2">
                 {needsSetupItems.map(item => (
-                  <div key={item.id} className="p-3 border border-orange-200 bg-white rounded flex justify-between items-center">
+                  <div
+                    key={item.id}
+                    onClick={() => canEditMx && openMxForm(item)}
+                    className={`p-3 border border-orange-200 bg-white rounded flex justify-between items-center ${canEditMx ? 'cursor-pointer hover:bg-orange-50 active:scale-[0.99] transition-all' : ''}`}
+                  >
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <h4 className="font-oswald font-bold uppercase text-sm text-navy truncate">{item.item_name}</h4>
-                        {item.is_required && <span className="text-[7px] font-bold uppercase tracking-widest px-1 py-0.5 rounded bg-red-100 text-[#CE3732] shrink-0">Required</span>}
+                        {item.is_required && <span className="text-[7px] font-bold uppercase tracking-widest px-1 py-0.5 rounded bg-red-100 text-danger shrink-0">Required</span>}
                       </div>
                       <div className="flex items-center gap-3 mt-1">
-                        <span className="text-[10px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-orange-100 text-[#F08B46]">Setup Required</span>
+                        <span className="text-[10px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-orange-100 text-mxOrange">Setup Required</span>
                         {formatItemInterval(item) && (
                           <span className="text-[10px] text-gray-400">{formatItemInterval(item)}</span>
                         )}
@@ -346,8 +416,8 @@ export default function MaintenanceTab({
                     </div>
                     {canEditMx && (
                       <div className="flex gap-3 pl-3 shrink-0">
-                        <button onClick={() => openMxForm(item)} className="text-[#F08B46] hover:text-orange-600 transition-colors active:scale-95" title="Configure"><Edit2 size={16}/></button>
-                        <button onClick={() => deleteMxItem(item.id)} className="text-gray-400 hover:text-[#CE3732] transition-colors active:scale-95"><Trash2 size={16}/></button>
+                        <button onClick={(e) => { e.stopPropagation(); openMxForm(item); }} className="text-mxOrange hover:text-orange-600 transition-colors active:scale-95" title="Configure"><Edit2 size={16}/></button>
+                        <button onClick={(e) => { e.stopPropagation(); deleteMxItem(item.id); }} className="text-gray-400 hover:text-danger transition-colors active:scale-95"><Trash2 size={16}/></button>
                       </div>
                     )}
                   </div>
@@ -357,93 +427,151 @@ export default function MaintenanceTab({
           )}
 
           {/* ─── ACTIVE TRACKING ITEMS ─── */}
-          <div className={`bg-cream shadow-lg rounded-sm p-4 md:p-6 border-t-4 mb-6 ${isGroundedLocally ? 'border-[#CE3732]' : 'border-[#F08B46]'}`}>
-            <div className="flex justify-between items-end mb-6">
-              <h2 className="font-oswald text-2xl md:text-3xl font-bold uppercase text-navy m-0 leading-none">Maintenance</h2>
-              <div className="flex items-center gap-3">
-                <button onClick={exportMxHistory} disabled={isExportingMx} className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-[#3AB0FF] hover:opacity-80 transition-colors active:scale-95 disabled:opacity-50"><Download size={14} /> {isExportingMx ? 'Exporting...' : 'History'}</button>
-                <button onClick={() => setShowGuideModal(true)} className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-[#F08B46] hover:opacity-80 transition-colors active:scale-95"><HelpCircle size={14} /> Guide</button>
-              </div>
-            </div>
-            <div className="space-y-3">
-              {activeItems.length === 0 ? (
-                <p className="text-center text-sm text-gray-400 italic py-4">
-                  {needsSetupItems.length > 0 ? 'All items need setup — configure them above to start tracking.' : 'No maintenance items tracked.'}
-                </p>
-              ) : activeItems.map(item => {
-                const processed = processMxItem(item, currentEngineTime, aircraft.burnRate, aircraft.burnRateLow, aircraft.burnRateHigh);
-                const dueTextColor = getMxTextColor(processed, sysSettings);
-                const containerClass = processed.isExpired ? (item.is_required ? 'bg-red-50 border-red-200' : 'bg-orange-50 border-orange-200') : 'bg-white border-gray-200';
-                return (
-                  <div key={item.id} className={`p-4 border rounded flex justify-between items-center ${containerClass}`}>
-                    <div className="w-full">
-                      <div className="flex items-center gap-2">
-                        <h4 className={`font-oswald font-bold uppercase text-sm ${processed.isExpired ? 'text-[#CE3732]' : 'text-navy'}`}>{item.item_name}</h4>
-                        {!item.is_required && <span className={`text-[8px] border px-1 rounded uppercase tracking-widest opacity-70 ${processed.isExpired ? 'border-[#CE3732] text-[#CE3732]' : 'border-navy text-navy'}`}>Optional</span>}
-                      </div>
-                      <p className={`text-xs mt-1 font-roboto font-bold ${dueTextColor}`}>{processed.dueText}</p>
-                      {item.primary_heads_up_sent && !item.mx_schedule_sent && (
-                        <div className="mt-3 bg-red-50 border border-red-200 p-3 rounded w-full max-w-sm">
-                          <p className="text-[10px] text-[#CE3732] font-bold uppercase mb-2 leading-tight">Action Required: Projected MX Due<br/>(System Confidence: {aircraft.confidenceScore || 0}%)</p>
-                          <button onClick={() => handleManualMxTrigger(item)} disabled={isSubmitting} className="w-full bg-[#CE3732] text-white text-[10px] font-bold uppercase px-3 py-2 rounded shadow active:scale-95 transition-transform disabled:opacity-50">{isSubmitting ? "Processing..." : "Approve & Email Mechanic"}</button>
-                        </div>
-                      )}
+          {(() => {
+            const processedActiveItems = activeItems.map(item => ({
+              item,
+              processed: processMxItem(item, currentEngineTime, aircraft.burnRate, aircraft.burnRateLow, aircraft.burnRateHigh),
+            }));
+            // Split into three buckets so a pilot scanning this tab can
+            // tell at a glance what's actually blocking flight today
+            // vs. what's just worth keeping an eye on. "Blocks flight"
+            // mirrors isGroundedLocally (required + expired).
+            const blocking = processedActiveItems.filter(({ item, processed }) => processed.isExpired && item.is_required);
+            const watchlist = processedActiveItems.filter(({ item, processed }) => processed.isExpired && !item.is_required);
+            const onTrack = processedActiveItems.filter(({ processed }) => !processed.isExpired);
+            const renderRow = ({ item, processed }: { item: any; processed: any }) => {
+              const dueTextColor = getMxTextColor(processed, sysSettings);
+              const containerClass = processed.isExpired
+                ? (item.is_required ? 'bg-red-50 border-red-200' : 'bg-orange-50 border-orange-200')
+                : 'bg-white border-gray-200';
+              const hoverClass = processed.isExpired
+                ? (item.is_required ? 'hover:bg-red-100' : 'hover:bg-orange-100')
+                : 'hover:bg-gray-50';
+              return (
+                <div
+                  key={item.id}
+                  onClick={() => canEditMx && openMxForm(item)}
+                  className={`p-4 border rounded flex justify-between items-center ${containerClass} ${canEditMx ? `cursor-pointer ${hoverClass} active:scale-[0.99] transition-all` : ''}`}
+                >
+                  <div className="w-full">
+                    <div className="flex items-center gap-2">
+                      <h4 className={`font-oswald font-bold uppercase text-sm ${processed.isExpired ? 'text-danger' : 'text-navy'}`}>{item.item_name}</h4>
+                      {!item.is_required && <span className={`text-[8px] border px-1 rounded uppercase tracking-widest opacity-70 ${processed.isExpired ? 'border-danger text-danger' : 'border-navy text-navy'}`}>Optional</span>}
                     </div>
-                    {canEditMx && (
-                      <div className="flex gap-3 pl-4">
-                        <button onClick={() => openMxForm(item)} className="text-gray-400 hover:text-[#F08B46] transition-colors active:scale-95"><Edit2 size={16}/></button>
-                        <button onClick={() => deleteMxItem(item.id)} className="text-gray-400 hover:text-[#CE3732] transition-colors active:scale-95"><Trash2 size={16}/></button>
+                    <p className={`text-xs mt-1 font-roboto font-bold ${dueTextColor}`}>{processed.dueText}</p>
+                    {item.primary_heads_up_sent && !item.mx_schedule_sent && (
+                      <div className="mt-3 bg-red-50 border border-red-200 p-3 rounded w-full max-w-sm">
+                        <p className="text-[10px] text-danger font-bold uppercase mb-1 leading-tight">Heads up — coming due based on recent flying</p>
+                        <p className="text-[10px] text-danger mb-2 leading-tight" title="How sure we are about the projection, based on how much recent flight history we have to work with.">Forecast confidence: {aircraft.confidenceScore || 0}% <span className="opacity-60">(from recent flight activity)</span></p>
+                        <button onClick={(e) => { e.stopPropagation(); handleManualMxTrigger(item); }} disabled={isSubmitting} className="w-full bg-danger text-white text-[10px] font-bold uppercase px-3 py-2 rounded shadow active:scale-95 transition-transform disabled:opacity-50">Review &amp; Schedule</button>
                       </div>
                     )}
                   </div>
-                );
-              })}
+                  <div className="flex items-center gap-3 pl-4 shrink-0">
+                    {canEditMx && (
+                      <>
+                        <button onClick={(e) => { e.stopPropagation(); openMxForm(item); }} className="text-gray-400 hover:text-mxOrange transition-colors active:scale-95"><Edit2 size={16}/></button>
+                        <button onClick={(e) => { e.stopPropagation(); deleteMxItem(item.id); }} className="text-gray-400 hover:text-danger transition-colors active:scale-95"><Trash2 size={16}/></button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              );
+            };
+            return (
+          <div className={`bg-cream shadow-lg rounded-sm p-4 md:p-6 border-t-4 mb-6 ${isGroundedLocally ? 'border-danger' : 'border-mxOrange'}`}>
+            <div className="flex justify-between items-end mb-6">
+              <h2 className="font-oswald text-2xl md:text-3xl font-bold uppercase text-navy m-0 leading-none">Maintenance</h2>
+              <div className="flex items-center gap-3">
+                <button onClick={exportMxHistory} disabled={isExportingMx} className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-info hover:opacity-80 transition-colors active:scale-95 disabled:opacity-50"><Download size={14} /> {isExportingMx ? 'Exporting...' : 'History'}</button>
+                <button onClick={() => setShowGuideModal(true)} className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-mxOrange hover:opacity-80 transition-colors active:scale-95"><HelpCircle size={14} /> Guide</button>
+              </div>
             </div>
+            {activeItems.length === 0 ? (
+              <p className="text-center text-sm text-gray-400 italic py-4">
+                {needsSetupItems.length > 0 ? 'All items need setup — fill in the last-completed info above to start tracking.' : 'Nothing tracked yet.'}
+              </p>
+            ) : (
+              <div className="space-y-5">
+                {blocking.length > 0 && (
+                  <div>
+                    <h3 className="text-[11px] font-bold uppercase tracking-widest text-danger mb-2 flex items-center gap-1.5">
+                      <ShieldAlert size={13} /> Grounds the airplane today ({blocking.length})
+                    </h3>
+                    <div className="space-y-3">{blocking.map(renderRow)}</div>
+                  </div>
+                )}
+                {watchlist.length > 0 && (
+                  <div>
+                    <h3 className="text-[11px] font-bold uppercase tracking-widest text-mxOrange mb-2 flex items-center gap-1.5">
+                      <AlertTriangle size={13} /> Past due — optional items ({watchlist.length})
+                    </h3>
+                    <p className="text-[10px] text-gray-500 mb-2 italic">These are past due but marked optional, so they don&apos;t ground the airplane.</p>
+                    <div className="space-y-3">{watchlist.map(renderRow)}</div>
+                  </div>
+                )}
+                {onTrack.length > 0 && (
+                  <div>
+                    <h3 className="text-[11px] font-bold uppercase tracking-widest text-gray-500 mb-2">On track ({onTrack.length})</h3>
+                    <div className="space-y-3">{onTrack.map(renderRow)}</div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
+            );
+          })()}
 
           {/* ─── MX ITEM FORM MODAL ─── */}
           {showMxModal && canEditMx && (
             <div className="fixed inset-0 bg-black/60 z-[10000] overflow-y-auto animate-fade-in" style={{ overscrollBehavior: 'contain' }}>
             <div className="flex min-h-full items-center justify-center p-3">
-              <div className="bg-white rounded shadow-2xl w-full max-w-md p-5 border-t-4 border-[#F08B46] animate-slide-up">
+              <div className="bg-white rounded shadow-2xl w-full max-w-md p-5 border-t-4 border-mxOrange animate-slide-up">
                 <div className="flex justify-between items-center mb-6">
-                  <h2 className="font-oswald text-2xl font-bold uppercase text-navy">{editingId ? 'Edit MX Item' : 'Track New Item'}</h2>
-                  <button onClick={() => setShowMxModal(false)} className="text-gray-400 hover:text-[#CE3732] transition-colors"><X size={24}/></button>
+                  <h2 className="font-oswald text-2xl font-bold uppercase text-navy">{editingId ? 'Edit Maintenance Item' : 'Track New Item'}</h2>
+                  <button onClick={() => setShowMxModal(false)} className="text-gray-400 hover:text-danger transition-colors"><X size={24}/></button>
                 </div>
                 <form onSubmit={submitMxItem} className="space-y-4">
                   <div className="grid grid-cols-3 gap-3">
-                    <div className="col-span-2 min-w-0"><label className="text-[10px] font-bold uppercase tracking-widest text-navy block truncate">Item Name *</label><input type="text" required value={mxName} onChange={e=>setMxName(e.target.value)} style={INPUT_WHITE_BG} className="w-full min-w-0 border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" placeholder="e.g. Annual Inspection" /></div>
-                    <div className="min-w-0"><label className="text-[10px] font-bold uppercase tracking-widest text-navy block truncate">Required?</label><select value={mxIsRequired ? "yes" : "no"} onChange={e=>setMxIsRequired(e.target.value === "yes")} style={INPUT_WHITE_BG} className="w-full min-w-0 border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none"><option value="yes">Yes</option><option value="no">Optional</option></select></div>
+                    <div className="col-span-2 min-w-0"><label className="text-[10px] font-bold uppercase tracking-widest text-navy block truncate">Item Name *</label><input type="text" required value={mxName} onChange={e=>setMxName(e.target.value)} style={INPUT_WHITE_BG} className="w-full min-w-0 border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none" placeholder="e.g. Annual Inspection" /></div>
+                    <div className="min-w-0"><label className="text-[10px] font-bold uppercase tracking-widest text-navy block truncate">Required?</label><select value={mxIsRequired ? "yes" : "no"} onChange={e=>setMxIsRequired(e.target.value === "yes")} style={INPUT_WHITE_BG} className="w-full min-w-0 border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none"><option value="yes">Yes</option><option value="no">Optional</option></select></div>
                   </div>
                   <div className="pt-2">
                     <label className="text-[10px] font-bold uppercase tracking-widest text-navy block mb-2">Tracking Method</label>
-                    <div className="flex gap-4">
+                    <div className="flex flex-wrap gap-x-4 gap-y-2">
                       <label className="flex items-center gap-2 text-sm font-bold text-navy cursor-pointer"><input type="radio" checked={mxTrackingType==='time'} onChange={()=>setMxTrackingType('time')} /> Track by Time</label>
                       <label className="flex items-center gap-2 text-sm font-bold text-navy cursor-pointer"><input type="radio" checked={mxTrackingType==='date'} onChange={()=>setMxTrackingType('date')} /> Track by Date</label>
+                      <label className="flex items-center gap-2 text-sm font-bold text-navy cursor-pointer"><input type="radio" checked={mxTrackingType==='both'} onChange={()=>setMxTrackingType('both')} /> Both (whichever first)</label>
                     </div>
+                    {mxTrackingType === 'both' && (
+                      <p className="text-[10px] text-gray-500 font-roboto mt-2 leading-tight">For items like Annual (12 months OR 100 hrs) — the item comes due whenever either interval expires.</p>
+                    )}
                   </div>
-                  {mxTrackingType === 'time' ? (
+                  {(mxTrackingType === 'time' || mxTrackingType === 'both') && (
                     <div className="bg-gray-50 p-3 md:p-4 rounded border border-gray-200 space-y-3">
-                      <div className="w-full min-w-0"><label className="text-[10px] font-bold uppercase tracking-widest text-navy block truncate">Last Completed ({isTurbine ? 'FTT' : 'Tach'}) *</label><input type="number" step="0.1" required value={mxLastTime} onChange={e=>setMxLastTime(e.target.value)} style={INPUT_WHITE_BG} className="w-full min-w-0 border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" /></div>
+                      <p className="text-[9px] font-bold uppercase tracking-widest text-gray-500">Time Interval</p>
+                      <div className="w-full min-w-0"><label className="text-[10px] font-bold uppercase tracking-widest text-navy block truncate">Last Completed ({isTurbine ? 'FTT' : 'Tach'}) *</label><input type="number" step="0.1" required value={mxLastTime} onChange={e=>setMxLastTime(e.target.value)} style={INPUT_WHITE_BG} className="w-full min-w-0 border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none" /></div>
                       <div className="grid grid-cols-2 gap-3 w-full min-w-0">
-                        <div className="min-w-0"><label className="text-[10px] font-bold uppercase tracking-widest text-navy block truncate">Interval (Hrs)</label><input type="number" step="0.1" value={mxIntervalTime} onChange={e=>setMxIntervalTime(e.target.value)} style={INPUT_WHITE_BG} className="w-full min-w-0 border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" /></div>
-                        <div className="min-w-0"><label className="text-[10px] font-bold uppercase tracking-widest text-navy block truncate">OR Exact Due</label><input type="number" step="0.1" required={!mxIntervalTime} value={mxDueTime} onChange={e=>setMxDueTime(e.target.value)} style={INPUT_WHITE_BG} className="w-full min-w-0 border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" /></div>
+                        <div className="min-w-0"><label className="text-[10px] font-bold uppercase tracking-widest text-navy block truncate">Interval (Hrs)</label><input type="number" step="0.1" value={mxIntervalTime} onChange={e=>setMxIntervalTime(e.target.value)} style={INPUT_WHITE_BG} className="w-full min-w-0 border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none" /></div>
+                        <div className="min-w-0"><label className="text-[10px] font-bold uppercase tracking-widest text-navy block truncate">OR Exact Due</label><input type="number" step="0.1" required={!mxIntervalTime} value={mxDueTime} onChange={e=>setMxDueTime(e.target.value)} style={INPUT_WHITE_BG} className="w-full min-w-0 border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none" /></div>
                       </div>
                     </div>
-                  ) : (
+                  )}
+                  {(mxTrackingType === 'date' || mxTrackingType === 'both') && (
                     <div className="bg-gray-50 p-3 md:p-4 rounded border border-gray-200 space-y-3">
-                      <div className="w-full min-w-0"><label className="text-[10px] font-bold uppercase tracking-widest text-navy block truncate">Last Completed Date *</label><input type="date" required value={mxLastDate} onChange={e=>setMxLastDate(e.target.value)} style={INPUT_WHITE_BG} className="w-full min-w-0 border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" /></div>
+                      <p className="text-[9px] font-bold uppercase tracking-widest text-gray-500">Date Interval</p>
+                      <div className="w-full min-w-0"><label className="text-[10px] font-bold uppercase tracking-widest text-navy block truncate">Last Completed Date *</label><input type="date" required value={mxLastDate} onChange={e=>setMxLastDate(e.target.value)} style={INPUT_WHITE_BG} className="w-full min-w-0 border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none" /></div>
                       <div className="grid grid-cols-2 gap-3 w-full min-w-0">
-                        <div className="min-w-0"><label className="text-[10px] font-bold uppercase tracking-widest text-navy block truncate">Interval (Days)</label><input type="number" value={mxIntervalDays} onChange={e=>setMxIntervalDays(e.target.value)} style={INPUT_WHITE_BG} className="w-full min-w-0 border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" /></div>
-                        <div className="min-w-0"><label className="text-[10px] font-bold uppercase tracking-widest text-navy block truncate">OR Exact Due</label><input type="date" required={!mxIntervalDays} value={mxDueDate} onChange={e=>setMxDueDate(e.target.value)} style={INPUT_WHITE_BG} className="w-full min-w-0 border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" /></div>
+                        <div className="min-w-0"><label className="text-[10px] font-bold uppercase tracking-widest text-navy block truncate">Interval (Days)</label><input type="number" value={mxIntervalDays} onChange={e=>setMxIntervalDays(e.target.value)} style={INPUT_WHITE_BG} className="w-full min-w-0 border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none" /></div>
+                        <div className="min-w-0"><label className="text-[10px] font-bold uppercase tracking-widest text-navy block truncate">OR Exact Due</label><input type="date" required={!mxIntervalDays} value={mxDueDate} onChange={e=>setMxDueDate(e.target.value)} style={INPUT_WHITE_BG} className="w-full min-w-0 border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none" /></div>
                       </div>
                     </div>
                   )}
                   {!editingId && (
                     <div className="pt-2 pb-2">
                       <label className="flex items-start gap-2 text-xs font-bold text-navy cursor-pointer">
-                        <input type="checkbox" checked={automateScheduling} onChange={e=>setAutomateScheduling(e.target.checked)} className="mt-0.5 w-4 h-4 text-[#F08B46] border-gray-300 rounded focus:ring-[#F08B46] cursor-pointer shrink-0" />
-                        <span className="flex flex-col"><span>Automate Scheduling</span><span className="text-[10px] text-gray-500 font-normal mt-1 leading-tight">When this item approaches its due threshold, the system will automatically create a draft work package and notify you to review and send it to your mechanic.</span></span>
+                        <input type="checkbox" checked={automateScheduling} onChange={e=>setAutomateScheduling(e.target.checked)} className="mt-0.5 w-4 h-4 text-mxOrange border-gray-300 rounded focus:ring-mxOrange cursor-pointer shrink-0" />
+                        <span className="flex flex-col"><span>Auto-draft a work package when this gets close to due</span><span className="text-[10px] text-gray-500 font-normal mt-1 leading-tight">When this item gets close to due, we'll draft a work package and email you to review it before it goes to your mechanic. Nothing sends automatically — you still tap send.</span></span>
                       </label>
                     </div>
                   )}
@@ -457,12 +585,12 @@ export default function MaintenanceTab({
           {confirmResendId && (
             <div className="fixed inset-0 bg-black/60 z-[10001] overflow-y-auto animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => setConfirmResendId(null)}>
             <div className="flex min-h-full items-center justify-center p-4">
-              <div className="bg-white rounded shadow-2xl w-full max-w-sm p-6 border-t-4 border-[#F08B46] animate-slide-up" onClick={e => e.stopPropagation()}>
+              <div className="bg-white rounded shadow-2xl w-full max-w-sm p-6 border-t-4 border-mxOrange animate-slide-up" onClick={e => e.stopPropagation()}>
                 <h3 className="font-oswald text-xl font-bold uppercase text-navy mb-3">Resend Work Package?</h3>
-                <p className="text-sm text-gray-600 mb-6">Are you sure you want to resend the work order to <strong>{activeEvents.find(e => e.id === confirmResendId)?.mx_contact_name || 'the primary maintenance contact'}</strong>?</p>
+                <p className="text-sm text-gray-600 mb-6">Send the same work package email to <strong>{activeEvents.find(e => e.id === confirmResendId)?.mx_contact_name || 'your maintenance contact'}</strong> again? The subject line gets a &quot;Reminder&quot; tag so they know it&apos;s a nudge.</p>
                 <div className="flex gap-3">
                   <button onClick={() => setConfirmResendId(null)} className="flex-1 border border-gray-300 text-gray-600 font-oswald font-bold uppercase tracking-widest py-3 rounded text-xs active:scale-95">Cancel</button>
-                  <button onClick={() => handleResendWorkpackage(confirmResendId)} disabled={resendingEventId === confirmResendId} className="flex-1 bg-[#F08B46] text-white font-oswald font-bold uppercase tracking-widest py-3 rounded text-xs active:scale-95 disabled:opacity-50">{resendingEventId === confirmResendId ? 'Sending...' : 'Resend'}</button>
+                  <button onClick={() => handleResendWorkpackage(confirmResendId)} disabled={resendingEventId === confirmResendId} className="flex-1 bg-mxOrange text-white font-oswald font-bold uppercase tracking-widest py-3 rounded text-xs active:scale-95 disabled:opacity-50">{resendingEventId === confirmResendId ? 'Sending...' : 'Resend'}</button>
                 </div>
               </div>
             </div>
@@ -475,6 +603,152 @@ export default function MaintenanceTab({
       {subTab === 'squawks' && (
         <SquawksTab aircraft={aircraft} session={session} role={role} aircraftRole={aircraftRole} userInitials={userInitials} onGroundedStatusChange={onGroundedStatusChange} />
       )}
-    </>
+
+      {/* ─── SERVICE SUB-VIEW ─── */}
+      {subTab === 'service' && (
+        <ServiceEventsList
+          aircraft={aircraft}
+          activeEvents={activeEvents}
+          canEditMx={canEditMx}
+          onOpenModal={() => setShowServiceModal(true)}
+        />
+      )}
+
+      <ServiceEventModal aircraft={aircraft} show={showServiceModal} onClose={() => { setShowServiceModal(false); setPreSelectMxItemId(null); mutateEvents(); }} onRefresh={() => { mutate(); mutateEvents(); }} canManageService={canEditMx} preSelectMxItemId={preSelectMxItemId} />
+    </div>
+  );
+}
+
+/**
+ * Service-events listing — summary cards for every work package the
+ * aircraft has. Tapping a card opens ServiceEventModal (which handles
+ * the detailed view + mechanic portal link). Admins see a "Schedule
+ * Service" CTA; non-admins get read-only.
+ *
+ * We split into "active" (work in flight) and "past" (complete /
+ * cancelled) because owners glance here to see what's queued far more
+ * often than they dig into history.
+ */
+function ServiceEventsList({
+  aircraft,
+  activeEvents,
+  canEditMx,
+  onOpenModal,
+}: {
+  aircraft: AircraftWithMetrics | null;
+  activeEvents: any[];
+  canEditMx: boolean;
+  onOpenModal: () => void;
+}) {
+  const { data: pastEvents = [] } = useSWR(
+    aircraft ? ['mx-events-past', aircraft.id] : null,
+    async () => {
+      const { data } = await supabase
+        .from('aft_maintenance_events')
+        .select('*')
+        .eq('aircraft_id', aircraft!.id)
+        .is('deleted_at', null)
+        .in('status', ['complete', 'cancelled'])
+        .order('created_at', { ascending: false })
+        .limit(20);
+      return data || [];
+    },
+  );
+
+  const renderCard = (ev: any) => {
+    const statusColor = ev.status === 'draft' ? '#F08B46'
+      : ev.status === 'confirmed' ? '#3AB0FF'
+      : ev.status === 'in_progress' || ev.status === 'ready_for_pickup' ? '#56B94A'
+      : ev.status === 'complete' ? '#56B94A'
+      : ev.status === 'cancelled' ? '#CE3732'
+      : '#9CA3AF';
+    return (
+      <div
+        key={ev.id}
+        onClick={onOpenModal}
+        className="bg-white shadow rounded-sm p-4 border-l-4 flex items-start justify-between gap-3 cursor-pointer hover:shadow-lg active:scale-[0.99] transition-all"
+        style={{ borderLeftColor: statusColor }}
+      >
+        <div className="min-w-0">
+          <span
+            className="text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded text-white inline-block"
+            style={{ backgroundColor: statusColor }}
+          >
+            {mxEventStatusLabel(ev.status)}
+          </span>
+          <p className="font-oswald font-bold text-navy text-sm mt-2 truncate">{mxEventSummary(ev)}</p>
+          {ev.estimated_completion && (
+            <p className="text-[10px] text-gray-500 mt-0.5">Est. completion: {ev.estimated_completion}</p>
+          )}
+          <p className="text-[10px] text-gray-400 mt-0.5 truncate">
+            MX Contact: {ev.mx_contact_name || 'N/A'}
+          </p>
+        </div>
+        <div className="flex flex-col gap-1.5 shrink-0">
+          <button
+            onClick={(e) => { e.stopPropagation(); onOpenModal(); }}
+            className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-info bg-blue-50 border border-blue-200 px-2.5 py-1.5 rounded active:scale-95"
+          >
+            View <ChevronRight size={12} />
+          </button>
+          {ev.access_token && ev.status !== 'draft' && (
+            <a
+              href={`/service/${ev.access_token}`}
+              onClick={(e) => e.stopPropagation()}
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-navy bg-gray-50 border border-gray-200 px-2.5 py-1.5 rounded active:scale-95"
+            >
+              <ExternalLink size={10} /> Portal
+            </a>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="space-y-4">
+      {canEditMx && (
+        <button
+          onClick={onOpenModal}
+          className="w-full bg-mxOrange text-white font-oswald tracking-widest uppercase py-3 px-4 rounded hover:bg-opacity-90 active:scale-95 transition-all flex justify-center items-center gap-2 text-sm"
+        >
+          <Calendar size={18} /> Schedule Service
+        </button>
+      )}
+
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="font-oswald text-sm font-bold uppercase tracking-widest text-navy">
+            Active work
+          </h3>
+          <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">
+            {activeEvents.length}
+          </span>
+        </div>
+        {activeEvents.length === 0 ? (
+          <p className="text-xs text-gray-500 italic bg-gray-50 rounded p-3 border border-gray-200">
+            Nothing open right now. {canEditMx ? 'Tap Schedule Service to bundle items into a trip to the shop.' : 'Your aircraft admin can schedule service when needed.'}
+          </p>
+        ) : (
+          <div className="space-y-2">{activeEvents.map(renderCard)}</div>
+        )}
+      </div>
+
+      {pastEvents.length > 0 && (
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="font-oswald text-sm font-bold uppercase tracking-widest text-gray-500">
+              Past
+            </h3>
+            <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">
+              {pastEvents.length}
+            </span>
+          </div>
+          <div className="space-y-2 opacity-80">{pastEvents.map(renderCard)}</div>
+        </div>
+      )}
+    </div>
   );
 }

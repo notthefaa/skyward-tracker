@@ -30,16 +30,16 @@ export default function ServiceEventList({
       {/* Draft banners */}
       {canManageService && activeEvents.filter(e => e.status === 'draft').length > 0 && (
         <div className="bg-orange-50 border-2 border-orange-200 rounded p-4">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-[#F08B46] mb-3 flex items-center gap-1">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-mxOrange mb-3 flex items-center gap-1">
             <AlertTriangle size={12} /> Drafts Awaiting Your Review
           </p>
           {activeEvents.filter(e => e.status === 'draft').map(ev => (
-            <button key={ev.id} onClick={() => onOpenDraftReview(ev)} className="w-full bg-white border-2 border-[#F08B46] p-4 rounded mb-2 text-left flex justify-between items-center hover:bg-orange-50 transition-colors active:scale-[0.98]">
+            <button key={ev.id} onClick={() => onOpenDraftReview(ev)} className="w-full bg-white border-2 border-mxOrange p-4 rounded mb-2 text-left flex justify-between items-center hover:bg-orange-50 transition-colors active:scale-[0.98]">
               <div>
-                <span className="text-[8px] font-bold uppercase tracking-widest px-2 py-0.5 rounded text-white bg-[#F08B46]">draft — review &amp; send</span>
+                <span className="text-[8px] font-bold uppercase tracking-widest px-2 py-0.5 rounded text-white bg-mxOrange">draft — review &amp; send</span>
                 <p className="text-[10px] text-gray-500 mt-1">Auto-created {new Date(ev.created_at).toLocaleDateString()}</p>
               </div>
-              <ChevronRight size={18} className="text-[#F08B46]" />
+              <ChevronRight size={18} className="text-mxOrange" />
             </button>
           ))}
         </div>
@@ -50,9 +50,9 @@ export default function ServiceEventList({
         <div>
           <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-2">Active</p>
           {activeEvents.filter(e => e.status !== 'draft').map(ev => (
-            <button key={ev.id} onClick={() => onOpenDetail(ev)} className="w-full bg-gray-50 border border-gray-200 p-4 rounded mb-2 text-left flex justify-between items-center hover:border-[#F08B46] transition-colors active:scale-[0.98]">
+            <button key={ev.id} onClick={() => onOpenDetail(ev)} className="w-full bg-gray-50 border border-gray-200 p-4 rounded mb-2 text-left flex justify-between items-center hover:border-mxOrange transition-colors active:scale-[0.98]">
               <div>
-                <span className={`text-[8px] font-bold uppercase tracking-widest px-2 py-0.5 rounded text-white ${ev.status === 'confirmed' ? 'bg-[#3AB0FF]' : ev.status === 'in_progress' ? 'bg-[#56B94A]' : ev.status === 'ready_for_pickup' ? 'bg-[#56B94A]' : 'bg-gray-500'}`}>
+                <span className={`text-[8px] font-bold uppercase tracking-widest px-2 py-0.5 rounded text-white ${ev.status === 'confirmed' ? 'bg-info' : ev.status === 'in_progress' ? 'bg-[#56B94A]' : ev.status === 'ready_for_pickup' ? 'bg-[#56B94A]' : 'bg-gray-500'}`}>
                   {ev.status === 'ready_for_pickup' ? 'Ready' : ev.status}
                 </span>
                 <p className="font-bold text-navy text-sm mt-1">{ev.confirmed_date || ev.proposed_date || 'Pending'}</p>
@@ -87,7 +87,7 @@ export default function ServiceEventList({
           {cancelledEvents.slice(0, 3).map(ev => (
             <button key={ev.id} onClick={() => onOpenDetail(ev)} className="w-full bg-red-50 border border-red-200 p-3 rounded mb-2 text-left flex justify-between items-center opacity-50 hover:opacity-80 transition-opacity active:scale-[0.98]">
               <div>
-                <span className="text-[8px] font-bold uppercase tracking-widest px-2 py-0.5 rounded text-white bg-[#CE3732]">cancelled</span>
+                <span className="text-[8px] font-bold uppercase tracking-widest px-2 py-0.5 rounded text-white bg-danger">cancelled</span>
                 <p className="text-[10px] text-gray-500 mt-1">Created {new Date(ev.created_at).toLocaleDateString()}</p>
               </div>
               <ChevronRight size={18} className="text-gray-400" />
@@ -97,7 +97,7 @@ export default function ServiceEventList({
       )}
 
       {events.length === 0 && (
-        <p className="text-center text-sm text-gray-400 italic py-4">No maintenance events yet.</p>
+        <p className="text-center text-sm text-gray-400 italic py-4">No service events yet.</p>
       )}
     </div>
   );

@@ -365,25 +365,20 @@ export function processMxItem(
   burnRateLow?: number,
   burnRateHigh?: number
 ): ProcessedMxItem {
-  let remaining = 0;
-  let isExpired = false;
-  let dueText = '';
-  let projectedDays = Infinity;
-
-  if (item.tracking_type === 'time') {
-    remaining = (item.due_time ?? 0) - currentEngineTime;
-    isExpired = remaining <= 0;
-    dueText = isExpired
+  // Compute time-side status (hours remaining + projected days)
+  const timeResult = item.due_time != null ? (() => {
+    const remaining = (item.due_time ?? 0) - currentEngineTime;
+    const isExpired = remaining <= 0;
+    let dueText = isExpired
       ? `Expired by ${Math.abs(remaining).toFixed(1)} hrs`
       : `Due in ${remaining.toFixed(1)} hrs (@ ${item.due_time})`;
-
+    let projectedDays = Infinity;
     if (burnRate > 0) {
       projectedDays = remaining / burnRate;
-
       if (!isExpired) {
         if (burnRateLow && burnRateHigh && burnRateHigh > 0 && burnRateLow !== burnRateHigh) {
-          const daysHigh = Math.ceil(remaining / burnRateLow);   // Slow burn = more days
-          const daysLow = Math.ceil(remaining / burnRateHigh);   // Fast burn = fewer days
+          const daysHigh = Math.ceil(remaining / burnRateLow);
+          const daysLow = Math.ceil(remaining / burnRateHigh);
           if (daysLow !== daysHigh && daysHigh - daysLow > 2) {
             dueText += ` (~${daysLow}-${daysHigh} days)`;
           } else {
@@ -394,19 +389,51 @@ export function processMxItem(
         }
       }
     }
-  } else {
+    return { remaining, isExpired, projectedDays, dueText };
+  })() : null;
+
+  // Compute date-side status (days remaining)
+  const dateResult = item.due_date != null ? (() => {
     const diffTime =
       new Date((item.due_date ?? '') + 'T00:00:00').getTime() -
       new Date(new Date().setHours(0, 0, 0, 0)).getTime();
-    remaining = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    isExpired = remaining < 0;
-    projectedDays = remaining;
-    dueText = isExpired
+    const remaining = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    const isExpired = remaining < 0;
+    const projectedDays = remaining;
+    const dueText = isExpired
       ? `Expired ${Math.abs(remaining)} days ago`
       : `Due in ${remaining} days (${item.due_date})`;
+    return { remaining, isExpired, projectedDays, dueText };
+  })() : null;
+
+  // Decide which side drives the status.
+  // "both" means dual-interval; pick the more urgent (lower projectedDays).
+  const isDual = item.tracking_type === 'both';
+  const sideTime = item.tracking_type === 'time' || (isDual && timeResult);
+  const sideDate = item.tracking_type === 'date' || (isDual && dateResult && !sideTime);
+
+  if (isDual && timeResult && dateResult) {
+    // Compute which is sooner in days; combine text to show both, flagged.
+    const timeDays = Number.isFinite(timeResult.projectedDays) ? timeResult.projectedDays : Infinity;
+    const dateDays = dateResult.projectedDays;
+    const driver = timeDays <= dateDays ? timeResult : dateResult;
+    const otherLabel = timeDays <= dateDays
+      ? `; ${dateResult.isExpired ? 'expired' : 'then'} ${dateResult.dueText}`
+      : `; ${timeResult.isExpired ? 'expired' : 'then'} ${timeResult.dueText}`;
+    return {
+      ...item,
+      remaining: driver.remaining,
+      projectedDays: driver.projectedDays,
+      isExpired: timeResult.isExpired || dateResult.isExpired,
+      dueText: driver.dueText + otherLabel,
+    };
   }
 
-  return { ...item, remaining, projectedDays, isExpired, dueText };
+  const active = sideTime ? timeResult : sideDate ? dateResult : null;
+  if (!active) {
+    return { ...item, remaining: 0, projectedDays: Infinity, isExpired: false, dueText: 'Not yet configured' };
+  }
+  return { ...item, ...active };
 }
 
 export function getMxTextColor(
@@ -431,9 +458,11 @@ export function getMxTextColor(
 
 export function isMxExpired(item: any, currentEngineTime: number): boolean {
   if (!item.is_required) return false;
-  if (item.tracking_type === 'time') return (item.due_time ?? 0) <= currentEngineTime;
-  if (item.tracking_type === 'date') {
-    return new Date((item.due_date ?? '') + 'T00:00:00') < new Date(new Date().setHours(0, 0, 0, 0));
-  }
+  const timeExpired = item.due_time != null && item.due_time <= currentEngineTime;
+  const dateExpired = item.due_date != null
+    && new Date(item.due_date + 'T00:00:00') < new Date(new Date().setHours(0, 0, 0, 0));
+  if (item.tracking_type === 'both') return timeExpired || dateExpired;
+  if (item.tracking_type === 'time') return timeExpired;
+  if (item.tracking_type === 'date') return dateExpired;
   return false;
 }

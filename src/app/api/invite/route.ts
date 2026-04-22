@@ -25,11 +25,17 @@ export async function POST(req: Request) {
         email: email
       });
 
-      // 2. Assign the Aircraft instantly
+      // 2. Assign the Aircraft instantly. The access row NEEDS an
+      //    aircraft_role — downstream gates compare it against
+      //    'admin' / 'pilot' string literals, and a NULL value means
+      //    the user would silently be treated as having no role. We
+      //    default to 'pilot'; a caller who wants to mint admins must
+      //    do it from Admin Modals (which specifies the role).
       if (aircraftIds && aircraftIds.length > 0) {
         const accessInserts = aircraftIds.map((id: string) => ({
           user_id: data.user.id,
-          aircraft_id: id
+          aircraft_id: id,
+          aircraft_role: 'pilot',
         }));
         await supabaseAdmin.from('aft_user_aircraft_access').insert(accessInserts);
       }

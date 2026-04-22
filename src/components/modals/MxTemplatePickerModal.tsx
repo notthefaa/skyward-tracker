@@ -43,12 +43,12 @@ function formatInterval(item: MxTemplateItem): string {
 /** Icon for category */
 function getCategoryIcon(category: string) {
   const map: Record<string, React.ReactNode> = {
-    inspection: <Shield size={14} className="text-[#F08B46]" />,
+    inspection: <Shield size={14} className="text-mxOrange" />,
     engine: <Wrench size={14} className="text-navy" />,
-    propeller: <Wrench size={14} className="text-[#3AB0FF]" />,
+    propeller: <Wrench size={14} className="text-info" />,
     airframe: <Plane size={14} className="text-gray-600" />,
-    avionics: <Layers size={14} className="text-[#3AB0FF]" />,
-    safety: <AlertTriangle size={14} className="text-[#CE3732]" />,
+    avionics: <Layers size={14} className="text-info" />,
+    safety: <AlertTriangle size={14} className="text-danger" />,
     fluid: <Clock size={14} className="text-[#56B94A]" />,
   };
   return map[category] || <Wrench size={14} />;
@@ -249,7 +249,7 @@ export default function MxTemplatePickerModal({ aircraft, show, onClose, onRefre
     if (!res.ok) {
       const errData = await res.json().catch(() => ({ error: 'Unknown error' }));
       console.error('Template insert error:', errData);
-      showError('Failed to insert maintenance items: ' + (errData.error || 'Unknown error'));
+      showError("Couldn't add the maintenance items: " + (errData.error || 'Unknown error'));
       setIsInserting(false);
       setStep('select');
       return;
@@ -278,16 +278,16 @@ export default function MxTemplatePickerModal({ aircraft, show, onClose, onRefre
     >
       <div className="flex min-h-full items-center justify-center p-4">
       <div
-        className="bg-white rounded shadow-2xl w-full max-w-lg p-5 border-t-4 border-[#F08B46] animate-slide-up"
+        className="bg-white rounded shadow-2xl w-full max-w-lg p-5 border-t-4 border-mxOrange animate-slide-up"
         onClick={e => e.stopPropagation()}
       >
         {/* ─── HEADER ─── */}
         <div className="flex justify-between items-center mb-5">
           <h2 className="font-oswald text-2xl font-bold uppercase text-navy flex items-center gap-2">
-            <Layers size={20} className="text-[#F08B46]" />
+            <Layers size={20} className="text-mxOrange" />
             {step === 'pick' ? 'MX Templates' : step === 'select' ? 'Select Items' : 'Adding Items...'}
           </h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-red-500 p-2 -mr-2"><X size={24} /></button>
+          <button onClick={onClose} className="text-gray-400 hover:text-danger p-2 -mr-2"><X size={24} /></button>
         </div>
 
         {/* ═══════════════ STEP 1: PICK TEMPLATE ═══════════════ */}
@@ -296,7 +296,7 @@ export default function MxTemplatePickerModal({ aircraft, show, onClose, onRefre
             <p className="text-xs text-gray-500 mb-4">Choose a template that matches your aircraft type. You can customize which items to add in the next step.</p>
             
             <div className="bg-orange-50 border border-orange-200 rounded p-3 mb-4 flex items-start gap-2">
-              <Info size={14} className="text-[#F08B46] shrink-0 mt-0.5" />
+              <Info size={14} className="text-mxOrange shrink-0 mt-0.5" />
               <p className="text-[10px] text-gray-600 leading-tight">Templates add items with <strong>Setup Required</strong> status. You'll need to enter last-completed dates/times from your logbook to activate tracking.</p>
             </div>
 
@@ -306,7 +306,7 @@ export default function MxTemplatePickerModal({ aircraft, show, onClose, onRefre
                 <button
                   key={template.id}
                   onClick={() => handleSelectTemplate(template)}
-                  className="w-full bg-gray-50 border border-gray-200 p-4 rounded text-left hover:border-[#F08B46] hover:bg-orange-50/30 transition-colors active:scale-[0.98]"
+                  className="w-full bg-gray-50 border border-gray-200 p-4 rounded text-left hover:border-mxOrange hover:bg-orange-50/30 transition-colors active:scale-[0.98]"
                 >
                   <div className="flex justify-between items-start">
                     <div className="flex-1 min-w-0">
@@ -315,7 +315,7 @@ export default function MxTemplatePickerModal({ aircraft, show, onClose, onRefre
                       <div className="flex flex-wrap gap-1 mt-2">
                         <span className="text-[8px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-navy text-white">{template.engine_type}</span>
                         <span className="text-[8px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-gray-200 text-gray-600">{template.items.length} items</span>
-                        <span className="text-[8px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-red-100 text-[#CE3732]">{requiredCount} required</span>
+                        <span className="text-[8px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-red-100 text-danger">{requiredCount} required</span>
                       </div>
                     </div>
                     <ChevronRight size={18} className="text-gray-400 shrink-0 mt-1" />
@@ -333,7 +333,7 @@ export default function MxTemplatePickerModal({ aircraft, show, onClose, onRefre
             <div className="flex items-center gap-3 mb-2">
               <button 
                 onClick={() => { setStep('pick'); setSelectedTemplate(null); }}
-                className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-[#F08B46] bg-orange-50 border border-orange-200 rounded px-3 py-1.5 hover:bg-orange-100 active:scale-95 transition-all"
+                className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-mxOrange bg-orange-50 border border-orange-200 rounded px-3 py-1.5 hover:bg-orange-100 active:scale-95 transition-all"
               >
                 <ArrowLeft size={12} /> Back
               </button>
@@ -354,7 +354,7 @@ export default function MxTemplatePickerModal({ aircraft, show, onClose, onRefre
                     setSelectedItemIndices(all);
                   }
                 }}
-                className="text-[10px] font-bold uppercase tracking-widest text-[#F08B46] hover:opacity-80 active:scale-95 flex items-center gap-1"
+                className="text-[10px] font-bold uppercase tracking-widest text-mxOrange hover:opacity-80 active:scale-95 flex items-center gap-1"
               >
                 <CheckSquare size={12} /> {selectedCount === totalItems ? 'Deselect All' : 'Select All'}
               </button>
@@ -364,7 +364,7 @@ export default function MxTemplatePickerModal({ aircraft, show, onClose, onRefre
             {showDuplicateWarning && (
               <div className="bg-orange-50 border-2 border-orange-200 rounded p-4 animate-fade-in">
                 <p className="text-sm font-bold text-navy mb-2 flex items-center gap-2">
-                  <AlertTriangle size={16} className="text-[#F08B46]" /> Duplicate Items Found
+                  <AlertTriangle size={16} className="text-mxOrange" /> Duplicate Items Found
                 </p>
                 <p className="text-xs text-gray-600 mb-3">
                   {duplicateNames.length} item{duplicateNames.length > 1 ? 's' : ''} already exist{duplicateNames.length === 1 ? 's' : ''} on this aircraft:
@@ -377,13 +377,13 @@ export default function MxTemplatePickerModal({ aircraft, show, onClose, onRefre
                 <div className="flex gap-2">
                   <button 
                     onClick={() => handleDuplicateDecision('skip')}
-                    className="flex-1 bg-[#3AB0FF] text-white font-oswald font-bold uppercase tracking-widest py-2.5 rounded text-xs active:scale-95"
+                    className="flex-1 bg-info text-white font-oswald font-bold uppercase tracking-widest py-2.5 rounded text-xs active:scale-95"
                   >
                     Skip Duplicates
                   </button>
                   <button 
                     onClick={() => handleDuplicateDecision('add')}
-                    className="flex-1 bg-[#F08B46] text-white font-oswald font-bold uppercase tracking-widest py-2.5 rounded text-xs active:scale-95"
+                    className="flex-1 bg-mxOrange text-white font-oswald font-bold uppercase tracking-widest py-2.5 rounded text-xs active:scale-95"
                   >
                     Add Anyway
                   </button>
@@ -424,7 +424,7 @@ export default function MxTemplatePickerModal({ aircraft, show, onClose, onRefre
                         </button>
                         <button 
                           onClick={() => toggleCategory(group.key)}
-                          className="text-[9px] font-bold uppercase tracking-widest text-[#F08B46] hover:opacity-80 active:scale-95 ml-2 shrink-0"
+                          className="text-[9px] font-bold uppercase tracking-widest text-mxOrange hover:opacity-80 active:scale-95 ml-2 shrink-0"
                         >
                           {allSelected ? 'None' : 'All'}
                         </button>
@@ -445,16 +445,16 @@ export default function MxTemplatePickerModal({ aircraft, show, onClose, onRefre
                                   type="checkbox" 
                                   checked={isSelected} 
                                   onChange={() => toggleItem(index)}
-                                  className="mt-0.5 w-4 h-4 text-[#F08B46] border-gray-300 rounded cursor-pointer shrink-0" 
+                                  className="mt-0.5 w-4 h-4 text-mxOrange border-gray-300 rounded cursor-pointer shrink-0" 
                                 />
                                 <div className="flex-1 min-w-0">
                                   <div className="flex items-center gap-2 flex-wrap">
                                     <span className="text-xs font-bold text-navy">{item.item_name}</span>
                                     {item.is_required && (
-                                      <span className="text-[7px] font-bold uppercase tracking-widest px-1 py-0.5 rounded bg-red-100 text-[#CE3732]">Required</span>
+                                      <span className="text-[7px] font-bold uppercase tracking-widest px-1 py-0.5 rounded bg-red-100 text-danger">Required</span>
                                     )}
                                     {isDuplicate && (
-                                      <span className="text-[7px] font-bold uppercase tracking-widest px-1 py-0.5 rounded bg-orange-100 text-[#F08B46]">Exists</span>
+                                      <span className="text-[7px] font-bold uppercase tracking-widest px-1 py-0.5 rounded bg-orange-100 text-mxOrange">Exists</span>
                                     )}
                                   </div>
                                   <div className="flex items-center gap-3 mt-1">
@@ -492,7 +492,7 @@ export default function MxTemplatePickerModal({ aircraft, show, onClose, onRefre
           <div className="py-12 text-center">
             {isInserting ? (
               <>
-                <Loader2 size={48} className="mx-auto text-[#F08B46] animate-spin mb-4" />
+                <Loader2 size={48} className="mx-auto text-mxOrange animate-spin mb-4" />
                 <p className="font-oswald text-lg font-bold uppercase tracking-widest text-navy">Adding Items...</p>
                 <p className="text-xs text-gray-500 mt-2">Setting up maintenance tracking for {aircraft.tail_number}</p>
               </>

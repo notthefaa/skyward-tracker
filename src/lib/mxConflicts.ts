@@ -115,7 +115,11 @@ export async function cancelConflictingReservations({
     ? mxStartLabel
     : `${mxStartLabel} — ${mxEndLabel}`;
 
-  // Send a cancellation email to each affected pilot
+  // Send a cancellation email to each affected pilot. Wrap each send so
+  // one pilot's email failure (bounce, Resend outage, malformed address)
+  // doesn't abort the loop — the reservations are already cancelled and
+  // we still want to notify the other affected pilots.
+  const emailFailures: string[] = [];
   for (const userId of userIds) {
     const pilot = pilotMap[userId];
     if (!pilot.email) continue;
@@ -132,7 +136,8 @@ export async function cancelConflictingReservations({
       return `<li style="margin-bottom: 8px;">${start} — ${end}${safeTitle}${safeRoute}</li>`;
     }).join('');
 
-    await resend.emails.send({
+    try {
+      await resend.emails.send({
       from: `Skyward Alerts <${FROM_EMAIL}>`,
       to: [pilot.email],
       subject: `Reservation Cancelled: ${safeTailNumber} — Maintenance Scheduled`,
@@ -152,14 +157,24 @@ export async function cancelConflictingReservations({
             <p style="margin: 4px 0 0 0; color: #666; font-size: 13px;">Serviced by ${mechanicLabel}</p>
           </div>
 
-          <p style="color: #666; font-size: 14px;">Please rebook your flight for after the maintenance period. We apologize for the inconvenience.</p>
+          <p style="color: #666; font-size: 14px;">Rebook your flight for after the maintenance period. Sorry for the inconvenience.</p>
 
           <div style="margin-top: 25px; text-align: center;">
             <a href="${appUrl}" style="display: inline-block; background-color: #091F3C; color: white; text-decoration: none; padding: 12px 28px; border-radius: 6px; font-weight: bold; font-size: 14px; letter-spacing: 1px;">OPEN AIRCRAFT MANAGER</a>
           </div>
         </div>
       `,
-    });
+      });
+    } catch (err: any) {
+      emailFailures.push(`${pilot.email}: ${err?.message || 'unknown'}`);
+    }
+  }
+
+  if (emailFailures.length > 0) {
+    console.warn(
+      `[mxConflicts] Cancelled ${overlapping.length} reservation(s) for ${tailNumber} but ${emailFailures.length} pilot email(s) failed:`,
+      emailFailures,
+    );
   }
 
   return overlapping.length;

@@ -59,15 +59,15 @@ export async function POST(req: Request) {
           <div style="font-family: Arial, sans-serif; font-size: 14px; color: #333333; line-height: 1.6; max-width: 600px;">
             ${mxGreeting}
             
-            <p>A new squawk has been reported for ${safeTail}. Please let us know when you are able to accommodate this aircraft in your schedule to address the issue.</p>
+            <p>A new squawk was reported for ${safeTail}. Let us know when you can accommodate this aircraft to address the issue.</p>
             
             <p style="margin-top: 20px;"><strong>Squawk Details:</strong><br/>
             Location: ${safeLocation}<br/>
             Status: ${squawk.affects_airworthiness ? 'AOG / GROUNDED' : 'Monitor'}<br/>
             Description: ${safeDescription}</p>
             
-            <p style="margin-top: 20px;">You can view the full report and attached photos securely here:<br/>
-            <a href="${mainAppUrl}/squawk/${squawk.id}">${mainAppUrl}/squawk/${squawk.id}</a></p>
+            <p style="margin-top: 20px;">View the full report and attached photos here:<br/>
+            <a href="${mainAppUrl}/squawk/${squawk.access_token}">${mainAppUrl}/squawk/${squawk.access_token}</a></p>
             
             ${mxSignature}
           </div>

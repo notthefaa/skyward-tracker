@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireAuth, requireAircraftAccess, handleApiError } from '@/lib/auth';
+import { setAppUser } from '@/lib/audit';
 import { cancelConflictingReservations } from '@/lib/mxConflicts';
 
 export async function POST(req: Request) {
@@ -28,6 +29,8 @@ export async function POST(req: Request) {
       }
     }
 
+    await setAppUser(supabaseAdmin, user.id);
+
     // Get the caller's name/email from aft_user_roles (the canonical table).
     const { data: profile } = await supabaseAdmin
       .from('aft_user_roles').select('full_name, email')
@@ -51,7 +54,7 @@ export async function POST(req: Request) {
       .single();
 
     if (evErr || !event) {
-      return NextResponse.json({ error: 'Failed to create maintenance block.' }, { status: 500 });
+      return NextResponse.json({ error: "Couldn't create the maintenance block." }, { status: 500 });
     }
 
     // Log a system message

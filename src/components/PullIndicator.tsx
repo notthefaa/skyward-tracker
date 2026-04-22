@@ -25,7 +25,7 @@ export default function PullIndicator({ pullProgress, phase }: PullIndicatorProp
   } else if (phase === 'refreshing') {
     icon = <Loader2 size={14} className="animate-spin" />;
     label = 'Refreshing...';
-    colorClass = 'text-[#F08B46]';
+    colorClass = 'text-mxOrange';
     bgClass = 'bg-orange-50 border-orange-200';
   } else if (reachedThreshold) {
     icon = <ArrowDown size={14} style={{ transform: 'rotate(180deg)' }} />;

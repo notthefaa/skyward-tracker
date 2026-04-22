@@ -68,31 +68,40 @@ export default function UpdatePassword() {
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
-    
+
     if (!session) {
-      showError("Security session lost. Please close this window and click your invite link again.");
-      setIsSubmitting(false);
-      return;
-    }
-    
-    // 1. Save the new password via Supabase Auth
-    const { error: pwdError } = await supabase.auth.updateUser({ password });
-    
-    if (pwdError) {
-      showError("Error updating password: " + pwdError.message);
+      showError("The secure session expired. Close this window and click your invite link again.");
       setIsSubmitting(false);
       return;
     }
 
-    // 2. Save their profile fields to aft_user_roles (the canonical user table).
-    await supabase.from('aft_user_roles').update({
-      initials: initials.toUpperCase(),
-      email: session.user.email,
-      full_name: fullName.trim(),
-    }).eq('user_id', session.user.id);
+    try {
+      // 1. Save the new password via Supabase Auth
+      const { error: pwdError } = await supabase.auth.updateUser({ password });
+      if (pwdError) {
+        showError("Couldn't update the password: " + pwdError.message);
+        return;
+      }
 
-    // 3. Send them to the main dashboard!
-    window.location.href = "/";
+      // 2. Save their profile fields to aft_user_roles. Bubble errors to
+      // the user instead of silently redirecting with half-saved state.
+      const { error: profileError } = await supabase.from('aft_user_roles').update({
+        initials: initials.toUpperCase(),
+        email: session.user.email,
+        full_name: fullName.trim(),
+      }).eq('user_id', session.user.id);
+      if (profileError) {
+        showError("Couldn't save your profile: " + profileError.message);
+        return;
+      }
+
+      // 3. Send them to the main dashboard!
+      window.location.href = "/";
+    } catch (err: any) {
+      showError("Setup didn't finish: " + (err?.message || 'unknown error'));
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleRequestNewLink = async (e: React.FormEvent) => {
@@ -108,7 +117,7 @@ export default function UpdatePassword() {
       
       if (!res.ok) {
         const errData = await res.json();
-        throw new Error(errData.error || "Failed to send new invite link.");
+        throw new Error(errData.error || "Couldn't send a new invite link.");
       }
       
       setRequestSent(true);
@@ -122,7 +131,7 @@ export default function UpdatePassword() {
   if (isVerifying) {
     return (
       <div className="flex flex-col items-center justify-center p-4 bg-slateGray h-[100dvh] w-full text-white font-oswald text-2xl tracking-widest uppercase animate-pulse">
-        Verifying Secure Link...
+        Verifying your link...
       </div>
     );
   }
@@ -130,16 +139,16 @@ export default function UpdatePassword() {
   if (!session) {
     return (
       <div className="flex flex-col items-center justify-center p-4 bg-slateGray h-[100dvh] w-full overflow-hidden">
-        <div className="bg-cream shadow-2xl rounded-sm p-8 w-full max-w-md text-center animate-slide-up border-t-4 border-[#CE3732]">
-          <AlertTriangle size={48} className="mx-auto text-[#CE3732] mb-4" />
-          <h2 className="font-oswald text-2xl font-bold uppercase tracking-widest text-[#CE3732] mb-4">
+        <div className="bg-cream shadow-2xl rounded-sm p-8 w-full max-w-md text-center animate-slide-up border-t-4 border-danger">
+          <AlertTriangle size={48} className="mx-auto text-danger mb-4" />
+          <h2 className="font-oswald text-2xl font-bold uppercase tracking-widest text-danger mb-4">
             Link Expired
           </h2>
           
           {!requestSent ? (
             <>
               <p className="text-sm text-gray-600 font-roboto mb-6 leading-relaxed">
-                The invite link has expired. Please request a new one by entering your email and clicking "Request new link".
+                Invite links expire for security. Enter your email below and we&apos;ll send you a fresh one.
               </p>
               
               <form onSubmit={handleRequestNewLink} className="space-y-4 text-left">
@@ -171,7 +180,7 @@ export default function UpdatePassword() {
           ) : (
             <>
               <p className="text-sm text-gray-600 font-roboto mb-8 leading-relaxed">
-                If an account exists for <strong>{requestEmail}</strong>, a fresh invite link is on its way. Please check your inbox and spam folder.
+                If we find an account for <strong>{requestEmail}</strong>, a fresh invite link is on its way. Check your inbox (and spam folder).
               </p>
               <PrimaryButton onClick={() => window.location.href = "/"}>
                 Return to Login
@@ -193,7 +202,7 @@ export default function UpdatePassword() {
             Complete Setup
           </h2>
           <p className="text-sm text-gray-500 font-roboto mt-2">
-            Enter your initials and a secure password to access your account.
+            Set your name, initials, and a password to finish creating your account.
           </p>
         </div>
         
@@ -255,7 +264,7 @@ export default function UpdatePassword() {
 
           <div className="pt-4">
             <PrimaryButton disabled={isSubmitting}>
-              {isSubmitting ? "Saving..." : "Save & Enter Portal"}
+              {isSubmitting ? "Saving..." : "Save and enter Skyward"}
             </PrimaryButton>
           </div>
 

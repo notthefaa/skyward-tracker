@@ -14,7 +14,7 @@ export const MAX_UPLOAD_SIZE_LABEL = '10MB';
 export function validateFileSize(file: File): string | null {
   if (file.size > MAX_UPLOAD_SIZE) {
     const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
-    return `"${file.name}" is ${sizeMB}MB which exceeds the ${MAX_UPLOAD_SIZE_LABEL} limit. Please use a smaller file.`;
+    return `"${file.name}" is ${sizeMB}MB — that's over the ${MAX_UPLOAD_SIZE_LABEL} limit. Use a smaller file.`;
   }
   return null;
 }

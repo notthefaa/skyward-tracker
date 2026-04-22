@@ -43,7 +43,7 @@ export default function PilotOnboarding({
 
   const handleFile = (file: File) => {
     if (!file.type.startsWith('image/')) {
-      showError('Please select an image file.');
+      showError('Pick an image file (JPG or PNG).');
       return;
     }
     const sizeError = validateFileSize(file);
@@ -135,7 +135,7 @@ export default function PilotOnboarding({
       });
       if (!res.ok) {
         const errData = await res.json();
-        throw new Error(errData.error || "Failed to create aircraft.");
+        throw new Error(errData.error || "Couldn't create the aircraft.");
       }
       onSuccess();
     } catch (err: any) {
@@ -155,14 +155,14 @@ export default function PilotOnboarding({
         </div>
       </header>
       <div className="flex-1 p-4 flex justify-center items-start pt-8 pb-20">
-        <div className="bg-cream shadow-2xl rounded-sm w-full max-w-lg p-6 md:p-8 border-t-4 border-[#F08B46] animate-slide-up">
+        <div className="bg-cream shadow-2xl rounded-sm w-full max-w-lg p-6 md:p-8 border-t-4 border-mxOrange animate-slide-up">
           <div className="text-center mb-8">
             <h2 className="font-oswald text-3xl font-bold uppercase tracking-widest text-navy mb-2">Set Up Your Aircraft</h2>
-            <p className="text-sm text-gray-500 font-roboto">Please enter your aircraft details to initialize your flight log and maintenance tracking.</p>
+            <p className="text-sm text-gray-500 font-roboto">Start with the airplane&apos;s basics. Once it&apos;s set up, flight logs and maintenance tracking kick in.</p>
           </div>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div
-              className={`border-2 border-dashed rounded p-4 text-center transition-colors ${isDragging ? 'border-[#F08B46] bg-orange-50' : 'border-gray-300 bg-gray-50'} ${!avatarSrc ? 'cursor-pointer' : ''}`}
+              className={`border-2 border-dashed rounded p-4 text-center transition-colors ${isDragging ? 'border-mxOrange bg-orange-50' : 'border-gray-300 bg-gray-50'} ${!avatarSrc ? 'cursor-pointer' : ''}`}
               onDragOver={e => { e.preventDefault(); if (!avatarSrc) setIsDragging(true); }}
               onDragLeave={() => setIsDragging(false)}
               onDrop={!avatarSrc ? onDrop : undefined}
@@ -188,29 +188,29 @@ export default function PilotOnboarding({
               {avatarSrc && <button type="button" onClick={() => setAvatarSrc("")} className="text-[10px] uppercase text-red-500 font-bold mt-2 hover:underline">Choose Different Photo</button>}
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <div><label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">Tail Number</label><input type="text" required value={newTail} onChange={e => setNewTail(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 uppercase focus:border-[#F08B46] outline-none bg-white" /></div>
-              <div><label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">Serial Num</label><input type="text" value={newSerial} onChange={e => setNewSerial(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 uppercase focus:border-[#F08B46] outline-none bg-white" /></div>
+              <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Tail Number</label><input type="text" required value={newTail} onChange={e => setNewTail(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 uppercase focus:border-mxOrange outline-none bg-white" /></div>
+              <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Serial Num</label><input type="text" value={newSerial} onChange={e => setNewSerial(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 uppercase focus:border-mxOrange outline-none bg-white" /></div>
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <div><label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">Model Name</label><input type="text" required value={newModel} onChange={e => setNewModel(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none bg-white" /></div>
-              <div><label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">Engine Type</label><select value={newType} onChange={e => setNewType(e.target.value as any)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none bg-white"><option value="Piston">Piston</option><option value="Turbine">Turbine</option></select></div>
+              <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Model Name</label><input type="text" required value={newModel} onChange={e => setNewModel(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none bg-white" /></div>
+              <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Engine Type</label><select value={newType} onChange={e => setNewType(e.target.value as any)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none bg-white"><option value="Piston">Piston</option><option value="Turbine">Turbine</option></select></div>
             </div>
-            <div><label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">Home Airport</label><input type="text" value={newHomeAirport} onChange={e => setNewHomeAirport(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 uppercase focus:border-[#F08B46] outline-none bg-white" placeholder="ICAO" /></div>
+            <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Home Airport</label><input type="text" value={newHomeAirport} onChange={e => setNewHomeAirport(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 uppercase focus:border-mxOrange outline-none bg-white" placeholder="ICAO" /></div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div><label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">Main Contact</label><input type="text" value={newMainContact} onChange={e => setNewMainContact(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none bg-white" /></div>
-              <div><label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">Phone</label><input type="tel" value={newMainContactPhone} onChange={e => setNewMainContactPhone(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none bg-white" /></div>
-              <div><label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">Email</label><input type="email" value={newMainContactEmail} onChange={e => setNewMainContactEmail(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none bg-white" /></div>
+              <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Main Contact</label><input type="text" value={newMainContact} onChange={e => setNewMainContact(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none bg-white" /></div>
+              <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Phone</label><input type="tel" value={newMainContactPhone} onChange={e => setNewMainContactPhone(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none bg-white" /></div>
+              <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Email</label><input type="email" value={newMainContactEmail} onChange={e => setNewMainContactEmail(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none bg-white" /></div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div><label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">MX Contact</label><input type="text" value={newMxContact} onChange={e => setNewMxContact(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none bg-white" /></div>
-              <div><label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">MX Phone</label><input type="tel" value={newMxContactPhone} onChange={e => setNewMxContactPhone(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none bg-white" /></div>
-              <div><label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">MX Email</label><input type="email" value={newMxContactEmail} onChange={e => setNewMxContactEmail(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none bg-white" /></div>
+              <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">MX Contact</label><input type="text" value={newMxContact} onChange={e => setNewMxContact(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none bg-white" /></div>
+              <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">MX Phone</label><input type="tel" value={newMxContactPhone} onChange={e => setNewMxContactPhone(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none bg-white" /></div>
+              <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">MX Email</label><input type="email" value={newMxContactEmail} onChange={e => setNewMxContactEmail(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none bg-white" /></div>
             </div>
             <div className="grid grid-cols-2 gap-4 border-t border-gray-200 pt-4 mt-2">
-              <div><label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">Current {newType === 'Turbine' ? 'AFTT' : 'Hobbs'} (Opt)</label><input type="number" step="0.1" value={newAirframeTime} onChange={e => setNewAirframeTime(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none bg-white" placeholder={`Leave blank if no ${newType === 'Turbine' ? 'AFTT' : 'Hobbs'} meter`} /></div>
-              <div><label className="text-[10px] font-bold uppercase tracking-widest text-[#1B4869]">Current {newType === 'Turbine' ? 'FTT' : 'Tach'} *</label><input type="number" step="0.1" required value={newEngineTime} onChange={e => setNewEngineTime(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none bg-white" /></div>
+              <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Current {newType === 'Turbine' ? 'AFTT' : 'Hobbs'} (Opt)</label><input type="number" step="0.1" value={newAirframeTime} onChange={e => setNewAirframeTime(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none bg-white" placeholder={`Leave blank if no ${newType === 'Turbine' ? 'AFTT' : 'Hobbs'} meter`} /></div>
+              <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Current {newType === 'Turbine' ? 'FTT' : 'Tach'} *</label><input type="number" step="0.1" required value={newEngineTime} onChange={e => setNewEngineTime(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none bg-white" /></div>
             </div>
-            <div className="pt-4"><PrimaryButton disabled={isSubmitting}>{isSubmitting ? "Creating..." : "Create Aircraft & Enter Portal"}</PrimaryButton></div>
+            <div className="pt-4"><PrimaryButton disabled={isSubmitting}>{isSubmitting ? "Creating..." : "Save and start using Skyward"}</PrimaryButton></div>
           </form>
         </div>
       </div>

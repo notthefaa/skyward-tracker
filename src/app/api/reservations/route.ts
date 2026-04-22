@@ -3,12 +3,15 @@ import { Resend } from 'resend';
 import { requireAuth, handleApiError } from '@/lib/auth';
 import { env } from '@/lib/env';
 import { escapeHtml } from '@/lib/sanitize';
+import { idempotency } from '@/lib/idempotency';
 import {
   safeTimeZone,
   formatInTimeZone,
   formatTimeInTimeZone,
   formatDateInTimeZone,
   formatShortDateInTimeZone,
+  zonedDateStartAsUtc,
+  zonedDateEndAsUtc,
 } from '@/lib/dateFormat';
 
 const resend = new Resend(env.RESEND_API_KEY);
@@ -17,6 +20,10 @@ const FROM_EMAIL = 'notifications@skywardsociety.com';
 export async function POST(req: Request) {
   try {
     const { user, supabaseAdmin } = await requireAuth(req);
+    const idem = idempotency(supabaseAdmin, user.id, req, 'reservations/POST');
+    const cached = await idem.check();
+    if (cached) return cached;
+
     const { aircraftId, occurrences: rawOccurrences, title, route, timeZone, bookForUserId } = await req.json();
     const tz = safeTimeZone(timeZone);
 
@@ -160,15 +167,21 @@ export async function POST(req: Request) {
         continue;
       }
 
-      // Check MX conflicts — build the block in UTC so it compares correctly
-      // against ISO reservation timestamps regardless of server TZ.
+      // Check MX conflicts. MX blocks are stored as date-only
+      // (`YYYY-MM-DD`). "2026-04-19T00:00:00Z" hard-codes UTC midnight,
+      // which misaligns with a pilot in UTC+12 whose local-midnight
+      // reservation lands outside that UTC window. Interpret the
+      // block in the pilot's zone instead so same-day conflicts are
+      // detected regardless of where the pilot is.
       let mxConflict = false;
       for (const ev of allMxEvents) {
         if (ev.confirmed_date) {
-          const mxStart = new Date(ev.confirmed_date + 'T00:00:00Z');
+          const mxStart = zonedDateStartAsUtc(ev.confirmed_date, tz)
+            ?? new Date(ev.confirmed_date + 'T00:00:00Z');
           const mxEnd = ev.estimated_completion
-            ? new Date(ev.estimated_completion + 'T23:59:59.999Z')
-            : new Date(mxStart.getTime() + 86400000);
+            ? (zonedDateEndAsUtc(ev.estimated_completion, tz)
+              ?? new Date(ev.estimated_completion + 'T23:59:59.999Z'))
+            : new Date(mxStart.getTime() + 86_400_000);
           if (new Date(occ.start) < mxEnd && new Date(occ.end) > mxStart) {
             skipped.push({ start: occ.start, reason: 'Maintenance scheduled' });
             mxConflict = true;
@@ -314,12 +327,14 @@ export async function POST(req: Request) {
       }
     }
 
-    return NextResponse.json({
+    const body = {
       success: true,
       created: created.length,
       skipped: skipped.length,
       skippedDetails: skipped.length > 0 ? skipped : undefined,
-    });
+    };
+    await idem.save(200, body);
+    return NextResponse.json(body);
   } catch (error) {
     return handleApiError(error);
   }
@@ -406,9 +421,13 @@ export async function PUT(req: Request) {
     if (mxEvents) {
       for (const ev of mxEvents) {
         if (ev.confirmed_date) {
-          const mxStart = new Date(ev.confirmed_date + 'T00:00:00Z');
+          // See POST: anchor the date-only block in the pilot's zone
+          // so the conflict window matches the calendar day they see.
+          const mxStart = zonedDateStartAsUtc(ev.confirmed_date, tz)
+            ?? new Date(ev.confirmed_date + 'T00:00:00Z');
           const mxEnd = ev.estimated_completion
-            ? new Date(ev.estimated_completion + 'T23:59:59.999Z')
+            ? (zonedDateEndAsUtc(ev.estimated_completion, tz)
+              ?? new Date(ev.estimated_completion + 'T23:59:59.999Z'))
             : new Date(mxStart.getTime() + 24 * 60 * 60 * 1000);
 
           if (new Date(newStart) < mxEnd && new Date(newEnd) > mxStart) {

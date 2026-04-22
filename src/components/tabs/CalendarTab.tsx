@@ -3,6 +3,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { authFetch } from "@/lib/authFetch";
+import { swrKeys } from "@/lib/swrKeys";
 import type { AircraftWithMetrics, Reservation, AircraftRole, AppRole } from "@/lib/types";
 import useSWR from "swr";
 import { Calendar, ChevronLeft, ChevronRight, Plus, X, Clock, MapPin, Plane, Wrench, Loader2, Users, Edit2 } from "lucide-react";
@@ -169,7 +170,24 @@ export default function CalendarTab({
   const { showSuccess, showError, showWarning } = useToast();
   const [cancellingId, setCancellingId] = useState<string | null>(null);
 
-  const fetchKey = aircraft ? `calendar-${aircraft.id}-${currentDate.getFullYear()}-${currentDate.getMonth()}` : null;
+  // Close any open booking / MX-block modal and clear any in-progress
+  // edit IDs when the pilot switches aircraft. Otherwise the Save
+  // button would POST against the new aircraft with the previous
+  // aircraft's reservation id, silently patching the wrong row.
+  useEffect(() => {
+    setShowBookingForm(false);
+    setShowMxBlockForm(false);
+    setEditingReservationId(null);
+    setCancellingId(null);
+    setShowDatePicker(false);
+    setBookingStartDate(''); setBookingEndDate('');
+    setBookingTitle(''); setBookingRoute('');
+    setBookingRepeat('none');
+    setBookingForOther(false); setBookingForUserId('');
+    setMxBlockStartDate(''); setMxBlockEndDate(''); setMxBlockNotes('');
+  }, [aircraft?.id]);
+
+  const fetchKey = aircraft ? swrKeys.calendar(aircraft.id, currentDate.getFullYear(), currentDate.getMonth()) : null;
 
   const { data: calendarData, mutate } = useSWR(fetchKey, async () => {
     const year = currentDate.getFullYear();
@@ -178,7 +196,7 @@ export default function CalendarTab({
     const rangeEnd = new Date(year, month + 2, 0).toISOString();
     const [resRes, mxRes] = await Promise.all([
       supabase.from('aft_reservations').select('*').eq('aircraft_id', aircraft!.id).eq('status', 'confirmed').gte('end_time', rangeStart).lte('start_time', rangeEnd).order('start_time'),
-      supabase.from('aft_maintenance_events').select('confirmed_date, estimated_completion, status, mx_contact_name').eq('aircraft_id', aircraft!.id).in('status', ['confirmed', 'in_progress'])
+      supabase.from('aft_maintenance_events').select('confirmed_date, estimated_completion, status, mx_contact_name').eq('aircraft_id', aircraft!.id).is('deleted_at', null).in('status', ['confirmed', 'in_progress'])
     ]);
     return {
       reservations: (resRes.data || []) as Reservation[],
@@ -197,7 +215,7 @@ export default function CalendarTab({
   // they can book reservations on behalf of other pilots.
   const canBookForOthers = role === 'admin' || aircraftRole === 'admin';
   const { data: crew = [] } = useSWR(
-    canBookForOthers && aircraft ? `crew-${aircraft.id}` : null,
+    canBookForOthers && aircraft ? swrKeys.crew(aircraft.id) : null,
     async () => {
       const { data: accessData } = await supabase.from('aft_user_aircraft_access')
         .select('user_id, aircraft_role').eq('aircraft_id', aircraft!.id);
@@ -293,8 +311,8 @@ export default function CalendarTab({
   };
 
   const handleSubmitReservation = async () => {
-    if (!bookingStartDate || !bookingEndDate) return showWarning("Please select dates.");
-    if (bookingForOther && !bookingForUserId) return showWarning("Please select the pilot to book for.");
+    if (!bookingStartDate || !bookingEndDate) return showWarning("Pick a start and end date.");
+    if (bookingForOther && !bookingForUserId) return showWarning("Pick which pilot this booking is for.");
     if (bookingRepeat === 'custom' && bookingRepeatDays.length === 0) return showWarning("Pick at least one day of the week.");
     if (bookingRepeat !== 'none' && bookingRepeatEnd === 'until') {
       if (!bookingRepeatUntil) return showWarning("Pick an end date for the recurrence.");
@@ -317,7 +335,7 @@ export default function CalendarTab({
         interval: bookingRepeatInterval,
       };
       const occurrences = generateOccurrences(baseStart, baseEnd, spec);
-      if (occurrences.length === 0) { showError("Recurrence settings produced no occurrences."); setIsSubmitting(false); return; }
+      if (occurrences.length === 0) { showError("Those settings don't produce any bookings. Check the dates and days and try again."); setIsSubmitting(false); return; }
       if (occurrences.length > HARD_RECUR_CAP) { showError(`Recurrence is capped at ${HARD_RECUR_CAP} occurrences.`); setIsSubmitting(false); return; }
 
       if (editingReservationId) {
@@ -383,7 +401,7 @@ export default function CalendarTab({
   };
 
   const handleCreateMxBlock = async () => {
-    if (!mxBlockStartDate) return showWarning("Please select a start date.");
+    if (!mxBlockStartDate) return showWarning("Pick a start date for the maintenance block.");
     setIsSubmitting(true);
     try {
       const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -427,7 +445,7 @@ export default function CalendarTab({
         <div className="flex justify-between items-start">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1.5 min-w-0">
-              <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded shrink-0 ${multiDay ? 'bg-[#3AB0FF]/15 text-[#3AB0FF]' : isOwn ? 'bg-[#56B94A]/15 text-[#56B94A]' : 'bg-gray-100 text-gray-600'}`}>{r.pilot_initials || '—'}</span>
+              <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded shrink-0 ${multiDay ? 'bg-info/15 text-info' : isOwn ? 'bg-[#56B94A]/15 text-[#56B94A]' : 'bg-gray-100 text-gray-600'}`}>{r.pilot_initials || '—'}</span>
               <span className="text-xs text-gray-500 font-roboto truncate min-w-0" title={r.pilot_name || ''}>{r.pilot_name}</span>
             </div>
             <div className="flex items-center gap-2 text-sm text-navy font-bold font-roboto">
@@ -439,15 +457,15 @@ export default function CalendarTab({
           </div>
           {canManageReservation(r) && cancellingId !== r.id && (
             <div className="flex items-center gap-1 shrink-0 ml-3">
-              <button onClick={() => openEditForm(r)} className="text-gray-300 hover:text-[#3AB0FF] active:scale-95 p-1" title="Edit"><Edit2 size={14} /></button>
-              <button onClick={() => setCancellingId(r.id)} className="text-gray-300 hover:text-[#CE3732] active:scale-95 p-1" title="Cancel"><X size={16} /></button>
+              <button onClick={() => openEditForm(r)} className="text-gray-300 hover:text-info active:scale-95 p-1" title="Edit"><Edit2 size={14} /></button>
+              <button onClick={() => setCancellingId(r.id)} className="text-gray-300 hover:text-danger active:scale-95 p-1" title="Cancel"><X size={16} /></button>
             </div>
           )}
         </div>
         {cancellingId === r.id && (
           <div className="mt-3 pt-3 border-t border-gray-200 flex gap-2 animate-fade-in">
             <button onClick={() => setCancellingId(null)} className="flex-1 border border-gray-300 text-gray-600 font-oswald font-bold py-2 rounded text-[10px] uppercase tracking-widest active:scale-95">Keep</button>
-            <button onClick={() => handleCancelReservation(r.id)} disabled={isSubmitting} className="flex-1 bg-[#CE3732] text-white font-oswald font-bold py-2 rounded text-[10px] uppercase tracking-widest active:scale-95 disabled:opacity-50">{isSubmitting ? "..." : "Cancel Booking"}</button>
+            <button onClick={() => handleCancelReservation(r.id)} disabled={isSubmitting} className="flex-1 bg-danger text-white font-oswald font-bold py-2 rounded text-[10px] uppercase tracking-widest active:scale-95 disabled:opacity-50">{isSubmitting ? "..." : "Cancel Booking"}</button>
           </div>
         )}
       </div>
@@ -459,7 +477,7 @@ export default function CalendarTab({
       {aircraft && session && <CalendarDashboard aircraft={aircraft} session={session} />}
       <div className={`mb-2 ${canAdmin ? 'grid grid-cols-2 gap-2' : ''}`}>
         <button onClick={() => openBookingForm()} className="w-full bg-[#56B94A] text-white font-oswald tracking-widest uppercase py-3 px-4 rounded hover:bg-opacity-90 active:scale-95 transition-all duration-150 ease-out flex justify-center items-center gap-2 text-sm"><Plus size={18} /> Reserve Aircraft</button>
-        {canAdmin && <button onClick={() => openMxBlockForm()} className="w-full bg-[#F08B46] text-white font-oswald tracking-widest uppercase py-3 px-4 rounded hover:bg-opacity-90 active:scale-95 transition-all duration-150 ease-out flex justify-center items-center gap-2 text-sm"><Wrench size={18} /> Block for MX</button>}
+        {canAdmin && <button onClick={() => openMxBlockForm()} className="w-full bg-mxOrange text-white font-oswald tracking-widest uppercase py-3 px-4 rounded hover:bg-opacity-90 active:scale-95 transition-all duration-150 ease-out flex justify-center items-center gap-2 text-sm"><Wrench size={18} /> Block for MX</button>}
       </div>
 
       <div className="bg-cream shadow-lg rounded-sm border-t-4 border-[#56B94A] mb-6">
@@ -496,9 +514,9 @@ export default function CalendarTab({
                     <button key={day} onClick={() => { setCurrentDate(date); setView('day'); }} className={`min-h-[56px] md:min-h-[68px] p-1 md:p-1.5 text-left transition-colors relative flex flex-col ${hasMx ? 'bg-orange-50' : isPast ? 'bg-gray-50/60' : 'bg-white'} ${isToday ? 'ring-2 ring-[#56B94A] ring-inset z-[1]' : ''} hover:bg-emerald-50/50`}>
                       <span className={`text-xs font-bold leading-none ${isToday ? 'bg-[#56B94A] text-white w-5 h-5 rounded-full flex items-center justify-center' : isPast ? 'text-gray-400' : 'text-navy'}`}>{day}</span>
                       <div className="mt-auto pt-0.5 space-y-0.5 w-full overflow-hidden">
-                        {events.reservations.slice(0,2).map((r,idx) => { const multi = isFullDayOrMultiDay(r); return (<div key={idx} className={`text-[7px] font-bold px-1 py-px rounded truncate ${multi ? 'bg-[#3AB0FF] text-white' : 'bg-[#56B94A]/20 text-[#56B94A]'}`}>{r.pilot_initials || '—'}{!multi ? ` ${formatTime(r.start_time, r)}` : ''}</div>); })}
+                        {events.reservations.slice(0,2).map((r,idx) => { const multi = isFullDayOrMultiDay(r); return (<div key={idx} className={`text-[7px] font-bold px-1 py-px rounded truncate ${multi ? 'bg-info text-white' : 'bg-[#56B94A]/20 text-[#56B94A]'}`}>{r.pilot_initials || '—'}{!multi ? ` ${formatTime(r.start_time, r)}` : ''}</div>); })}
                         {events.reservations.length > 2 && <div className="text-[7px] font-bold text-gray-400 px-1">+{events.reservations.length - 2}</div>}
-                        {hasMx && <div className="text-[7px] font-bold text-white bg-[#F08B46] px-1 py-px rounded truncate">MX</div>}
+                        {hasMx && <div className="text-[7px] font-bold text-white bg-mxOrange px-1 py-px rounded truncate">MX</div>}
                       </div>
                     </button>
                   );
@@ -506,9 +524,9 @@ export default function CalendarTab({
                 {(() => { const t = startDayOfWeek + daysInMonth; const r = t % 7; if (r === 0) return null; return Array.from({ length: 7-r }).map((_,i) => (<div key={`t-${i}`} className="bg-gray-50/80 min-h-[56px] md:min-h-[68px]" />)); })()}
               </div>
               <div className="flex items-center gap-4 mt-4 pt-3 border-t border-gray-100">
-                <div className="flex items-center gap-1.5"><div className="w-3 h-2 rounded bg-[#3AB0FF]" /><span className="text-[9px] font-bold uppercase tracking-widest text-gray-400">Multi-Day</span></div>
+                <div className="flex items-center gap-1.5"><div className="w-3 h-2 rounded bg-info" /><span className="text-[9px] font-bold uppercase tracking-widest text-gray-400">Multi-Day</span></div>
                 <div className="flex items-center gap-1.5"><div className="w-3 h-2 rounded bg-[#56B94A]" /><span className="text-[9px] font-bold uppercase tracking-widest text-gray-400">Day Trip</span></div>
-                <div className="flex items-center gap-1.5"><div className="w-3 h-2 rounded bg-[#F08B46]" /><span className="text-[9px] font-bold uppercase tracking-widest text-gray-400">Maintenance</span></div>
+                <div className="flex items-center gap-1.5"><div className="w-3 h-2 rounded bg-mxOrange" /><span className="text-[9px] font-bold uppercase tracking-widest text-gray-400">Maintenance</span></div>
               </div>
             </div>
           )}
@@ -520,7 +538,7 @@ export default function CalendarTab({
             return (
               <div className="space-y-0">
                 {multiDayRes.length > 0 && (<div className="mb-4 space-y-1.5"><p className="text-[9px] font-bold uppercase tracking-widest text-gray-400 mb-1">Multi-Day Bookings</p>
-                  {multiDayRes.map(r => { const { startIdx, endIdx } = getReservationDaySpan(r, weekDates); return (<div key={r.id} className="grid grid-cols-7 gap-px">{startIdx > 0 && <div style={{ gridColumn: `span ${startIdx}` }} />}<div style={{ gridColumn: `span ${endIdx - startIdx + 1}` }} className="bg-[#3AB0FF] text-white rounded px-2.5 py-1.5 flex items-center gap-2 cursor-pointer active:scale-[0.99] transition-transform" onClick={() => { setCurrentDate(new Date(r.start_time)); setView('day'); }}><span className="text-[10px] font-bold uppercase tracking-widest">{r.pilot_initials}</span><span className="text-[10px] font-roboto opacity-90 truncate">{r.title || r.route || `${formatDateShort(r.start_time, r)} – ${formatDateShort(r.end_time, r)}`}</span></div></div>); })}
+                  {multiDayRes.map(r => { const { startIdx, endIdx } = getReservationDaySpan(r, weekDates); return (<div key={r.id} className="grid grid-cols-7 gap-px">{startIdx > 0 && <div style={{ gridColumn: `span ${startIdx}` }} />}<div style={{ gridColumn: `span ${endIdx - startIdx + 1}` }} className="bg-info text-white rounded px-2.5 py-1.5 flex items-center gap-2 cursor-pointer active:scale-[0.99] transition-transform" onClick={() => { setCurrentDate(new Date(r.start_time)); setView('day'); }}><span className="text-[10px] font-bold uppercase tracking-widest">{r.pilot_initials}</span><span className="text-[10px] font-roboto opacity-90 truncate">{r.title || r.route || `${formatDateShort(r.start_time, r)} – ${formatDateShort(r.end_time, r)}`}</span></div></div>); })}
                 </div>)}
                 <div className="space-y-1">{weekDates.map(date => {
                   const events = getEventsForDate(date); const isToday = date.toDateString() === today.toDateString(); const isPast = date < today;
@@ -532,7 +550,7 @@ export default function CalendarTab({
                           <div className="w-8 text-center"><span className={`text-[10px] font-oswald font-bold uppercase block leading-none ${isPast ? 'text-gray-400' : 'text-gray-500'}`}>{date.toLocaleDateString('en-US', { weekday: 'short' })}</span><span className={`text-lg font-oswald font-bold leading-none ${isToday ? 'text-[#56B94A]' : isPast ? 'text-gray-400' : 'text-navy'}`}>{date.getDate()}</span></div>
                           <div className="flex flex-col gap-0.5">
                             {singleDayRes.map((r,idx) => (<div key={idx} className="text-xs text-gray-600 font-roboto"><span className="font-bold text-navy">{r.pilot_initials}</span> {formatTime(r.start_time, r)} – {formatTime(r.end_time, r)}{r.route && <span className="text-gray-400 ml-1.5">{r.route}</span>}</div>))}
-                            {events.mxBlocks.map((m: any,idx: number) => (<div key={`mx-${idx}`} className="text-xs text-[#F08B46] font-bold font-roboto flex items-center gap-1"><Wrench size={10} /> {m.label}</div>))}
+                            {events.mxBlocks.map((m: any,idx: number) => (<div key={`mx-${idx}`} className="text-xs text-mxOrange font-bold font-roboto flex items-center gap-1"><Wrench size={10} /> {m.label}</div>))}
                             {singleDayRes.length === 0 && events.mxBlocks.length === 0 && <span className="text-[10px] text-gray-400 font-roboto">Available</span>}
                           </div>
                         </div>
@@ -552,31 +570,31 @@ export default function CalendarTab({
             return (
               <div className="space-y-3">
                 {fullDayRes.map(r => (
-                  <div key={r.id} className="bg-[#3AB0FF]/10 border-2 border-[#3AB0FF]/30 rounded-sm p-4">
+                  <div key={r.id} className="bg-info/10 border-2 border-info/30 rounded-sm p-4">
                     <div className="flex justify-between items-start">
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-2 min-w-0"><span className="bg-[#3AB0FF] text-white text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded shrink-0">{r.pilot_initials || '—'} — All Day</span><span className="text-xs text-gray-500 font-roboto truncate min-w-0" title={r.pilot_name || ''}>{r.pilot_name}</span></div>
-                        <div className="flex items-center gap-2 text-sm text-navy font-bold font-roboto"><Calendar size={13} className="text-[#3AB0FF] shrink-0" />{formatDateShort(r.start_time, r)} {formatTime(r.start_time, r)} — {formatDateShort(r.end_time, r)} {formatTime(r.end_time, r)}</div>
+                        <div className="flex items-center gap-2 mb-2 min-w-0"><span className="bg-info text-white text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded shrink-0">{r.pilot_initials || '—'} — All Day</span><span className="text-xs text-gray-500 font-roboto truncate min-w-0" title={r.pilot_name || ''}>{r.pilot_name}</span></div>
+                        <div className="flex items-center gap-2 text-sm text-navy font-bold font-roboto"><Calendar size={13} className="text-info shrink-0" />{formatDateShort(r.start_time, r)} {formatTime(r.start_time, r)} — {formatDateShort(r.end_time, r)} {formatTime(r.end_time, r)}</div>
                         {r.title && <p className="text-xs text-gray-600 mt-2 font-roboto">{r.title}</p>}
-                        {r.route && <p className="text-xs text-gray-500 mt-1 flex items-center gap-1 font-roboto"><MapPin size={11} className="text-[#3AB0FF] shrink-0" /> {r.route}</p>}
+                        {r.route && <p className="text-xs text-gray-500 mt-1 flex items-center gap-1 font-roboto"><MapPin size={11} className="text-info shrink-0" /> {r.route}</p>}
                       </div>
                       {canManageReservation(r) && cancellingId !== r.id && (
                         <div className="flex items-center gap-1 shrink-0 ml-3">
-                          <button onClick={() => openEditForm(r)} className="text-gray-300 hover:text-[#3AB0FF] active:scale-95 p-1" title="Edit"><Edit2 size={14} /></button>
-                          <button onClick={() => setCancellingId(r.id)} className="text-gray-300 hover:text-[#CE3732] active:scale-95 p-1" title="Cancel"><X size={16} /></button>
+                          <button onClick={() => openEditForm(r)} className="text-gray-300 hover:text-info active:scale-95 p-1" title="Edit"><Edit2 size={14} /></button>
+                          <button onClick={() => setCancellingId(r.id)} className="text-gray-300 hover:text-danger active:scale-95 p-1" title="Cancel"><X size={16} /></button>
                         </div>
                       )}
                     </div>
-                    {cancellingId === r.id && (<div className="mt-3 pt-3 border-t border-sky-200 flex gap-2 animate-fade-in"><button onClick={() => setCancellingId(null)} className="flex-1 border border-gray-300 text-gray-600 font-oswald font-bold py-2 rounded text-[10px] uppercase tracking-widest active:scale-95">Keep</button><button onClick={() => handleCancelReservation(r.id)} disabled={isSubmitting} className="flex-1 bg-[#CE3732] text-white font-oswald font-bold py-2 rounded text-[10px] uppercase tracking-widest active:scale-95 disabled:opacity-50">{isSubmitting ? "..." : "Cancel Booking"}</button></div>)}
+                    {cancellingId === r.id && (<div className="mt-3 pt-3 border-t border-sky-200 flex gap-2 animate-fade-in"><button onClick={() => setCancellingId(null)} className="flex-1 border border-gray-300 text-gray-600 font-oswald font-bold py-2 rounded text-[10px] uppercase tracking-widest active:scale-95">Keep</button><button onClick={() => handleCancelReservation(r.id)} disabled={isSubmitting} className="flex-1 bg-danger text-white font-oswald font-bold py-2 rounded text-[10px] uppercase tracking-widest active:scale-95 disabled:opacity-50">{isSubmitting ? "..." : "Cancel Booking"}</button></div>)}
                   </div>
                 ))}
-                {hasMx && events.mxBlocks.map((m: any, idx: number) => (<div key={`mx-${idx}`} className="p-4 bg-orange-50 border border-orange-200 rounded flex items-center gap-3"><div className="bg-[#F08B46] text-white p-1.5 rounded shrink-0"><Wrench size={16} /></div><div className="min-w-0 flex-1"><p className="text-sm font-bold text-navy font-roboto truncate">{m.label}</p><p className="text-[10px] text-gray-500 font-roboto">{m.start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} — {m.end.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</p></div></div>))}
+                {hasMx && events.mxBlocks.map((m: any, idx: number) => (<div key={`mx-${idx}`} className="p-4 bg-orange-50 border border-orange-200 rounded flex items-center gap-3"><div className="bg-mxOrange text-white p-1.5 rounded shrink-0"><Wrench size={16} /></div><div className="min-w-0 flex-1"><p className="text-sm font-bold text-navy font-roboto truncate">{m.label}</p><p className="text-[10px] text-gray-500 font-roboto">{m.start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} — {m.end.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</p></div></div>))}
                 {timedRes.map(r => <ReservationCard key={r.id} r={r} />)}
                 {events.reservations.length === 0 && !hasMx && (
                   <div className="text-center py-12"><div className="bg-gray-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4"><Plane size={28} className="text-gray-300" /></div><p className="text-sm text-gray-400 font-oswald font-bold uppercase tracking-widest">Available</p><p className="text-xs text-gray-400 font-roboto mt-1">No bookings for this day</p><button onClick={() => openBookingForm(currentDate)} className="mt-4 text-[10px] font-oswald font-bold uppercase tracking-widest text-[#56B94A] bg-emerald-50 border border-emerald-200 px-4 py-2 rounded hover:bg-emerald-100 active:scale-95 transition-all">+ Reserve this date</button></div>
                 )}
                 {!hasMx && events.reservations.length > 0 && <button onClick={() => openBookingForm(currentDate)} className="w-full border-2 border-dashed border-gray-200 text-gray-400 font-oswald font-bold py-3 rounded hover:bg-emerald-50 hover:border-[#56B94A] hover:text-[#56B94A] active:scale-95 transition-all text-[10px] uppercase tracking-widest">+ Add Booking</button>}
-                {hasMx && <p className="text-[11px] font-roboto font-bold text-[#CE3732] text-center mt-2">Maintenance event scheduled — reservations blocked during this period.</p>}
+                {hasMx && <p className="text-[11px] font-roboto font-bold text-danger text-center mt-2">Maintenance event scheduled — reservations blocked during this period.</p>}
               </div>
             );
           })()}
@@ -590,7 +608,7 @@ export default function CalendarTab({
           <div className="bg-white rounded shadow-2xl w-full max-w-sm p-5 border-t-4 border-[#56B94A] animate-slide-up" onClick={e => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-5">
               <h2 className="font-oswald text-xl font-bold uppercase text-navy flex items-center gap-2"><Calendar size={18} className="text-[#56B94A]" /> {editingReservationId ? 'Edit Reservation' : 'Reserve Aircraft'}</h2>
-              <button onClick={() => setShowBookingForm(false)} className="text-gray-400 hover:text-red-500"><X size={22} /></button>
+              <button onClick={() => setShowBookingForm(false)} className="text-gray-400 hover:text-danger"><X size={22} /></button>
             </div>
             <div className="space-y-4">
               {canBookForOthers && !editingReservationId && (
@@ -608,7 +626,7 @@ export default function CalendarTab({
                     <div className="mt-3 animate-fade-in">
                       <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Pilot *</label>
                       {otherCrew.length === 0 ? (
-                        <p className="text-[11px] text-gray-500 mt-1.5 italic">No other pilots assigned to this aircraft.</p>
+                        <p className="text-[11px] text-gray-500 mt-1.5 italic">No other pilots on this aircraft yet.</p>
                       ) : (
                         <select value={bookingForUserId} onChange={e => setBookingForUserId(e.target.value)} style={wb} className="w-full border border-gray-300 rounded p-2.5 text-sm mt-1 focus:border-[#56B94A] outline-none">
                           <option value="">Select pilot…</option>
@@ -930,25 +948,25 @@ export default function CalendarTab({
       {showMxBlockForm && (
         <div className="fixed inset-0 bg-black/60 z-[10000] overflow-y-auto animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => setShowMxBlockForm(false)}>
           <div className="flex min-h-full items-center justify-center p-4">
-          <div className="bg-white rounded shadow-2xl w-full max-w-sm p-5 border-t-4 border-[#F08B46] animate-slide-up" onClick={e => e.stopPropagation()}>
+          <div className="bg-white rounded shadow-2xl w-full max-w-sm p-5 border-t-4 border-mxOrange animate-slide-up" onClick={e => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-5">
-              <h2 className="font-oswald text-xl font-bold uppercase text-navy flex items-center gap-2"><Wrench size={18} className="text-[#F08B46]" /> Block for Maintenance</h2>
-              <button onClick={() => setShowMxBlockForm(false)} className="text-gray-400 hover:text-red-500"><X size={22} /></button>
+              <h2 className="font-oswald text-xl font-bold uppercase text-navy flex items-center gap-2"><Wrench size={18} className="text-mxOrange" /> Block for Maintenance</h2>
+              <button onClick={() => setShowMxBlockForm(false)} className="text-gray-400 hover:text-danger"><X size={22} /></button>
             </div>
             <div className="space-y-4">
               <div>
                 <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Start Date *</label>
-                <input type="date" value={mxBlockStartDate} onChange={e => setMxBlockStartDate(e.target.value)} style={wb} className="w-full border border-gray-300 rounded p-2.5 text-sm mt-1 focus:border-[#F08B46] outline-none" />
+                <input type="date" value={mxBlockStartDate} onChange={e => setMxBlockStartDate(e.target.value)} style={wb} className="w-full border border-gray-300 rounded p-2.5 text-sm mt-1 focus:border-mxOrange outline-none" />
               </div>
               <div>
                 <label className="text-[10px] font-bold uppercase tracking-widest text-navy">End Date *</label>
-                <input type="date" value={mxBlockEndDate} onChange={e => setMxBlockEndDate(e.target.value)} style={wb} className="w-full border border-gray-300 rounded p-2.5 text-sm mt-1 focus:border-[#F08B46] outline-none" />
+                <input type="date" value={mxBlockEndDate} onChange={e => setMxBlockEndDate(e.target.value)} style={wb} className="w-full border border-gray-300 rounded p-2.5 text-sm mt-1 focus:border-mxOrange outline-none" />
               </div>
               <div className="border-t border-gray-100 pt-4">
                 <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Notes (Optional)</label>
-                <input type="text" value={mxBlockNotes} onChange={e => setMxBlockNotes(e.target.value)} style={wb} className="w-full border border-gray-300 rounded p-2.5 text-sm mt-1 focus:border-[#F08B46] outline-none" placeholder="Annual inspection, oil change..." />
+                <input type="text" value={mxBlockNotes} onChange={e => setMxBlockNotes(e.target.value)} style={wb} className="w-full border border-gray-300 rounded p-2.5 text-sm mt-1 focus:border-mxOrange outline-none" placeholder="Annual inspection, oil change..." />
               </div>
-              <div className="pt-2"><button onClick={handleCreateMxBlock} disabled={isSubmitting} className="w-full bg-[#F08B46] text-white font-oswald tracking-widest uppercase py-3 px-4 rounded hover:bg-opacity-90 active:scale-95 transition-all text-sm disabled:opacity-50">{isSubmitting ? <><Loader2 size={16} className="animate-spin" /> Creating...</> : "Block Aircraft"}</button></div>
+              <div className="pt-2"><button onClick={handleCreateMxBlock} disabled={isSubmitting} className="w-full bg-mxOrange text-white font-oswald tracking-widest uppercase py-3 px-4 rounded hover:bg-opacity-90 active:scale-95 transition-all text-sm disabled:opacity-50">{isSubmitting ? <><Loader2 size={16} className="animate-spin" /> Creating...</> : "Block Aircraft"}</button></div>
             </div>
           </div>
           </div>

@@ -4,10 +4,28 @@
   /* Brand Colors */
   --color-navy: #091F3C;
   --color-cream: #FDFCF4;
-  --color-brandOrange: #E68E2D;
-  --color-brandOrange-alt: #FF8C00;
+
+  /* brandOrange is the sunset tone that anchors Howard's persona and the
+     overall brand identity. Use this for Howard accents, the primary FAB,
+     and any "branded" surface. */
+  --color-brandOrange: #e6651b;
+
+  /* mxOrange is the single maintenance tone — borders, icons, buttons, and
+     status chips that signal "maintenance context." Distinct from
+     brandOrange on purpose: mx is task-colored; brand is identity-colored. */
+  --color-mxOrange: #F08B46;
+
   --color-brandYellow: #F4C458;
   --color-success: #56B94A;
+
+  /* Grounded / destructive red. Used for AOG badges, delete buttons,
+     danger-zone borders, error toasts, and close-X hover. */
+  --color-danger: #CE3732;
+
+  /* Sky blue. Links, info banners, "next up" accents, awaiting status,
+     and confirmation-pending chips. */
+  --color-info: #3AB0FF;
+
   --color-slateGray: #525659;
 
   /* Google Fonts */
@@ -72,4 +90,79 @@ main {
 
 .animate-slide-up {
   animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* ─── MODAL CHROME-INSET SCROLL REGION ───
+   Every popup/modal in the app uses the shared structure:
+     <div className="fixed inset-0 ... overflow-y-auto animate-fade-in">   ← overlay
+       <div className="flex min-h-full items-center justify-center p-4">  ← scroll content
+         <div className="card">...</div>
+       </div>
+     </div>
+
+   The overlay is `fixed inset-0` so its dimmed backdrop paints the
+   full viewport — including under the 3.5rem navy header and the
+   3.5rem bottom nav. That part we want: the whole app dims when a
+   modal is open.
+
+   But when the modal card is tall, the OVERLAY itself is the scroll
+   container (overflow-y-auto). That means modal content can scroll
+   right up to the top and bottom edges of the viewport. On paper
+   the overlay's z-[10000] paints above the chrome's z-[9999], but
+   mobile browsers are unreliable about that (backdrop-filter on
+   the bottom nav, iOS Safari quirks with fixed ancestors inside
+   `-webkit-overflow-scrolling: touch` scroll containers), and tall
+   modals ended up with content visually clipped behind the navs.
+
+   Rewire the scroll so the OUTER div just paints the dim backdrop
+   and the INNER flex container is the actual scroll viewport —
+   absolutely positioned to sit between the header and nav. Content
+   physically cannot render in those bands regardless of stacking.
+
+   `background-color` on the overlay still fills edge-to-edge, so
+   the visual dim is unchanged. The attribute-selector specificity
+   (0-2-0) beats Tailwind utility classes (0-1-0), so this wins
+   without !important. */
+.animate-fade-in.fixed.inset-0,
+.modal-overlay {
+  /* Overlay no longer scrolls — it's just the dim layer */
+  overflow: hidden !important;
+}
+
+.animate-fade-in.fixed.inset-0 > .min-h-full,
+.modal-overlay > .min-h-full {
+  position: absolute !important;
+  top: calc(env(safe-area-inset-top, 0px) + 3.5rem) !important;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 3.5rem) !important;
+  left: 0 !important;
+  right: 0 !important;
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+/* Hide scrollbar for nav tray */
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* Always-visible thin scrollbar for modal scroll regions — on macOS
+   and iOS, default scrollbars only appear during active scroll, which
+   hides the fact that the modal has more content below. This keeps
+   a subtle track+thumb visible whenever content overflows. */
+.modal-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(9, 31, 60, 0.28) transparent; /* navy @ 28% */
+}
+.modal-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+.modal-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.modal-scroll::-webkit-scrollbar-thumb {
+  background-color: rgba(9, 31, 60, 0.28);
+  border-radius: 3px;
+}
+.modal-scroll::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(9, 31, 60, 0.45);
 }

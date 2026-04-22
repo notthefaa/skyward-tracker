@@ -15,6 +15,10 @@ export interface Aircraft {
   setup_hobbs?: number;
   setup_tach?: number;
   home_airport?: string | null;
+  /** IANA timezone identifier (e.g. 'America/Los_Angeles'). Used by
+   *  server-side date math so MX-reminder emails and airworthiness
+   *  verdicts reflect the pilot's calendar day, not the UTC runtime. */
+  time_zone?: string | null;
   main_contact?: string | null;
   main_contact_phone?: string | null;
   main_contact_email?: string | null;
@@ -25,6 +29,87 @@ export interface Aircraft {
   current_fuel_gallons?: number;
   fuel_last_updated?: string | null;
   created_by?: string | null;
+  make?: string | null;
+  model?: string | null;
+  year_mfg?: number | null;
+  /** FAA Type Certificate number (e.g. "A13WE"). Optional. Improves
+   *  AD matching accuracy when the make name drifts between TC holders. */
+  type_certificate?: string | null;
+  is_ifr_equipped?: boolean | null;
+  is_for_hire?: boolean | null;
+}
+
+export type EquipmentCategory =
+  | 'engine' | 'propeller' | 'avionics' | 'transponder' | 'altimeter'
+  | 'pitot_static' | 'elt' | 'adsb' | 'autopilot' | 'gps' | 'radio'
+  | 'intercom' | 'instrument' | 'landing_gear' | 'lighting'
+  | 'accessory' | 'other';
+
+export interface AircraftEquipment {
+  id: string;
+  aircraft_id: string;
+  category: EquipmentCategory;
+  name: string;
+  make?: string | null;
+  model?: string | null;
+  serial?: string | null;
+  part_number?: string | null;
+  installed_at?: string | null;
+  installed_by?: string | null;
+  removed_at?: string | null;
+  removed_reason?: string | null;
+  ifr_capable: boolean;
+  adsb_out: boolean;
+  adsb_in: boolean;
+  transponder_class?: string | null;
+  is_elt: boolean;
+  elt_battery_expires?: string | null;
+  elt_battery_cumulative_hours?: number | null;
+  pitot_static_due_date?: string | null;
+  transponder_due_date?: string | null;
+  altimeter_due_date?: string | null;
+  vor_due_date?: string | null;
+  notes?: string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at?: string | null;
+}
+
+export interface AirworthinessDirective {
+  id: string;
+  aircraft_id: string;
+  ad_number: string;
+  amendment?: string | null;
+  subject: string;
+  applicability?: string | null;
+  source_url?: string | null;
+  source: 'drs_sync' | 'manual' | 'user_added';
+  effective_date?: string | null;
+  is_superseded: boolean;
+  superseded_by?: string | null;
+  compliance_type: 'one_time' | 'recurring';
+  initial_compliance_hours?: number | null;
+  initial_compliance_date?: string | null;
+  recurring_interval_hours?: number | null;
+  recurring_interval_months?: number | null;
+  last_complied_date?: string | null;
+  last_complied_time?: number | null;
+  last_complied_by?: string | null;
+  next_due_date?: string | null;
+  next_due_time?: number | null;
+  compliance_method?: string | null;
+  notes?: string | null;
+  affects_airworthiness: boolean;
+  synced_at?: string | null;
+  /** Per-aircraft applicability verdict. 'applies' = serial/engine in range,
+   *  'does_not_apply' = out of range, 'review_required' = matched make/model
+   *  but serial-level check was ambiguous. Null = never checked. */
+  applicability_status?: 'applies' | 'does_not_apply' | 'review_required' | null;
+  applicability_reason?: string | null;
+  applicability_checked_at?: string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at?: string | null;
 }
 
 export interface AircraftWithMetrics extends Aircraft {
@@ -58,7 +143,7 @@ export interface MaintenanceItem {
   id: string;
   aircraft_id: string;
   item_name: string;
-  tracking_type: 'time' | 'date';
+  tracking_type: 'time' | 'date' | 'both';
   is_required: boolean;
   last_completed_time?: number | null;
   time_interval?: number | null;
@@ -127,7 +212,27 @@ export interface UserRole {
   role: 'admin' | 'pilot';
   email?: string | null;
   initials?: string | null;
+  faa_ratings?: string[] | null;
 }
+
+// Pilot FAA certificates and ratings the user can self-identify in their
+// profile. Order here drives the order they render in SettingsModal.
+// Howard consumes this via buildUserContext to tailor tone / jargon.
+export const FAA_RATINGS = [
+  { code: 'Student',      label: 'Student Pilot' },
+  { code: 'Sport',        label: 'Sport Pilot' },
+  { code: 'Recreational', label: 'Recreational Pilot' },
+  { code: 'PPL',          label: 'Private Pilot (PPL)' },
+  { code: 'IFR',          label: 'Instrument Rating (IFR)' },
+  { code: 'ME',           label: 'Multi-Engine (ME)' },
+  { code: 'CPL',          label: 'Commercial Pilot (CPL)' },
+  { code: 'ATP',          label: 'Airline Transport Pilot (ATP)' },
+  { code: 'CFI',          label: 'Flight Instructor (CFI)' },
+  { code: 'CFII',         label: 'Instrument Instructor (CFII)' },
+  { code: 'MEI',          label: 'Multi-Engine Instructor (MEI)' },
+] as const;
+
+export type FaaRatingCode = typeof FAA_RATINGS[number]['code'];
 
 export interface Reservation {
   id: string;
@@ -201,5 +306,68 @@ export interface SystemSettings {
 export type AppRole = 'admin' | 'pilot';
 export type AircraftRole = 'admin' | 'pilot';
 export type AircraftStatus = 'airworthy' | 'issues' | 'grounded';
-export type AppTab = 'fleet' | 'summary' | 'times' | 'calendar' | 'mx' | 'notes';
-export type MxSubTab = 'maintenance' | 'squawks';
+export type AppTab = 'fleet' | 'summary' | 'times' | 'calendar' | 'mx' | 'notes' | 'howard' | 'howard-usage' | 'documents' | 'equipment' | 'ads';
+export type MxSubTab = 'maintenance' | 'squawks' | 'service';
+export type LogSubTab = 'flights' | 'checks';
+
+export type VorCheckType = 'VOT' | 'Ground Checkpoint' | 'Airborne Checkpoint' | 'Dual VOR';
+
+export interface VorCheck {
+  id: string;
+  aircraft_id: string;
+  user_id?: string | null;
+  check_type: VorCheckType;
+  station: string;
+  bearing_error: number;
+  tolerance: number;
+  passed: boolean;
+  initials: string;
+  created_at: string;
+}
+
+export interface TireCheck {
+  id: string;
+  aircraft_id: string;
+  user_id?: string | null;
+  nose_psi: number | null;
+  left_main_psi: number | null;
+  right_main_psi: number | null;
+  initials: string;
+  notes?: string | null;
+  created_at: string;
+}
+
+export interface OilLog {
+  id: string;
+  aircraft_id: string;
+  user_id?: string | null;
+  oil_qty: number;
+  oil_added?: number | null;
+  engine_hours: number;
+  initials: string;
+  notes?: string | null;
+  created_at: string;
+}
+
+export type DocType =
+  | 'POH'
+  | 'AFM'
+  | 'Supplement'
+  | 'MEL'
+  | 'SOP'
+  | 'Registration'
+  | 'Airworthiness Certificate'
+  | 'Weight and Balance'
+  | 'Other';
+
+export interface AircraftDocument {
+  id: string;
+  aircraft_id: string;
+  user_id?: string | null;
+  filename: string;
+  file_url: string;
+  doc_type: DocType;
+  page_count?: number | null;
+  status: 'processing' | 'ready' | 'error';
+  created_at: string;
+}

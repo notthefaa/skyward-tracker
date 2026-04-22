@@ -1,9 +1,12 @@
 import { NextResponse } from 'next/server';
+import { randomBytes } from 'crypto';
 import { Resend } from 'resend';
 import { requireAuth, requireAircraftAdmin, handleApiError } from '@/lib/auth';
+import { setAppUser } from '@/lib/audit';
 import { env } from '@/lib/env';
 import { escapeHtml } from '@/lib/sanitize';
 import { cancelConflictingReservations } from '@/lib/mxConflicts';
+import { isIsoDate } from '@/lib/validation';
 
 const resend = new Resend(env.RESEND_API_KEY);
 const FROM_EMAIL = 'notifications@skywardsociety.com';
@@ -17,8 +20,10 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Event ID and action are required.' }, { status: 400 });
     }
 
+    // Reject actions on soft-deleted events so an owner can't "confirm" or
+    // "counter" an event they already cancelled via a stale tab.
     const { data: event, error: evErr } = await supabaseAdmin
-      .from('aft_maintenance_events').select('*').eq('id', eventId).single();
+      .from('aft_maintenance_events').select('*').eq('id', eventId).is('deleted_at', null).maybeSingle();
 
     if (evErr || !event) {
       return NextResponse.json({ error: 'Event not found.' }, { status: 404 });
@@ -26,6 +31,7 @@ export async function POST(req: Request) {
 
     // Verify the user has access to this aircraft
     await requireAircraftAdmin(supabaseAdmin, user.id, event.aircraft_id);
+    await setAppUser(supabaseAdmin, user.id);
 
     const portalUrl = `${new URL(req.url).origin}/service/${event.access_token}`;
     const mxEmail = event.mx_contact_email;
@@ -95,8 +101,8 @@ export async function POST(req: Request) {
 
     } else if (action === 'counter') {
       // Owner proposes a different date
-      if (!proposedDate) {
-        return NextResponse.json({ error: 'Proposed date is required for counter.' }, { status: 400 });
+      if (!isIsoDate(proposedDate)) {
+        return NextResponse.json({ error: 'A valid YYYY-MM-DD date is required for counter.' }, { status: 400 });
       }
 
       await supabaseAdmin.from('aft_maintenance_events').update({
@@ -162,9 +168,15 @@ export async function POST(req: Request) {
       }
 
     } else if (action === 'cancel') {
-      // Owner cancels the service event
+      // Owner cancels the service event. Rotate the access_token so any
+      // still-circulating portal links stop working — the mutations
+      // were already rejected by the status check, but read access to
+      // event history / attached images / message thread would linger
+      // otherwise. A fresh random token makes the old link a 404.
+      const freshToken = randomBytes(32).toString('base64url');
       await supabaseAdmin.from('aft_maintenance_events').update({
         status: 'cancelled',
+        access_token: freshToken,
       }).eq('id', eventId);
 
       await supabaseAdmin.from('aft_event_messages').insert({
@@ -188,7 +200,7 @@ export async function POST(req: Request) {
               <p>Hello ${safeMxName},</p>
               <p>${safePrimaryName} has cancelled the pending service event.</p>
               ${safeMessage ? `<p style="margin-top: 15px; padding: 15px; background: #f9f9f9; border-left: 4px solid #CE3732; border-radius: 4px;"><em>${safeMessage}</em></p>` : ''}
-              <p style="margin-top: 15px; color: #666;">No further action is needed on your end. We apologize for any inconvenience.</p>
+              <p style="margin-top: 15px; color: #666;">Nothing more to do on your end. Sorry for the inconvenience.</p>
             </div>
           `
         });

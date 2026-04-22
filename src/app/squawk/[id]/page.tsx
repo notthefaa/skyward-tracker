@@ -8,7 +8,12 @@ import { AlertTriangle, X, Image, MapPin } from "lucide-react";
 
 export default function SquawkViewer() {
   const params = useParams();
-  const squawkId = params.id as string;
+  // The URL segment is the squawk's `access_token` (a random
+  // 32-byte base64url string). Old URLs that embedded the row UUID
+  // directly no longer resolve — a deliberate tradeoff so a leaked
+  // UUID from any source (audit log, DB export) doesn't leak the
+  // squawk. The token is what gets distributed in mechanic emails.
+  const token = params.id as string;
 
   const [squawk, setSquawk] = useState<any>(null);
   const [aircraft, setAircraft] = useState<any>(null);
@@ -19,12 +24,12 @@ export default function SquawkViewer() {
   useBodyScrollOverride();
 
   useEffect(() => {
-    if (squawkId) fetchSquawk();
-  }, [squawkId]);
+    if (token) fetchSquawk();
+  }, [token]);
 
   const fetchSquawk = async () => {
     const { data: sqData } = await supabase
-      .from('aft_squawks').select('*').eq('id', squawkId).single();
+      .from('aft_squawks').select('*').eq('access_token', token).is('deleted_at', null).maybeSingle();
 
     if (sqData) {
       setSquawk(sqData);
@@ -72,15 +77,15 @@ export default function SquawkViewer() {
         <div className="w-full max-w-2xl space-y-6 animate-slide-up">
 
           {/* HEADER */}
-          <div className="bg-white shadow-2xl rounded-sm overflow-hidden border-t-4 border-[#CE3732]">
-            <div className={`${isGrounded ? 'bg-[#CE3732]' : 'bg-[#091F3C]'} p-6 text-white flex justify-between items-center`}>
+          <div className="bg-white shadow-2xl rounded-sm overflow-hidden border-t-4 border-danger">
+            <div className={`${isGrounded ? 'bg-danger' : 'bg-[#091F3C]'} p-6 text-white flex justify-between items-center`}>
               <div>
                 <h2 className="font-oswald text-3xl font-bold uppercase leading-none">{aircraft?.tail_number || 'N/A'}</h2>
                 <p className="text-xs font-bold uppercase tracking-widest mt-1 opacity-90">{aircraft?.aircraft_type || ''}</p>
               </div>
               <div className="text-right">
                 <span className="text-[10px] font-bold uppercase tracking-widest block mb-1">Status</span>
-                <span className={`${isResolved ? 'bg-[#56B94A]' : isGrounded ? 'bg-white text-[#CE3732]' : 'bg-[#F08B46]'} px-3 py-1 rounded text-xs font-bold uppercase tracking-widest`}>
+                <span className={`${isResolved ? 'bg-[#56B94A]' : isGrounded ? 'bg-white text-danger' : 'bg-mxOrange'} px-3 py-1 rounded text-xs font-bold uppercase tracking-widest`}>
                   {isResolved ? 'Resolved' : isGrounded ? 'AOG / Grounded' : 'Monitor'}
                 </span>
               </div>
@@ -98,22 +103,22 @@ export default function SquawkViewer() {
               {squawk.location && (
                 <div>
                   <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 block">Location</span>
-                  <span className="font-roboto font-bold text-navy flex items-center gap-1"><MapPin size={14} className="text-[#CE3732]" /> {squawk.location}</span>
+                  <span className="font-roboto font-bold text-navy flex items-center gap-1"><MapPin size={14} className="text-danger" /> {squawk.location}</span>
                 </div>
               )}
               {aircraft?.main_contact && (
                 <div>
                   <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 block">Primary Contact</span>
                   <span className="font-roboto font-bold text-navy">{aircraft.main_contact}</span>
-                  {aircraft.main_contact_email && <a href={`mailto:${aircraft.main_contact_email}`} className="block text-xs text-[#3AB0FF] mt-1">{aircraft.main_contact_email}</a>}
+                  {aircraft.main_contact_email && <a href={`mailto:${aircraft.main_contact_email}`} className="block text-xs text-info mt-1">{aircraft.main_contact_email}</a>}
                 </div>
               )}
             </div>
           </div>
 
           {/* DESCRIPTION */}
-          <div className="bg-white shadow-lg rounded-sm p-6 border-t-4 border-[#CE3732]">
-            <h3 className="font-oswald text-lg font-bold uppercase tracking-widest text-navy mb-4 flex items-center gap-2"><AlertTriangle size={18} className="text-[#CE3732]"/> Discrepancy</h3>
+          <div className="bg-white shadow-lg rounded-sm p-6 border-t-4 border-danger">
+            <h3 className="font-oswald text-lg font-bold uppercase tracking-widest text-navy mb-4 flex items-center gap-2"><AlertTriangle size={18} className="text-danger"/> Discrepancy</h3>
             <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{squawk.description}</p>
           </div>
 
@@ -126,7 +131,7 @@ export default function SquawkViewer() {
                   <button 
                     key={idx} 
                     onClick={() => setViewingPhoto(url)} 
-                    className="aspect-square rounded border-2 border-gray-200 overflow-hidden hover:border-[#CE3732] transition-colors active:scale-95"
+                    className="aspect-square rounded border-2 border-gray-200 overflow-hidden hover:border-danger transition-colors active:scale-95"
                   >
                     <img src={url} alt={`Squawk photo ${idx + 1}`} className="w-full h-full object-cover" />
                   </button>
@@ -137,7 +142,7 @@ export default function SquawkViewer() {
 
           {/* DEFERRAL INFO */}
           {squawk.is_deferred && (
-            <div className="bg-white shadow-lg rounded-sm p-6 border-t-4 border-[#F08B46]">
+            <div className="bg-white shadow-lg rounded-sm p-6 border-t-4 border-mxOrange">
               <h3 className="font-oswald text-lg font-bold uppercase tracking-widest text-navy mb-4">Deferral Information</h3>
               <div className="grid grid-cols-2 gap-3 text-sm">
                 {squawk.mel_number && <div><span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 block">MEL</span><span className="font-bold text-navy">{squawk.mel_number}</span></div>}

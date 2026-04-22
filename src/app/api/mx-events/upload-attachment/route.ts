@@ -76,12 +76,14 @@ export async function POST(req: Request) {
     const supabaseAdmin = createAdminClient();
     const baseUrl = new URL(req.url).origin;
 
-    // Validate the access token
+    // Validate the access token — reject if the owner already soft-deleted
+    // the event (matches the respond route).
     const { data: event, error: evErr } = await supabaseAdmin
       .from('aft_maintenance_events')
       .select('*')
       .eq('access_token', accessToken)
-      .single();
+      .is('deleted_at', null)
+      .maybeSingle();
 
     if (evErr || !event) {
       return NextResponse.json({ error: 'Service event not found.' }, { status: 404 });
@@ -130,7 +132,7 @@ export async function POST(req: Request) {
       // so a magic-byte check is the real gate.
       if (!fileBytesMatchType(buffer.subarray(0, 16), file.type, file.name)) {
         return NextResponse.json(
-          { error: `File "${file.name}" does not match its declared type. Please re-upload a valid ${file.type} file.` },
+          { error: `File "${file.name}" doesn't match its declared type. Re-upload a valid ${file.type} file.` },
           { status: 400 }
         );
       }

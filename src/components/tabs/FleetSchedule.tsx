@@ -3,6 +3,7 @@
 import { useState, useMemo } from "react";
 import useSWR from "swr";
 import { supabase } from "@/lib/supabase";
+import { swrKeys } from "@/lib/swrKeys";
 import type { AircraftWithMetrics, Reservation } from "@/lib/types";
 import { ChevronLeft, ChevronRight, Wrench, Plane, MapPin, Clock, Filter } from "lucide-react";
 import { useModalScrollLock } from "@/hooks/useModalScrollLock";
@@ -71,7 +72,7 @@ export default function FleetSchedule({
   const month = currentDate.getMonth();
   const aircraftIdsKey = aircraftList.map(a => a.id).sort().join(',');
   const fetchKey = aircraftList.length > 0
-    ? `fleet-schedule-${aircraftIdsKey}-${year}-${month}`
+    ? swrKeys.fleetSchedule(aircraftIdsKey, year, month)
     : null;
 
   const { data: calendarData } = useSWR(fetchKey, async () => {

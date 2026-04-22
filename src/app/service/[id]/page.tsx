@@ -152,7 +152,7 @@ export default function ServicePortal() {
       setConfirmDurationDays("");
       setConfirmMessage("");
     } catch (err) {
-      showError("Something went wrong. Please try again.");
+      showError("That didn't go through. Try again.");
     }
     setIsSubmitting(false);
   };
@@ -179,14 +179,14 @@ export default function ServicePortal() {
       });
       if (!res.ok) {
         const errData = await res.json();
-        throw new Error(errData.error || 'Upload failed');
+        throw new Error(errData.error || "Upload didn't finish");
       }
       await fetchEventData();
       setUploadFiles([]);
       setUploadDescription("");
       setShowUploadForm(false);
     } catch (err: any) {
-      showError(err.message || "Upload failed. Please try again.");
+      showError(err.message || "Upload didn't finish. Try again.");
     }
     setIsUploading(false);
   };
@@ -226,18 +226,18 @@ export default function ServicePortal() {
           <img src="/logo.png" alt="Skyward" className="mx-auto h-20 object-contain mb-4 opacity-80" />
           {isExpired ? (
             <>
-              <AlertTriangle size={32} className="mx-auto text-[#F08B46] mb-3" />
+              <AlertTriangle size={32} className="mx-auto text-mxOrange mb-3" />
               <h2 className="font-oswald text-2xl font-bold uppercase tracking-widest text-navy mb-3">Portal Expired</h2>
               <p className="text-sm text-gray-600 font-roboto leading-relaxed">
-                This service event has been completed and the portal link is no longer active. If you need to access the records, please contact the aircraft owner directly.
+                This service event is complete and the portal link is no longer active. Contact the aircraft owner directly if you need access to the records.
               </p>
             </>
           ) : (
             <>
-              <XCircle size={32} className="mx-auto text-[#CE3732] mb-3" />
+              <XCircle size={32} className="mx-auto text-danger mb-3" />
               <h2 className="font-oswald text-2xl font-bold uppercase tracking-widest text-navy mb-3">Service Event Not Found</h2>
               <p className="text-sm text-gray-600 font-roboto leading-relaxed">
-                The link you followed doesn't match an active service event. It may have been revoked or mistyped. Please contact the aircraft owner for a fresh link.
+                The link you followed doesn&apos;t match an active service event — it may have been revoked or typed wrong. Contact the aircraft owner for a fresh one.
               </p>
             </>
           )}
@@ -246,7 +246,7 @@ export default function ServicePortal() {
     );
   }
 
-  const statusColor = event.status === 'complete' ? 'bg-[#56B94A]' : event.status === 'ready_for_pickup' ? 'bg-[#56B94A]' : event.status === 'confirmed' ? 'bg-[#3AB0FF]' : event.status === 'cancelled' ? 'bg-[#CE3732]' : 'bg-[#F08B46]';
+  const statusColor = event.status === 'complete' ? 'bg-[#56B94A]' : event.status === 'ready_for_pickup' ? 'bg-[#56B94A]' : event.status === 'confirmed' ? 'bg-info' : event.status === 'cancelled' ? 'bg-danger' : 'bg-mxOrange';
   const statusLabel = event.status === 'ready_for_pickup' ? 'Ready for Pickup' : event.status;
   const mxLines = lineItems.filter(li => li.item_type === 'maintenance');
   const squawkLines = lineItems.filter(li => li.item_type === 'squawk');
@@ -263,7 +263,7 @@ export default function ServicePortal() {
 
       {isAppUser && (
         <div className="fixed top-0 left-0 right-0 z-50 bg-navy" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
-          <button onClick={() => router.push('/')} className="flex items-center gap-2 px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-white hover:text-[#3AB0FF] active:scale-95 transition-all">
+          <button onClick={() => router.push('/')} className="flex items-center gap-2 px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-white hover:text-info active:scale-95 transition-all">
             <ArrowLeft size={14} /> Back to App
           </button>
         </div>
@@ -299,12 +299,12 @@ export default function ServicePortal() {
               <div>
                 <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 block">Primary Contact</span>
                 <span className="font-roboto font-bold text-navy">{event.primary_contact_name || 'N/A'}</span>
-                {event.primary_contact_email && <a href={`mailto:${event.primary_contact_email}`} className="block text-xs text-[#3AB0FF] mt-1">{event.primary_contact_email}</a>}
+                {event.primary_contact_email && <a href={`mailto:${event.primary_contact_email}`} className="block text-xs text-info mt-1">{event.primary_contact_email}</a>}
               </div>
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Current Times</span>
-                  <button onClick={handleRefreshTimes} disabled={isRefreshing} className="text-[#3AB0FF] hover:text-blue-600 active:scale-95 transition-all disabled:opacity-50" title="Refresh aircraft times">
+                  <button onClick={handleRefreshTimes} disabled={isRefreshing} className="text-info hover:text-blue-600 active:scale-95 transition-all disabled:opacity-50" title="Refresh aircraft times">
                     <RefreshCw size={14} className={isRefreshing ? 'animate-spin' : ''} />
                   </button>
                 </div>
@@ -328,7 +328,7 @@ export default function ServicePortal() {
               {event.proposed_date && !event.confirmed_date && (
                 <div>
                   <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 block">Proposed Date</span>
-                  <span className="font-roboto font-bold text-[#F08B46]">{event.proposed_date}{event.service_duration_days ? ` (${event.service_duration_days} day${event.service_duration_days > 1 ? 's' : ''})` : ''} (by {event.proposed_by})</span>
+                  <span className="font-roboto font-bold text-mxOrange">{event.proposed_date}{event.service_duration_days ? ` (${event.service_duration_days} day${event.service_duration_days > 1 ? 's' : ''})` : ''} (by {event.proposed_by})</span>
                 </div>
               )}
             </div>
@@ -336,15 +336,15 @@ export default function ServicePortal() {
 
           {/* SCHEDULING ACTIONS */}
           {event.status === 'scheduling' && (
-            <div className="bg-white shadow-lg rounded-sm p-6 border-t-4 border-[#F08B46]">
-              <h3 className="font-oswald text-lg font-bold uppercase tracking-widest text-navy mb-4 flex items-center gap-2"><Calendar size={18} className="text-[#F08B46]"/> Scheduling</h3>
+            <div className="bg-white shadow-lg rounded-sm p-6 border-t-4 border-mxOrange">
+              <h3 className="font-oswald text-lg font-bold uppercase tracking-widest text-navy mb-4 flex items-center gap-2"><Calendar size={18} className="text-mxOrange"/> Scheduling</h3>
               
               {event.proposed_by === 'owner' && (
                 <div className="space-y-3">
                   <p className="text-sm text-gray-600">
                     {event.proposed_date 
                       ? <>The owner has proposed <strong>{event.proposed_date}</strong>. Does this date work for your shop?</>
-                      : <>The owner has requested your availability. Please propose a service date below.</>
+                      : <>The owner wants to know your availability. Propose a service date below.</>
                     }
                   </p>
                   {event.proposed_date && (
@@ -352,7 +352,7 @@ export default function ServicePortal() {
                       {!showConfirmWithDuration ? (
                         <div className="flex gap-3">
                           <button onClick={() => setShowConfirmWithDuration(true)} disabled={isSubmitting} className="flex-1 bg-[#56B94A] text-white font-oswald font-bold uppercase tracking-widest py-3 rounded active:scale-95 transition-transform disabled:opacity-50">Confirm Date</button>
-                          <button onClick={() => setShowDateForm(true)} disabled={isSubmitting} className="flex-1 bg-[#F08B46] text-white font-oswald font-bold uppercase tracking-widest py-3 rounded active:scale-95 transition-transform disabled:opacity-50">Propose Different</button>
+                          <button onClick={() => setShowDateForm(true)} disabled={isSubmitting} className="flex-1 bg-mxOrange text-white font-oswald font-bold uppercase tracking-widest py-3 rounded active:scale-95 transition-transform disabled:opacity-50">Propose Different</button>
                         </div>
                       ) : (
                         <div className="p-4 bg-green-50 rounded border border-green-200 space-y-3 animate-fade-in">
@@ -387,7 +387,7 @@ export default function ServicePortal() {
 
               {(event.proposed_by === 'mechanic' || (!event.proposed_date && event.proposed_by !== 'owner')) && (
                 <div className="space-y-3">
-                  <p className="text-sm text-gray-600">{event.proposed_by === 'mechanic' ? 'Waiting for owner to confirm your proposed date.' : 'Please propose a service date.'}</p>
+                  <p className="text-sm text-gray-600">{event.proposed_by === 'mechanic' ? 'Waiting for owner to confirm your proposed date.' : 'Propose a service date.'}</p>
                   {!event.proposed_date && (
                     <button onClick={() => setShowDateForm(true)} className="w-full bg-[#091F3C] text-white font-oswald font-bold uppercase tracking-widest py-3 rounded active:scale-95 transition-transform">Propose a Date</button>
                   )}
@@ -398,20 +398,20 @@ export default function ServicePortal() {
                 <div className="mt-4 p-4 bg-gray-50 rounded border border-gray-200 space-y-3 animate-fade-in">
                   <div>
                     <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Proposed Date *</label>
-                    <input type="date" min={todayDateString} value={proposedDate} onChange={e => setProposedDate(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" />
+                    <input type="date" min={todayDateString} value={proposedDate} onChange={e => setProposedDate(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none" />
                   </div>
                   <div>
                     <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Estimated Duration (Days) *</label>
-                    <input type="number" min="1" value={serviceDurationDays} onChange={e => setServiceDurationDays(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" placeholder="How many days will the aircraft be in your shop?" />
+                    <input type="number" min="1" value={serviceDurationDays} onChange={e => setServiceDurationDays(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none" placeholder="How many days will the aircraft be in your shop?" />
                   </div>
                   <div>
                     <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Shop Availability (Optional)</label>
-                    <textarea value={availabilityNote} onChange={e => setAvailabilityNote(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none min-h-[60px]" placeholder="e.g. We're booked through March 15. Earliest opening is March 17-21." />
+                    <textarea value={availabilityNote} onChange={e => setAvailabilityNote(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none min-h-[60px]" placeholder="e.g. We're booked through March 15. Earliest opening is March 17-21." />
                     <p className="text-[10px] text-gray-400 mt-1">Let the owner know about your upcoming availability so they can plan accordingly.</p>
                   </div>
                   <div>
                     <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Additional Message (Optional)</label>
-                    <textarea value={commentText} onChange={e => setCommentText(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none min-h-[60px]" placeholder="Any other notes..." />
+                    <textarea value={commentText} onChange={e => setCommentText(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none min-h-[60px]" placeholder="Any other notes..." />
                   </div>
                   <button 
                     onClick={() => {
@@ -419,7 +419,7 @@ export default function ServicePortal() {
                       handleAction('propose_date', { proposedDate, serviceDurationDays: parseInt(serviceDurationDays), message: fullMessage });
                     }} 
                     disabled={isSubmitting || !proposedDate || !serviceDurationDays || parseInt(serviceDurationDays) < 1} 
-                    className="w-full bg-[#F08B46] text-white font-oswald font-bold uppercase tracking-widest py-3 rounded active:scale-95 transition-transform disabled:opacity-50"
+                    className="w-full bg-mxOrange text-white font-oswald font-bold uppercase tracking-widest py-3 rounded active:scale-95 transition-transform disabled:opacity-50"
                   >
                     {isSubmitting ? "Sending..." : "Send Proposal"}
                   </button>
@@ -430,8 +430,8 @@ export default function ServicePortal() {
 
           {/* WORK PACKAGE — MX ITEMS */}
           {mxLines.length > 0 && (
-            <div className="bg-white shadow-lg rounded-sm p-6 border-t-4 border-[#F08B46]">
-              <h3 className="font-oswald text-lg font-bold uppercase tracking-widest text-navy mb-4 flex items-center gap-2"><Wrench size={18} className="text-[#F08B46]"/> Maintenance Items</h3>
+            <div className="bg-white shadow-lg rounded-sm p-6 border-t-4 border-mxOrange">
+              <h3 className="font-oswald text-lg font-bold uppercase tracking-widest text-navy mb-4 flex items-center gap-2"><Wrench size={18} className="text-mxOrange"/> Maintenance Items</h3>
               <div className="space-y-3">
                 {mxLines.map((li: any) => (
                   <div key={li.id} className={`p-4 border rounded ${li.line_status === 'complete' ? 'bg-green-50 border-green-200' : li.line_status === 'in_progress' ? 'bg-blue-50 border-blue-200' : 'bg-white border-gray-200'}`}>
@@ -439,10 +439,10 @@ export default function ServicePortal() {
                       <div>
                         <h4 className="font-oswald font-bold uppercase text-sm text-navy">{li.item_name}</h4>
                         {li.item_description && <p className="text-xs text-gray-500 mt-1">{li.item_description}</p>}
-                        {li.mechanic_comment && <p className="text-xs text-[#3AB0FF] mt-2 italic">Note: {li.mechanic_comment}</p>}
+                        {li.mechanic_comment && <p className="text-xs text-info mt-2 italic">Note: {li.mechanic_comment}</p>}
                       </div>
                       {event.status !== 'complete' && (
-                        <select value={li.line_status} onChange={e => handleLineStatusUpdate(li.id, e.target.value)} style={whiteBg} className="text-[10px] font-bold uppercase border border-gray-300 rounded px-2 py-1 focus:border-[#F08B46] outline-none">
+                        <select value={li.line_status} onChange={e => handleLineStatusUpdate(li.id, e.target.value)} style={whiteBg} className="text-[10px] font-bold uppercase border border-gray-300 rounded px-2 py-1 focus:border-mxOrange outline-none">
                           <option value="pending">Pending</option>
                           <option value="in_progress">In Progress</option>
                           <option value="complete">Complete</option>
@@ -458,8 +458,8 @@ export default function ServicePortal() {
 
           {/* SQUAWKS WITH PHOTOS */}
           {squawkLines.length > 0 && (
-            <div className="bg-white shadow-lg rounded-sm p-6 border-t-4 border-[#CE3732]">
-              <h3 className="font-oswald text-lg font-bold uppercase tracking-widest text-navy mb-4 flex items-center gap-2"><AlertTriangle size={18} className="text-[#CE3732]"/> Squawks</h3>
+            <div className="bg-white shadow-lg rounded-sm p-6 border-t-4 border-danger">
+              <h3 className="font-oswald text-lg font-bold uppercase tracking-widest text-navy mb-4 flex items-center gap-2"><AlertTriangle size={18} className="text-danger"/> Squawks</h3>
               <div className="space-y-3">
                 {squawkLines.map((li: any) => {
                   const photos = li.squawk_id ? (squawkPhotos[li.squawk_id] || []) : [];
@@ -469,13 +469,13 @@ export default function ServicePortal() {
                         <div className="flex-1 min-w-0">
                           <h4 className="font-oswald font-bold uppercase text-sm text-navy">{li.item_name}</h4>
                           {li.item_description && <p className="text-xs text-gray-600 mt-1 whitespace-pre-wrap">{li.item_description}</p>}
-                          {li.mechanic_comment && <p className="text-xs text-[#3AB0FF] mt-2 italic">Note: {li.mechanic_comment}</p>}
+                          {li.mechanic_comment && <p className="text-xs text-info mt-2 italic">Note: {li.mechanic_comment}</p>}
                           {photos.length > 0 && (
                             <div className="mt-3">
                               <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2 flex items-center gap-1"><Image size={12} /> {photos.length} Photo{photos.length > 1 ? 's' : ''} Attached</p>
                               <div className="flex gap-2 flex-wrap">
                                 {photos.map((url: string, idx: number) => (
-                                  <button key={idx} onClick={() => setViewingPhoto(url)} className="w-20 h-20 rounded border-2 border-gray-200 overflow-hidden hover:border-[#CE3732] transition-colors active:scale-95">
+                                  <button key={idx} onClick={() => setViewingPhoto(url)} className="w-20 h-20 rounded border-2 border-gray-200 overflow-hidden hover:border-danger transition-colors active:scale-95">
                                     <img src={url} alt={`Squawk photo ${idx + 1}`} className="w-full h-full object-cover" />
                                   </button>
                                 ))}
@@ -484,7 +484,7 @@ export default function ServicePortal() {
                           )}
                         </div>
                         {event.status !== 'complete' && (
-                          <select value={li.line_status} onChange={e => handleLineStatusUpdate(li.id, e.target.value)} style={whiteBg} className="text-[10px] font-bold uppercase border border-gray-300 rounded px-2 py-1 focus:border-[#CE3732] outline-none ml-3 shrink-0">
+                          <select value={li.line_status} onChange={e => handleLineStatusUpdate(li.id, e.target.value)} style={whiteBg} className="text-[10px] font-bold uppercase border border-gray-300 rounded px-2 py-1 focus:border-danger outline-none ml-3 shrink-0">
                             <option value="pending">Pending</option>
                             <option value="in_progress">In Progress</option>
                             <option value="complete">Complete</option>
@@ -501,15 +501,15 @@ export default function ServicePortal() {
 
           {/* ADDITIONAL SERVICES */}
           {addonLines.length > 0 && (
-            <div className="bg-white shadow-lg rounded-sm p-6 border-t-4 border-[#3AB0FF]">
-              <h3 className="font-oswald text-lg font-bold uppercase tracking-widest text-navy mb-4 flex items-center gap-2"><Sparkles size={18} className="text-[#3AB0FF]"/> Additional Services</h3>
+            <div className="bg-white shadow-lg rounded-sm p-6 border-t-4 border-info">
+              <h3 className="font-oswald text-lg font-bold uppercase tracking-widest text-navy mb-4 flex items-center gap-2"><Sparkles size={18} className="text-info"/> Additional Services</h3>
               <div className="space-y-3">
                 {addonLines.map((li: any) => (
                   <div key={li.id} className={`p-4 border rounded ${li.line_status === 'complete' ? 'bg-green-50 border-green-200' : 'bg-white border-gray-200'}`}>
                     <div className="flex justify-between items-center">
                       <span className="font-bold text-sm text-navy">{li.item_name}</span>
                       {event.status !== 'complete' && (
-                        <select value={li.line_status} onChange={e => handleLineStatusUpdate(li.id, e.target.value)} style={whiteBg} className="text-[10px] font-bold uppercase border border-gray-300 rounded px-2 py-1 focus:border-[#3AB0FF] outline-none">
+                        <select value={li.line_status} onChange={e => handleLineStatusUpdate(li.id, e.target.value)} style={whiteBg} className="text-[10px] font-bold uppercase border border-gray-300 rounded px-2 py-1 focus:border-info outline-none">
                           <option value="pending">Pending</option>
                           <option value="complete">Complete</option>
                         </select>
@@ -523,23 +523,23 @@ export default function ServicePortal() {
 
           {/* SUGGEST ADDITIONAL WORK */}
           {event.status !== 'complete' && (
-            <div className="bg-white shadow-lg rounded-sm p-6 border-t-4 border-[#F08B46]">
-              <h3 className="font-oswald text-lg font-bold uppercase tracking-widest text-navy mb-4 flex items-center gap-2"><Plus size={18} className="text-[#F08B46]"/> Suggest Additional Work</h3>
+            <div className="bg-white shadow-lg rounded-sm p-6 border-t-4 border-mxOrange">
+              <h3 className="font-oswald text-lg font-bold uppercase tracking-widest text-navy mb-4 flex items-center gap-2"><Plus size={18} className="text-mxOrange"/> Suggest Additional Work</h3>
               {!showSuggestForm ? (
-                <button onClick={() => setShowSuggestForm(true)} className="w-full border-2 border-dashed border-gray-300 text-gray-500 font-bold py-3 rounded hover:bg-gray-50 hover:border-[#F08B46] active:scale-95 transition-all text-sm uppercase tracking-widest">+ Add Discovered Item</button>
+                <button onClick={() => setShowSuggestForm(true)} className="w-full border-2 border-dashed border-gray-300 text-gray-500 font-bold py-3 rounded hover:bg-gray-50 hover:border-mxOrange active:scale-95 transition-all text-sm uppercase tracking-widest">+ Add Discovered Item</button>
               ) : (
                 <div className="space-y-3 animate-fade-in">
                   <div>
                     <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Item Name *</label>
-                    <input type="text" value={suggestName} onChange={e => setSuggestName(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none" placeholder="e.g. Replace left main brake pads" />
+                    <input type="text" value={suggestName} onChange={e => setSuggestName(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none" placeholder="e.g. Replace left main brake pads" />
                   </div>
                   <div>
                     <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Description / Reason (Optional)</label>
-                    <textarea value={suggestDescription} onChange={e => setSuggestDescription(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#F08B46] outline-none min-h-[80px]" placeholder="Pads worn below minimum thickness during inspection..." />
+                    <textarea value={suggestDescription} onChange={e => setSuggestDescription(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none min-h-[80px]" placeholder="Pads worn below minimum thickness during inspection..." />
                   </div>
                   <div className="flex gap-2">
                     <button onClick={() => { setShowSuggestForm(false); setSuggestName(""); setSuggestDescription(""); }} className="flex-1 border border-gray-300 text-gray-600 font-bold py-2 rounded text-xs uppercase tracking-widest hover:bg-gray-50 active:scale-95">Cancel</button>
-                    <button onClick={async () => { if (!suggestName.trim()) return showWarning("Item name is required."); await handleAction('suggest_item', { itemName: suggestName, itemDescription: suggestDescription, message: suggestName }); setSuggestName(""); setSuggestDescription(""); setShowSuggestForm(false); }} disabled={isSubmitting || !suggestName.trim()} className="flex-[2] bg-[#F08B46] text-white font-bold py-2 rounded text-xs uppercase tracking-widest active:scale-95 transition-transform disabled:opacity-50">{isSubmitting ? "Adding..." : "Add & Notify Owner"}</button>
+                    <button onClick={async () => { if (!suggestName.trim()) return showWarning("Item name is required."); await handleAction('suggest_item', { itemName: suggestName, itemDescription: suggestDescription, message: suggestName }); setSuggestName(""); setSuggestDescription(""); setShowSuggestForm(false); }} disabled={isSubmitting || !suggestName.trim()} className="flex-[2] bg-mxOrange text-white font-bold py-2 rounded text-xs uppercase tracking-widest active:scale-95 transition-transform disabled:opacity-50">{isSubmitting ? "Adding..." : "Add & Notify Owner"}</button>
                   </div>
                 </div>
               )}
@@ -548,10 +548,10 @@ export default function ServicePortal() {
 
           {/* UPLOAD FILES / DOCUMENTS */}
           {event.status !== 'complete' && event.status !== 'cancelled' && (
-            <div className="bg-white shadow-lg rounded-sm p-6 border-t-4 border-[#3AB0FF]">
-              <h3 className="font-oswald text-lg font-bold uppercase tracking-widest text-navy mb-4 flex items-center gap-2"><Upload size={18} className="text-[#3AB0FF]"/> Upload Photos &amp; Documents</h3>
+            <div className="bg-white shadow-lg rounded-sm p-6 border-t-4 border-info">
+              <h3 className="font-oswald text-lg font-bold uppercase tracking-widest text-navy mb-4 flex items-center gap-2"><Upload size={18} className="text-info"/> Upload Photos &amp; Documents</h3>
               {!showUploadForm ? (
-                <button onClick={() => setShowUploadForm(true)} className="w-full border-2 border-dashed border-gray-300 text-gray-500 font-bold py-3 rounded hover:bg-gray-50 hover:border-[#3AB0FF] active:scale-95 transition-all text-sm uppercase tracking-widest">+ Attach Files</button>
+                <button onClick={() => setShowUploadForm(true)} className="w-full border-2 border-dashed border-gray-300 text-gray-500 font-bold py-3 rounded hover:bg-gray-50 hover:border-info active:scale-95 transition-all text-sm uppercase tracking-widest">+ Attach Files</button>
               ) : (
                 <div className="space-y-3 animate-fade-in">
                   <div>
@@ -569,18 +569,18 @@ export default function ServicePortal() {
                             <div className="w-10 h-10 rounded bg-gray-200 flex items-center justify-center shrink-0"><FileText size={18} className="text-gray-500" /></div>
                           )}
                           <div className="flex-1 min-w-0"><p className="text-xs font-bold text-navy truncate">{file.name}</p><p className="text-[10px] text-gray-400">{formatFileSize(file.size)}</p></div>
-                          <button onClick={() => removeUploadFile(idx)} className="text-gray-400 hover:text-red-500 shrink-0 active:scale-95"><X size={16} /></button>
+                          <button onClick={() => removeUploadFile(idx)} className="text-gray-400 hover:text-danger shrink-0 active:scale-95"><X size={16} /></button>
                         </div>
                       ))}
                     </div>
                   )}
                   <div>
                     <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Description (Optional)</label>
-                    <textarea value={uploadDescription} onChange={e => setUploadDescription(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#3AB0FF] outline-none min-h-[60px]" placeholder="e.g. Photos of corroded exhaust gasket, work order estimate attached..." />
+                    <textarea value={uploadDescription} onChange={e => setUploadDescription(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-info outline-none min-h-[60px]" placeholder="e.g. Photos of corroded exhaust gasket, work order estimate attached..." />
                   </div>
                   <div className="flex gap-2">
                     <button onClick={() => { setShowUploadForm(false); setUploadFiles([]); setUploadDescription(""); }} className="flex-1 border border-gray-300 text-gray-600 font-bold py-2 rounded text-xs uppercase tracking-widest hover:bg-gray-50 active:scale-95">Cancel</button>
-                    <button onClick={handleFileUpload} disabled={isUploading || uploadFiles.length === 0} className="flex-[2] bg-[#3AB0FF] text-white font-bold py-2 rounded text-xs uppercase tracking-widest active:scale-95 transition-transform disabled:opacity-50 flex items-center justify-center gap-2">{isUploading ? <><Loader2 size={14} className="animate-spin" /> Uploading...</> : `Upload & Notify Owner`}</button>
+                    <button onClick={handleFileUpload} disabled={isUploading || uploadFiles.length === 0} className="flex-[2] bg-info text-white font-bold py-2 rounded text-xs uppercase tracking-widest active:scale-95 transition-transform disabled:opacity-50 flex items-center justify-center gap-2">{isUploading ? <><Loader2 size={14} className="animate-spin" /> Uploading...</> : `Upload & Notify Owner`}</button>
                   </div>
                 </div>
               )}
@@ -637,15 +637,15 @@ export default function ServicePortal() {
           {event.status !== 'complete' && event.status !== 'cancelled' && event.status !== 'ready_for_pickup' && (
             <div className="bg-white shadow-lg rounded-sm p-6 border-t-4 border-red-200">
               {!showDeclineConfirm ? (
-                <button onClick={() => setShowDeclineConfirm(true)} className="w-full text-[10px] font-bold uppercase tracking-widest text-[#CE3732] border border-red-200 bg-red-50 rounded py-2.5 hover:bg-red-100 active:scale-95 transition-all flex items-center justify-center gap-1.5"><XCircle size={12} /> Unable to Accommodate — Decline Service</button>
+                <button onClick={() => setShowDeclineConfirm(true)} className="w-full text-[10px] font-bold uppercase tracking-widest text-danger border border-red-200 bg-red-50 rounded py-2.5 hover:bg-red-100 active:scale-95 transition-all flex items-center justify-center gap-1.5"><XCircle size={12} /> Unable to Accommodate — Decline Service</button>
               ) : (
                 <div className="space-y-3 animate-fade-in">
-                  <p className="text-sm font-bold text-navy">Are you sure you want to decline this service request?</p>
-                  <p className="text-xs text-gray-500">The owner will be notified via email.</p>
-                  <textarea value={declineReason} onChange={e => setDeclineReason(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-[#CE3732] outline-none min-h-[60px]" placeholder="Reason (optional) — e.g. shop fully booked through Q2, recommend contacting..." />
+                  <p className="text-sm font-bold text-navy">Decline this service request?</p>
+                  <p className="text-xs text-gray-500">The owner will be notified by email.</p>
+                  <textarea value={declineReason} onChange={e => setDeclineReason(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-danger outline-none min-h-[60px]" placeholder="Reason (optional) — e.g. shop fully booked through Q2, recommend contacting..." />
                   <div className="flex gap-2">
                     <button onClick={() => { setShowDeclineConfirm(false); setDeclineReason(""); }} className="flex-1 border border-gray-300 text-gray-600 font-bold py-2 rounded text-xs uppercase tracking-widest hover:bg-gray-50 active:scale-95">Keep Event</button>
-                    <button onClick={() => handleAction('decline', { message: declineReason })} disabled={isSubmitting} className="flex-[2] bg-[#CE3732] text-white font-bold py-2 rounded text-xs uppercase tracking-widest active:scale-95 transition-transform disabled:opacity-50">{isSubmitting ? "Declining..." : "Decline & Notify Owner"}</button>
+                    <button onClick={() => handleAction('decline', { message: declineReason })} disabled={isSubmitting} className="flex-[2] bg-danger text-white font-bold py-2 rounded text-xs uppercase tracking-widest active:scale-95 transition-transform disabled:opacity-50">{isSubmitting ? "Declining..." : "Decline & Notify Owner"}</button>
                   </div>
                 </div>
               )}
@@ -655,7 +655,7 @@ export default function ServicePortal() {
           {/* CANCELLED STATE */}
           {event.status === 'cancelled' && (
             <div className="bg-red-50 border-2 border-red-200 rounded-sm p-6 text-center">
-              <XCircle size={48} className="mx-auto text-[#CE3732] mb-4" />
+              <XCircle size={48} className="mx-auto text-danger mb-4" />
               <h3 className="font-oswald text-2xl font-bold uppercase tracking-widest text-navy mb-2">Service Cancelled</h3>
               <p className="text-sm text-gray-600">This service event has been cancelled.</p>
             </div>
@@ -669,7 +669,7 @@ export default function ServicePortal() {
                 <p className="text-center text-sm text-gray-400 italic py-4">No messages yet.</p>
               ) : (
                 messages.map((msg: any) => (
-                  <div key={msg.id} className={`p-3 rounded text-sm ${msg.sender === 'mechanic' ? 'bg-blue-50 border-l-4 border-[#3AB0FF]' : msg.sender === 'owner' ? 'bg-orange-50 border-l-4 border-[#F08B46]' : 'bg-gray-50 border-l-4 border-gray-300'}`}>
+                  <div key={msg.id} className={`p-3 rounded text-sm ${msg.sender === 'mechanic' ? 'bg-blue-50 border-l-4 border-info' : msg.sender === 'owner' ? 'bg-orange-50 border-l-4 border-mxOrange' : 'bg-gray-50 border-l-4 border-gray-300'}`}>
                     <div className="flex justify-between items-center mb-1">
                       <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500">{msg.sender === 'mechanic' ? 'Maintenance' : msg.sender === 'owner' ? 'Owner' : 'System'}</span>
                       <span className="text-[10px] text-gray-400">{new Date(msg.created_at).toLocaleString()}</span>
@@ -681,8 +681,8 @@ export default function ServicePortal() {
                         <div className="flex gap-2 flex-wrap">
                           {msg.attachments.map((att: any, idx: number) => {
                             const isImg = att.type && att.type.startsWith('image/');
-                            if (isImg) return (<button key={idx} onClick={() => setViewingPhoto(att.url)} className="w-20 h-20 rounded border-2 border-gray-200 overflow-hidden hover:border-[#3AB0FF] transition-colors active:scale-95"><img src={att.url} alt={att.filename} className="w-full h-full object-cover" /></button>);
-                            return (<a key={idx} href={att.url} target="_blank" rel="noreferrer" className="flex items-center gap-2 p-2 bg-white border border-gray-200 rounded hover:border-[#3AB0FF] transition-colors"><FileText size={16} className="text-gray-500 shrink-0" /><div className="min-w-0"><p className="text-xs font-bold text-navy truncate max-w-[120px]">{att.filename}</p>{att.size && <p className="text-[10px] text-gray-400">{att.size < 1024 * 1024 ? (att.size / 1024).toFixed(0) + ' KB' : (att.size / (1024 * 1024)).toFixed(1) + ' MB'}</p>}</div></a>);
+                            if (isImg) return (<button key={idx} onClick={() => setViewingPhoto(att.url)} className="w-20 h-20 rounded border-2 border-gray-200 overflow-hidden hover:border-info transition-colors active:scale-95"><img src={att.url} alt={att.filename} className="w-full h-full object-cover" /></button>);
+                            return (<a key={idx} href={att.url} target="_blank" rel="noreferrer" className="flex items-center gap-2 p-2 bg-white border border-gray-200 rounded hover:border-info transition-colors"><FileText size={16} className="text-gray-500 shrink-0" /><div className="min-w-0"><p className="text-xs font-bold text-navy truncate max-w-[120px]">{att.filename}</p>{att.size && <p className="text-[10px] text-gray-400">{att.size < 1024 * 1024 ? (att.size / 1024).toFixed(0) + ' KB' : (att.size / (1024 * 1024)).toFixed(1) + ' MB'}</p>}</div></a>);
                           })}
                         </div>
                       </div>
@@ -693,8 +693,8 @@ export default function ServicePortal() {
             </div>
             {event.status !== 'complete' && (
               <div className="flex gap-2">
-                <textarea value={commentText} onChange={e => setCommentText(e.target.value)} style={whiteBg} className="flex-1 border border-gray-300 rounded p-3 text-sm focus:border-[#3AB0FF] outline-none min-h-[60px]" placeholder="Send a message..." />
-                <button onClick={() => handleAction('comment', { message: commentText })} disabled={isSubmitting || !commentText.trim()} className="bg-[#3AB0FF] text-white px-4 rounded active:scale-95 transition-transform disabled:opacity-50"><Send size={18}/></button>
+                <textarea value={commentText} onChange={e => setCommentText(e.target.value)} style={whiteBg} className="flex-1 border border-gray-300 rounded p-3 text-sm focus:border-info outline-none min-h-[60px]" placeholder="Send a message..." />
+                <button onClick={() => handleAction('comment', { message: commentText })} disabled={isSubmitting || !commentText.trim()} className="bg-info text-white px-4 rounded active:scale-95 transition-transform disabled:opacity-50"><Send size={18}/></button>
               </div>
             )}
           </div>

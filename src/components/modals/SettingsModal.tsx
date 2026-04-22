@@ -5,9 +5,10 @@ import { supabase } from "@/lib/supabase";
 import { authFetch } from "@/lib/authFetch";
 import { useToast } from "@/components/ToastProvider";
 import { useModalScrollLock } from "@/hooks/useModalScrollLock";
-import { NOTIFICATION_TYPES } from "@/lib/types";
+import { NOTIFICATION_TYPES, FAA_RATINGS } from "@/lib/types";
 import type { NotificationType } from "@/lib/types";
-import { Settings, Bell, Trash2, Key, X, Loader2, AlertTriangle, User, Check } from "lucide-react";
+import { friendlyPgError } from "@/lib/pgErrors";
+import { Settings, Bell, Trash2, Key, X, Loader2, AlertTriangle, User, Check, Award, BookOpen } from "lucide-react";
 
 export default function SettingsModal({ 
   show, onClose, session 
@@ -29,6 +30,10 @@ export default function SettingsModal({
   const [isLoadingProfile, setIsLoadingProfile] = useState(true);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
 
+  // Pilot FAA ratings — feeds Howard's context to tailor tone/detail
+  const [ratings, setRatings] = useState<Set<string>>(new Set());
+  const [savingRating, setSavingRating] = useState<string | null>(null);
+
   // Delete account
   const [showDeleteSection, setShowDeleteSection] = useState(false);
   const [deleteImpact, setDeleteImpact] = useState<any>(null);
@@ -46,13 +51,21 @@ export default function SettingsModal({
       checkPrimaryContactStatus();
       loadProfile();
     }
+    // Reset the danger-zone on close so reopening doesn't keep "DELETE"
+    // staged in the confirm field — one accidental click away from a
+    // destructive submit otherwise.
+    if (!show) {
+      setShowDeleteSection(false);
+      setDeleteConfirmText("");
+      setDeleteImpact(null);
+    }
   }, [show, session]);
 
   const loadProfile = async () => {
     setIsLoadingProfile(true);
     const { data } = await supabase
       .from('aft_user_roles')
-      .select('full_name, initials')
+      .select('full_name, initials, faa_ratings')
       .eq('user_id', session.user.id)
       .maybeSingle();
     const name = data?.full_name || "";
@@ -61,7 +74,26 @@ export default function SettingsModal({
     setInitials(inits);
     setOriginalFullName(name);
     setOriginalInitials(inits);
+    setRatings(new Set((data?.faa_ratings as string[] | null) || []));
     setIsLoadingProfile(false);
+  };
+
+  const toggleRating = async (code: string) => {
+    const next = new Set(ratings);
+    if (next.has(code)) next.delete(code);
+    else next.add(code);
+    setRatings(next);
+    setSavingRating(code);
+    const { error } = await supabase
+      .from('aft_user_roles')
+      .update({ faa_ratings: Array.from(next) })
+      .eq('user_id', session.user.id);
+    if (error) {
+      showError("Couldn't save rating: " + friendlyPgError(error));
+      // Revert on failure
+      setRatings(ratings);
+    }
+    setSavingRating(null);
   };
 
   const handleSaveProfile = async () => {
@@ -75,7 +107,7 @@ export default function SettingsModal({
       .update({ full_name: trimmedName, initials: trimmedInitials })
       .eq('user_id', session.user.id);
     if (error) {
-      showError("Couldn't save profile: " + error.message);
+      showError("Couldn't save profile: " + friendlyPgError(error));
     } else {
       setFullName(trimmedName);
       setInitials(trimmedInitials);
@@ -183,7 +215,7 @@ export default function SettingsModal({
       });
       if (!res.ok) {
         const data = await res.json();
-        throw new Error(data.error || 'Failed to delete account');
+        throw new Error(data.error || "Couldn't delete the account");
       }
       await supabase.auth.signOut();
     } catch (err: any) {
@@ -209,7 +241,7 @@ export default function SettingsModal({
           <h2 className="font-oswald text-2xl font-bold uppercase text-navy flex items-center gap-2">
             <Settings size={20} className="text-gray-500" /> Settings
           </h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-red-500"><X size={24} /></button>
+          <button onClick={onClose} className="text-gray-400 hover:text-danger"><X size={24} /></button>
         </div>
 
         <div className="p-6 space-y-8">
@@ -219,7 +251,7 @@ export default function SettingsModal({
             <h3 className="font-oswald text-lg font-bold uppercase text-navy mb-1 flex items-center gap-2">
               <User size={18} className="text-navy" /> Profile
             </h3>
-            <p className="text-[10px] text-gray-500 uppercase tracking-widest mb-4">Your name and initials as shown to your crew</p>
+            <p className="text-[10px] text-gray-500 uppercase tracking-widest mb-4">Your name and initials as shown to the other pilots</p>
 
             {isLoadingProfile ? (
               <div className="flex items-center justify-center py-6">
@@ -266,10 +298,48 @@ export default function SettingsModal({
             )}
           </div>
 
+          {/* ─── PILOT RATINGS ─── */}
+          <div className="border-t border-gray-200 pt-6">
+            <h3 className="font-oswald text-lg font-bold uppercase text-navy mb-1 flex items-center gap-2">
+              <Award size={18} className="text-mxOrange" /> Pilot Ratings
+            </h3>
+            <p className="text-[10px] text-gray-500 uppercase tracking-widest mb-4">
+              Howard uses these to tailor briefings and tone — pick everything you hold
+            </p>
+
+            {isLoadingProfile ? (
+              <div className="flex items-center justify-center py-6">
+                <Loader2 size={20} className="text-gray-400 animate-spin" />
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-2">
+                {FAA_RATINGS.map(r => {
+                  const checked = ratings.has(r.code);
+                  const saving = savingRating === r.code;
+                  return (
+                    <label key={r.code} className="flex items-center gap-2 cursor-pointer group">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggleRating(r.code)}
+                        disabled={saving}
+                        className="w-4 h-4 rounded border-gray-300 text-mxOrange focus:ring-mxOrange cursor-pointer shrink-0"
+                      />
+                      <span className="text-xs text-navy group-hover:text-mxOrange transition-colors leading-tight">
+                        {r.label}
+                      </span>
+                      {saving && <Loader2 size={10} className="text-gray-400 animate-spin" />}
+                    </label>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
           {/* ─── NOTIFICATION PREFERENCES ─── */}
           <div className="border-t border-gray-200 pt-6">
             <h3 className="font-oswald text-lg font-bold uppercase text-navy mb-1 flex items-center gap-2">
-              <Bell size={18} className="text-[#3AB0FF]" /> Notifications
+              <Bell size={18} className="text-info" /> Notifications
             </h3>
             <p className="text-[10px] text-gray-500 uppercase tracking-widest mb-4">Choose which email notifications you receive</p>
 
@@ -286,14 +356,14 @@ export default function SettingsModal({
                         type="checkbox" 
                         checked={prefs[nt.type] !== false} 
                         onChange={() => togglePref(nt.type)} 
-                        className="w-5 h-5 rounded border-gray-300 text-[#3AB0FF] focus:ring-[#3AB0FF] cursor-pointer" 
+                        className="w-5 h-5 rounded border-gray-300 text-info focus:ring-info cursor-pointer" 
                       />
                       {savingPref === nt.type && (
                         <Loader2 size={12} className="absolute -right-5 top-1 text-gray-400 animate-spin" />
                       )}
                     </div>
                     <div>
-                      <span className="text-sm font-bold text-navy block group-hover:text-[#3AB0FF] transition-colors">{nt.label}</span>
+                      <span className="text-sm font-bold text-navy block group-hover:text-info transition-colors">{nt.label}</span>
                       <span className="text-[10px] text-gray-500 leading-tight">{nt.description}</span>
                     </div>
                   </label>
@@ -305,7 +375,7 @@ export default function SettingsModal({
           {/* ─── PASSWORD RESET ─── */}
           <div className="border-t border-gray-200 pt-6">
             <h3 className="font-oswald text-lg font-bold uppercase text-navy mb-1 flex items-center gap-2">
-              <Key size={18} className="text-[#F08B46]" /> Password
+              <Key size={18} className="text-mxOrange" /> Password
             </h3>
             <p className="text-[10px] text-gray-500 uppercase tracking-widest mb-4">Reset your account password via email</p>
 
@@ -315,7 +385,7 @@ export default function SettingsModal({
               <button 
                 onClick={handlePasswordReset} 
                 disabled={isResettingPassword}
-                className="text-sm font-bold text-[#F08B46] hover:underline disabled:opacity-50 flex items-center gap-2"
+                className="text-sm font-bold text-mxOrange hover:underline disabled:opacity-50 flex items-center gap-2"
               >
                 {isResettingPassword ? <><Loader2 size={14} className="animate-spin" /> Sending...</> : 'Send Password Reset Email'}
               </button>
@@ -331,37 +401,69 @@ export default function SettingsModal({
             </div>
           </div>
 
+          {/* ─── FEATURES GUIDE ─── */}
+          <div className="border-t border-gray-200 pt-6">
+            <h3 className="font-oswald text-lg font-bold uppercase text-navy mb-3">Help & Reference</h3>
+            <button
+              onClick={() => {
+                // Close Settings so the full-screen guide gets focus,
+                // then dispatch the global open event. Small delay lets
+                // the scroll lock cleanup run before the next lock.
+                onClose();
+                setTimeout(() => {
+                  window.dispatchEvent(new CustomEvent('aft:open-features-guide'));
+                }, 50);
+              }}
+              className="w-full flex items-center justify-between gap-3 bg-brandOrange/5 hover:bg-brandOrange/10 border border-brandOrange/30 rounded-lg px-4 py-3 active:scale-[0.98] transition-colors"
+            >
+              <div className="flex items-center gap-3 min-w-0 text-left">
+                <div className="w-9 h-9 rounded-full bg-brandOrange text-white flex items-center justify-center shrink-0">
+                  <BookOpen size={16} />
+                </div>
+                <div className="min-w-0">
+                  <p className="font-oswald text-sm font-bold uppercase tracking-widest text-navy">
+                    Features Guide
+                  </p>
+                  <p className="text-[11px] font-roboto text-gray-500 leading-snug">
+                    What every part of the app does — organized by task.
+                  </p>
+                </div>
+              </div>
+              <span className="text-[10px] font-bold uppercase tracking-widest text-brandOrange shrink-0">Open</span>
+            </button>
+          </div>
+
           {/* ─── DELETE ACCOUNT ─── */}
           <div className="border-t border-gray-200 pt-6">
-            <h3 className="font-oswald text-lg font-bold uppercase text-[#CE3732] mb-1 flex items-center gap-2">
+            <h3 className="font-oswald text-lg font-bold uppercase text-danger mb-1 flex items-center gap-2">
               <Trash2 size={18} /> Danger Zone
             </h3>
 
             {!showDeleteSection ? (
-              <button onClick={loadDeleteImpact} className="text-sm font-bold text-[#CE3732] hover:underline mt-2">
+              <button onClick={loadDeleteImpact} className="text-sm font-bold text-danger hover:underline mt-2">
                 Delete my account...
               </button>
             ) : (
               <div className="mt-4 bg-red-50 border border-red-200 rounded p-4 animate-fade-in">
                 {isLoadingImpact ? (
-                  <div className="flex items-center justify-center py-4"><Loader2 size={24} className="text-[#CE3732] animate-spin" /></div>
+                  <div className="flex items-center justify-center py-4"><Loader2 size={24} className="text-danger animate-spin" /></div>
                 ) : (
                   <>
                     <div className="flex items-start gap-2 mb-4">
-                      <AlertTriangle size={18} className="text-[#CE3732] shrink-0 mt-0.5" />
+                      <AlertTriangle size={18} className="text-danger shrink-0 mt-0.5" />
                       <div>
-                        <p className="text-sm font-bold text-navy">This action is permanent and cannot be undone.</p>
+                        <p className="text-sm font-bold text-navy">Once your account is deleted, it&apos;s gone — no undo.</p>
                         <p className="text-xs text-gray-600 mt-2">Deleting your account will:</p>
                         <ul className="text-xs text-gray-600 mt-1 space-y-1 ml-4 list-disc">
                           <li>Remove your profile and all preferences</li>
                           <li>Cancel all your future reservations</li>
                           {deleteImpact?.ownedAircraft?.length > 0 && (
-                            <li className="text-[#CE3732] font-bold">
+                            <li className="text-danger font-bold">
                               Permanently delete {deleteImpact.ownedAircraft.length} aircraft you created: {deleteImpact.ownedAircraft.map((a: any) => a.tail_number).join(', ')} — including all their flight logs, maintenance records, squawks, notes, and service events
                             </li>
                           )}
                           {deleteImpact?.affectedUserCount > 0 && (
-                            <li className="text-[#CE3732] font-bold">
+                            <li className="text-danger font-bold">
                               {deleteImpact.affectedUserCount} other user{deleteImpact.affectedUserCount > 1 ? 's' : ''} will lose access to those aircraft
                             </li>
                           )}
@@ -370,12 +472,12 @@ export default function SettingsModal({
                     </div>
 
                     <div className="mt-4">
-                      <label className="text-[10px] font-bold uppercase tracking-widest text-[#CE3732] block mb-1">Type DELETE to confirm</label>
+                      <label className="text-[10px] font-bold uppercase tracking-widest text-danger block mb-1">Type DELETE to confirm</label>
                       <input 
                         type="text" 
                         value={deleteConfirmText} 
                         onChange={e => setDeleteConfirmText(e.target.value)} 
-                        className="w-full border border-red-300 rounded p-3 text-sm focus:border-[#CE3732] outline-none bg-white" 
+                        className="w-full border border-red-300 rounded p-3 text-sm focus:border-danger outline-none bg-white" 
                         placeholder="DELETE"
                       />
                     </div>
@@ -387,7 +489,7 @@ export default function SettingsModal({
                       <button 
                         onClick={handleDeleteAccount} 
                         disabled={deleteConfirmText !== 'DELETE' || isDeleting} 
-                        className="flex-1 bg-[#CE3732] text-white font-oswald font-bold uppercase tracking-widest py-3 rounded text-xs active:scale-95 disabled:opacity-50"
+                        className="flex-1 bg-danger text-white font-oswald font-bold uppercase tracking-widest py-3 rounded text-xs active:scale-95 disabled:opacity-50"
                       >
                         {isDeleting ? 'Deleting...' : 'Delete My Account'}
                       </button>

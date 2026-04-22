@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
+import { computeAirworthinessStatus } from "@/lib/airworthiness";
 import type { AircraftWithMetrics, AircraftStatus } from "@/lib/types";
 
 export function useGroundedStatus(allAircraftList: AircraftWithMetrics[]) {
@@ -12,55 +13,39 @@ export function useGroundedStatus(allAircraftList: AircraftWithMetrics[]) {
     const ac = allAircraftList.find(a => a.tail_number === tail);
     if (!ac) return;
 
-    let isGrounded = false;
-    let hasOpen = false;
-    let reason = "";
-
-    // Fetch MX items and squawks in parallel (single round trip)
-    const [{ data: mx }, { data: sq }] = await Promise.all([
-      supabase.from('aft_maintenance_items').select('item_name, tracking_type, is_required, due_time, due_date').eq('aircraft_id', ac.id),
-      supabase.from('aft_squawks').select('affects_airworthiness, location, status').eq('aircraft_id', ac.id).eq('status', 'open'),
+    // Pull everything needed for the explicit 91.205/.411/.413/.207/.417
+    // regulatory check in a single parallel round-trip.
+    const [mxRes, sqRes, eqRes, adRes] = await Promise.all([
+      supabase.from('aft_maintenance_items')
+        .select('item_name, tracking_type, is_required, due_time, due_date')
+        .eq('aircraft_id', ac.id).is('deleted_at', null),
+      supabase.from('aft_squawks')
+        .select('affects_airworthiness, location, status')
+        .eq('aircraft_id', ac.id).eq('status', 'open').is('deleted_at', null),
+      supabase.from('aft_aircraft_equipment')
+        .select('*')
+        .eq('aircraft_id', ac.id).is('deleted_at', null).is('removed_at', null),
+      supabase.from('aft_airworthiness_directives')
+        .select('*')
+        .eq('aircraft_id', ac.id).is('deleted_at', null).eq('is_superseded', false),
     ]);
 
-    // Check MX items — EXCLUDE items with null due values (needs setup)
-    if (mx) {
-      const et = ac.total_engine_time || 0;
-      for (const item of mx) {
-        if (!item.is_required) continue;
+    const verdict = computeAirworthinessStatus({
+      aircraft: {
+        id: ac.id,
+        tail_number: ac.tail_number,
+        total_engine_time: ac.total_engine_time,
+        is_ifr_equipped: (ac as any).is_ifr_equipped,
+        is_for_hire: (ac as any).is_for_hire,
+      },
+      equipment: (eqRes.data || []) as any,
+      mxItems: mxRes.data || [],
+      squawks: (sqRes.data || []) as any,
+      ads: (adRes.data || []) as any,
+    });
 
-        // Skip items that haven't been set up yet (null due values)
-        if (item.tracking_type === 'time' && (item.due_time === null || item.due_time === undefined)) continue;
-        if (item.tracking_type === 'date' && (item.due_date === null || item.due_date === undefined)) continue;
-
-        if (item.tracking_type === 'time' && item.due_time <= et) {
-          isGrounded = true;
-          reason = `${item.item_name} expired by ${(et - item.due_time).toFixed(1)} hrs`;
-          break;
-        }
-        if (item.tracking_type === 'date' && new Date(item.due_date + 'T00:00:00') < new Date(new Date().setHours(0, 0, 0, 0))) {
-          isGrounded = true;
-          const d = Math.ceil((Date.now() - new Date(item.due_date + 'T00:00:00').getTime()) / 86400000);
-          reason = `${item.item_name} expired ${d} day${d > 1 ? 's' : ''} ago`;
-          break;
-        }
-      }
-    }
-
-    // Check squawks (only if not already grounded by MX)
-    if (!isGrounded && sq && sq.length > 0) {
-      const g = sq.find(s => s.affects_airworthiness);
-      if (g) {
-        isGrounded = true;
-        reason = `AOG squawk${g.location ? ' at ' + g.location : ''}`;
-      } else {
-        hasOpen = true;
-      }
-    }
-
-    setGroundedReason(reason);
-    if (isGrounded) setAircraftStatus('grounded');
-    else if (hasOpen) setAircraftStatus('issues');
-    else setAircraftStatus('airworthy');
+    setGroundedReason(verdict.reason || "");
+    setAircraftStatus(verdict.status);
   }, [allAircraftList]);
 
   return { aircraftStatus, groundedReason, checkGroundedStatus };

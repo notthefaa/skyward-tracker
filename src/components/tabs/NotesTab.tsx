@@ -2,6 +2,7 @@ import { useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { authFetch } from "@/lib/authFetch";
 import { validateFileSizes, MAX_UPLOAD_SIZE_LABEL } from "@/lib/constants";
+import { swrKeys } from "@/lib/swrKeys";
 import type { AircraftRole } from "@/lib/types";
 import useSWR from "swr";
 import { FileText, Plus, X, Upload, Edit2, ChevronLeft, ChevronRight, Trash2 } from "lucide-react";
@@ -10,18 +11,22 @@ import imageCompression from "browser-image-compression";
 import { useToast } from "@/components/ToastProvider";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { useModalScrollLock } from "@/hooks/useModalScrollLock";
+import SectionSelector from "@/components/shell/SectionSelector";
+import { MORE_SELECTOR_ITEMS, emitMoreNavigate } from "@/components/shell/moreNav";
+import { useSignedUrls } from "@/hooks/useSignedUrls";
 
 const whiteBg = { backgroundColor: '#ffffff' } as const;
 
 export default function NotesTab({ aircraft, session, role, aircraftRole, userInitials, onNotesRead }: { aircraft: any, session: any, role: string, aircraftRole: AircraftRole | null, userInitials: string, onNotesRead: () => void }) {
   
   const { data: notes = [], mutate } = useSWR(
-    aircraft ? `notes-${aircraft.id}` : null,
+    aircraft ? swrKeys.notes(aircraft.id) : null,
     async () => {
       const { data: notesData } = await supabase
         .from('aft_notes')
         .select('*')
         .eq('aircraft_id', aircraft.id)
+        .is('deleted_at', null)
         .order('created_at', { ascending: false });
       
       if (notesData && notesData.length > 0) {
@@ -48,6 +53,7 @@ export default function NotesTab({ aircraft, session, role, aircraftRole, userIn
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const { showSuccess, showError } = useToast();
+  const resolve = useSignedUrls();
   const confirm = useConfirm();
 
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -88,93 +94,133 @@ export default function NotesTab({ aircraft, session, role, aircraftRole, userIn
     setSelectedImages(files);
   };
 
-  const uploadImages = async (): Promise<string[]> => {
-    let uploadedPaths: string[] = [];
+  // Returns both the public URL (for storing in the note row) AND the
+  // storage path (for rollback if the note insert fails). Same shape
+  // as SquawksTab — see there for the rationale.
+  const uploadImages = async (): Promise<{ url: string; path: string }[]> => {
+    const uploaded: { url: string; path: string }[] = [];
     const options = { maxSizeMB: 1, maxWidthOrHeight: 1920, useWebWorker: true };
-    
+
     for (const file of selectedImages) {
       try {
         const compressedFile = await imageCompression(file, options);
         const fileName = `${aircraft.tail_number}_${Date.now()}_${compressedFile.name}`;
-        
+
         const { data } = await supabase.storage.from('aft_note_images').upload(fileName, compressedFile);
-        
+
         if (data) {
           const { data: urlData } = supabase.storage.from('aft_note_images').getPublicUrl(data.path);
-          uploadedPaths.push(urlData.publicUrl);
+          uploaded.push({ url: urlData.publicUrl, path: data.path });
         }
-      } catch (error) { 
-        console.error("Error compressing/uploading image:", error); 
+      } catch (error) {
+        console.error("Error compressing/uploading image:", error);
       }
     }
-    return uploadedPaths;
+    return uploaded;
+  };
+
+  // Fire-and-forget rollback when the note insert fails after images
+  // have already landed in storage.
+  const cleanupUploadedImages = async (paths: string[]) => {
+    if (paths.length === 0) return;
+    try {
+      await supabase.storage.from('aft_note_images').remove(paths);
+    } catch (err) {
+      console.error("Failed to clean up orphaned note images:", err);
+    }
   };
 
   const submitNote = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
+    // Try/catch/finally — bare throws used to leave the button frozen
+    // in "Saving…" forever on API error.
+    // Upload images first so we can roll them back if the note insert
+    // fails. uploadedPathsToRollback is used by the catch branch.
+    const uploadedThisSubmit = await uploadImages();
+    const uploadedPathsToRollback = uploadedThisSubmit.map(u => u.path);
+    try {
+      const allPictures = [...existingImages, ...uploadedThisSubmit.map(u => u.url)];
 
-    const uploadedUrls = await uploadImages();
-    const allPictures = [...existingImages, ...uploadedUrls];
+      const noteData: any = {
+        aircraft_id: aircraft.id,
+        content,
+        pictures: allPictures
+      };
 
-    const noteData: any = {
-      aircraft_id: aircraft.id,
-      content,
-      pictures: allPictures
-    };
-
-    if (editingId) {
-      noteData.edited_at = new Date().toISOString();
-      const res = await authFetch('/api/notes', {
-        method: 'PUT',
-        body: JSON.stringify({ noteId: editingId, aircraftId: aircraft.id, noteData })
-      });
-      if (!res.ok) throw new Error('Failed to update note');
-    } else {
-      noteData.author_email = session.user.email;
-      noteData.author_initials = userInitials;
-      const res = await authFetch('/api/notes', {
-        method: 'POST',
-        body: JSON.stringify({ aircraftId: aircraft.id, noteData })
-      });
-      if (!res.ok) throw new Error('Failed to create note');
-
-      try {
-        await authFetch('/api/emails/note-notify', {
-          method: 'POST',
-          body: JSON.stringify({ note: { ...noteData, author_initials: userInitials }, aircraft })
+      if (editingId) {
+        noteData.edited_at = new Date().toISOString();
+        const res = await authFetch('/api/notes', {
+          method: 'PUT',
+          body: JSON.stringify({ noteId: editingId, aircraftId: aircraft.id, noteData })
         });
-      } catch (err) {
-        console.error("Failed to send note notification", err);
-      }
-    }
+        if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || "Couldn't update the note"); }
+      } else {
+        noteData.author_email = session.user.email;
+        noteData.author_initials = userInitials;
+        const res = await authFetch('/api/notes', {
+          method: 'POST',
+          body: JSON.stringify({ aircraftId: aircraft.id, noteData })
+        });
+        if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || "Couldn't create the note"); }
 
-    await mutate();
-    setShowModal(false);
-    setIsSubmitting(false);
-    showSuccess(editingId ? "Note updated" : "Note posted");
+        try {
+          await authFetch('/api/emails/note-notify', {
+            method: 'POST',
+            body: JSON.stringify({ note: { ...noteData, author_initials: userInitials }, aircraft })
+          });
+        } catch (err) {
+          // Notification failure is non-blocking — the note saved. Log
+          // for ops but don't surface a toast that implies the note
+          // write itself failed.
+          console.error("Failed to send note notification", err);
+        }
+      }
+
+      await mutate();
+      setShowModal(false);
+      showSuccess(editingId ? "Note updated" : "Note posted");
+    } catch (err: any) {
+      // Note row never landed — remove the images we just uploaded
+      // so they don't sit in storage forever with no referencing row.
+      await cleanupUploadedImages(uploadedPathsToRollback);
+      showError(err?.message || "Couldn't save the note.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const deleteNote = async (id: string) => {
     const ok = await confirm({
       title: "Delete Note?",
-      message: "This note will be permanently removed from the crew whiteboard.",
+      message: "This note will be permanently removed from the message board.",
       confirmText: "Delete",
       variant: "danger",
     });
     if (!ok) return;
-    const res = await authFetch('/api/notes', {
-      method: 'DELETE',
-      body: JSON.stringify({ noteId: id, aircraftId: aircraft.id })
-    });
-    if (!res.ok) throw new Error('Failed to delete note');
-    await mutate();
+    try {
+      const res = await authFetch('/api/notes', {
+        method: 'DELETE',
+        body: JSON.stringify({ noteId: id, aircraftId: aircraft.id })
+      });
+      if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || "Couldn't delete the note"); }
+      await mutate();
+      showSuccess('Note deleted.');
+    } catch (err: any) {
+      showError(err?.message || "Couldn't delete the note.");
+    }
   };
 
   if (!aircraft) return null;
 
   return (
     <>
+      <SectionSelector
+        items={MORE_SELECTOR_ITEMS}
+        selectedKey="notes"
+        onSelect={(key) => emitMoreNavigate(key)}
+        compact
+      />
       <div className="mb-2">
         <PrimaryButton onClick={() => openForm()}>
           <Plus size={18} /> Add New Note
@@ -196,7 +242,7 @@ export default function NotesTab({ aircraft, session, role, aircraftRole, userIn
                     </span>
                     <span className="text-[10px] uppercase text-gray-400 font-bold">
                       {new Date(note.created_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
-                      {note.edited_at && <span className="text-[#F08B46] ml-2">(Edited: {new Date(note.edited_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })})</span>}
+                      {note.edited_at && <span className="text-mxOrange ml-2">(Edited: {new Date(note.edited_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })})</span>}
                     </span>
                   </div>
                   
@@ -207,7 +253,7 @@ export default function NotesTab({ aircraft, session, role, aircraftRole, userIn
                       </button>
                     )}
                     {(isAdmin || note.author_id === session.user.id) && (
-                      <button onClick={() => deleteNote(note.id)} className="text-gray-400 hover:text-red-500 active:scale-95" title="Delete Note">
+                      <button onClick={() => deleteNote(note.id)} className="text-gray-400 hover:text-danger active:scale-95" title="Delete Note">
                         <Trash2 size={14}/>
                       </button>
                     )}
@@ -220,7 +266,7 @@ export default function NotesTab({ aircraft, session, role, aircraftRole, userIn
                   <div className="mt-3 flex gap-2 overflow-x-auto pt-2">
                     {note.pictures.map((pic: string, i: number) => (
                       <button key={i} onClick={() => { setPreviewImages(note.pictures); setPreviewIndex(i); }} className="active:scale-95 transition-transform shrink-0">
-                        <img src={pic} loading="lazy" alt="Note Attachment" className="h-20 w-20 object-cover rounded border border-gray-300 shadow-sm" />
+                        <img src={resolve(pic) || pic} loading="lazy" alt="Note Attachment" className="h-20 w-20 object-cover rounded border border-gray-300 shadow-sm" />
                       </button>
                     ))}
                   </div>
@@ -270,7 +316,7 @@ export default function NotesTab({ aircraft, session, role, aircraftRole, userIn
               <h2 className="font-oswald text-2xl font-bold uppercase text-navy flex items-center gap-2">
                 <FileText size={20} className="text-navy"/> {editingId ? 'Edit Note' : 'Add Note'}
               </h2>
-              <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-red-500">
+              <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-danger">
                 <X size={24}/>
               </button>
             </div>

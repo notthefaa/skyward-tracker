@@ -41,12 +41,12 @@ export default function ServiceEventDetail({
       setOwnerMessage("");
       await fetchEventDetail(selectedEvent.id);
       showSuccess("Date confirmed");
-    } catch (err) { showError("Failed to confirm date."); }
+    } catch (err) { showError("Couldn't confirm the date."); }
     setIsSubmitting(false);
   };
 
   const handleOwnerCounter = async () => {
-    if (!proposedDate) return showError("Please select a date.");
+    if (!proposedDate) return showError("Pick a date first.");
     setIsSubmitting(true);
     try {
       const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -54,7 +54,7 @@ export default function ServiceEventDetail({
       setOwnerMessage(""); setProposedDate("");
       await fetchEventDetail(selectedEvent.id);
       showSuccess("Counter proposal sent");
-    } catch (err) { showError("Failed to send counter proposal."); }
+    } catch (err) { showError("Couldn't send the counter proposal."); }
     setIsSubmitting(false);
   };
 
@@ -67,7 +67,7 @@ export default function ServiceEventDetail({
       setOwnerMessage("");
       await fetchEventDetail(selectedEvent.id);
       showSuccess("Message sent");
-    } catch (err) { showError("Failed to send message."); }
+    } catch (err) { showError("Couldn't send the message."); }
     setIsSubmitting(false);
   };
 
@@ -80,7 +80,7 @@ export default function ServiceEventDetail({
       onRefresh();
       showSuccess("Service event cancelled");
       onNavigate('list');
-    } catch (err) { showError("Failed to cancel event."); }
+    } catch (err) { showError("Couldn't cancel the event."); }
     setIsSubmitting(false);
   };
 
@@ -92,7 +92,7 @@ export default function ServiceEventDetail({
       onRefresh();
       showSuccess("Service event closed");
       onNavigate('list');
-    } catch (err) { showError("Failed to close event."); }
+    } catch (err) { showError("Couldn't close the event."); }
     setIsSubmitting(false);
   };
 
@@ -104,8 +104,8 @@ export default function ServiceEventDetail({
         <div className="flex gap-2 flex-wrap">
           {attachments.map((att: any, idx: number) => {
             const isImg = att.type && att.type.startsWith('image/');
-            if (isImg) return (<button key={idx} onClick={() => setViewingAttachment(att.url)} className="w-16 h-16 rounded border-2 border-gray-200 overflow-hidden hover:border-[#3AB0FF] transition-colors active:scale-95"><img src={att.url} alt={att.filename} className="w-full h-full object-cover" /></button>);
-            return (<a key={idx} href={att.url} target="_blank" rel="noreferrer" className="flex items-center gap-2 p-2 bg-white border border-gray-200 rounded hover:border-[#3AB0FF] transition-colors"><FileText size={14} className="text-gray-500 shrink-0" /><div className="min-w-0"><p className="text-[10px] font-bold text-navy truncate max-w-[100px]">{att.filename}</p></div></a>);
+            if (isImg) return (<button key={idx} onClick={() => setViewingAttachment(att.url)} className="w-16 h-16 rounded border-2 border-gray-200 overflow-hidden hover:border-info transition-colors active:scale-95"><img src={att.url} alt={att.filename} className="w-full h-full object-cover" /></button>);
+            return (<a key={idx} href={att.url} target="_blank" rel="noreferrer" className="flex items-center gap-2 p-2 bg-white border border-gray-200 rounded hover:border-info transition-colors"><FileText size={14} className="text-gray-500 shrink-0" /><div className="min-w-0"><p className="text-[10px] font-bold text-navy truncate max-w-[100px]">{att.filename}</p></div></a>);
           })}
         </div>
       </div>
@@ -114,18 +114,18 @@ export default function ServiceEventDetail({
 
   return (
     <div className="space-y-5">
-      <button onClick={() => onNavigate('list')} className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-[#F08B46] bg-orange-50 border border-orange-200 rounded px-3 py-1.5 hover:bg-orange-100 active:scale-95 transition-all">
+      <button onClick={() => onNavigate('list')} className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-mxOrange bg-orange-50 border border-orange-200 rounded px-3 py-1.5 hover:bg-orange-100 active:scale-95 transition-all">
         <ChevronDown size={12} className="rotate-90" /> Back to Events
       </button>
 
       {/* Status card */}
       <div className="bg-gray-50 rounded p-4 border border-gray-200">
         <div className="flex justify-between items-center mb-3">
-          <span className={`text-[8px] font-bold uppercase tracking-widest px-2 py-1 rounded text-white ${selectedEvent.status === 'confirmed' ? 'bg-[#3AB0FF]' : selectedEvent.status === 'complete' ? 'bg-[#56B94A]' : selectedEvent.status === 'ready_for_pickup' ? 'bg-[#56B94A]' : selectedEvent.status === 'cancelled' ? 'bg-[#CE3732]' : 'bg-[#F08B46]'}`}>
+          <span className={`text-[8px] font-bold uppercase tracking-widest px-2 py-1 rounded text-white ${selectedEvent.status === 'confirmed' ? 'bg-info' : selectedEvent.status === 'complete' ? 'bg-[#56B94A]' : selectedEvent.status === 'ready_for_pickup' ? 'bg-[#56B94A]' : selectedEvent.status === 'cancelled' ? 'bg-danger' : 'bg-mxOrange'}`}>
             {selectedEvent.status === 'ready_for_pickup' ? 'Ready for Pickup' : selectedEvent.status}
           </span>
           {selectedEvent.access_token && selectedEvent.status !== 'complete' && (
-            <a href={`/service/${selectedEvent.access_token}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-[#3AB0FF] bg-blue-50 border border-blue-200 rounded px-3 py-1.5 hover:bg-blue-100 active:scale-95 transition-all">
+            <a href={`/service/${selectedEvent.access_token}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-info bg-blue-50 border border-blue-200 rounded px-3 py-1.5 hover:bg-blue-100 active:scale-95 transition-all">
               <ExternalLink size={12} /> Portal
             </a>
           )}
@@ -143,12 +143,12 @@ export default function ServiceEventDetail({
           <p className="text-sm font-bold text-navy">{selectedEvent.mx_contact_name || 'Mechanic'} proposed <strong>{selectedEvent.proposed_date}</strong>{selectedEvent.service_duration_days ? ` (${selectedEvent.service_duration_days} day${selectedEvent.service_duration_days > 1 ? 's' : ''})` : ''}</p>
           <div className="flex gap-2">
             <button onClick={handleOwnerConfirm} disabled={isSubmitting} className="flex-1 bg-[#56B94A] text-white font-oswald font-bold uppercase tracking-widest py-2 rounded text-xs active:scale-95 disabled:opacity-50">Confirm</button>
-            <button onClick={() => {}} className="flex-1 bg-[#F08B46] text-white font-oswald font-bold uppercase tracking-widest py-2 rounded text-xs active:scale-95">Counter</button>
+            <button onClick={() => {}} className="flex-1 bg-mxOrange text-white font-oswald font-bold uppercase tracking-widest py-2 rounded text-xs active:scale-95">Counter</button>
           </div>
           <div className="space-y-2 pt-2">
-            <input type="date" value={proposedDate} onChange={e => setProposedDate(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-2 text-sm focus:border-[#F08B46] outline-none" />
-            <textarea value={ownerMessage} onChange={e => setOwnerMessage(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-2 text-sm focus:border-[#F08B46] outline-none min-h-[50px]" placeholder="Message (optional)" />
-            <button onClick={handleOwnerCounter} disabled={isSubmitting || !proposedDate} className="w-full bg-[#F08B46] text-white font-oswald font-bold uppercase tracking-widest py-2 rounded text-xs active:scale-95 disabled:opacity-50">Send Counter Proposal</button>
+            <input type="date" value={proposedDate} onChange={e => setProposedDate(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-2 text-sm focus:border-mxOrange outline-none" />
+            <textarea value={ownerMessage} onChange={e => setOwnerMessage(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-2 text-sm focus:border-mxOrange outline-none min-h-[50px]" placeholder="Message (optional)" />
+            <button onClick={handleOwnerCounter} disabled={isSubmitting || !proposedDate} className="w-full bg-mxOrange text-white font-oswald font-bold uppercase tracking-widest py-2 rounded text-xs active:scale-95 disabled:opacity-50">Send Counter Proposal</button>
           </div>
         </div>
       )}
@@ -162,9 +162,9 @@ export default function ServiceEventDetail({
               <p className="text-xs text-gray-500">Waiting for {selectedEvent.mx_contact_name || 'the mechanic'} to respond.</p>
               <div className="border-t border-blue-200 pt-3 space-y-2">
                 <p className="text-[10px] font-bold uppercase tracking-widest text-navy">Change Proposed Date</p>
-                <input type="date" value={proposedDate} onChange={e => setProposedDate(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-2 text-sm focus:border-[#F08B46] outline-none" />
-                <textarea value={ownerMessage} onChange={e => setOwnerMessage(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-2 text-sm focus:border-[#F08B46] outline-none min-h-[50px]" placeholder="Message to mechanic (optional)" />
-                <button onClick={handleOwnerCounter} disabled={isSubmitting || !proposedDate} className="w-full bg-[#F08B46] text-white font-oswald font-bold uppercase tracking-widest py-2 rounded text-xs active:scale-95 disabled:opacity-50">Update Proposed Date</button>
+                <input type="date" value={proposedDate} onChange={e => setProposedDate(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-2 text-sm focus:border-mxOrange outline-none" />
+                <textarea value={ownerMessage} onChange={e => setOwnerMessage(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-2 text-sm focus:border-mxOrange outline-none min-h-[50px]" placeholder="Message to mechanic (optional)" />
+                <button onClick={handleOwnerCounter} disabled={isSubmitting || !proposedDate} className="w-full bg-mxOrange text-white font-oswald font-bold uppercase tracking-widest py-2 rounded text-xs active:scale-95 disabled:opacity-50">Update Proposed Date</button>
               </div>
             </>
           ) : (
@@ -173,9 +173,9 @@ export default function ServiceEventDetail({
               <p className="text-xs text-gray-500">No preferred date was specified. Waiting for the mechanic to propose dates.</p>
               <div className="border-t border-blue-200 pt-3 space-y-2">
                 <p className="text-[10px] font-bold uppercase tracking-widest text-navy">Propose a Date Instead</p>
-                <input type="date" value={proposedDate} onChange={e => setProposedDate(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-2 text-sm focus:border-[#F08B46] outline-none" />
-                <textarea value={ownerMessage} onChange={e => setOwnerMessage(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-2 text-sm focus:border-[#F08B46] outline-none min-h-[50px]" placeholder="Message to mechanic (optional)" />
-                <button onClick={handleOwnerCounter} disabled={isSubmitting || !proposedDate} className="w-full bg-[#F08B46] text-white font-oswald font-bold uppercase tracking-widest py-2 rounded text-xs active:scale-95 disabled:opacity-50">Send Date Proposal</button>
+                <input type="date" value={proposedDate} onChange={e => setProposedDate(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-2 text-sm focus:border-mxOrange outline-none" />
+                <textarea value={ownerMessage} onChange={e => setOwnerMessage(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-2 text-sm focus:border-mxOrange outline-none min-h-[50px]" placeholder="Message to mechanic (optional)" />
+                <button onClick={handleOwnerCounter} disabled={isSubmitting || !proposedDate} className="w-full bg-mxOrange text-white font-oswald font-bold uppercase tracking-widest py-2 rounded text-xs active:scale-95 disabled:opacity-50">Send Date Proposal</button>
               </div>
             </>
           )}
@@ -198,7 +198,7 @@ export default function ServiceEventDetail({
                     {li.line_status}
                   </span>
                 </div>
-                {li.mechanic_comment && <p className="text-[10px] text-[#3AB0FF] mt-1 italic">{li.mechanic_comment}</p>}
+                {li.mechanic_comment && <p className="text-[10px] text-info mt-1 italic">{li.mechanic_comment}</p>}
                 {li.line_status === 'complete' && li.completion_date && (
                   <p className="text-[10px] text-[#56B94A] mt-1 flex items-center gap-1"><Link2 size={10} /> Completed {li.completion_date}{li.completed_by_name ? ` by ${li.completed_by_name}` : ''}{li.completion_time ? ` @ ${li.completion_time} hrs` : ''}</p>
                 )}
@@ -214,7 +214,7 @@ export default function ServiceEventDetail({
           <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-2">Messages</p>
           <div className="space-y-2 max-h-[300px] overflow-y-auto">
             {eventMessages.map(msg => (
-              <div key={msg.id} className={`p-2 rounded text-xs ${msg.sender === 'mechanic' ? 'bg-blue-50 border-l-4 border-[#3AB0FF]' : msg.sender === 'owner' ? 'bg-orange-50 border-l-4 border-[#F08B46]' : 'bg-gray-50 border-l-4 border-gray-300'}`}>
+              <div key={msg.id} className={`p-2 rounded text-xs ${msg.sender === 'mechanic' ? 'bg-blue-50 border-l-4 border-info' : msg.sender === 'owner' ? 'bg-orange-50 border-l-4 border-mxOrange' : 'bg-gray-50 border-l-4 border-gray-300'}`}>
                 <span className="text-[8px] font-bold uppercase text-gray-400">{msg.sender} • {new Date(msg.created_at).toLocaleString()}</span>
                 <p className="text-navy mt-1">{msg.message}</p>
                 {renderMessageAttachments(msg.attachments)}
@@ -227,8 +227,8 @@ export default function ServiceEventDetail({
       {/* Comment box */}
       {canManageService && selectedEvent.status !== 'complete' && (
         <div className="flex gap-2">
-          <textarea value={ownerMessage} onChange={e => setOwnerMessage(e.target.value)} style={INPUT_WHITE_BG} className="flex-1 border border-gray-300 rounded p-2 text-sm focus:border-[#3AB0FF] outline-none min-h-[50px]" placeholder="Send a message..." />
-          <button onClick={handleOwnerComment} disabled={isSubmitting || !ownerMessage.trim()} className="bg-[#3AB0FF] text-white px-4 py-3 rounded active:scale-95 disabled:opacity-50"><Send size={18}/></button>
+          <textarea value={ownerMessage} onChange={e => setOwnerMessage(e.target.value)} style={INPUT_WHITE_BG} className="flex-1 border border-gray-300 rounded p-2 text-sm focus:border-info outline-none min-h-[50px]" placeholder="Send a message..." />
+          <button onClick={handleOwnerComment} disabled={isSubmitting || !ownerMessage.trim()} className="bg-info text-white px-4 py-3 rounded active:scale-95 disabled:opacity-50"><Send size={18}/></button>
         </div>
       )}
 
@@ -244,30 +244,30 @@ export default function ServiceEventDetail({
         <div className="bg-green-50 border-2 border-green-200 rounded p-4 text-center">
           <CheckCircle size={32} className="mx-auto text-[#56B94A] mb-2" />
           <p className="font-oswald text-lg font-bold uppercase tracking-widest text-navy mb-2">All Items Resolved</p>
-          <p className="text-xs text-gray-600 mb-4">Every line item has been completed or deferred. Close this event to finalize.</p>
+          <p className="text-xs text-gray-600 mb-4">Every item is either completed or deferred. Close the event to wrap it up.</p>
           <button onClick={handleCloseEvent} disabled={isSubmitting} className="w-full bg-[#56B94A] text-white font-oswald font-bold uppercase tracking-widest py-3 rounded active:scale-95 disabled:opacity-50">{isSubmitting ? "Closing..." : "Close Service Event"}</button>
         </div>
       )}
 
       {/* Ready for pickup banner */}
       {selectedEvent.status === 'ready_for_pickup' && (
-        <div className="bg-green-50 border-2 border-green-200 rounded p-4 text-center"><Plane size={32} className="mx-auto text-[#56B94A] mb-2" /><p className="font-oswald text-lg font-bold uppercase tracking-widest text-navy">Aircraft Ready</p><p className="text-sm text-gray-600 mt-1">Your mechanic has marked all work as complete. Enter logbook data above to finalize.</p></div>
+        <div className="bg-green-50 border-2 border-green-200 rounded p-4 text-center"><Plane size={32} className="mx-auto text-[#56B94A] mb-2" /><p className="font-oswald text-lg font-bold uppercase tracking-widest text-navy">Aircraft Ready</p><p className="text-sm text-gray-600 mt-1">Your mechanic marked every item complete. Enter logbook data above to finish out the event.</p></div>
       )}
       {selectedEvent.status === 'cancelled' && (
-        <div className="bg-red-50 border-2 border-red-200 rounded p-4 text-center"><XCircle size={32} className="mx-auto text-[#CE3732] mb-2" /><p className="font-oswald text-lg font-bold uppercase tracking-widest text-navy">Event Cancelled</p></div>
+        <div className="bg-red-50 border-2 border-red-200 rounded p-4 text-center"><XCircle size={32} className="mx-auto text-danger mb-2" /><p className="font-oswald text-lg font-bold uppercase tracking-widest text-navy">Event Cancelled</p></div>
       )}
 
       {/* Cancel button */}
       {canManageService && selectedEvent.status !== 'complete' && selectedEvent.status !== 'cancelled' && !showCancelConfirm && (
-        <button onClick={() => setShowCancelConfirm(true)} className="w-full text-[10px] font-bold uppercase tracking-widest text-[#CE3732] border border-red-200 bg-red-50 rounded py-2 hover:bg-red-100 active:scale-95 transition-all flex items-center justify-center gap-1.5 mt-2"><XCircle size={12} /> Cancel Service Event</button>
+        <button onClick={() => setShowCancelConfirm(true)} className="w-full text-[10px] font-bold uppercase tracking-widest text-danger border border-red-200 bg-red-50 rounded py-2 hover:bg-red-100 active:scale-95 transition-all flex items-center justify-center gap-1.5 mt-2"><XCircle size={12} /> Cancel Service Event</button>
       )}
       {showCancelConfirm && (
         <div className="bg-red-50 border-2 border-red-200 rounded p-4 space-y-3 animate-fade-in">
-          <p className="text-sm font-bold text-navy">Are you sure you want to cancel this service event?</p>
-          <textarea value={cancelReason} onChange={e => setCancelReason(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-2 text-sm focus:border-[#CE3732] outline-none min-h-[50px]" placeholder="Reason for cancellation (optional)..." />
+          <p className="text-sm font-bold text-navy">Cancel this service event?</p>
+          <textarea value={cancelReason} onChange={e => setCancelReason(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-2 text-sm focus:border-danger outline-none min-h-[50px]" placeholder="Reason for the cancellation (optional) — your mechanic will see this." />
           <div className="flex gap-2">
             <button onClick={() => { setShowCancelConfirm(false); setCancelReason(""); }} className="flex-1 border border-gray-300 text-gray-600 font-oswald font-bold uppercase tracking-widest py-2 rounded text-xs active:scale-95">Keep Event</button>
-            <button onClick={handleCancelEvent} disabled={isSubmitting} className="flex-1 bg-[#CE3732] text-white font-oswald font-bold uppercase tracking-widest py-2 rounded text-xs active:scale-95 disabled:opacity-50">{isSubmitting ? "Cancelling..." : "Cancel Event"}</button>
+            <button onClick={handleCancelEvent} disabled={isSubmitting} className="flex-1 bg-danger text-white font-oswald font-bold uppercase tracking-widest py-2 rounded text-xs active:scale-95 disabled:opacity-50">{isSubmitting ? "Cancelling..." : "Cancel Event"}</button>
           </div>
         </div>
       )}

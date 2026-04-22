@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { enrichAircraftWithMetrics } from "@/lib/math";
 import { useSWRConfig } from "swr";
 import { FLIGHT_DATA_LOOKBACK_DAYS } from "@/lib/constants";
+import { matchesAircraft } from "@/lib/swrKeys";
 import type { AircraftWithMetrics, SystemSettings, AppRole } from "@/lib/types";
 
 /**
@@ -29,6 +30,11 @@ export interface FleetIndexEntry {
 export function useFleetData() {
   const [role, setRole] = useState<AppRole>('pilot');
   const [userInitials, setUserInitials] = useState("");
+  // Onboarding gate — flipped true after either onboarding path (Howard-
+  // guided or classic form) finishes. Starts undefined so the shell can
+  // distinguish "still loading" from "new user."
+  const [completedOnboarding, setCompletedOnboarding] = useState<boolean | null>(null);
+  const [tourCompleted, setTourCompleted] = useState<boolean | null>(null);
   const [allAircraftList, setAllAircraftList] = useState<AircraftWithMetrics[]>([]);
   const [aircraftList, setAircraftList] = useState<AircraftWithMetrics[]>([]);
   const [allAccessRecords, setAllAccessRecords] = useState<any[]>([]);
@@ -53,7 +59,7 @@ export function useFleetData() {
     // and WHICH aircraft they can see.
     const [sR, rR, aR] = await Promise.all([
       supabase.from('aft_system_settings').select('*').eq('id', 1).single(),
-      supabase.from('aft_user_roles').select('role, initials').eq('user_id', userId).single(),
+      supabase.from('aft_user_roles').select('role, initials, completed_onboarding, tour_completed').eq('user_id', userId).single(),
       supabase.from('aft_user_aircraft_access').select('aircraft_id, aircraft_role, user_id').eq('user_id', userId),
     ]);
 
@@ -62,6 +68,8 @@ export function useFleetData() {
     const userRole = (rR.data?.role || 'pilot') as AppRole;
     setRole(userRole);
     setUserInitials(rR.data?.initials || "");
+    setCompletedOnboarding(!!rR.data?.completed_onboarding);
+    setTourCompleted(!!rR.data?.tour_completed);
 
     const accessData = aR.data || [];
     setAllAccessRecords(accessData);
@@ -77,6 +85,7 @@ export function useFleetData() {
         .from('aft_aircraft')
         .select('*')
         .in('id', assignedIds)
+        .is('deleted_at', null)
         .order('tail_number');
 
       allPlanes = (aircraftData || []).map((plane: any) => ({
@@ -108,6 +117,7 @@ export function useFleetData() {
     const { data } = await supabase
       .from('aft_aircraft')
       .select('id, tail_number, aircraft_type')
+      .is('deleted_at', null)
       .order('tail_number');
 
     const index = (data || []) as FleetIndexEntry[];
@@ -185,8 +195,8 @@ export function useFleetData() {
     ago.setDate(ago.getDate() - FLIGHT_DATA_LOOKBACK_DAYS);
 
     const [pR, lR] = await Promise.all([
-      supabase.from('aft_aircraft').select('*').eq('id', aircraftId).single(),
-      supabase.from('aft_flight_logs').select('aircraft_id, ftt, tach, created_at').eq('aircraft_id', aircraftId).gte('created_at', ago.toISOString()).order('created_at', { ascending: true }),
+      supabase.from('aft_aircraft').select('*').eq('id', aircraftId).is('deleted_at', null).maybeSingle(),
+      supabase.from('aft_flight_logs').select('aircraft_id, ftt, tach, created_at').eq('aircraft_id', aircraftId).is('deleted_at', null).gte('created_at', ago.toISOString()).order('created_at', { ascending: true }),
     ]);
 
     if (pR.data) {
@@ -197,16 +207,16 @@ export function useFleetData() {
       setAircraftList(prev => prev.map(a => a.id === aircraftId ? up : a));
     }
 
-    globalMutate(
-      (key: any) => typeof key === 'string' && key.includes(aircraftId),
-      undefined,
-      { revalidate: true }
-    );
+    globalMutate(matchesAircraft(aircraftId), undefined, { revalidate: true });
   }, [globalMutate]);
 
   return {
     role,
     userInitials,
+    completedOnboarding,
+    tourCompleted,
+    setCompletedOnboarding,
+    setTourCompleted,
     allAircraftList,
     aircraftList,
     allAccessRecords,

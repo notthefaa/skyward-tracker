@@ -5,6 +5,7 @@ import { env } from '@/lib/env';
 import { escapeHtml } from '@/lib/sanitize';
 import { cancelConflictingReservations } from '@/lib/mxConflicts';
 import { PORTAL_EXPIRY_DAYS } from '@/lib/constants';
+import { isIsoDate } from '@/lib/validation';
 
 const resend = new Resend(env.RESEND_API_KEY);
 const FROM_EMAIL = 'notifications@skywardsociety.com';
@@ -43,13 +44,23 @@ export async function POST(req: Request) {
       .from('aft_maintenance_events')
       .select('*')
       .eq('access_token', accessToken)
-      .single();
+      .is('deleted_at', null)
+      .maybeSingle();
 
     if (evErr || !event) {
+      // If the event was soft-deleted after a mechanic already had the
+      // portal link, fall through to the same 404 — the owner cancelled
+      // the service and the mechanic shouldn't keep responding on it.
       return NextResponse.json({ error: 'Service event not found.' }, { status: 404 });
     }
 
-    // Token expiry: reject actions on events completed more than PORTAL_EXPIRY_DAYS ago
+    // Token expiry: complete events expire PORTAL_EXPIRY_DAYS after
+    // completed_at; cancelled events expire immediately (mirrors
+    // upload-attachment). Leaving cancelled events open would let a
+    // mechanic keep commenting on a service the owner walked away from.
+    if (event.status === 'cancelled') {
+      return NextResponse.json({ error: 'This service was cancelled and the portal link is no longer active.' }, { status: 403 });
+    }
     if (event.status === 'complete' && event.completed_at) {
       const expiryDate = new Date(new Date(event.completed_at).getTime() + PORTAL_EXPIRY_DAYS * 24 * 60 * 60 * 1000);
       if (new Date() > expiryDate) {
@@ -66,6 +77,9 @@ export async function POST(req: Request) {
     if (action === 'propose_date') {
       if (!serviceDurationDays || serviceDurationDays < 1) {
         return NextResponse.json({ error: 'Estimated service duration in days is required.' }, { status: 400 });
+      }
+      if (!isIsoDate(proposedDate)) {
+        return NextResponse.json({ error: 'Proposed date must be a valid YYYY-MM-DD date.' }, { status: 400 });
       }
 
       const estCompletion = computeEstimatedCompletion(proposedDate, serviceDurationDays);
@@ -323,9 +337,9 @@ export async function POST(req: Request) {
           html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
               <h2 style="color: #CE3732;">Service Declined</h2>
-              <p>${safeMxName} has indicated they are unable to accommodate this service request.</p>
+              <p>${safeMxName} can&apos;t accommodate this service request.</p>
               ${safeMessage ? `<p style="margin-top: 15px; padding: 15px; background: #f9f9f9; border-left: 4px solid #CE3732; border-radius: 4px;"><em>${safeMessage}</em></p>` : ''}
-              <p style="margin-top: 15px; color: #666;">You may wish to contact an alternative maintenance provider or reschedule.</p>
+              <p style="margin-top: 15px; color: #666;">You might want to reach out to a different mechanic or reschedule.</p>
               ${ctaButton(appUrl, 'OPEN AIRCRAFT MANAGER')}
             </div>
           `
@@ -354,7 +368,7 @@ export async function POST(req: Request) {
               <h2 style="color: #56B94A;">Aircraft Ready for Pickup!</h2>
               <p>${safeMxName} has completed all work and your aircraft is ready.</p>
               ${safeMessage ? `<p style="margin-top: 15px; padding: 15px; background: #f0fdf4; border-left: 4px solid #56B94A; border-radius: 4px;"><em>${safeMessage}</em></p>` : ''}
-              <p style="margin-top: 15px; color: #666;">Please log in to enter the logbook data from your mechanic's sign-off to complete this service event and reset maintenance tracking.</p>
+              <p style="margin-top: 15px; color: #666;">Log in to enter the logbook data from your mechanic&apos;s sign-off. That closes out the service event and resets maintenance tracking.</p>
               ${ctaButton(appUrl, 'OPEN AIRCRAFT MANAGER')}
             </div>
           `
