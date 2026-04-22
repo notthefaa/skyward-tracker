@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { processMxItem } from "@/lib/math";
-import { computeAirworthinessStatus } from "@/lib/airworthiness";
+import { computeAirworthinessStatus, applyOpenSquawkOverride } from "@/lib/airworthiness";
 import type { AircraftWithMetrics } from "@/lib/types";
 import { swrKeys } from "@/lib/swrKeys";
 import useSWR from "swr";
@@ -147,10 +147,7 @@ export default function FleetSummary({
           squawks: acSq as any,
           ads: acAd as any,
         });
-        const status: 'grounded' | 'issues' | 'airworthy' =
-          verdict.status === 'grounded' ? 'grounded'
-          : verdict.status === 'issues' ? 'issues'
-          : acSq.length > 0 ? 'issues' : 'airworthy';
+        const status = applyOpenSquawkOverride(verdict.status, acSq.length);
 
         // Find next MX due — only from active (set up) items
         const processedMx = activeItems.map(item => processMxItem(item, ac.total_engine_time || 0, ac.burnRate, ac.burnRateLow, ac.burnRateHigh));

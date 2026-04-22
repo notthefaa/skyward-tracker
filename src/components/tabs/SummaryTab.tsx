@@ -8,7 +8,7 @@ import { getFuelWeightPerGallon } from "@/lib/constants";
 import { parseFiniteNumber } from "@/lib/validation";
 import { INPUT_WHITE_BG } from "@/lib/styles";
 import { swrKeys } from "@/lib/swrKeys";
-import type { AircraftWithMetrics, SystemSettings, AppTab, AppRole, AircraftRole } from "@/lib/types";
+import type { AircraftWithMetrics, SystemSettings, AppTab, AppRole, AircraftRole, AircraftStatus } from "@/lib/types";
 import useSWR from "swr";
 import { PlaneTakeoff, MapPin, Droplet, Phone, Mail, Wrench, AlertTriangle, FileText, Clock, X, Trash2, Edit2, UserPlus, Loader2, Users, ChevronDown, Calendar, CheckCircle } from "lucide-react";
 import { PrimaryButton } from "@/components/AppButtons";
@@ -16,10 +16,10 @@ import { useToast } from "@/components/ToastProvider";
 import { useModalScrollLock } from "@/hooks/useModalScrollLock";
 import { useSignedUrls } from "@/hooks/useSignedUrls";
 
-export default function SummaryTab({ 
-  aircraft, setActiveTab, onNavigateToSquawks, role, aircraftRole, onDeleteAircraft, sysSettings, onEditAircraft, refreshData, session
-}: { 
-  aircraft: AircraftWithMetrics | null, 
+export default function SummaryTab({
+  aircraft, setActiveTab, onNavigateToSquawks, role, aircraftRole, onDeleteAircraft, sysSettings, onEditAircraft, refreshData, session, aircraftStatus
+}: {
+  aircraft: AircraftWithMetrics | null,
   setActiveTab: (tab: AppTab) => void,
   onNavigateToSquawks: () => void,
   role: AppRole,
@@ -28,7 +28,8 @@ export default function SummaryTab({
   sysSettings: SystemSettings,
   onEditAircraft: () => void,
   refreshData: () => void,
-  session: any
+  session: any,
+  aircraftStatus: AircraftStatus
 }) {
   const canEdit = role === 'admin' || aircraftRole === 'admin';
 
@@ -247,10 +248,8 @@ export default function SummaryTab({
   const lastFlight = flightData || null;
   const nextReservations = reservationData || [];
 
-  const isGrounded = (nextMx?.isExpired) || activeSquawks.some(sq => sq.affects_airworthiness);
-  const hasIssues = activeSquawks.length > 0;
-  const statusBorderColor = isGrounded ? 'border-danger' : hasIssues ? 'border-mxOrange' : 'border-success';
-  const statusIconColor = isGrounded ? 'text-danger' : hasIssues ? 'text-mxOrange' : 'text-success';
+  const statusBorderColor = aircraftStatus === 'grounded' ? 'border-danger' : aircraftStatus === 'issues' ? 'border-mxOrange' : 'border-success';
+  const statusIconColor = aircraftStatus === 'grounded' ? 'text-danger' : aircraftStatus === 'issues' ? 'text-mxOrange' : 'text-success';
   const mxTextColor = nextMx ? getMxTextColor(nextMx, sysSettings) : 'text-gray-500';
 
   const lastFlownLabel = (() => {

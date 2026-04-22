@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
-import { computeAirworthinessStatus } from "@/lib/airworthiness";
+import { computeAirworthinessStatus, applyOpenSquawkOverride } from "@/lib/airworthiness";
 import type { AircraftWithMetrics, AircraftStatus } from "@/lib/types";
 
 export function useGroundedStatus(allAircraftList: AircraftWithMetrics[]) {
@@ -44,8 +44,9 @@ export function useGroundedStatus(allAircraftList: AircraftWithMetrics[]) {
       ads: (adRes.data || []) as any,
     });
 
+    const openSquawkCount = (sqRes.data || []).length;
     setGroundedReason(verdict.reason || "");
-    setAircraftStatus(verdict.status);
+    setAircraftStatus(applyOpenSquawkOverride(verdict.status, openSquawkCount));
   }, [allAircraftList]);
 
   return { aircraftStatus, groundedReason, checkGroundedStatus };

@@ -200,3 +200,19 @@ export function computeAirworthinessStatus(input: Inputs): AirworthinessVerdict 
   }
   return { status: 'airworthy', findings };
 }
+
+/**
+ * Display-layer rule: if the regulatory verdict says `airworthy` but
+ * there's at least one open squawk (even non-airworthiness), bump the
+ * display status to `issues`. This keeps fleet cards, nav dots, and
+ * summary bentos in agreement — any open squawk is a visual cue
+ * ("something to look at") without overstating it as a regulatory
+ * grounding.
+ */
+export function applyOpenSquawkOverride(
+  status: AirworthinessStatus,
+  openSquawkCount: number,
+): AirworthinessStatus {
+  if (status === 'airworthy' && openSquawkCount > 0) return 'issues';
+  return status;
+}
