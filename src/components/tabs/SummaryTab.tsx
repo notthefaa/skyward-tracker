@@ -37,7 +37,7 @@ export default function SummaryTab({
     aircraft ? swrKeys.summaryMx(aircraft.id) : null,
     async () => {
       const { data } = await supabase.from('aft_maintenance_items')
-        .select('*').eq('aircraft_id', aircraft!.id);
+        .select('*').eq('aircraft_id', aircraft!.id).is('deleted_at', null);
       if (!data || data.length === 0) return null;
       const activeItems = data.filter((item: any) => {
         if (item.tracking_type === 'time') return item.due_time !== null && item.due_time !== undefined;

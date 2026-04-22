@@ -97,7 +97,8 @@ export default function MxTemplatePickerModal({ aircraft, show, onClose, onRefre
     const { data } = await supabase
       .from('aft_maintenance_items')
       .select('item_name')
-      .eq('aircraft_id', aircraft.id);
+      .eq('aircraft_id', aircraft.id)
+      .is('deleted_at', null);
     if (data) {
       setExistingItemNames(new Set(data.map((d: any) => d.item_name.toLowerCase().trim())));
     }
