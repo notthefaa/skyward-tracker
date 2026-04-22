@@ -215,7 +215,7 @@ export default function FleetSummary({
             <div key={ac.id} onClick={() => onSelectAircraft(ac.tail_number)} className={`bg-white shadow-md rounded-sm border-t-4 ${borderColor} overflow-hidden cursor-pointer hover:shadow-xl transition-all active:scale-[0.98] flex flex-col`}>
               <div className="flex justify-between items-center p-4 border-b border-gray-100 bg-gray-50">
                 <div className="flex items-center gap-4">
-                  {ac.avatar_url ? <img src={resolve(ac.avatar_url) || ac.avatar_url} alt="Avatar" className="w-12 h-12 object-cover rounded-full border-2 border-white shadow-sm" /> : <div className="w-12 h-12 rounded-full bg-slateGray flex items-center justify-center text-white shadow-sm"><PlaneTakeoff size={20}/></div>}
+                  {ac.avatar_url ? <img src={resolve(ac.avatar_url) || ac.avatar_url} alt="Avatar" width={48} height={48} loading="lazy" decoding="async" className="w-12 h-12 object-cover rounded-full border-2 border-white shadow-sm" /> : <div className="w-12 h-12 rounded-full bg-slateGray flex items-center justify-center text-white shadow-sm"><PlaneTakeoff size={20}/></div>}
                   <div>
                     <h3 className="font-oswald text-2xl font-bold text-navy leading-none uppercase">{ac.tail_number}</h3>
                     <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mt-1">{ac.aircraft_type}</p>

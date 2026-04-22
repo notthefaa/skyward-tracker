@@ -25,12 +25,23 @@ import { authFetch } from "@/lib/authFetch";
 
 const CACHE_TTL = 50 * 60 * 1000; // 50 min
 
+// Buckets that have been flipped to private. Only URLs belonging to
+// one of these buckets get signed — public-bucket URLs pass through
+// unchanged, skipping the /api/storage/sign round-trip entirely.
+// When a bucket is flipped to private, add its name here.
+const PRIVATE_BUCKETS = new Set<string>([]);
+
 // Module-level cache so multiple component instances share signed URLs.
 const cache = new Map<string, { signed: string; expiresAt: number }>();
 const pending = new Set<string>();
 let batchTimer: ReturnType<typeof setTimeout> | null = null;
 let batchQueue: string[] = [];
 const listeners = new Set<() => void>();
+
+function bucketFromPublicUrl(url: string): string | null {
+  const m = url.match(/\/storage\/v1\/object\/public\/([^/]+)\//);
+  return m ? m[1] : null;
+}
 
 function flushBatch() {
   batchTimer = null;
@@ -92,6 +103,14 @@ export function useSignedUrls(): (publicUrl: string | null | undefined) => strin
     if (!publicUrl) return null;
     // Only resolve Supabase Storage URLs; pass through external URLs.
     if (!publicUrl.includes('/storage/v1/object/public/')) return publicUrl;
+
+    // Skip signing for buckets that are still public — no reason to
+    // double-fetch when the public URL is the authoritative one. The
+    // `<img>` src swap from public → signed triggers a browser fetch
+    // abort + refetch, which is what causes avatar flicker and
+    // occasional load failures on slow networks.
+    const bucket = bucketFromPublicUrl(publicUrl);
+    if (!bucket || !PRIVATE_BUCKETS.has(bucket)) return publicUrl;
 
     const cached = cache.get(publicUrl);
     if (cached && cached.expiresAt > Date.now()) return cached.signed;

@@ -187,7 +187,7 @@ export default function AircraftModal({
       const croppedFile = await getCroppedImg();
       if (croppedFile) {
         try {
-          const compressed = await imageCompression(croppedFile, { maxSizeMB: 0.5, maxWidthOrHeight: 1200, useWebWorker: true });
+          const compressed = await imageCompression(croppedFile, { maxSizeMB: 0.2, maxWidthOrHeight: 800, useWebWorker: true });
           const fileName = `${newTail.toUpperCase()}_${Date.now()}`;
           const { data } = await supabase.storage.from('aft_aircraft_avatars').upload(fileName, compressed);
           if (data) {
