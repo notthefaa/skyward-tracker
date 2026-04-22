@@ -295,15 +295,25 @@ export default function ChecksTab({ aircraft, session, role, userInitials }: Pro
   // py-3, slightly smaller text (text-xs vs text-sm) only because
   // the column width under a 90px gauge can't accommodate the
   // full-size label + icon without wrapping.
-  const DialAction = ({ label, onPress }: { label: string; onPress: () => void }) => (
-    <button
-      type="button"
-      onClick={(e) => { e.stopPropagation(); onPress(); }}
-      className="bg-navy text-white font-oswald tracking-widest uppercase py-3 px-3 rounded hover:bg-opacity-90 active:scale-95 transition-all duration-150 ease-out flex items-center justify-center gap-2 text-xs whitespace-nowrap"
-    >
-      <Plus size={14} /> {label}
-    </button>
-  );
+  // Label splits into "Record" + remainder so mobile columns can stack
+  // the two words instead of overflowing the narrow grid cell.
+  const DialAction = ({ label, onPress }: { label: string; onPress: () => void }) => {
+    const [lead, ...rest] = label.split(' ');
+    const tail = rest.join(' ');
+    return (
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); onPress(); }}
+        className="bg-navy text-white font-oswald tracking-widest uppercase py-2 sm:py-3 px-3 rounded hover:bg-opacity-90 active:scale-95 transition-all duration-150 ease-out flex items-center justify-center gap-2 text-xs w-full"
+      >
+        <Plus size={14} className="flex-shrink-0" />
+        <span className="flex flex-col sm:flex-row sm:gap-1 items-center leading-tight">
+          <span>{lead}</span>
+          <span>{tail}</span>
+        </span>
+      </button>
+    );
+  };
 
   return (
     <div className="flex flex-col gap-2">
@@ -315,7 +325,7 @@ export default function ChecksTab({ aircraft, session, role, userInitials }: Pro
       <div className="mt-1">
         <div className="text-center mb-3">
           <span className="text-[9px] font-bold uppercase tracking-widest text-gray-400">
-            Tap a dial to jump
+            Tap a dial to view log
           </span>
         </div>
         <div className="grid grid-cols-3 gap-3 px-1 items-start">
