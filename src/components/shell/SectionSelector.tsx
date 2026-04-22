@@ -37,7 +37,7 @@ export default function SectionSelector({ items, selectedKey, onSelect, compact 
   const py = compact ? 'py-2' : 'py-3';
 
   return (
-    <div className="flex mb-4 border-b-2 border-gray-200 overflow-x-auto scrollbar-hide sticky top-0 z-10 bg-neutral-100">
+    <div className="flex mb-4 border-b-2 border-gray-200 overflow-x-auto scrollbar-hide sticky top-0 z-10 bg-neutral-100 -mt-4 pt-4">
       {items.map(it => {
         const active = it.key === selectedKey;
         const Icon = it.icon;
