@@ -172,11 +172,11 @@ export default function HowardLauncher({ currentAircraft, userFleet = [], sessio
 
       {open && (
         <div
-          className="fixed inset-0 z-[99999] bg-black/50 flex items-end md:items-center justify-center p-0 md:p-4 modal-overlay"
+          className="fixed inset-0 z-[99999] bg-black/50 flex items-center justify-center p-3 md:p-4 modal-overlay"
           onClick={() => setOpen(false)}
         >
           <div
-            className={`bg-white rounded-t-2xl md:rounded-xl shadow-2xl w-full md:max-w-md border-t-4 border-brandOrange flex flex-col ${
+            className={`bg-white rounded-2xl md:rounded-xl shadow-2xl w-full md:max-w-md border-t-4 border-brandOrange flex flex-col ${
               mode === 'chat' ? 'h-[85vh] md:h-[70vh]' : 'max-h-[85vh] overflow-y-auto'
             }`}
             onClick={e => e.stopPropagation()}
