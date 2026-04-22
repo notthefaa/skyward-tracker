@@ -697,7 +697,7 @@ export default function AppShell({ session }: AppShellProps) {
       <PullIndicator pullProgress={pullProgress} phase={pullPhase} />
 
       <main
-        className="fixed left-0 right-0 overflow-y-auto bg-neutral-100 p-4 flex justify-center w-full"
+        className="fixed left-0 right-0 overflow-y-auto bg-neutral-100 flex justify-center w-full"
         style={{
           touchAction: 'manipulation',
           overscrollBehaviorY: 'contain',
@@ -707,7 +707,7 @@ export default function AppShell({ session }: AppShellProps) {
         }}
         {...pullHandlers}
       >
-        <div className="w-full max-w-3xl flex flex-col gap-6">
+        <div className="w-full max-w-3xl flex flex-col gap-6 p-4">
           {!isDataLoaded ? (
             activeTab === 'fleet' ? <FleetSkeleton /> : <SummarySkeleton />
           ) : aircraftList.length === 0 ? (
