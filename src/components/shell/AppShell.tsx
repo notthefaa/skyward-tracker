@@ -406,11 +406,16 @@ export default function AppShell({ session }: AppShellProps) {
   }, [activeTab]);
 
   // ─── Enrich active aircraft metrics + refresh status when tail changes ───
+  // activeTab is in the dep list so in-app navigation re-runs
+  // checkGroundedStatus — otherwise the header status dot goes stale
+  // whenever MX/squawk mutations happen in another tab but the user
+  // never changes tail. enrichSingleAircraft is guarded and fetchUnreadNotes
+  // is cheap, so re-running them on tab switch is harmless and keeps the
+  // unread-notes count fresh too.
   useEffect(() => {
     if (activeTail && allAircraftList.length > 0 && session) {
       const ac = allAircraftList.find(a => a.tail_number === activeTail);
       if (ac) {
-        // Lazy-load metrics for the active aircraft if not yet computed
         if (ac.burnRate === 0 && ac.confidenceScore === 0) {
           enrichSingleAircraft(ac.id);
         }
@@ -418,7 +423,7 @@ export default function AppShell({ session }: AppShellProps) {
       checkGroundedStatus(activeTail);
       fetchUnreadNotes(activeTail, session.user.id);
     }
-  }, [activeTail, allAircraftList.length, session]);
+  }, [activeTail, allAircraftList.length, session, activeTab]);
 
   // ─── Helpers ───
   const handleInitialFetch = async (userId: string) => {
@@ -510,7 +515,19 @@ export default function AppShell({ session }: AppShellProps) {
   const handleLogout = async () => {
     dataFetchTriggeredRef.current = false;
     setActiveTab('fleet');
-    await supabase.auth.signOut();
+    try {
+      // scope: 'local' clears the local session synchronously without
+      // waiting on a server round-trip. The default 'global' scope
+      // revokes every session server-side, which can hang on flaky
+      // mobile data and leaves the user staring at a dead button.
+      // The SWR cache wipe below prevents stale aircraft/squawk data
+      // from bleeding into the next login on the same device.
+      await supabase.auth.signOut({ scope: 'local' });
+      globalMutate(() => true, undefined, { revalidate: false });
+    } catch (err: any) {
+      console.error('Logout failed:', err);
+      showError("Couldn't log out cleanly — reload the page to finish signing out.");
+    }
   };
 
   const openAircraftForm = (ac: AircraftWithMetrics | null = null) => {
