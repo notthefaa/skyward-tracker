@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useToast } from "@/components/ToastProvider";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { supabase } from "@/lib/supabase";
@@ -8,7 +8,7 @@ import { INPUT_WHITE_BG } from "@/lib/styles";
 import { swrKeys } from "@/lib/swrKeys";
 import type { AircraftWithMetrics, SystemSettings, AircraftRole, MxSubTab } from "@/lib/types";
 import useSWR from "swr";
-import { Wrench, Trash2, Plus, X, Edit2, Calendar, Send, ExternalLink, ChevronRight, HelpCircle, AlertTriangle, Download, Layers, Settings, ClipboardList, ShieldAlert } from "lucide-react";
+import { Wrench, Trash2, Plus, X, Edit2, Calendar, Send, ExternalLink, ChevronRight, HelpCircle, AlertTriangle, Download, Layers, Settings, ClipboardList, ShieldAlert, Camera, Loader2 } from "lucide-react";
 import { PrimaryButton } from "@/components/AppButtons";
 import { useModalScrollLock } from "@/hooks/useModalScrollLock";
 import ServiceEventModal from "@/components/modals/ServiceEventModal";
@@ -95,6 +95,12 @@ export default function MaintenanceTab({
   const [confirmResendId, setConfirmResendId] = useState<string | null>(null);
   const [resendingEventId, setResendingEventId] = useState<string | null>(null);
   const [isExportingMx, setIsExportingMx] = useState(false);
+  // Scan-from-logbook state for the "Track New Item" flow. Kept
+  // separate from the MX-event completion scan so neither flow
+  // steps on the other.
+  const [isScanningNewItem, setIsScanningNewItem] = useState(false);
+  const [scanPrefillHint, setScanPrefillHint] = useState<string | null>(null);
+  const scanNewItemInputRef = useRef<HTMLInputElement | null>(null);
 
   // Reset modal + editing state when the aircraft changes — otherwise
   // a partially-edited MX row from Aircraft A would land on Aircraft
@@ -111,6 +117,8 @@ export default function MaintenanceTab({
     setMxName(''); setMxLastTime(''); setMxIntervalTime(''); setMxDueTime('');
     setMxLastDate(''); setMxIntervalDays(''); setMxDueDate('');
     setAutomateScheduling(false);
+    setIsScanningNewItem(false);
+    setScanPrefillHint(null);
   }, [aircraft?.id]);
 
   useModalScrollLock(showMxModal || !!confirmResendId);
@@ -214,7 +222,50 @@ export default function MaintenanceTab({
       setMxLastDate(""); setMxIntervalDays(""); setMxDueDate("");
       setAutomateScheduling(false);
     }
+    setScanPrefillHint(null);
     setShowMxModal(true);
+  };
+
+  // Scan a logbook entry and prefill the "Track New Item" form.
+  // Only overwrites blank text inputs, so if the pilot has already
+  // typed something we keep their version. Tracking type + required
+  // flag are authoritative from the scan since they're classifications
+  // rather than free text.
+  const handleScanForNewItem = async (file: File) => {
+    if (!aircraft) return;
+    setIsScanningNewItem(true);
+    try {
+      const formData = new FormData();
+      formData.append('image', file);
+      formData.append('aircraftId', aircraft.id);
+      const res = await authFetch('/api/maintenance-items/scan-logentry', { method: 'POST', body: formData });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || 'Scan failed');
+      }
+      const { fields, warning } = await res.json();
+      if (warning) { showWarning(warning); return; }
+
+      if (fields.item_name && !mxName) setMxName(fields.item_name);
+      if (fields.tracking_type && ['time', 'date', 'both'].includes(fields.tracking_type)) {
+        setMxTrackingType(fields.tracking_type);
+      }
+      if (typeof fields.is_required === 'boolean') setMxIsRequired(fields.is_required);
+      if (fields.last_completed_time != null && !mxLastTime) setMxLastTime(String(fields.last_completed_time));
+      if (fields.last_completed_date && !mxLastDate) setMxLastDate(fields.last_completed_date);
+      if (fields.time_interval != null && !mxIntervalTime) setMxIntervalTime(String(fields.time_interval));
+      if (fields.date_interval_days != null && !mxIntervalDays) setMxIntervalDays(String(fields.date_interval_days));
+
+      const hint = fields.work_description
+        ? `Prefilled from scan — ${fields.work_description}`
+        : 'Prefilled from scan — review every field before saving.';
+      setScanPrefillHint(hint);
+      showSuccess('Logbook entry scanned — review the fields before saving.');
+    } catch (err: any) {
+      showError("Scan didn't work: " + (err?.message || 'unknown error'));
+    } finally {
+      setIsScanningNewItem(false);
+    }
   };
 
   const handleManualMxTrigger = (item: any) => {
@@ -532,6 +583,37 @@ export default function MaintenanceTab({
                   <button onClick={() => setShowMxModal(false)} className="text-gray-400 hover:text-danger transition-colors"><X size={24}/></button>
                 </div>
                 <form onSubmit={submitMxItem} className="space-y-4">
+                  {!editingId && (
+                    <div className="bg-purple-50 border border-purple-200 rounded p-3">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <button
+                          type="button"
+                          onClick={() => scanNewItemInputRef.current?.click()}
+                          disabled={isScanningNewItem}
+                          className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-widest text-[#7C3AED] bg-white border border-purple-300 rounded px-3 py-2 hover:bg-purple-100 active:scale-95 disabled:opacity-50 transition-all"
+                        >
+                          {isScanningNewItem
+                            ? <><Loader2 size={12} className="animate-spin" /> Scanning...</>
+                            : <><Camera size={12} /> Scan from logbook</>}
+                        </button>
+                        <span className="text-[10px] text-purple-900/70 flex-1 min-w-0">Snap a logbook entry — we&apos;ll classify the work and prefill the fields below.</span>
+                        <input
+                          ref={scanNewItemInputRef}
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp"
+                          className="hidden"
+                          onChange={e => {
+                            const f = e.target.files?.[0];
+                            if (f) handleScanForNewItem(f);
+                            e.target.value = '';
+                          }}
+                        />
+                      </div>
+                      {scanPrefillHint && (
+                        <p className="text-[10px] text-purple-900/80 italic mt-2 leading-tight">{scanPrefillHint}</p>
+                      )}
+                    </div>
+                  )}
                   <div className="grid grid-cols-3 gap-3">
                     <div className="col-span-2 min-w-0"><label className="text-[10px] font-bold uppercase tracking-widest text-navy block truncate">Item Name *</label><input type="text" required value={mxName} onChange={e=>setMxName(e.target.value)} style={INPUT_WHITE_BG} className="w-full min-w-0 border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none" placeholder="e.g. Annual Inspection" /></div>
                     <div className="min-w-0"><label className="text-[10px] font-bold uppercase tracking-widest text-navy block truncate">Required?</label><select value={mxIsRequired ? "yes" : "no"} onChange={e=>setMxIsRequired(e.target.value === "yes")} style={INPUT_WHITE_BG} className="w-full min-w-0 border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none"><option value="yes">Yes</option><option value="no">Optional</option></select></div>
