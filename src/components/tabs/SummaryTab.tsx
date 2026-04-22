@@ -14,7 +14,7 @@ import { PlaneTakeoff, MapPin, Droplet, Phone, Mail, Wrench, AlertTriangle, File
 import { PrimaryButton } from "@/components/AppButtons";
 import { useToast } from "@/components/ToastProvider";
 import { useModalScrollLock } from "@/hooks/useModalScrollLock";
-import { useSignedUrls } from "@/hooks/useSignedUrls";
+import { AircraftAvatarImg } from "@/components/AircraftAvatarImg";
 
 export default function SummaryTab({
   aircraft, setActiveTab, onNavigateToSquawks, role, aircraftRole, onDeleteAircraft, sysSettings, onEditAircraft, refreshData, session, aircraftStatus
@@ -161,7 +161,6 @@ export default function SummaryTab({
   const [removingUserId, setRemovingUserId] = useState<string | null>(null);
   const [isCrewUpdating, setIsCrewUpdating] = useState(false);
   const { showSuccess, showError } = useToast();
-  const resolve = useSignedUrls();
   useModalScrollLock(showDeleteModal || showFuelModal || showInviteModal || showNoteModal);
 
   const handleFuelUpdate = async (e: React.FormEvent) => {
@@ -317,7 +316,7 @@ export default function SummaryTab({
       {/* Hero section */}
       <div className="bg-white shadow-lg rounded-sm overflow-hidden">
         <div className="relative bg-slateGray flex items-center justify-center" style={{ aspectRatio: '16/9' }}>
-          {aircraft.avatar_url ? <img src={resolve(aircraft.avatar_url) || aircraft.avatar_url} alt="Aircraft Avatar" loading="eager" decoding="async" className="w-full h-full object-cover" /> : <PlaneTakeoff size={64} className="text-white/20" />}
+          {aircraft.avatar_url ? <AircraftAvatarImg publicUrl={aircraft.avatar_url} alt="Aircraft Avatar" loading="eager" className="w-full h-full object-cover" /> : <PlaneTakeoff size={64} className="text-white/20" />}
           {canEdit && (
             <div className="absolute top-4 right-4 flex flex-col gap-2 z-10">
               <button onClick={() => setShowInviteModal(true)} className="bg-info text-white p-2.5 rounded-full shadow-[0_4px_10px_rgba(0,0,0,0.5)] hover:bg-blue-600 active:scale-95 transition-all" title="Invite Pilot"><UserPlus size={18} /></button>
