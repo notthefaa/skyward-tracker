@@ -17,12 +17,12 @@ export const tools: Anthropic.Tool[] = [
   },
   {
     name: 'get_maintenance_items',
-    description: 'Retrieve maintenance tracking items for the named aircraft. Returns item name, tracking type (time/date), intervals, due time/date, required status, and completion history.',
+    description: 'Retrieve maintenance tracking items for the named aircraft. Returns item name, tracking type (time/date/both), intervals, due time/date, required status, and completion history. tracking_type="both" = dual-tracked items (annuals: due on calendar date OR hours, whichever first).',
     input_schema: {
       type: 'object' as const,
       properties: {
         tail: { type: 'string', description: 'Aircraft tail number.' },
-        tracking_type: { type: 'string', enum: ['time', 'date'], description: 'Filter by tracking type' },
+        tracking_type: { type: 'string', enum: ['time', 'date', 'both'], description: 'Filter by tracking type. "both" = dual-tracked items like annuals (due on hours OR calendar date).' },
         required_only: { type: 'boolean', description: 'Only return required/regulatory items' },
       },
       required: ['tail'],
@@ -118,7 +118,7 @@ export const tools: Anthropic.Tool[] = [
   },
   {
     name: 'get_tire_and_oil_logs',
-    description: 'Retrieve tire pressure checks and/or oil consumption logs for the named aircraft. Tire: nose/left/right PSI. Oil: quantity, amount added, engine hours.',
+    description: 'Retrieve tire pressure checks and/or oil consumption logs for the named aircraft. Tire: nose/left/right PSI. Oil: each log has `level_before_add` (dipstick reading BEFORE the top-off), `oil_added` (null/0 for a routine level check), `level_after_add` (derived end-state = before + added), and `engine_hours`. Oil results also include a `consumption_status` block with { level: red|orange|green|gray, hours_since_last_add, howard_message, ui_warning } — when level is orange or red, surface the warning in your reply.',
     input_schema: {
       type: 'object' as const,
       properties: {

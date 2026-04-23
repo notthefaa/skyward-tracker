@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { requireAuth, handleApiError } from '@/lib/auth';
 import { checkRateLimit } from '@/lib/howard/rateLimit';
 import { sendMessageStream, HOWARD_MODEL } from '@/lib/howard/claude';
+import { getOilConsumptionStatus, hoursSinceLastOilAdd, type OilConsumptionStatus } from '@/lib/oilConsumption';
+import { getRequestId, logError } from '@/lib/requestId';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -97,6 +99,7 @@ export async function GET(req: Request) {
 
 // POST — send a message to Howard (streamed SSE response)
 export async function POST(req: Request) {
+  const requestId = getRequestId(req);
   try {
     const { user, supabaseAdmin } = await requireAuth(req);
     const { message, currentTail, previousTail, timeZone, onboardingMode } = await req.json();
@@ -164,6 +167,7 @@ export async function POST(req: Request) {
     const pilotInitials: string = (profile as any)?.initials || '';
     const pilotFullName: string = (profile as any)?.full_name || '';
     let aircraftRole: string | null = null;
+    let oilConsumption: OilConsumptionStatus | null = null;
     if (currentAircraft) {
       const { data: acAccess } = await supabaseAdmin
         .from('aft_user_aircraft_access')
@@ -175,6 +179,23 @@ export async function POST(req: Request) {
       if (userRole !== 'admin' && aircraftRole) {
         userRole = aircraftRole;
       }
+
+      // Proactive oil-consumption flag — same signal as the Ops Checks
+      // dial. Surfacing it in Howard's per-request context means he'll
+      // mention orange/red states when the pilot asks about the plane,
+      // not just when he happens to pull the oil log.
+      const { data: lastAddRow } = await supabaseAdmin
+        .from('aft_oil_logs')
+        .select('engine_hours')
+        .eq('aircraft_id', currentAircraft.id)
+        .is('deleted_at', null)
+        .gt('oil_added', 0)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      const currentHrs = (currentAircraft as any)?.total_engine_time ?? null;
+      const hrsSince = hoursSinceLastOilAdd((lastAddRow as any)?.engine_hours ?? null, currentHrs);
+      oilConsumption = getOilConsumptionStatus(hrsSince);
     }
 
     // Only flag a switch when the client's previousTail is different
@@ -249,6 +270,7 @@ export async function POST(req: Request) {
             onboardingMode === true,
             switchedFromTail,
             aircraftRole,
+            oilConsumption,
           )) {
             if (ev.type === 'complete') {
               assistantText = ev.assistantText;
@@ -289,6 +311,20 @@ export async function POST(req: Request) {
           controller.close();
         } catch (err: any) {
           clearInterval(heartbeat);
+          // Inner-catch errors (Anthropic stream failure, tool crash,
+          // DB write after partial stream, etc.) never reach the outer
+          // `handleApiError` because the HTTP response has already
+          // started — they were invisible in prod prior to this log.
+          logError('[Howard stream failed]', err, {
+            requestId,
+            route: '/api/howard',
+            userId: user.id,
+            extra: {
+              had_partial_stream: streamedSoFar.trim().length > 0,
+              onboarding_mode: onboardingMode === true,
+              current_tail: typeof currentTail === 'string' ? currentTail : '',
+            },
+          });
           const reason = err?.message || 'Stream failed';
           const partial = streamedSoFar.trim();
           const content = partial

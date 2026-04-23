@@ -5,6 +5,8 @@ import { computeAirworthinessStatus } from '@/lib/airworthiness';
 import { syncAdsForAircraft } from '@/lib/drs';
 import { logEvent } from '@/lib/requestId';
 import { isIsoDate, isIsoDateTime, parseFiniteNumber } from '@/lib/validation';
+import { getOilConsumptionStatus, hoursSinceLastOilAdd } from '@/lib/oilConsumption';
+import { NETWORK_TIMEOUT_MS } from '@/lib/constants';
 import { proposeAction, type ActionType } from './proposedActions';
 
 // Allow-list for aft_aircraft_equipment.category. Must match the
@@ -311,8 +313,29 @@ const handlers: Record<string, ToolHandler> = {
         .order('created_at', { ascending: false })
         .limit(limit);
       if (error) return { error: error.message };
-      result.oil_logs = data;
+
+      // Each log stores the pre-add dipstick reading in `oil_qty` plus
+      // the amount added (null for level checks). Derive the post-add
+      // state here so Howard doesn't have to do the arithmetic in his
+      // head — he surfaces the end-state cleanly when the pilot asks.
+      result.oil_logs = (data || []).map((l: any) => ({
+        ...l,
+        level_before_add: l.oil_qty,
+        level_after_add: (l.oil_qty ?? 0) + (l.oil_added ?? 0),
+      }));
       result.oil_count = (data || []).length;
+
+      // Consumption status — the same "hours since last add" signal the
+      // Ops Checks dial uses. Howard MUST flag orange/red in his reply
+      // (see system prelude "Oil consumption" rule).
+      const { data: ac } = await sb.from('aft_aircraft')
+        .select('total_engine_time')
+        .eq('id', aircraftId)
+        .maybeSingle();
+      const currentHrs = (ac as any)?.total_engine_time ?? null;
+      const lastAdd = (data || []).find((l: any) => (l.oil_added ?? 0) > 0) || null;
+      const hrsSince = hoursSinceLastOilAdd(lastAdd?.engine_hours ?? null, currentHrs);
+      result.consumption_status = getOilConsumptionStatus(hrsSince);
     }
 
     return result;
@@ -374,20 +397,38 @@ const handlers: Record<string, ToolHandler> = {
     if (!params.query || typeof params.query !== 'string') return { error: 'Search query is required.' };
     try {
       const client = tavily({ apiKey: process.env.TAVILY_API_KEY! });
-      const response = await client.search(params.query, {
-        maxResults: 5,
-        searchDepth: 'basic',
-        includeAnswer: true,
-      });
+      // `advanced` depth pulls richer page content and ranks more
+      // aggressively than `basic`. Destination queries ("fly-in
+      // breakfast within 200mi of KVNY") were returning too few + too
+      // shallow results on basic — Howard would latch onto whatever
+      // listicle ranked first, missing closer and more popular spots.
+      // Tavily's SDK doesn't expose an AbortSignal, so we race the
+      // search against a hard deadline — a hung upstream otherwise
+      // holds the Howard round open until Vercel's maxDuration kills
+      // the whole response.
+      const response = await Promise.race([
+        client.search(params.query, {
+          maxResults: 10,
+          searchDepth: 'advanced',
+          includeAnswer: true,
+        }),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('web_search_timeout')), NETWORK_TIMEOUT_MS),
+        ),
+      ]) as any;
       return {
         answer: response.answer || null,
         results: (response.results || []).map((r: any) => ({
           title: r.title,
           url: r.url,
-          content: r.content?.slice(0, 500),
+          content: r.content?.slice(0, 800),
         })),
       };
     } catch (err: any) {
+      if (err?.message === 'web_search_timeout') {
+        logEvent('howard_web_search_timeout', { query_len: params.query.length });
+        return { error: `Web search timed out after ${Math.round(NETWORK_TIMEOUT_MS / 1000)}s. Try a narrower query or tell the user search is slow right now.` };
+      }
       return { error: `Web search failed: ${err.message}` };
     }
   },

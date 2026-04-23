@@ -254,6 +254,22 @@ export default function HowardTab({
     const abortController = new AbortController();
     streamAbortRef.current = abortController;
 
+    // Watchdog state — tracked across the whole send so the finally
+    // block can always clean up regardless of where we exit.
+    // - preStreamTimer: fires if fetch() never returns headers (10s).
+    //   The classic failure mode is an ad blocker or tracking-
+    //   protection extension silently dropping the POST.
+    // - stallTimer: fires if the reader receives no bytes for 20s
+    //   (server emits a heartbeat every 15s, so this gives a full
+    //   heartbeat-cycle of slack before we flag a stall).
+    // Both paths abort via abortController and stamp a reason on
+    // stalledRef so the catch block surfaces the right message.
+    const PRE_STREAM_TIMEOUT_MS = 10_000;
+    const STREAM_STALL_MS = 20_000;
+    const stalledRef = { current: null as null | 'preStream' | 'stall' };
+    let preStreamTimer: ReturnType<typeof setTimeout> | null = null;
+    let stallTimer: ReturnType<typeof setInterval> | null = null;
+
     try {
       const { data: { session: s } } = await supabase.auth.getSession();
       // Send the pilot's IANA timezone so Howard can resolve relative
@@ -266,6 +282,11 @@ export default function HowardTab({
       const previousTail = acknowledgedTail && currentAircraft?.tail_number && acknowledgedTail !== currentAircraft.tail_number
         ? acknowledgedTail
         : null;
+      preStreamTimer = setTimeout(() => {
+        stalledRef.current = 'preStream';
+        abortController.abort();
+      }, PRE_STREAM_TIMEOUT_MS);
+
       const res = await fetch('/api/howard', {
         method: 'POST',
         headers: {
@@ -281,6 +302,9 @@ export default function HowardTab({
         }),
         signal: abortController.signal,
       });
+      // Headers came back — cancel the pre-stream timer so a slow
+      // tool round doesn't later get mis-flagged as an ad-blocker hang.
+      if (preStreamTimer) { clearTimeout(preStreamTimer); preStreamTimer = null; }
       // Anchor the new tail so next message doesn't re-raise the flag.
       if (currentAircraft?.tail_number) setAcknowledgedTail(currentAircraft.tail_number);
 
@@ -292,10 +316,23 @@ export default function HowardTab({
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
+      let lastByteAt = Date.now();
+
+      // Stall watchdog — runs for the life of the reader loop. Server
+      // SSE heartbeats land every 15s, so a 20s-silent reader is a real
+      // stall (dropped mid-stream, ad blocker filtering event-stream,
+      // upstream hang past Anthropic's own timeout).
+      stallTimer = setInterval(() => {
+        if (Date.now() - lastByteAt > STREAM_STALL_MS) {
+          stalledRef.current = 'stall';
+          abortController.abort();
+        }
+      }, 2_000);
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
+        lastByteAt = Date.now();
         buffer += decoder.decode(value, { stream: true });
 
         const parts = buffer.split('\n\n');
@@ -373,11 +410,22 @@ export default function HowardTab({
       // If Howard created any proposed actions, pick them up for the cards.
       mutateActions();
     } catch (err: any) {
-      // Intentional abort (unmount / nav away) isn't a user-facing error.
-      if (err?.name === 'AbortError' || abortController.signal.aborted) {
+      // Watchdog-triggered abort: distinguish pre-stream (ad blocker /
+      // extension dropping the POST) from mid-stream stall, and show a
+      // pointed message so the user has something actionable.
+      if (stalledRef.current === 'preStream') {
+        showError("Couldn't reach Howard. A tracking-protection extension or ad blocker may be blocking the request — try disabling it for this site, or try again.");
         return;
       }
-      showError(err.message);
+      if (stalledRef.current === 'stall') {
+        showError('Howard went quiet mid-reply. That usually means a network stall or an extension filtering the event stream — try again.');
+        // Fall through so partial text below is preserved.
+      } else if (err?.name === 'AbortError' || abortController.signal.aborted) {
+        // Intentional abort (unmount / nav away) isn't a user-facing error.
+        return;
+      } else {
+        showError(err.message);
+      }
       // Preserve whatever text already streamed so the user doesn't lose
       // the reply when the connection drops mid-response.
       const partial = accumulated.trim();
@@ -407,6 +455,11 @@ export default function HowardTab({
         }, false);
       });
     } finally {
+      // Always tear down the watchdogs — otherwise a lingering
+      // setInterval keeps firing and a later pre-stream timer would
+      // abort the NEXT send by accident.
+      if (preStreamTimer) clearTimeout(preStreamTimer);
+      if (stallTimer) clearInterval(stallTimer);
       // Only clear the ref if this is still the active controller — a
       // later send may have overwritten it already.
       if (streamAbortRef.current === abortController) {

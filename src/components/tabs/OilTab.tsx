@@ -13,6 +13,14 @@ const whiteBg = { backgroundColor: '#ffffff' } as const;
 const PAGE_SIZE = 10;
 
 // ─── SVG Oil Consumption Chart ───
+//
+// Each entry is logged with the PRE-add dipstick reading (`oil_qty`)
+// + optional `oil_added`. The post-add level is `oil_qty + oil_added`
+// — what the sump held after service. To honestly represent the
+// consumption curve, we draw a service-jump segment on every add
+// day: down to pre-add, vertical up to post-add, then back to the
+// next entry's pre-add. A line that skipped the jump would understate
+// real consumption between adds.
 
 function OilChart({ entries }: { entries: OilLog[] }) {
   if (entries.length < 2) return (
@@ -28,17 +36,28 @@ function OilChart({ entries }: { entries: OilLog[] }) {
   const PAD_T = 10;
   const PAD_B = 20;
 
+  // Expand each entry into 1 or 2 points so the chart can connect
+  // pre-add → post-add as a vertical "service jump" on add days.
+  const expanded = entries.flatMap(e => {
+    const pre = { hrs: e.engine_hours, qty: e.oil_qty, kind: 'pre' as const, added: e.oil_added ?? 0 };
+    if ((e.oil_added ?? 0) > 0) {
+      return [pre, { hrs: e.engine_hours, qty: e.oil_qty + (e.oil_added as number), kind: 'post' as const, added: e.oil_added ?? 0 }];
+    }
+    return [pre];
+  });
+
+  const allQtys = expanded.map(p => p.qty);
   const minHrs = Math.min(...entries.map(e => e.engine_hours));
   const maxHrs = Math.max(...entries.map(e => e.engine_hours));
-  const minQty = Math.min(...entries.map(e => e.oil_qty));
-  const maxQty = Math.max(...entries.map(e => e.oil_qty));
+  const minQty = Math.min(...allQtys);
+  const maxQty = Math.max(...allQtys);
   const qtyRange = maxQty - minQty || 1;
   const hrsRange = maxHrs - minHrs || 1;
 
   const scaleX = (hrs: number) => PAD_L + ((hrs - minHrs) / hrsRange) * (W - PAD_L - PAD_R);
   const scaleY = (qty: number) => PAD_T + ((maxQty - qty) / qtyRange) * (H - PAD_T - PAD_B);
 
-  const points = entries.map(e => ({ x: scaleX(e.engine_hours), y: scaleY(e.oil_qty), added: (e.oil_added ?? 0) > 0, qty: e.oil_qty, hrs: e.engine_hours }));
+  const points = expanded.map(p => ({ ...p, x: scaleX(p.hrs), y: scaleY(p.qty) }));
   const pathD = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ');
 
   // Y-axis ticks (3-4 values)
@@ -47,6 +66,12 @@ function OilChart({ entries }: { entries: OilLog[] }) {
   for (let v = Math.floor(minQty); v <= Math.ceil(maxQty); v += yStep) {
     yTicks.push(v);
   }
+
+  // X-axis labels: first + last entry (use entries, not expanded, so
+  // we don't label duplicates at the same engine-hour for add days).
+  const xLabelPoints = entries
+    .filter((_, i) => i === 0 || i === entries.length - 1 || entries.length <= 5)
+    .map(e => ({ x: scaleX(e.engine_hours), hrs: e.engine_hours }));
 
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-36" preserveAspectRatio="xMidYMid meet">
@@ -59,19 +84,21 @@ function OilChart({ entries }: { entries: OilLog[] }) {
       ))}
 
       {/* X-axis labels */}
-      {points.filter((_, i) => i === 0 || i === points.length - 1 || points.length <= 5).map((p, i) => (
+      {xLabelPoints.map((p, i) => (
         <text key={i} x={p.x} y={H - 4} textAnchor="middle" fill="#9CA3AF" fontSize="6.5" fontFamily="Roboto, sans-serif">{p.hrs.toFixed(0)}h</text>
       ))}
 
-      {/* Line */}
+      {/* Consumption line — walks pre → post on add days so the
+       * vertical jump is visible, then continues to next entry. */}
       <path d={pathD} fill="none" stroke="#CE3732" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
 
-      {/* Data points */}
+      {/* Data points — red dot for pre-add / level reading, green dot
+       * + "+Xqt" label for post-add. */}
       {points.map((p, i) => (
         <g key={i}>
-          <circle cx={p.x} cy={p.y} r={p.added ? 3 : 2} fill={p.added ? '#56B94A' : '#CE3732'} />
-          {p.added && (
-            <text x={p.x} y={p.y - 5} textAnchor="middle" fill="#56B94A" fontSize="6" fontWeight="bold">+</text>
+          <circle cx={p.x} cy={p.y} r={p.kind === 'post' ? 3 : 2} fill={p.kind === 'post' ? '#56B94A' : '#CE3732'} />
+          {p.kind === 'post' && (
+            <text x={p.x} y={p.y - 5} textAnchor="middle" fill="#56B94A" fontSize="6" fontWeight="bold">+{p.added}qt</text>
           )}
         </g>
       ))}
@@ -222,8 +249,8 @@ export default function OilTab({
             <OilChart entries={chartEntries || []} />
           </div>
           <div className="flex items-center gap-4 mt-1.5 justify-center">
-            <span className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-widest text-gray-400"><span className="inline-block w-2 h-2 rounded-full bg-danger"></span> Oil Level</span>
-            <span className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-widest text-gray-400"><span className="inline-block w-2 h-2 rounded-full bg-[#56B94A]"></span> Oil Added</span>
+            <span className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-widest text-gray-400"><span className="inline-block w-2 h-2 rounded-full bg-danger"></span> Before Add</span>
+            <span className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-widest text-gray-400"><span className="inline-block w-2 h-2 rounded-full bg-[#56B94A]"></span> After Add</span>
           </div>
         </div>
 
@@ -240,32 +267,37 @@ export default function OilTab({
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="border-b-2 border-navy text-[10px] font-bold uppercase tracking-widest text-gray-500">
-                {['Date', 'PIC', 'Qty', 'Added', 'Eng Hrs', 'Notes', ...(isAdmin ? [''] : [])].map(h => (
+                {['Date', 'PIC', 'Before', 'Added', 'After', 'Eng Hrs', 'Notes', ...(isAdmin ? [''] : [])].map(h => (
                   <th key={h} className="pb-2 pr-4 whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="text-xs font-roboto text-navy">
               {oilLogs.length === 0 && (
-                <tr><td colSpan={7} className="text-center text-gray-400 py-8">No oil logs yet.</td></tr>
+                <tr><td colSpan={8} className="text-center text-gray-400 py-8">No oil logs yet.</td></tr>
               )}
-              {oilLogs.map((l, i) => (
-                <tr key={l.id} className="border-b border-gray-200 hover:bg-blue-50/50 transition-colors">
-                  <td className="py-3 pr-4 whitespace-nowrap">{new Date(l.created_at).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: '2-digit' })}</td>
-                  <td className="py-3 pr-4 whitespace-nowrap font-bold">{l.initials}</td>
-                  <td className="py-3 pr-4 whitespace-nowrap">{l.oil_qty} qt</td>
-                  <td className="py-3 pr-4 whitespace-nowrap">{l.oil_added ? <span className="text-[#56B94A] font-bold">+{l.oil_added} qt</span> : '—'}</td>
-                  <td className="py-3 pr-4 whitespace-nowrap">{l.engine_hours.toFixed(1)}</td>
-                  <td className="py-3 pr-4 max-w-[120px] truncate text-gray-500">{l.notes || '—'}</td>
-                  {isAdmin && (
-                    <td className="py-3 text-right">
-                      {page === 1 && i === 0 && (
-                        <button onClick={() => handleDelete(l)} className="text-gray-400 hover:text-danger transition-colors"><Trash2 size={14} /></button>
-                      )}
-                    </td>
-                  )}
-                </tr>
-              ))}
+              {oilLogs.map((l, i) => {
+                const hasAdd = (l.oil_added ?? 0) > 0;
+                const after = hasAdd ? l.oil_qty + (l.oil_added as number) : null;
+                return (
+                  <tr key={l.id} className="border-b border-gray-200 hover:bg-blue-50/50 transition-colors">
+                    <td className="py-3 pr-4 whitespace-nowrap">{new Date(l.created_at).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: '2-digit' })}</td>
+                    <td className="py-3 pr-4 whitespace-nowrap font-bold">{l.initials}</td>
+                    <td className="py-3 pr-4 whitespace-nowrap">{l.oil_qty} qt</td>
+                    <td className="py-3 pr-4 whitespace-nowrap">{hasAdd ? <span className="text-[#56B94A] font-bold">+{l.oil_added} qt</span> : '—'}</td>
+                    <td className="py-3 pr-4 whitespace-nowrap">{after != null ? <span className="font-bold">{after.toFixed(1)} qt</span> : '—'}</td>
+                    <td className="py-3 pr-4 whitespace-nowrap">{l.engine_hours.toFixed(1)}</td>
+                    <td className="py-3 pr-4 max-w-[120px] truncate text-gray-500">{l.notes || '—'}</td>
+                    {isAdmin && (
+                      <td className="py-3 text-right">
+                        {page === 1 && i === 0 && (
+                          <button onClick={() => handleDelete(l)} className="text-gray-400 hover:text-danger transition-colors"><Trash2 size={14} /></button>
+                        )}
+                      </td>
+                    )}
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -292,14 +324,22 @@ export default function OilTab({
               <form onSubmit={handleSubmit} className="flex flex-col gap-4">
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1 block">Oil Level (qt)</label>
+                    <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1 block">Oil Before Add (qt)</label>
                     <input type="number" step="0.5" min="0" value={oilQty} onChange={e => setOilQty(e.target.value)} className="w-full rounded p-3 text-sm border border-gray-300 focus:border-danger outline-none" style={whiteBg} required />
                   </div>
                   <div>
                     <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1 block">Oil Added (qt)</label>
-                    <input type="number" step="0.5" min="0" value={oilAdded} onChange={e => setOilAdded(e.target.value)} placeholder="Optional" className="w-full rounded p-3 text-sm border border-gray-300 focus:border-danger outline-none" style={whiteBg} />
+                    <input type="number" step="0.5" min="0" value={oilAdded} onChange={e => setOilAdded(e.target.value)} placeholder="Leave blank for level check" className="w-full rounded p-3 text-sm border border-gray-300 focus:border-danger outline-none" style={whiteBg} />
                   </div>
                 </div>
+                <p className="text-[10px] text-gray-500 italic leading-snug -mt-2">
+                  Log the dipstick reading <em>before</em> pouring anything in. Leave &ldquo;Oil Added&rdquo; blank for a routine level check — we&rsquo;ll compute the end-state automatically when you top her off.
+                  {oilQty && oilAdded && Number(oilQty) >= 0 && Number(oilAdded) > 0 && (
+                    <span className="block mt-1 not-italic text-navy">
+                      End state after service: <span className="font-bold">{(Number(oilQty) + Number(oilAdded)).toFixed(1)} qt</span>
+                    </span>
+                  )}
+                </p>
                 <div>
                   <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1 block">Engine Hours</label>
                   <input type="number" step="0.1" min="0" value={engineHours} onChange={e => setEngineHours(e.target.value)} className="w-full rounded p-3 text-sm border border-gray-300 focus:border-danger outline-none" style={whiteBg} required />

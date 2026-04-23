@@ -4,6 +4,7 @@ import { executeTool } from './toolHandlers';
 import { HOWARD_STABLE_PRELUDE, HOWARD_ONBOARDING_APPENDIX, buildUserContext } from './systemPrompt';
 import type { Aircraft } from '@/lib/types';
 import type { HowardMessage } from './types';
+import type { OilConsumptionStatus } from '@/lib/oilConsumption';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 const client = new Anthropic();
@@ -20,6 +21,12 @@ export const HOWARD_MODEL = 'claude-haiku-4-5-20251001';
 const MAX_OUTPUT_TOKENS = 2000;
 const MAX_TOOL_ROUNDS = 3;
 const CONTEXT_WINDOW = 10;
+// Hard cap per Anthropic round — if the stream never emits or finishes
+// by this deadline, we abort cleanly and let the caller surface a
+// timeout message. 45s is comfortably longer than a normal round
+// (typically 2–15s incl. tool use) but well under Vercel's 60s
+// maxDuration so a stalled round doesn't steal the whole response.
+const STREAM_DEADLINE_MS = 45_000;
 
 export interface HowardUsage {
   input_tokens: number;
@@ -56,6 +63,7 @@ export async function* sendMessageStream(
   onboardingMode = false,
   switchedFromTail: string | null = null,
   aircraftRole: string | null = null,
+  oilConsumption: OilConsumptionStatus | null = null,
 ): AsyncGenerator<StreamEvent, void, unknown> {
   // Two-block system prompt: stable prelude is prompt-cached, user context
   // (fleet + currently-selected aircraft + ratings + "now" + initials) is
@@ -72,6 +80,7 @@ export async function* sendMessageStream(
     new Date(),
     switchedFromTail,
     aircraftRole,
+    oilConsumption,
   );
 
   const toolCtx = {
@@ -99,36 +108,57 @@ export async function* sendMessageStream(
   let assistantText = '';
 
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
-    const stream = client.messages.stream({
-      model: HOWARD_MODEL,
-      max_tokens: MAX_OUTPUT_TOKENS,
-      system: [
-        { type: 'text', text: HOWARD_STABLE_PRELUDE, cache_control: { type: 'ephemeral' } },
-        ...(onboardingMode ? [{ type: 'text' as const, text: HOWARD_ONBOARDING_APPENDIX }] : []),
-        { type: 'text', text: userContext },
-      ],
-      tools,
-      messages,
-    });
+    // Per-round hard deadline. A hung stream (network stall, upstream
+    // latency spike, or mid-stream silence) otherwise holds the
+    // async-iterator open until Vercel's maxDuration kills the whole
+    // request — which looks to the user like Howard vanished.
+    const roundAbort = AbortSignal.timeout(STREAM_DEADLINE_MS);
+
+    const stream = client.messages.stream(
+      {
+        model: HOWARD_MODEL,
+        max_tokens: MAX_OUTPUT_TOKENS,
+        system: [
+          { type: 'text', text: HOWARD_STABLE_PRELUDE, cache_control: { type: 'ephemeral' } },
+          ...(onboardingMode ? [{ type: 'text' as const, text: HOWARD_ONBOARDING_APPENDIX }] : []),
+          { type: 'text', text: userContext },
+        ],
+        tools,
+        messages,
+      },
+      { signal: roundAbort },
+    );
 
     // Capture text exactly as it streams so the saved message matches
     // what the user sees — not reconstructed from finalMsg.content,
     // where block boundaries and concatenation can drift.
     let roundStreamedText = '';
-    for await (const event of stream) {
-      if (event.type === 'content_block_start') {
-        if (event.content_block.type === 'tool_use') {
-          yield { type: 'tool_use_start', id: event.content_block.id, name: event.content_block.name };
-        }
-      } else if (event.type === 'content_block_delta') {
-        if (event.delta.type === 'text_delta') {
-          roundStreamedText += event.delta.text;
-          yield { type: 'text_delta', delta: event.delta.text };
+    let finalMsg: Awaited<ReturnType<typeof stream.finalMessage>>;
+    try {
+      for await (const event of stream) {
+        if (event.type === 'content_block_start') {
+          if (event.content_block.type === 'tool_use') {
+            yield { type: 'tool_use_start', id: event.content_block.id, name: event.content_block.name };
+          }
+        } else if (event.type === 'content_block_delta') {
+          if (event.delta.type === 'text_delta') {
+            roundStreamedText += event.delta.text;
+            yield { type: 'text_delta', delta: event.delta.text };
+          }
         }
       }
-    }
 
-    const finalMsg = await stream.finalMessage();
+      finalMsg = await stream.finalMessage();
+    } catch (err: any) {
+      // AbortError when our 45s deadline fires. Rename to a pilot-
+      // friendly message — the caller catches this and saves whatever
+      // partial text already streamed alongside the timeout notice.
+      const isAbort = err?.name === 'AbortError' || err?.name === 'APIUserAbortError' || roundAbort.aborted;
+      if (isAbort) {
+        throw new Error(`Howard's reply timed out after ${Math.round(STREAM_DEADLINE_MS / 1000)}s. Try again in a moment.`);
+      }
+      throw err;
+    }
     totalUsage.input_tokens += finalMsg.usage.input_tokens;
     totalUsage.output_tokens += finalMsg.usage.output_tokens;
     totalUsage.cache_read_input_tokens += (finalMsg.usage as any).cache_read_input_tokens || 0;

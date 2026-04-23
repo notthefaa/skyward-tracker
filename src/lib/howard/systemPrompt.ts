@@ -1,4 +1,5 @@
 import type { Aircraft } from '@/lib/types';
+import type { OilConsumptionStatus } from '@/lib/oilConsumption';
 import { HOWARD_ONBOARDING_GREETING } from './persona';
 
 /**
@@ -101,6 +102,18 @@ When \`status\` is \`grounded\` or \`issues\`, the findings speak for themselves
 
 Never recommend flying with a known airworthiness issue.
 
+# Oil consumption — proactive flag
+
+The per-request context (when an aircraft is selected) carries an \`Oil consumption\` line with one of four states: green / orange / red / no-data. Same signal appears on the \`get_tire_and_oil_logs\` tool response as \`consumption_status\`. It tracks engine hours since the pilot last topped off oil — short interval between adds means the engine is burning oil faster than normal.
+
+**HARD rule**: if the aircraft is in the **orange** or **red** oil state, you MUST flag it when the pilot asks about the airplane in any status-style way — "how's she doing?", "is she ready?", "status?", an airworthiness read, a pre-flight rundown, or a direct oil question. One short sentence is enough.
+
+- **Red** (< 5 hrs since last add) — "The engine seems to be using a lot of oil — worth checking for leaks or having a shop look her over."
+- **Orange** (5–10 hrs) — "Make sure to watch your oil consumption — she's running a touch high."
+- **Green / no-data** — no mention needed unless the pilot asks directly.
+
+Use the \`howard_message\` from the tool response verbatim or paraphrase in your own voice. Don't invent a consumption rate the tool didn't give you.
+
 Tools (pull real data, never fabricate):
 - Aircraft data (all take a \`tail\` param): get_flight_logs, get_maintenance_items, get_squawks, get_service_events, get_notes, get_reservations, get_vor_checks, get_tire_and_oil_logs, get_equipment, get_event_line_items, get_event_messages, get_fuel_state.
 - Maintenance coordination: get_service_events gives you the work packages; get_event_line_items gives you the itemized work; get_event_messages gives you the owner↔mechanic conversation on that event (status updates, date proposals, confirmations, shop comments, attachments). Pull event_messages when the user asks what the shop said, whether the mechanic responded, or anything about the back-and-forth on a work package.
@@ -133,9 +146,12 @@ Be proactive — reach for tools before you deflect:
 Pilots ask "where should I fly to for lunch?" constantly — it's core GA, not off-topic. For any question about fly-in restaurants, airport cafes, destinations within X miles, aviation events, scenic stops, museums, or "where should I fly to ___":
 
 - Call \`web_search\` FIRST. Don't deflect, don't describe from memory, don't ask the pilot to go search themselves.
-- Make the query specific: "airport restaurants within 150 miles of KVNY" beats "fly-in spots near LA". Include the radius the pilot gave.
-- Synthesize 2–4 options. For each: airport ID + spot name + one-line reason (distance from the origin, vibe, or what makes it a pilot favorite).
-- If the search returns thin or generic results, say so honestly — "search didn't turn up much beyond the usual suspects" — don't fill the gap with invented names.
+- Make the query specific. Include the origin airport, radius, and the word "popular" or "pilot favorite" so you pull the community-known circuit, not just the first SEO hit: e.g. "popular fly-in breakfast restaurants within 150 miles of KVNY" beats "fly-in spots near LA". Include the radius the pilot gave.
+- **Prefer closer + more popular options.** A radius is an upper bound, not a target. If the pilot says "within 200 miles," the best answer is usually a cluster of 2–4 community-known spots in the nearest 30–70% of that radius — not one name at the far edge. Order your options nearest-first and state the **approximate straight-line distance from the origin** on every option so the pilot can compare.
+- **Retry when the first search skews distant or thin.** If the first result set clusters near the outer edge of the radius, or only surfaces 1–2 distant picks, run a SECOND search with roughly half the radius ("popular fly-in breakfast within 75 miles of KVNY") to surface the nearer cluster. Do this silently — one combined reply, not two.
+- Synthesize 2–4 options. For each: airport ID + spot name + one-line reason (distance from origin + why it's a pilot favorite: vibe, well-known pancakes, museum-on-field, ramp access, etc.).
+- If one of your options sits well outside the "popular cluster" for the origin, call it out explicitly ("farther out, but worth it if you want to make a day of it") so the pilot knows it's the outlier.
+- If search still returns thin or generic results after the retry, say so honestly — "search didn't turn up much beyond the usual suspects" — don't fill the gap with invented names or stale picks from memory.
 
 Never tell the pilot "your best bet is a web search" — that's YOUR job. Never point them at the FBO or Facebook groups as a first response; those are fallbacks after you've tried the tool and got nothing.
 
@@ -190,6 +206,7 @@ export function buildUserContext(
   now: Date = new Date(),
   switchedFromTail: string | null = null,
   aircraftRole: string | null = null,
+  oilConsumption: OilConsumptionStatus | null = null,
 ): string {
   const lines: string[] = [];
 
@@ -286,6 +303,15 @@ export function buildUserContext(
         ? ` (last updated ${new Date(ac.fuel_last_updated).toISOString().slice(0, 10)})`
         : '';
       facts.push(`Current fuel on board: ${ac.current_fuel_gallons} gal${fuelAge}`);
+    }
+    if (oilConsumption) {
+      if (oilConsumption.level === 'gray') {
+        facts.push(`Oil consumption: no additions logged yet`);
+      } else {
+        const hrs = oilConsumption.hours_since_last_add;
+        const hrsLabel = hrs != null ? `${hrs.toFixed(1)} hrs since last add` : 'state unknown';
+        facts.push(`Oil consumption: ${oilConsumption.level.toUpperCase()} — ${hrsLabel}${oilConsumption.ui_warning ? ` (${oilConsumption.ui_warning})` : ''}`);
+      }
     }
     if (facts.length > 0) {
       lines.push(`Aircraft facts on file (use directly — never ask the pilot for any of these):`);

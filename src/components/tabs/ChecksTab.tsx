@@ -9,6 +9,7 @@ import dynamic from "next/dynamic";
 import { AlertTriangle, Droplets, Compass, Plus } from "lucide-react";
 import { TireIcon } from "@/components/shell/TrayIcons";
 import { TabSkeleton } from "@/components/Skeletons";
+import { getOilConsumptionStatus, hoursSinceLastOilAdd } from "@/lib/oilConsumption";
 
 // Embed the individual tab surfaces inline. Each one keeps its own
 // form/modal/pagination — we're not re-implementing, we're orchestrating.
@@ -179,37 +180,31 @@ function tireDial(latest: TireCheck | null, now: Date): DialState {
 
 /** Oil dial — tracks engine HOURS since the most recent oil addition
  * (not just any oil-log entry, since a zero-add level-check shouldn't
- * reset the counter). Short interval between adds = high consumption. */
+ * reset the counter). Short interval between adds = high consumption.
+ * Thresholds + colors live in @/lib/oilConsumption so Howard and the
+ * dial read from the same source. */
 function oilDial(lastAdded: OilLog | null, currentEngineHours: number): DialState {
-  if (!lastAdded) {
+  const hoursSince = hoursSinceLastOilAdd(lastAdded?.engine_hours ?? null, currentEngineHours);
+  const status = getOilConsumptionStatus(hoursSince);
+
+  if (hoursSince === null) {
     return {
-      value: '—', progress: 0, color: COLOR_GRAY,
+      value: '—', progress: 0, color: status.color,
       sublabel: 'No oil additions logged', suffix: 'hrs',
     };
   }
-  const hoursSince = Math.max(0, currentEngineHours - lastAdded.engine_hours);
 
   // Arc grows as hours accumulate, capped at 20 for visual consistency
   // (10+ hrs = healthy; show headroom up to 20 before the arc saturates).
   const progress = Math.min(hoursSince / 20, 1);
 
-  if (hoursSince < 5) {
-    return {
-      value: hoursSince, progress, color: COLOR_RED,
-      sublabel: 'Hrs since add', suffix: 'hrs',
-      warning: 'Check Oil Consumption',
-    };
-  }
-  if (hoursSince < 10) {
-    return {
-      value: hoursSince, progress, color: COLOR_ORANGE,
-      sublabel: 'Hrs since add', suffix: 'hrs',
-      warning: 'Slightly Higher Consumption',
-    };
-  }
   return {
-    value: hoursSince, progress, color: COLOR_GREEN,
-    sublabel: 'Hrs since add', suffix: 'hrs',
+    value: hoursSince,
+    progress,
+    color: status.color,
+    sublabel: 'Hrs since add',
+    suffix: 'hrs',
+    warning: status.ui_warning ?? undefined,
   };
 }
 
