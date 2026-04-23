@@ -73,7 +73,7 @@ const SECTIONS: Section[] = [
       {
         icon: CheckSquare, accent: '#56B94A',
         name: "Ops Checks",
-        blurb: "VOR check every 30 days per §91.171, oil burn trending across your engine hours, tire PSI. All three on one dashboard.",
+        blurb: "VOR check every 30 days per §91.171, oil burn trending across your engine hours, tire PSI. All three on one dashboard. Oil dial turns orange, then red, as the hours between top-offs shrink — Howard flags it if consumption starts climbing.",
         where: "Log → Ops Checks",
       },
     ],
@@ -91,7 +91,7 @@ const SECTIONS: Section[] = [
       {
         icon: AlertTriangle, accent: '#CE3732',
         name: "Squawks",
-        blurb: "Write up a squawk with photos. Mark it airworthiness-affecting and the airplane grounds — Howard, the summary, and the fleet view all show it. When the shop fixes it, the squawk links back to the service event that closed it.",
+        blurb: "Write up a squawk with photos. Mark it airworthiness-affecting and the airplane grounds — Howard, the summary, and the fleet view all show it. Deferring under MEL, CDL, NEF, or MDL? Log the category and procedures so the signoff stays with the squawk. When the shop fixes it, the squawk links back to the service event that closed it.",
         where: "MX → Squawks",
       },
       {
@@ -121,7 +121,7 @@ const SECTIONS: Section[] = [
       {
         icon: Calendar, accent: '#56B94A',
         name: "Calendar",
-        blurb: "Confirmed service dates block the calendar. If maintenance bumps a pilot off the airplane, they get an email that explains what moved and why. Howard can book a slot for you in chat.",
+        blurb: "Confirmed service dates block the calendar. Book a recurring slot — weekly, custom weekdays, whatever cadence fits. If maintenance bumps a pilot off the airplane, they get an email that explains what moved and why. Howard can book a slot for you in chat.",
         where: "Calendar icon in nav",
       },
       {
@@ -145,7 +145,7 @@ const SECTIONS: Section[] = [
       {
         icon: MessageSquare, accent: '#e6651b',
         name: "Howard",
-        blurb: "Orange button on every screen. Ask whether the airplane's airworthy, pull a briefing (METARs, TAFs, NOTAMs, PIREPs straight from NOAA and FAA), decode a METAR, look up an AD, search your own documents. When Howard wants to act — book a flight, close a squawk, schedule the shop — he shows you a card. You tap Confirm.",
+        blurb: "Orange button on every screen. Ask whether the airplane's airworthy, pull a briefing (METARs, TAFs, NOTAMs, PIREPs straight from NOAA and FAA), decode a METAR, look up an AD, search your own documents. When Howard wants to act — book a flight, close a squawk, schedule the shop — he shows you a card. You tap Confirm. Your chat history stays with your account, and the usage panel inside the Howard tab shows what he's been working on.",
         where: "Orange floating button, any screen",
       },
       {
