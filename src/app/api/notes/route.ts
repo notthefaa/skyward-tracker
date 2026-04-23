@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireAuth, requireAircraftAccess, requireAircraftAdmin, handleApiError } from '@/lib/auth';
 import { setAppUser } from '@/lib/audit';
 import { idempotency } from '@/lib/idempotency';
+import { stripProtectedFields } from '@/lib/validation';
 
 // POST — create note (any user with aircraft access)
 export async function POST(req: Request) {
@@ -16,7 +17,11 @@ export async function POST(req: Request) {
     await requireAircraftAccess(supabaseAdmin, user.id, aircraftId);
 
     await setAppUser(supabaseAdmin, user.id);
-    const { error } = await supabaseAdmin.from('aft_notes').insert({ ...noteData, aircraft_id: aircraftId, author_id: user.id });
+    // Strip server-owned fields; aircraft_id + author_id are set
+    // authoritatively so client-supplied values for those can't leak
+    // through into the insert.
+    const safeNote = stripProtectedFields(noteData);
+    const { error } = await supabaseAdmin.from('aft_notes').insert({ ...safeNote, aircraft_id: aircraftId, author_id: user.id });
     if (error) throw error;
 
     const body = { success: true };
@@ -53,7 +58,10 @@ export async function PUT(req: Request) {
     }
 
     await setAppUser(supabaseAdmin, user.id);
-    const { error } = await supabaseAdmin.from('aft_notes').update(noteData).eq('id', noteId);
+    // Prevent a PUT from migrating the note across aircraft (bypassing
+    // the access check) or resurrecting a soft-delete.
+    const safeUpdate = stripProtectedFields(noteData);
+    const { error } = await supabaseAdmin.from('aft_notes').update(safeUpdate).eq('id', noteId);
     if (error) throw error;
 
     return NextResponse.json({ success: true });

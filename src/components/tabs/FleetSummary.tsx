@@ -30,13 +30,32 @@ function formatLastFlown(createdAt: string, initials: string | null): string {
   return `${timeAgo}${initials ? ` by ${initials}` : ''}`;
 }
 
-/** Build a short "Due in ..." label for the fleet card. */
-function formatNextMxDue(item: { tracking_type: string; remaining: number; isExpired: boolean }): string {
-  if (item.tracking_type === 'time') {
+/** Build a short "Due in ..." label for the fleet card.
+ *
+ * `processMxItem` returns `remaining` in HOURS when the time dimension
+ * drives (tracking_type='time' OR a 'both' item where time is nearer),
+ * and in DAYS when the date dimension drives. So we can't look at
+ * `tracking_type` alone — a 'both' item can be either. We need the
+ * caller to pass the unit, or infer from projectedDays vs remaining:
+ * for date-driven, remaining === projectedDays; for time-driven,
+ * projectedDays = remaining / burnRate (different unless burnRate=1).
+ * Simpler + reliable: accept the unit explicitly from the caller.
+ */
+function formatNextMxDue(item: { tracking_type: string; remaining: number; isExpired: boolean; projectedDays: number }): string {
+  // Time-driven when tracking_type is 'time' outright, OR when it's
+  // 'both' AND remaining differs from projectedDays (which is always
+  // the case for hours-driven: remaining is in hours, projectedDays
+  // is those hours divided by burn rate). When burnRate≈1 the two
+  // could coincidentally match, but that's a degenerate case — worst
+  // outcome is we pick the 'days' framing on a unit that happens to
+  // be numerically equal, which is still correct.
+  const timeDriven = item.tracking_type === 'time'
+    || (item.tracking_type === 'both' && item.remaining !== item.projectedDays);
+  if (timeDriven) {
     const hrs = Math.abs(item.remaining).toFixed(1);
     return item.isExpired ? `Overdue by ${hrs} hrs` : `Due in ${hrs} hrs`;
   }
-  // date
+  // date (or 'both' driven by date)
   const days = Math.abs(item.remaining);
   if (item.isExpired) return days === 1 ? 'Overdue by 1 day' : `Overdue by ${days} days`;
   if (item.remaining === 0) return 'Due today';

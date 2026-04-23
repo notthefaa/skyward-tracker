@@ -98,7 +98,9 @@ export default function VorTab({
     e.preventDefault();
     if (!aircraft || isSubmitting) return;
     const error = Number(bearingError);
-    if (Number.isNaN(error)) { showError('Bearing error must be a number.'); return; }
+    // isFinite (not isNaN) so "1e400" → Infinity gets rejected here
+    // instead of sliding through to the server's stricter check.
+    if (!Number.isFinite(error)) { showError('Bearing error must be a finite number.'); return; }
     if (!station.trim()) { showError('Station/place is required.'); return; }
     if (!initials.trim()) { showError('Initials are required.'); return; }
 

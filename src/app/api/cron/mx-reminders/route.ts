@@ -110,6 +110,12 @@ export async function GET(req: Request) {
         mx: any;
         remaining: number;
         projectedDays: number;
+        // Per-dimension remaining, kept on the evaluated item so Phase 4
+        // (internal reminders) can frame the "due in X hrs / Y days"
+        // message correctly for 'both' items without recomputing.
+        // Infinity when the dimension isn't configured or doesn't apply.
+        hoursLeft: number;
+        daysLeft: number;
         triggersScheduling: boolean;
         triggersHeadsUp: boolean;
         withinAggregationWindow: boolean;
@@ -121,30 +127,58 @@ export async function GET(req: Request) {
         // Skip items already in an active maintenance event
         if (mxIdsInActiveEvents.has(mx.id)) continue;
 
-        // Skip items that haven't been set up yet (null due values from templates)
-        if (mx.tracking_type === 'time' && (mx.due_time === null || mx.due_time === undefined)) continue;
-        if (mx.tracking_type === 'date' && (mx.due_date === null || mx.due_date === undefined)) continue;
+        // Which dimensions this item tracks + whether they're filled in.
+        // 'both' items (annuals: tracking_type='both', time_interval=100,
+        // date_interval_days=365) MUST fire on whichever deadline hits
+        // first. Prior to this, the threshold-hit checks below only
+        // matched 'time' or 'date' tracking_types — 'both' items
+        // silently never triggered any reminder or scheduling email,
+        // which is a safety-of-flight problem for annuals.
+        const hasTimeDim = mx.tracking_type === 'time' || mx.tracking_type === 'both';
+        const hasDateDim = mx.tracking_type === 'date' || mx.tracking_type === 'both';
+        const hasTimeData = hasTimeDim && mx.due_time !== null && mx.due_time !== undefined;
+        const hasDateData = hasDateDim && mx.due_date !== null && mx.due_date !== undefined;
 
-        let remaining = 0;
-        let projectedDays = Infinity;
+        // Skip items that haven't been set up yet (no relevant due value
+        // configured — a template insert that was never filled in).
+        if (!hasTimeData && !hasDateData) continue;
 
+        // Per-dimension remaining. Infinity when the dimension isn't
+        // applicable or isn't configured, so the min() below naturally
+        // picks the populated dimension.
+        const hoursLeft = hasTimeData
+          ? (mx.due_time as number) - (aircraft.total_engine_time || 0)
+          : Infinity;
+        const daysFromHours = hasTimeData && burnRate > 0 ? hoursLeft / burnRate : Infinity;
+        // Compute "days to due_date" against today in the pilot's
+        // timezone, not the Vercel UTC runtime. Without this, a
+        // reminder email at the UTC day-boundary rounded a
+        // tomorrow-for-the-pilot item to "due today".
+        const daysLeftRaw = hasDateData ? daysUntilDate(mx.due_date, aircraft.time_zone) : Infinity;
+        const daysLeft = hasDateData ? (Number.isFinite(daysLeftRaw) ? daysLeftRaw : 0) : Infinity;
+
+        // Headline `remaining` + `projectedDays` for downstream sort
+        // and aggregation window. For 'time'-only it's hours; for
+        // 'date' / 'both' it's the nearer deadline in days.
+        let remaining: number;
+        let projectedDays: number;
         if (mx.tracking_type === 'time') {
-          remaining = (mx.due_time ?? 0) - (aircraft.total_engine_time || 0);
-          if (burnRate > 0) projectedDays = remaining / burnRate;
+          remaining = hoursLeft;
+          projectedDays = daysFromHours;
+        } else if (mx.tracking_type === 'date') {
+          remaining = daysLeft;
+          projectedDays = daysLeft;
         } else {
-          // Compute "days to due_date" against today in the pilot's
-          // timezone, not the Vercel UTC runtime. Without this, a
-          // reminder email at the UTC day-boundary rounded a
-          // tomorrow-for-the-pilot item to "due today".
-          const daysRemaining = daysUntilDate(mx.due_date, aircraft.time_zone);
-          remaining = Number.isFinite(daysRemaining) ? daysRemaining : 0;
-          projectedDays = remaining;
+          // 'both' — pick whichever dimension is nearer in days.
+          projectedDays = Math.min(daysLeft, daysFromHours);
+          remaining = projectedDays;
         }
 
-        // Does this item hit the scheduling threshold?
-        const mxThresholdHitTime = mx.tracking_type === 'time' && remaining <= schedTime;
-        const mxThresholdHitPredictive = mx.tracking_type === 'time' && projectedDays <= predictiveSchedDays;
-        const mxThresholdHitDate = mx.tracking_type === 'date' && remaining <= schedDays;
+        // Does this item hit the scheduling threshold? Each dimension
+        // is checked in its own units. 'both' fires on either.
+        const mxThresholdHitTime = hasTimeData && hoursLeft <= schedTime;
+        const mxThresholdHitPredictive = hasTimeData && daysFromHours <= predictiveSchedDays;
+        const mxThresholdHitDate = hasDateData && daysLeft <= schedDays;
 
         const triggersScheduling = mx.automate_scheduling && !mx.mx_schedule_sent && (
           mxThresholdHitTime || mxThresholdHitDate || (mxThresholdHitPredictive && confidenceScore >= 80)
@@ -159,6 +193,8 @@ export async function GET(req: Request) {
           mx,
           remaining,
           projectedDays,
+          hoursLeft,
+          daysLeft,
           triggersScheduling,
           triggersHeadsUp,
           withinAggregationWindow,
@@ -178,9 +214,20 @@ export async function GET(req: Request) {
         );
 
         const lineItemDescriptions = itemsForDraft.map(e => {
-          let dueString = e.mx.tracking_type === 'time' ? `at ${e.mx.due_time} hours` : `on ${e.mx.due_date}`;
-          if (e.mx.tracking_type === 'time' && burnRate > 0) {
-            dueString += ` (projected ~${Math.ceil(e.projectedDays)} days)`;
+          let dueString: string;
+          if (e.mx.tracking_type === 'time') {
+            dueString = `at ${e.mx.due_time} hours`;
+            if (burnRate > 0) dueString += ` (projected ~${Math.ceil(e.projectedDays)} days)`;
+          } else if (e.mx.tracking_type === 'date') {
+            dueString = `on ${e.mx.due_date}`;
+          } else {
+            // 'both' — show whichever dimension is actually configured,
+            // and note "whichever first" so the shop understands the
+            // item has two triggers.
+            const bits: string[] = [];
+            if (e.mx.due_time != null) bits.push(`at ${e.mx.due_time} hours`);
+            if (e.mx.due_date != null) bits.push(`on ${e.mx.due_date}`);
+            dueString = bits.length === 2 ? `${bits.join(' or ')} (whichever first)` : bits[0] || '—';
           }
           return { mx: e.mx, dueString };
         });
@@ -340,10 +387,20 @@ export async function GET(req: Request) {
           hitReminder3 = remaining <= reminderHours3 || projectedDays <= reminder3;
           hitReminder2 = remaining <= reminderHours2 || projectedDays <= reminder2;
           hitReminder1 = remaining <= reminderHours1 || projectedDays <= reminder1;
-        } else {
+        } else if (mx.tracking_type === 'date') {
           hitReminder3 = remaining <= reminder3;
           hitReminder2 = remaining <= reminder2;
           hitReminder1 = remaining <= reminder1;
+        } else {
+          // 'both' — fire if EITHER dimension crosses its reminder
+          // threshold. Check hours directly (not via projected days)
+          // so a burnRate=0 aircraft with hours-close items still
+          // reminds. `remaining` here is already the nearer in days,
+          // so the days-comparison picks up date-driven reminders
+          // AND time-driven-via-projection reminders.
+          hitReminder3 = e.hoursLeft <= reminderHours3 || remaining <= reminder3;
+          hitReminder2 = e.hoursLeft <= reminderHours2 || remaining <= reminder2;
+          hitReminder1 = e.hoursLeft <= reminderHours1 || remaining <= reminder1;
         }
 
         // New aircraft with no flights yet report projectedDays=Infinity
@@ -351,14 +408,33 @@ export async function GET(req: Request) {
         // is nonsense — substitute a readable fallback so the email
         // still makes sense.
         const projectedDaysText = Number.isFinite(projectedDays) ? `~${Math.ceil(projectedDays)} DAYS` : 'PROJECTION UNAVAILABLE — NO RECENT FLIGHT DATA';
+        // Frame the "due in" line to match what's actually tight. For
+        // 'both' items, the whichever dimension triggered the reminder
+        // drives the phrasing so the pilot sees "100 HRS" vs. "30 DAYS"
+        // as appropriate, not a lossy conversion to a single unit.
+        const triggerTemplate = (): string => {
+          if (mx.tracking_type === 'time') {
+            return `DUE IN ${remaining.toFixed(1)} HRS (${projectedDaysText})`;
+          }
+          if (mx.tracking_type === 'date') {
+            return `DUE IN ${remaining} DAYS`;
+          }
+          // 'both' — lead with whichever dimension is actually closer.
+          const timeIsTight = Number.isFinite(e.hoursLeft) && e.hoursLeft <= reminderHours1;
+          const dateIsTight = Number.isFinite(e.daysLeft) && e.daysLeft <= reminder1;
+          if (timeIsTight && (!dateIsTight || e.daysLeft > Math.ceil(e.hoursLeft / Math.max(burnRate, 0.01)))) {
+            return `DUE IN ${e.hoursLeft.toFixed(1)} HRS (${projectedDaysText})`;
+          }
+          return `DUE IN ${Math.round(e.daysLeft)} DAYS`;
+        };
         if (hitReminder3 && !mx.reminder_5_sent) {
-          internalTriggerTemplate = mx.tracking_type === 'time' ? `DUE IN ${remaining.toFixed(1)} HRS (${projectedDaysText})` : `DUE IN ${remaining} DAYS`;
+          internalTriggerTemplate = triggerTemplate();
           flagToUpdate.reminder_5_sent = true; flagToUpdate.reminder_15_sent = true; flagToUpdate.reminder_30_sent = true;
         } else if (hitReminder2 && !mx.reminder_15_sent) {
-          internalTriggerTemplate = mx.tracking_type === 'time' ? `DUE IN ${remaining.toFixed(1)} HRS (${projectedDaysText})` : `DUE IN ${remaining} DAYS`;
+          internalTriggerTemplate = triggerTemplate();
           flagToUpdate.reminder_15_sent = true; flagToUpdate.reminder_30_sent = true;
         } else if (hitReminder1 && !mx.reminder_30_sent) {
-          internalTriggerTemplate = mx.tracking_type === 'time' ? `DUE IN ${remaining.toFixed(1)} HRS (${projectedDaysText})` : `DUE IN ${remaining} DAYS`;
+          internalTriggerTemplate = triggerTemplate();
           flagToUpdate.reminder_30_sent = true;
         }
 

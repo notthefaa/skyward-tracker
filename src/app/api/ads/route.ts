@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireAuth, requireAircraftAccess, requireAircraftAdmin, handleApiError } from '@/lib/auth';
 import { setAppUser } from '@/lib/audit';
+import { stripProtectedFields } from '@/lib/validation';
 
 // GET — list ADs for an aircraft
 export async function GET(req: Request) {
@@ -41,9 +42,13 @@ export async function POST(req: Request) {
     await requireAircraftAdmin(supabaseAdmin, user.id, aircraftId);
     await setAppUser(supabaseAdmin, user.id);
 
+    // source='manual' marks records entered by hand vs. synced from DRS.
+    // That distinction must be server-controlled — a client who set
+    // source='drs' on a manual record would bypass future sync-conflict
+    // resolution. aircraft_id / created_by are also server-owned.
     const { data, error } = await supabaseAdmin
       .from('aft_airworthiness_directives')
-      .insert({ ...adData, aircraft_id: aircraftId, source: 'manual', created_by: user.id })
+      .insert({ ...stripProtectedFields(adData), aircraft_id: aircraftId, source: 'manual', created_by: user.id })
       .select()
       .single();
 
@@ -66,9 +71,10 @@ export async function PUT(req: Request) {
     await requireAircraftAdmin(supabaseAdmin, user.id, aircraftId);
     await setAppUser(supabaseAdmin, user.id);
 
+    const safeUpdate = stripProtectedFields(adData);
     const { error } = await supabaseAdmin
       .from('aft_airworthiness_directives')
-      .update(adData)
+      .update(safeUpdate)
       .eq('id', adId)
       .eq('aircraft_id', aircraftId);
     if (error) throw error;

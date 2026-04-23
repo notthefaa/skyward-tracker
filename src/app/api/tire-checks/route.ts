@@ -15,8 +15,11 @@ export async function POST(req: Request) {
     if (!initials || typeof initials !== 'string') return NextResponse.json({ error: 'Initials are required.' }, { status: 400 });
 
     // null = tire wasn't adjusted on this check. A non-null value
-    // must be a non-negative number. At least one tire must be
-    // adjusted, otherwise there's nothing to log.
+    // must be a non-negative number. An all-null row is legitimate —
+    // that's the "All tires OK — no adjustment needed" shortcut in
+    // the UI. The tire-check dial keys off `created_at` only, so an
+    // all-null entry still resets the counter, which is the whole
+    // point of letting the pilot log a clean inspection.
     // Normalize "not supplied" → null and reject NaN / ±Infinity /
     // negative. Using `Number.isFinite` here (rather than just
     // `Number.isNaN`) means a caller can't sneak "Infinity" through
@@ -40,9 +43,6 @@ export async function POST(req: Request) {
     const noseClean = nose === 'invalid' ? null : nose;
     const leftClean = left === 'invalid' ? null : left;
     const rightClean = right === 'invalid' ? null : right;
-    if (noseClean === null && leftClean === null && rightClean === null) {
-      return NextResponse.json({ error: 'Select at least one tire that was adjusted.' }, { status: 400 });
-    }
 
     await setAppUser(supabaseAdmin, user.id);
     await supabaseAdmin.from('aft_tire_checks').insert({

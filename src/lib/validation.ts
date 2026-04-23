@@ -77,3 +77,35 @@ export function pickAllowedFields<T extends Record<string, unknown>>(
   }
   return out as Partial<T>;
 }
+
+/**
+ * Strip server-owned fields from a client-supplied insert/update
+ * payload. Use on routes where the legitimate-field surface is wide
+ * (squawks, notes, etc.) and a full whitelist would rot faster than
+ * the schema evolves. Blacklist covers the attack vectors:
+ *   - `id` → reassignment
+ *   - `aircraft_id` → cross-aircraft migration via PUT
+ *   - `reported_by` / `author_id` / `created_by` → authorship spoof
+ *   - `deleted_at` / `deleted_by` → silent un-delete
+ *   - `created_at` / `updated_at` → timestamp forgery
+ *
+ * Returns a new object; never mutates the source. Callers should then
+ * spread in the authoritative values they control (aircraft_id from
+ * the URL param, reported_by from the authenticated user) so the
+ * explicit value wins over any residual client field.
+ */
+export function stripProtectedFields<T extends Record<string, unknown>>(payload: unknown): Partial<T> {
+  if (!payload || typeof payload !== 'object') return {};
+  const src = payload as Record<string, unknown>;
+  const PROTECTED = new Set([
+    'id', 'aircraft_id',
+    'reported_by', 'author_id', 'created_by',
+    'deleted_at', 'deleted_by',
+    'created_at', 'updated_at',
+  ]);
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(src)) {
+    if (!PROTECTED.has(k)) out[k] = v;
+  }
+  return out as Partial<T>;
+}

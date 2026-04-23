@@ -72,14 +72,24 @@ export async function POST(req: Request) {
 
         if (mxItems) {
           for (const mx of mxItems) {
+            // 'both' items carry both a time and a date interval (e.g.
+            // annuals: due at hours OR on date, whichever first). Send
+            // both dimensions to the mechanic so the work package
+            // reflects the actual trigger, not just one side.
+            const itemDescription = (() => {
+              if (mx.tracking_type === 'time') return `Due at ${mx.due_time} hrs`;
+              if (mx.tracking_type === 'date') return `Due on ${mx.due_date}`;
+              const bits: string[] = [];
+              if (mx.due_time != null) bits.push(`at ${mx.due_time} hrs`);
+              if (mx.due_date != null) bits.push(`on ${mx.due_date}`);
+              return bits.length === 2 ? `Due ${bits.join(' or ')} (whichever first)` : bits[0] ? `Due ${bits[0]}` : 'Not yet scheduled';
+            })();
             allLineItems.push({
               event_id: eventId,
               item_type: 'maintenance',
               maintenance_item_id: mx.id,
               item_name: mx.item_name,
-              item_description: mx.tracking_type === 'time'
-                ? `Due at ${mx.due_time} hrs`
-                : `Due on ${mx.due_date}`,
+              item_description: itemDescription,
             });
           }
         }

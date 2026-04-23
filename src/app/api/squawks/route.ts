@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireAuth, requireAircraftAccess, requireAircraftAdmin, handleApiError } from '@/lib/auth';
 import { setAppUser } from '@/lib/audit';
 import { idempotency } from '@/lib/idempotency';
+import { stripProtectedFields } from '@/lib/validation';
 
 // POST — report squawk (any user with aircraft access)
 export async function POST(req: Request) {
@@ -16,7 +17,16 @@ export async function POST(req: Request) {
     await requireAircraftAccess(supabaseAdmin, user.id, aircraftId);
 
     await setAppUser(supabaseAdmin, user.id);
-    const { data, error } = await supabaseAdmin.from('aft_squawks').insert({ ...squawkData, aircraft_id: aircraftId }).select().single();
+    // Strip server-owned fields, then set aircraft_id + reported_by
+    // authoritatively so a client can't spoof authorship or drop a
+    // squawk onto a different aircraft by sneaking the fields into
+    // the payload.
+    const safeSquawk = stripProtectedFields(squawkData);
+    const { data, error } = await supabaseAdmin
+      .from('aft_squawks')
+      .insert({ ...safeSquawk, aircraft_id: aircraftId, reported_by: user.id })
+      .select()
+      .single();
     if (error) throw error;
 
     const body = { success: true, squawk: data };
@@ -56,7 +66,11 @@ export async function PUT(req: Request) {
     }
 
     await setAppUser(supabaseAdmin, user.id);
-    const { error } = await supabaseAdmin.from('aft_squawks').update(squawkData).eq('id', squawkId);
+    // Strip server-owned fields so a PUT can't migrate the squawk to
+    // a different aircraft (bypassing the access check above), resurrect
+    // a soft-delete, or reassign reported_by.
+    const safeUpdate = stripProtectedFields(squawkData);
+    const { error } = await supabaseAdmin.from('aft_squawks').update(safeUpdate).eq('id', squawkId);
     if (error) throw error;
 
     return NextResponse.json({ success: true });

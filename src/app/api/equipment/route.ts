@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireAuth, requireAircraftAccess, requireAircraftAdmin, handleApiError } from '@/lib/auth';
 import { setAppUser } from '@/lib/audit';
+import { stripProtectedFields } from '@/lib/validation';
 
 // GET — list equipment for an aircraft
 export async function GET(req: Request) {
@@ -38,7 +39,11 @@ export async function POST(req: Request) {
     await setAppUser(supabaseAdmin, user.id);
 
     if (Array.isArray(bulk)) {
-      const rows = bulk.map((e: any) => ({ ...e, aircraft_id: aircraftId, created_by: user.id }));
+      const rows = bulk.map((e: any) => ({
+        ...stripProtectedFields(e),
+        aircraft_id: aircraftId,
+        created_by: user.id,
+      }));
       const { data, error } = await supabaseAdmin
         .from('aft_aircraft_equipment')
         .insert(rows)
@@ -52,7 +57,7 @@ export async function POST(req: Request) {
     }
     const { data, error } = await supabaseAdmin
       .from('aft_aircraft_equipment')
-      .insert({ ...equipmentData, aircraft_id: aircraftId, created_by: user.id })
+      .insert({ ...stripProtectedFields(equipmentData), aircraft_id: aircraftId, created_by: user.id })
       .select()
       .single();
     if (error) throw error;
@@ -71,9 +76,15 @@ export async function PUT(req: Request) {
     await requireAircraftAdmin(supabaseAdmin, user.id, aircraftId);
     await setAppUser(supabaseAdmin, user.id);
 
+    // Strip server-owned fields — the aircraft_id filter on the
+    // update query already prevents cross-aircraft escapes, but
+    // without the strip a client could still blank `installed_at`,
+    // resurrect a soft-delete via `deleted_at: null`, or spoof
+    // `created_by`.
+    const safeUpdate = stripProtectedFields(equipmentData);
     const { error } = await supabaseAdmin
       .from('aft_aircraft_equipment')
-      .update(equipmentData)
+      .update(safeUpdate)
       .eq('id', equipmentId)
       .eq('aircraft_id', aircraftId);
     if (error) throw error;

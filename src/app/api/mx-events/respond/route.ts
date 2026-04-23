@@ -36,6 +36,15 @@ export async function POST(req: Request) {
     if (!accessToken) {
       return NextResponse.json({ error: 'Access token is required.' }, { status: 400 });
     }
+    // Reject unknown / missing actions up front. The else-if chain below
+    // doesn't have a default branch, so without this guard a typo'd or
+    // absent `action` would silently fall through to the success
+    // response at the end — mechanic would see "saved" but nothing
+    // happened.
+    const KNOWN_ACTIONS = ['propose_date', 'confirm', 'comment', 'update_lines', 'update_estimate', 'suggest_item', 'decline', 'mark_ready'] as const;
+    if (!action || !KNOWN_ACTIONS.includes(action)) {
+      return NextResponse.json({ error: `Unknown or missing action. Expected one of: ${KNOWN_ACTIONS.join(', ')}.` }, { status: 400 });
+    }
 
     const supabaseAdmin = createAdminClient();
     const baseUrl = new URL(req.url).origin;
