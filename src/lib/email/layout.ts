@@ -139,9 +139,15 @@ export function emailShell(opts: ShellOpts): string {
     .sw-card { background-color:#0f2340 !important; color:#e5e7eb !important; }
     .sw-heading { color:#ffffff !important; }
     .sw-paragraph { color:#d1d5db !important; }
-    .sw-label { color:#9ca3af !important; }
-    .sw-footer { color:#9ca3af !important; }
-    .sw-footer a { color:#9ca3af !important; }
+    .sw-label { color:#cbd5e1 !important; }
+    .sw-footer { color:#cbd5e1 !important; }
+    .sw-footer a { color:#cbd5e1 !important; }
+    /* Info-variant button is navy, which visually vanishes against
+       the dark-navy card in dark mode. Flip it to brand gold with
+       dark text so the primary CTA still reads as a CTA. Other
+       variants have enough hue distance to stay visible. */
+    .sw-btn-info-bg { background-color:#F5B05B !important; }
+    .sw-btn-info-text { color:#091F3C !important; }
   }
 </style>
 </head>
@@ -163,20 +169,18 @@ export function emailShell(opts: ShellOpts): string {
 
       <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" class="sw-container" style="max-width:600px;width:100%;">
 
-        <!-- Header band — navy bar with brand wordmark. Short, no images
-             so we don't depend on clients loading remote assets. -->
+        <!-- Header band — navy bar with unified Skyward Society
+             wordmark. Centered, two-line: the company name above,
+             the product label beneath in gold. No images so we
+             don't depend on clients loading remote assets. -->
         <tr>
-          <td class="sw-header-band" style="background-color:#091F3C;padding:18px 24px;border-radius:8px 8px 0 0;">
-            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
-              <tr>
-                <td align="left" style="font-family:'Oswald','Arial Narrow',Arial,sans-serif;color:#ffffff;font-size:18px;font-weight:700;letter-spacing:3px;text-transform:uppercase;">
-                  Skyward
-                </td>
-                <td align="right" style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#F5B05B;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;">
-                  Aircraft Manager
-                </td>
-              </tr>
-            </table>
+          <td class="sw-header-band" align="center" style="background-color:#091F3C;padding:20px 24px;border-radius:8px 8px 0 0;text-align:center;">
+            <div style="font-family:'Oswald','Arial Narrow',Arial,sans-serif;color:#ffffff;font-size:22px;font-weight:700;letter-spacing:3px;text-transform:uppercase;line-height:1.2;">
+              Skyward Society
+            </div>
+            <div style="font-family:'Oswald','Arial Narrow',Arial,sans-serif;color:#F5B05B;font-size:11px;font-weight:700;letter-spacing:4px;text-transform:uppercase;line-height:1.2;margin-top:4px;">
+              Aircraft Manager
+            </div>
           </td>
         </tr>
 
@@ -189,10 +193,10 @@ export function emailShell(opts: ShellOpts): string {
 
         <!-- Footer — why you got this + preferences link -->
         <tr>
-          <td class="sw-footer" align="center" style="padding:20px 12px 8px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;font-size:11px;line-height:1.6;color:#6B7280;">
+          <td class="sw-footer" align="center" style="padding:20px 12px 8px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;font-size:11px;line-height:1.6;color:#4B5563;">
             You're getting this because you have access to this aircraft on Skyward${preferencesLink}.
             <br />
-            <span style="color:#9CA3AF;">Skyward Society · <a href="https://track.skywardsociety.com" style="color:#9CA3AF;text-decoration:underline;">track.skywardsociety.com</a></span>
+            <span style="color:#6B7280;">Skyward Society · <a href="https://track.skywardsociety.com" style="color:#6B7280;text-decoration:underline;">track.skywardsociety.com</a></span>
           </td>
         </tr>
       </table>
@@ -290,13 +294,18 @@ export function button(
   label: string,
   opts: { variant?: Variant } = {},
 ): string {
-  const v = VARIANTS[opts.variant ?? 'info'];
+  const variant = opts.variant ?? 'info';
+  const v = VARIANTS[variant];
+  // Only the info variant gets the dark-mode flip — other variants
+  // have enough hue distance from the dark-navy card to stay visible.
+  const bgClass = variant === 'info' ? 'sw-btn-info-bg' : '';
+  const textClass = variant === 'info' ? 'sw-btn-info-text' : '';
   return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" class="sw-button" style="margin:24px auto;">
   <tr>
-    <td align="center" style="background-color:${v.accent};border-radius:6px;">
-      <a href="${url}" target="_blank" style="display:inline-block;padding:14px 36px;font-family:'Oswald','Arial Narrow',Arial,sans-serif;font-size:14px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#ffffff;text-decoration:none;border-radius:6px;mso-padding-alt:0;">
+    <td align="center" class="${bgClass}" style="background-color:${v.accent};border-radius:6px;">
+      <a href="${url}" target="_blank" class="${textClass}" style="display:inline-block;padding:14px 36px;font-family:'Oswald','Arial Narrow',Arial,sans-serif;font-size:14px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#ffffff;text-decoration:none;border-radius:6px;mso-padding-alt:0;">
         <!--[if mso]><i style="mso-font-width:150%;mso-text-raise:22pt;" hidden>&emsp;</i><![endif]-->
-        <span style="mso-text-raise:11pt;color:#ffffff;">${label}</span>
+        <span class="${textClass}" style="mso-text-raise:11pt;color:#ffffff;">${label}</span>
         <!--[if mso]><i style="mso-font-width:150%;" hidden>&emsp;&#8203;</i><![endif]-->
       </a>
     </td>
