@@ -99,7 +99,7 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
   const loadMxAndSquawks = async () => {
     const [{ data: mx }, { data: sq }] = await Promise.all([
       supabase.from('aft_maintenance_items').select('*').eq('aircraft_id', aircraft.id).is('deleted_at', null).order('due_time').order('due_date'),
-      supabase.from('aft_squawks').select('*').eq('aircraft_id', aircraft.id).eq('status', 'open').is('deleted_at', null).order('created_at', { ascending: false }),
+      supabase.from('aft_squawks').select('*').eq('aircraft_id', aircraft.id).eq('status', 'open').is('deleted_at', null).order('occurred_at', { ascending: false }).order('created_at', { ascending: false }),
     ]);
     setMxItems(mx || []);
     setSquawks(sq || []);

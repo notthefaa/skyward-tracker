@@ -1,49 +1,39 @@
 import { NextResponse } from 'next/server';
-import { requireAuth, requireAircraftAccess, requireAircraftAdmin, handleApiError } from '@/lib/auth';
+import { requireAuth, requireAircraftAdmin, handleApiError } from '@/lib/auth';
 import { setAppUser } from '@/lib/audit';
+import { idempotency } from '@/lib/idempotency';
+import { apiErrorCoded, handleCodedError } from '@/lib/apiResponse';
+import { validateVorCheckInput, submitVorCheck } from '@/lib/submissions';
+import { requireAircraftAccessCoded } from '@/lib/submissionAuth';
 
-const VOR_TOLERANCES: Record<string, number> = {
-  'VOT': 4,
-  'Ground Checkpoint': 4,
-  'Airborne Checkpoint': 6,
-  'Dual VOR': 4,
-};
-
-const VALID_TYPES = Object.keys(VOR_TOLERANCES);
-
-// POST — create VOR check (any user with aircraft access)
+// POST — create VOR check (any user with aircraft access).
+// Companion-app queue contract:
+//   * occurred_at (ISO datetime with tz) pins FAR 91.171 expiry math
+//     to when the check was actually performed, not when the server
+//     saw the request. A 29-day-old offline submission can't silently
+//     be recorded as fresh.
+//   * X-Idempotency-Key header makes retries safe — repeats return
+//     the cached response, no duplicate row.
 export async function POST(req: Request) {
   try {
     const { user, supabaseAdmin } = await requireAuth(req);
+    const idem = idempotency(supabaseAdmin, user.id, req, 'vor-checks/POST');
+    const cached = await idem.check();
+    if (cached) return cached;
+
     const { aircraftId, logData } = await req.json();
-    if (!aircraftId) return NextResponse.json({ error: 'Aircraft ID required.' }, { status: 400 });
-    if (!logData || typeof logData !== 'object') return NextResponse.json({ error: 'Invalid log data.' }, { status: 400 });
-    await requireAircraftAccess(supabaseAdmin, user.id, aircraftId);
+    if (!aircraftId) {
+      return apiErrorCoded('AIRCRAFT_ID_REQUIRED', 'Aircraft ID required.', 400, req);
+    }
+    const input = validateVorCheckInput(logData);
+    await requireAircraftAccessCoded(supabaseAdmin, user.id, aircraftId);
 
-    const { check_type, station, bearing_error, initials } = logData;
-    if (!VALID_TYPES.includes(check_type)) return NextResponse.json({ error: 'Invalid check type.' }, { status: 400 });
-    if (!station || typeof station !== 'string') return NextResponse.json({ error: 'Station/place is required.' }, { status: 400 });
-    if (!initials || typeof initials !== 'string') return NextResponse.json({ error: 'Initials are required.' }, { status: 400 });
-    const error = Number(bearing_error);
-    if (!Number.isFinite(error)) return NextResponse.json({ error: 'Bearing error must be a finite number.' }, { status: 400 });
+    const result = await submitVorCheck(supabaseAdmin, user.id, aircraftId, input);
 
-    const tolerance = VOR_TOLERANCES[check_type];
-    const passed = Math.abs(error) <= tolerance;
-
-    await setAppUser(supabaseAdmin, user.id);
-    await supabaseAdmin.from('aft_vor_checks').insert({
-      aircraft_id: aircraftId,
-      user_id: user.id,
-      check_type,
-      station: station.trim(),
-      bearing_error: error,
-      tolerance,
-      passed,
-      initials: initials.trim().toUpperCase(),
-    });
-
-    return NextResponse.json({ success: true });
-  } catch (error) { return handleApiError(error); }
+    const body = { success: true, id: result.id, passed: result.passed };
+    await idem.save(200, body);
+    return NextResponse.json(body);
+  } catch (error) { return handleCodedError(error, req); }
 }
 
 // DELETE — soft-delete VOR check (admin only)

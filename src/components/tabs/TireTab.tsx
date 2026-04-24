@@ -94,6 +94,7 @@ export default function TireTab({
         .select('*', { count: 'exact' })
         .eq('aircraft_id', aircraft!.id)
         .is('deleted_at', null)
+        .order('occurred_at', { ascending: false })
         .order('created_at', { ascending: false })
         .range(from, to);
       const total = count ?? 0;
@@ -210,7 +211,7 @@ export default function TireTab({
               )}
               {tireChecks.map((c, i) => (
                 <tr key={c.id} className="border-b border-gray-200 hover:bg-blue-50/50 transition-colors">
-                  <td className="py-3 pr-4 whitespace-nowrap">{new Date(c.created_at).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: '2-digit' })}</td>
+                  <td className="py-3 pr-4 whitespace-nowrap">{new Date(c.occurred_at ?? c.created_at).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: '2-digit' })}</td>
                   <td className="py-3 pr-4 whitespace-nowrap font-bold">{c.initials}</td>
                   <td className="py-3 pr-4 whitespace-nowrap">{c.nose_psi ?? '—'}</td>
                   <td className="py-3 pr-4 whitespace-nowrap">{c.left_main_psi ?? '—'}</td>

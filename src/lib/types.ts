@@ -137,6 +137,12 @@ export interface FlightLog {
   trip_reason?: string | null;
   fuel_gallons?: number | null;
   created_at: string;
+  /** When the flight actually happened. Server defaults to now() for
+   *  live submissions; the companion app sets this to the pilot's
+   *  local timestamp for offline-queued entries so compliance math
+   *  and UI sort order reflect when the event occurred, not when
+   *  the server finally received it. */
+  occurred_at: string;
 }
 
 export interface MaintenanceItem {
@@ -193,6 +199,10 @@ export interface Squawk {
   edited_by_initials?: string | null;
   resolved_by_event_id?: string | null;
   created_at: string;
+  /** When the squawk event physically occurred (companion-app offline
+   *  queue stamps the pilot's local time here). Display + chronology
+   *  keys off this; created_at stays as the server audit stamp. */
+  occurred_at: string;
 }
 
 export interface Note {
@@ -323,6 +333,10 @@ export interface VorCheck {
   passed: boolean;
   initials: string;
   created_at: string;
+  /** FAR 91.171 expiry keys off this. Companion-app offline flush
+   *  supplies the pilot's local check time here so a 29-day-old
+   *  queued check can't silently be recorded as fresh on replay. */
+  occurred_at: string;
 }
 
 export interface TireCheck {
@@ -335,6 +349,10 @@ export interface TireCheck {
   initials: string;
   notes?: string | null;
   created_at: string;
+  /** Inspection-counter dial keys off this. Companion-app offline flush
+   *  carries the pilot's local timestamp so the due-date cycle reflects
+   *  when the check was performed, not when the server saw it. */
+  occurred_at: string;
 }
 
 export interface OilLog {
@@ -347,6 +365,10 @@ export interface OilLog {
   initials: string;
   notes?: string | null;
   created_at: string;
+  /** Chronological ordering keys off this; companion-app offline flush
+   *  supplies the pilot's local timestamp so an out-of-order replay
+   *  between two pilots doesn't invert the oil-consumption curve. */
+  occurred_at: string;
 }
 
 export type DocType =

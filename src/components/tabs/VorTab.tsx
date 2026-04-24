@@ -53,6 +53,7 @@ export default function VorTab({
         .select('*', { count: 'exact' })
         .eq('aircraft_id', aircraft!.id)
         .is('deleted_at', null)
+        .order('occurred_at', { ascending: false })
         .order('created_at', { ascending: false })
         .range(from, to);
       const total = count ?? 0;
@@ -69,6 +70,7 @@ export default function VorTab({
         .select('*')
         .eq('aircraft_id', aircraft!.id)
         .is('deleted_at', null)
+        .order('occurred_at', { ascending: false })
         .order('created_at', { ascending: false })
         .limit(1);
       return (checks && checks.length > 0) ? checks[0] as VorCheck : null;
@@ -132,7 +134,7 @@ export default function VorTab({
       setShowModal(false);
       mutate();
       // Also revalidate the latest check
-      await supabase.from('aft_vor_checks').select('*').eq('aircraft_id', aircraft.id).order('created_at', { ascending: false }).limit(1);
+      await supabase.from('aft_vor_checks').select('*').eq('aircraft_id', aircraft.id).order('occurred_at', { ascending: false }).order('created_at', { ascending: false }).limit(1);
     } catch (err: any) { showError(err.message); }
     finally { setIsSubmitting(false); }
   };
@@ -183,7 +185,7 @@ export default function VorTab({
               )}
               {vorChecks.map((c, i) => (
                 <tr key={c.id} className="border-b border-gray-200 hover:bg-blue-50/50 transition-colors">
-                  <td className="py-3 pr-4 whitespace-nowrap">{new Date(c.created_at).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: '2-digit' })}</td>
+                  <td className="py-3 pr-4 whitespace-nowrap">{new Date(c.occurred_at ?? c.created_at).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: '2-digit' })}</td>
                   <td className="py-3 pr-4 whitespace-nowrap text-[10px] font-bold uppercase tracking-wider">{c.check_type}</td>
                   <td className="py-3 pr-4 whitespace-nowrap">{c.station}</td>
                   <td className="py-3 pr-4 whitespace-nowrap font-bold">{c.bearing_error > 0 ? '+' : ''}{c.bearing_error}°</td>

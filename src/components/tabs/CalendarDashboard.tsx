@@ -103,8 +103,12 @@ export default function CalendarDashboard({ aircraft, session }: CalendarDashboa
   const { data: flightHours } = useSWR(
     aircraft ? swrKeys.calHours(aircraft.id, hoursRange.from.getTime(), hoursRange.to.getTime()) : null,
     async () => {
-      const { data: baseline } = await supabase.from('aft_flight_logs').select('aftt, ftt, hobbs, tach').eq('aircraft_id', aircraft.id).is('deleted_at', null).lt('created_at', hoursRange.from.toISOString()).order('created_at', { ascending: false }).limit(1);
-      const { data: current } = await supabase.from('aft_flight_logs').select('aftt, ftt, hobbs, tach').eq('aircraft_id', aircraft.id).is('deleted_at', null).lte('created_at', hoursRange.to.toISOString()).order('created_at', { ascending: false }).limit(1);
+      // Hours-flown windows key off occurred_at (when the flight was
+      // physically performed), not created_at (when the server saw it).
+      // Otherwise an offline-queued flight from yesterday flushed today
+      // would land in today's window instead of yesterday's.
+      const { data: baseline } = await supabase.from('aft_flight_logs').select('aftt, ftt, hobbs, tach').eq('aircraft_id', aircraft.id).is('deleted_at', null).lt('occurred_at', hoursRange.from.toISOString()).order('occurred_at', { ascending: false }).order('created_at', { ascending: false }).limit(1);
+      const { data: current } = await supabase.from('aft_flight_logs').select('aftt, ftt, hobbs, tach').eq('aircraft_id', aircraft.id).is('deleted_at', null).lte('occurred_at', hoursRange.to.toISOString()).order('occurred_at', { ascending: false }).order('created_at', { ascending: false }).limit(1);
       if (!current || current.length === 0) return 0;
       const endLog = current[0] as any;
       // Pick a consistent metric for both endpoints — only use hobbs/aftt

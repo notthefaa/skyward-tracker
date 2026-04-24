@@ -140,11 +140,18 @@ export default function OilTab({
     async () => {
       const from = (page - 1) * PAGE_SIZE;
       const to = from + PAGE_SIZE;
+      // Sort by occurred_at (when the reading was physically taken)
+      // rather than created_at (when the server wrote the row). With
+      // the offline-queue companion app, these diverge — an entry
+      // dated 14:00 may not reach the DB until 16:30 if the phone was
+      // out of signal. created_at kicks in as a tiebreaker for entries
+      // with identical occurred_at.
       const { data: logs, count } = await supabase
         .from('aft_oil_logs')
         .select('*', { count: 'exact' })
         .eq('aircraft_id', aircraft!.id)
         .is('deleted_at', null)
+        .order('occurred_at', { ascending: false })
         .order('created_at', { ascending: false })
         .range(from, to);
       const total = count ?? 0;
@@ -281,7 +288,7 @@ export default function OilTab({
                 const after = hasAdd ? l.oil_qty + (l.oil_added as number) : null;
                 return (
                   <tr key={l.id} className="border-b border-gray-200 hover:bg-blue-50/50 transition-colors">
-                    <td className="py-3 pr-4 whitespace-nowrap">{new Date(l.created_at).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: '2-digit' })}</td>
+                    <td className="py-3 pr-4 whitespace-nowrap">{new Date(l.occurred_at ?? l.created_at).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: '2-digit' })}</td>
                     <td className="py-3 pr-4 whitespace-nowrap font-bold">{l.initials}</td>
                     <td className="py-3 pr-4 whitespace-nowrap">{l.oil_qty} qt</td>
                     <td className="py-3 pr-4 whitespace-nowrap">{hasAdd ? <span className="text-[#56B94A] font-bold">+{l.oil_added} qt</span> : '—'}</td>

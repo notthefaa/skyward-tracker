@@ -273,22 +273,27 @@ export default function TimesTab({
     let isLatestLog = true;
 
     if (editingId) {
+      // Edit validation anchors against the adjacent logs by occurred_at,
+      // matching how the server-side derive_latest aggregate works. Using
+      // created_at here instead would have us validate against a different
+      // neighbor than the RPC picks when the aircraft totals are rederived.
       const { data: editingLog } = await supabase
-        .from('aft_flight_logs').select('created_at')
+        .from('aft_flight_logs').select('occurred_at, created_at')
         .eq('id', editingId).maybeSingle();
       if (!editingLog) return showError("Flight log not found.");
 
+      const pivot = editingLog.occurred_at ?? editingLog.created_at;
       const [{ data: prevLogs }, { data: nextLogs }] = await Promise.all([
         supabase.from('aft_flight_logs').select('*')
           .eq('aircraft_id', aircraft!.id)
           .is('deleted_at', null)
-          .lt('created_at', editingLog.created_at)
-          .order('created_at', { ascending: false }).limit(1),
+          .lt('occurred_at', pivot)
+          .order('occurred_at', { ascending: false }).order('created_at', { ascending: false }).limit(1),
         supabase.from('aft_flight_logs').select('*')
           .eq('aircraft_id', aircraft!.id)
           .is('deleted_at', null)
-          .gt('created_at', editingLog.created_at)
-          .order('created_at', { ascending: true }).limit(1),
+          .gt('occurred_at', pivot)
+          .order('occurred_at', { ascending: true }).order('created_at', { ascending: true }).limit(1),
       ]);
       const prevLog = prevLogs?.[0] || null;
       nextLog = nextLogs?.[0] || null;

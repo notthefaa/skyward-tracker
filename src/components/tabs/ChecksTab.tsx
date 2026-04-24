@@ -237,12 +237,17 @@ export default function ChecksTab({ aircraft, session, role, userInitials }: Pro
   // last log), which needs its own small query — we still key it by
   // aircraft so matchesAircraft(id) invalidates it on any aircraft
   // write.
+  // Dials key off occurred_at (when the event physically happened)
+  // not created_at (when the server wrote the row). The companion-
+  // app offline queue can flush hours-old entries whose created_at
+  // would make them look fresher than they are. created_at is the
+  // tiebreaker for rows with identical occurred_at.
   const { data: vorLatest } = useSWR<VorCheck | null>(
     aircraft ? swrKeys.vorLatest(aircraft.id) : null,
     async () => {
       const { data } = await supabase
         .from('aft_vor_checks').select('*').eq('aircraft_id', aircraft!.id).is('deleted_at', null)
-        .order('created_at', { ascending: false }).limit(1);
+        .order('occurred_at', { ascending: false }).order('created_at', { ascending: false }).limit(1);
       return (data?.[0] as VorCheck | undefined) || null;
     },
   );
@@ -251,7 +256,7 @@ export default function ChecksTab({ aircraft, session, role, userInitials }: Pro
     async () => {
       const { data } = await supabase
         .from('aft_tire_checks').select('*').eq('aircraft_id', aircraft!.id).is('deleted_at', null)
-        .order('created_at', { ascending: false }).limit(10);
+        .order('occurred_at', { ascending: false }).order('created_at', { ascending: false }).limit(10);
       return { checks: (data || []) as TireCheck[] };
     },
   );
@@ -263,7 +268,7 @@ export default function ChecksTab({ aircraft, session, role, userInitials }: Pro
     async () => {
       const { data } = await supabase
         .from('aft_oil_logs').select('*').eq('aircraft_id', aircraft!.id).is('deleted_at', null)
-        .gt('oil_added', 0).order('created_at', { ascending: false }).limit(1);
+        .gt('oil_added', 0).order('occurred_at', { ascending: false }).order('created_at', { ascending: false }).limit(1);
       return (data?.[0] as OilLog | undefined) || null;
     },
   );

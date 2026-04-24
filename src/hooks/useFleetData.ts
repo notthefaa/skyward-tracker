@@ -167,12 +167,16 @@ export function useFleetData() {
     const ago = new Date();
     ago.setDate(ago.getDate() - FLIGHT_DATA_LOOKBACK_DAYS);
 
-    // Fetch flight logs for this specific aircraft
+    // Fetch flight logs for this specific aircraft. Filter + order by
+    // occurred_at (physical flight time) rather than created_at (server
+    // write time) so the companion app's offline queue doesn't skew
+    // burn-rate projections when old flights flush late.
     const { data: logs } = await supabase
       .from('aft_flight_logs')
-      .select('aircraft_id, ftt, tach, created_at')
+      .select('aircraft_id, ftt, tach, created_at, occurred_at')
       .eq('aircraft_id', aircraftId)
-      .gte('created_at', ago.toISOString())
+      .gte('occurred_at', ago.toISOString())
+      .order('occurred_at', { ascending: true })
       .order('created_at', { ascending: true });
 
     const planeLogs = logs || [];
@@ -196,7 +200,10 @@ export function useFleetData() {
 
     const [pR, lR] = await Promise.all([
       supabase.from('aft_aircraft').select('*').eq('id', aircraftId).is('deleted_at', null).maybeSingle(),
-      supabase.from('aft_flight_logs').select('aircraft_id, ftt, tach, created_at').eq('aircraft_id', aircraftId).is('deleted_at', null).gte('created_at', ago.toISOString()).order('created_at', { ascending: true }),
+      // 180-day burn-rate lookback: filter + order by occurred_at so
+      // an offline-queued flight from 170 days ago counts as a
+      // 170-day-old data point, not a fresh one.
+      supabase.from('aft_flight_logs').select('aircraft_id, ftt, tach, created_at, occurred_at').eq('aircraft_id', aircraftId).is('deleted_at', null).gte('occurred_at', ago.toISOString()).order('occurred_at', { ascending: true }).order('created_at', { ascending: true }),
     ]);
 
     if (pR.data) {

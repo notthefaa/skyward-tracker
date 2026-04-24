@@ -27,6 +27,10 @@ export default function SquawksTab({
       const { data } = await supabase
         .from('aft_squawks').select('*').eq('aircraft_id', aircraft!.id)
         .is('deleted_at', null)
+        // occurred_at first so offline-queued squawks (stamped with
+        // the pilot's local report time) thread into the timeline
+        // correctly; created_at as tiebreaker.
+        .order('occurred_at', { ascending: false })
         .order('created_at', { ascending: false });
 
       const resolved = (data || []).filter((s: any) => s.resolved_by_event_id);
@@ -382,7 +386,7 @@ export default function SquawksTab({
     const targetEmail = aircraft?.mx_contact_email || "";
     const subject = encodeURIComponent(`${aircraft!.tail_number}: ${sq.location}`);
     let body = `Aircraft: ${aircraft!.tail_number} (Serial: ${aircraft!.serial_number || 'N/A'})\n`;
-    body += `Reported Date: ${new Date(sq.created_at).toLocaleDateString()}\nStatus: ${sq.status.toUpperCase()}\n`;
+    body += `Reported Date: ${new Date(sq.occurred_at ?? sq.created_at).toLocaleDateString()}\nStatus: ${sq.status.toUpperCase()}\n`;
     body += `Airworthiness Affected: ${sq.affects_airworthiness ? 'YES (GROUNDED)' : 'NO'}\n\nLocation: ${sq.location}\nDescription: ${sq.description}\n\n`;
     if (sq.is_deferred) { body += `--- DEFERRAL DETAILS ---\nCategory: ${sq.deferral_category}\nMEL/CDL/NEF/MDL: ${sq.mel_number} / ${sq.cdl_number} / ${sq.nef_number} / ${sq.mdl_number}\n\n`; }
     body += `--- VIEW FULL DETAILS & PHOTOS ---\nSecure Link:\n${window.location.origin}/squawk/${sq.access_token}\n\n---\n`;
@@ -403,7 +407,7 @@ export default function SquawksTab({
       for (const sq of itemsToExport) {
         if (y > 260) { doc.addPage(); y = 20; }
         doc.setFontSize(12); doc.setFont("helvetica", "bold"); 
-        doc.text(`Date: ${new Date(sq.created_at).toLocaleDateString()} | Location: ${sq.location}`, 14, y); y += 6;
+        doc.text(`Date: ${new Date(sq.occurred_at ?? sq.created_at).toLocaleDateString()} | Location: ${sq.location}`, 14, y); y += 6;
         doc.setFontSize(10); doc.setFont("helvetica", "normal"); 
         doc.text(`Status: ${sq.status.toUpperCase()} | Airworthiness: ${sq.affects_airworthiness ? 'GROUNDED' : 'Monitor'}`, 14, y); y += 6;
         if (sq.is_deferred) { doc.text(`Deferred (${sq.deferral_category}): MEL/CDL/NEF: ${sq.mel_number||'-'} / ${sq.cdl_number||'-'} / ${sq.nef_number||'-'}`, 14, y); y += 6; }
@@ -483,7 +487,7 @@ export default function SquawksTab({
                   </div>
                 </div>
                 <div className="mt-3">
-                  <p className="text-xs text-gray-500 font-bold uppercase tracking-widest">{new Date(sq.created_at).toLocaleDateString()} | {sq.location} {sq.reporter_initials ? `| ${sq.reporter_initials}` : ''}</p>
+                  <p className="text-xs text-gray-500 font-bold uppercase tracking-widest">{new Date(sq.occurred_at ?? sq.created_at).toLocaleDateString()} | {sq.location} {sq.reporter_initials ? `| ${sq.reporter_initials}` : ''}</p>
                   <p className="text-sm text-navy mt-1 font-roboto whitespace-pre-wrap line-clamp-2">{sq.description}</p>
                   {sq.edited_at && <p className="text-[9px] text-gray-400 mt-2 font-bold uppercase tracking-widest">Edited {new Date(sq.edited_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}{sq.edited_by_initials ? ` by ${sq.edited_by_initials}` : ''}</p>}
                 </div>
@@ -528,7 +532,7 @@ export default function SquawksTab({
                   <span className="text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded text-white bg-gray-500">RESOLVED</span>
                 </div>
                 <div className="mt-3">
-                  <p className="text-xs text-gray-500 font-bold uppercase tracking-widest">{new Date(sq.created_at).toLocaleDateString()} | {sq.location} {sq.reporter_initials ? `| ${sq.reporter_initials}` : ''}</p>
+                  <p className="text-xs text-gray-500 font-bold uppercase tracking-widest">{new Date(sq.occurred_at ?? sq.created_at).toLocaleDateString()} | {sq.location} {sq.reporter_initials ? `| ${sq.reporter_initials}` : ''}</p>
                   <p className="text-sm text-gray-700 mt-1 font-roboto whitespace-pre-wrap line-clamp-2">{sq.description}</p>
                   {sq.resolved_note && <p className="text-xs text-[#56B94A] mt-2 italic">Resolution: {sq.resolved_note}</p>}
                   {renderResolvedBy(sq)}
@@ -565,7 +569,7 @@ export default function SquawksTab({
             <div className="grid grid-cols-2 gap-3 mb-4 text-sm">
               <div className="flex items-start gap-2"><MapPin size={14} className="text-danger shrink-0 mt-0.5" /><div><span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 block">Location</span><span className="font-bold text-navy">{detailSquawk.location}</span></div></div>
               <div className="flex items-start gap-2"><User size={14} className="text-gray-500 shrink-0 mt-0.5" /><div><span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 block">Reported By</span><span className="font-bold text-navy">{detailSquawk.reporter_initials || 'Unknown'}</span></div></div>
-              <div className="flex items-start gap-2"><Clock size={14} className="text-gray-500 shrink-0 mt-0.5" /><div><span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 block">Date</span><span className="font-bold text-navy">{new Date(detailSquawk.created_at).toLocaleDateString()}</span></div></div>
+              <div className="flex items-start gap-2"><Clock size={14} className="text-gray-500 shrink-0 mt-0.5" /><div><span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 block">Date</span><span className="font-bold text-navy">{new Date(detailSquawk.occurred_at ?? detailSquawk.created_at).toLocaleDateString()}</span></div></div>
               {detailSquawk.edited_at && (
                 <div className="flex items-start gap-2"><Edit2 size={14} className="text-mxOrange shrink-0 mt-0.5" /><div><span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 block">Last Edited</span><span className="font-bold text-navy">{new Date(detailSquawk.edited_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}{detailSquawk.edited_by_initials ? ` by ${detailSquawk.edited_by_initials}` : ''}</span></div></div>
               )}
@@ -666,7 +670,7 @@ export default function SquawksTab({
                 <label key={sq.id} className="flex items-start gap-3 p-3 border border-gray-200 rounded cursor-pointer hover:bg-gray-50 transition-colors">
                   <input type="checkbox" checked={selectedForExport.includes(sq.id)} onChange={() => toggleExportSelection(sq.id)} className="mt-1 w-4 h-4 text-danger border-gray-300 rounded focus:ring-danger" />
                   <div className="flex-1">
-                    <p className="text-xs font-bold text-navy">{new Date(sq.created_at).toLocaleDateString()} - {sq.location}</p>
+                    <p className="text-xs font-bold text-navy">{new Date(sq.occurred_at ?? sq.created_at).toLocaleDateString()} - {sq.location}</p>
                     <p className="text-[10px] text-gray-500 line-clamp-1">{sq.description}</p>
                   </div>
                   <span className={`text-[8px] font-bold uppercase px-1.5 py-0.5 rounded ${sq.status === 'resolved' ? 'bg-gray-200 text-gray-700' : 'bg-orange-100 text-orange-700'}`}>{sq.status}</span>

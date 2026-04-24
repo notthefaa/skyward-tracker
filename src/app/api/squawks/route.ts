@@ -3,8 +3,13 @@ import { requireAuth, requireAircraftAccess, requireAircraftAdmin, handleApiErro
 import { setAppUser } from '@/lib/audit';
 import { idempotency } from '@/lib/idempotency';
 import { stripProtectedFields } from '@/lib/validation';
+import { apiErrorCoded, handleCodedError } from '@/lib/apiResponse';
+import { validateSquawkInput, submitSquawk } from '@/lib/submissions';
+import { requireAircraftAccessCoded } from '@/lib/submissionAuth';
 
-// POST — report squawk (any user with aircraft access)
+// POST — report squawk (any user with aircraft access).
+// occurred_at + idempotency. Mass-assignment still handled by
+// stripProtectedFields inside submitSquawk.
 export async function POST(req: Request) {
   try {
     const { user, supabaseAdmin } = await requireAuth(req);
@@ -13,26 +18,18 @@ export async function POST(req: Request) {
     if (cached) return cached;
 
     const { aircraftId, squawkData } = await req.json();
-    if (!aircraftId) return NextResponse.json({ error: 'Aircraft ID required.' }, { status: 400 });
-    await requireAircraftAccess(supabaseAdmin, user.id, aircraftId);
+    if (!aircraftId) {
+      return apiErrorCoded('AIRCRAFT_ID_REQUIRED', 'Aircraft ID required.', 400, req);
+    }
+    const input = validateSquawkInput(squawkData);
+    await requireAircraftAccessCoded(supabaseAdmin, user.id, aircraftId);
 
-    await setAppUser(supabaseAdmin, user.id);
-    // Strip server-owned fields, then set aircraft_id + reported_by
-    // authoritatively so a client can't spoof authorship or drop a
-    // squawk onto a different aircraft by sneaking the fields into
-    // the payload.
-    const safeSquawk = stripProtectedFields(squawkData);
-    const { data, error } = await supabaseAdmin
-      .from('aft_squawks')
-      .insert({ ...safeSquawk, aircraft_id: aircraftId, reported_by: user.id })
-      .select()
-      .single();
-    if (error) throw error;
+    const result = await submitSquawk(supabaseAdmin, user.id, aircraftId, input);
 
-    const body = { success: true, squawk: data };
+    const body = { success: true, squawk: result.row };
     await idem.save(200, body);
     return NextResponse.json(body);
-  } catch (error) { return handleApiError(error); }
+  } catch (error) { return handleCodedError(error, req); }
 }
 
 // PUT — edit or resolve squawk (author or aircraft admin).
@@ -40,20 +37,29 @@ export async function POST(req: Request) {
 // supplied aircraftId before the admin check, otherwise an admin on
 // Aircraft A could supply their own aircraftId + Aircraft B's squawk ID
 // and pass the admin-on-aircraftId gate while editing B's squawk.
+//
+// Companion-app contract: a resolve-PUT that lands before the create-
+// POST (offline queue replayed out of dependency order) returns
+// `SQUAWK_NOT_FOUND`. The companion app should retain the resolve in
+// the queue and retry after the create succeeds.
 export async function PUT(req: Request) {
   try {
     const { user, supabaseAdmin } = await requireAuth(req);
     const { squawkId, aircraftId, squawkData } = await req.json();
-    if (!squawkId || !aircraftId) return NextResponse.json({ error: 'Squawk ID and Aircraft ID required.' }, { status: 400 });
+    if (!squawkId || !aircraftId) {
+      return apiErrorCoded('VALIDATION_ERROR', 'Squawk ID and Aircraft ID required.', 400, req);
+    }
 
     const { data: squawk } = await supabaseAdmin
       .from('aft_squawks')
       .select('reported_by, aircraft_id, deleted_at')
       .eq('id', squawkId)
       .maybeSingle();
-    if (!squawk || squawk.deleted_at) return NextResponse.json({ error: 'Squawk not found.' }, { status: 404 });
+    if (!squawk || squawk.deleted_at) {
+      return apiErrorCoded('SQUAWK_NOT_FOUND', 'Squawk not found.', 404, req);
+    }
     if (squawk.aircraft_id !== aircraftId) {
-      return NextResponse.json({ error: 'Squawk does not belong to the given aircraft.' }, { status: 403 });
+      return apiErrorCoded('NO_AIRCRAFT_ACCESS', 'Squawk does not belong to the given aircraft.', 403, req);
     }
 
     const isAuthor = squawk.reported_by === user.id;
@@ -74,7 +80,7 @@ export async function PUT(req: Request) {
     if (error) throw error;
 
     return NextResponse.json({ success: true });
-  } catch (error) { return handleApiError(error); }
+  } catch (error) { return handleCodedError(error, req); }
 }
 
 // DELETE — soft-delete squawk (author or aircraft admin). Same
