@@ -5,6 +5,7 @@ import {
   processMxItem,
   getMxTextColor,
   isMxExpired,
+  computeMxDueState,
 } from '../math';
 
 // ---------------------------------------------------------------
@@ -30,6 +31,13 @@ function generateLogs(
     totalDays = 90,
     daysAgoStart = 0,
     useFtt = false,
+    /** Simulate the companion-app offline-queue case: `created_at`
+     * reflects the flush time (default 0 days ago), separate from
+     * `occurred_at` (the real flight time). Passing `createdAtOverride`
+     * pins every log's created_at to that many days ago — the engine
+     * should still honor occurred_at and not be fooled by the fresh
+     * write timestamp. */
+    createdAtOverride,
   }: {
     aircraftId?: string;
     startTach?: number;
@@ -37,6 +45,7 @@ function generateLogs(
     totalDays?: number;
     daysAgoStart?: number;
     useFtt?: boolean;
+    createdAtOverride?: number;
   } = {}
 ) {
   const now = Date.now();
@@ -46,11 +55,16 @@ function generateLogs(
   for (let i = 0; i < count; i++) {
     const daysAgo = daysAgoStart + totalDays - i * interval;
     const tachValue = startTach + i * hoursPerFlight;
+    const occurredAt = new Date(now - daysAgo * MS_PER_DAY).toISOString();
+    const createdAt = createdAtOverride !== undefined
+      ? new Date(now - createdAtOverride * MS_PER_DAY).toISOString()
+      : occurredAt;
     logs.push({
       aircraft_id: aircraftId,
       tach: useFtt ? null : tachValue,
       ftt: useFtt ? tachValue : null,
-      created_at: new Date(now - daysAgo * MS_PER_DAY).toISOString(),
+      created_at: createdAt,
+      occurred_at: occurredAt,
     });
   }
 
@@ -425,5 +439,178 @@ describe('isMxExpired', () => {
       due_date: futureDate.toISOString().split('T')[0],
     };
     expect(isMxExpired(item, 0)).toBe(false);
+  });
+
+  it('honors the timezone argument when comparing due_date against "today"', () => {
+    // Server-side grounding check (Howard's check_airworthiness tool)
+    // runs on Vercel UTC. Without passing the aircraft's zone, an item
+    // due-tomorrow-in-Pacific-time can appear expired in the
+    // UTC-evening window (UTC day has rolled over, Pacific hasn't).
+    // Pass in a future date in the aircraft's zone and confirm it
+    // resolves to "not expired" regardless of UTC wall-clock.
+    const tomorrowUtc = new Date();
+    tomorrowUtc.setUTCDate(tomorrowUtc.getUTCDate() + 1);
+    const dueDate = tomorrowUtc.toISOString().split('T')[0];
+    const item = {
+      id: 'mx-tz', aircraft_id: 'p', item_name: 'Annual',
+      tracking_type: 'date', is_required: true,
+      due_date: dueDate,
+    };
+    // Pacific zone: tomorrow-in-UTC is at earliest "today" in Pacific,
+    // never expired.
+    expect(isMxExpired(item, 0, 'America/Los_Angeles')).toBe(false);
+    // No-zone fallback behaves like UTC — same answer for a
+    // tomorrow-in-UTC date.
+    expect(isMxExpired(item, 0)).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------
+// occurred_at drift — regression guard
+// ---------------------------------------------------------------
+
+describe('occurred_at drives predictive math, not created_at', () => {
+  it('recency factor keys off occurred_at, not the flush time', () => {
+    // Scenario: a fleet of old flights. Every log has occurred_at
+    // 60-90 days ago (inactive plane) but created_at = today (the
+    // companion app just flushed an offline queue). The engine must
+    // NOT treat this as a fresh-flying aircraft — recency score should
+    // reflect the real flight time, keeping confidence low.
+    const oldLogs = generateLogs(20, {
+      startTach: 1000,
+      hoursPerFlight: 2,
+      totalDays: 30,
+      daysAgoStart: 60,         // flights 60-90 days ago (occurred_at)
+      createdAtOverride: 0,     // but written to the DB today
+    });
+    const plane = makePlane();
+    const result = computeMetrics(plane, oldLogs);
+
+    // Without the fix, recency would be at its max (30 pts, since
+    // newest created_at is today) and confidence would sit ~90. With
+    // occurred_at respected, the newest actual flight is 60 days ago,
+    // past the 14-day grace, well into decay — recency ≈ 0.
+    expect(result.confidenceScore).toBeLessThan(60);
+  });
+
+  it('burn rate does not spike when offline-queued flights land with fresh created_at', () => {
+    // Same offline-flush scenario, but the operative check is that
+    // the exponentially-weighted burn rate doesn't pin all 20 flights
+    // at daysAgo=0 (weight=1 each). If the engine mistakenly uses
+    // created_at, every flight gets the maximum weight and the burn
+    // rate collapses to `hoursPerFlight / 1-day-gap` = 2 h/day. With
+    // occurred_at honored, each flight sits at its real age and the
+    // result is smaller because of the 14-day gap cap + 90-day
+    // activity window.
+    const logs = generateLogs(20, {
+      startTach: 1000,
+      hoursPerFlight: 2,
+      totalDays: 30,
+      daysAgoStart: 60,         // real flights 60-90 days ago
+      createdAtOverride: 0,     // all flushed today
+    });
+    const plane = makePlane();
+    const result = computeMetrics(plane, logs);
+
+    // If created_at were driving: 20 flights today → recency-weighted
+    // rate of ~2 h/day. Real math: flights 60-90 days ago, activity
+    // ratio is 0 (nothing in last 90 days is contradicted by the
+    // filter — let's just assert the rate didn't spike to the 2 h/day
+    // ceiling).
+    expect(result.burnRate).toBeLessThan(1.5);
+  });
+
+  it('falls back to created_at when occurred_at is missing (legacy rows)', () => {
+    // Any log row somehow without occurred_at should still compute.
+    // Not exhaustive, just a smoke test that the fallback path works.
+    const now = Date.now();
+    const legacyLogs = [
+      {
+        aircraft_id: 'plane-1',
+        tach: 1000,
+        ftt: null,
+        created_at: new Date(now - 60 * MS_PER_DAY).toISOString(),
+        occurred_at: null, // pre-backfill row
+      },
+      {
+        aircraft_id: 'plane-1',
+        tach: 1040,
+        ftt: null,
+        created_at: new Date(now - 30 * MS_PER_DAY).toISOString(),
+        occurred_at: null,
+      },
+    ];
+    const plane = makePlane();
+    const result = computeMetrics(plane, legacyLogs);
+    expect(result.burnRate).toBeGreaterThanOrEqual(0);
+    expect(Number.isFinite(result.confidenceScore)).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------
+// computeMxDueState — shared primitive for cron + UI
+// ---------------------------------------------------------------
+
+describe('computeMxDueState', () => {
+  it('computes hoursLeft and daysFromHours for a time-based item', () => {
+    const item = {
+      id: 'mx', aircraft_id: 'p', item_name: 'Oil',
+      tracking_type: 'time', due_time: 1200,
+    };
+    const s = computeMxDueState(item, 1100, 2);
+    expect(s.hasTimeData).toBe(true);
+    expect(s.hasDateData).toBe(false);
+    expect(s.hoursLeft).toBe(100);
+    expect(s.daysFromHours).toBe(50);
+    expect(s.daysLeft).toBe(Infinity);
+    expect(s.isTimeExpired).toBe(false);
+  });
+
+  it('returns Infinity on the unused dimension', () => {
+    const item = {
+      id: 'mx', aircraft_id: 'p', item_name: 'Date-only',
+      tracking_type: 'date', due_date: '2099-01-01',
+    };
+    const s = computeMxDueState(item, 0, 0);
+    expect(s.hasTimeData).toBe(false);
+    expect(s.hasDateData).toBe(true);
+    expect(s.hoursLeft).toBe(Infinity);
+    expect(s.daysFromHours).toBe(Infinity);
+    expect(s.daysLeft).toBeGreaterThan(0);
+  });
+
+  it('marks time side expired when current engine time >= due_time', () => {
+    const item = {
+      id: 'mx', aircraft_id: 'p', item_name: 'Overhaul',
+      tracking_type: 'time', due_time: 1000,
+    };
+    const s = computeMxDueState(item, 1050, 2);
+    expect(s.hoursLeft).toBe(-50);
+    expect(s.isTimeExpired).toBe(true);
+  });
+
+  it('returns infinity daysFromHours when burn rate is 0', () => {
+    const item = {
+      id: 'mx', aircraft_id: 'p', item_name: 'Oil',
+      tracking_type: 'time', due_time: 1200,
+    };
+    const s = computeMxDueState(item, 1100, 0);
+    expect(s.hoursLeft).toBe(100);
+    expect(s.daysFromHours).toBe(Infinity);
+  });
+
+  it('populates both sides for tracking_type="both" items', () => {
+    const futureDate = new Date();
+    futureDate.setDate(futureDate.getDate() + 45);
+    const item = {
+      id: 'mx', aircraft_id: 'p', item_name: 'Annual',
+      tracking_type: 'both', due_time: 2000,
+      due_date: futureDate.toISOString().split('T')[0],
+    };
+    const s = computeMxDueState(item, 1950, 2);
+    expect(s.hasTimeData).toBe(true);
+    expect(s.hasDateData).toBe(true);
+    expect(s.hoursLeft).toBe(50);
+    expect(s.daysLeft).toBe(45);
   });
 });

@@ -3,8 +3,7 @@ import { Resend } from 'resend';
 import { createAdminClient, handleApiError } from '@/lib/auth';
 import { env } from '@/lib/env';
 import { escapeHtml } from '@/lib/sanitize';
-import { computeMetrics } from '@/lib/math';
-import { daysUntilDate } from '@/lib/pilotTime';
+import { computeMetrics, computeMxDueState } from '@/lib/math';
 import { FLIGHT_DATA_LOOKBACK_DAYS, MX_AGGREGATION_WINDOW_DAYS } from '@/lib/constants';
 
 // How many days to let an event sit in ready_for_pickup before nudging
@@ -45,13 +44,21 @@ export async function GET(req: Request) {
     const schedDays = settings?.sched_days ?? 30;
     const predictiveSchedDays = settings?.predictive_sched_days ?? 45;
 
-    // Fetch Flight Logs from lookback window
+    // Fetch Flight Logs from lookback window. Filter + order by
+    // `occurred_at` (when the flight physically happened), not
+    // `created_at` (server write time). Without this, a companion-app
+    // offline flush would dump a batch of logs with `created_at=today`
+    // and skew both the 180-day window inclusion AND the burn-rate
+    // math — every just-flushed flight would look like "flown today"
+    // and spike recency-weighted projections.
     const lookbackDate = new Date();
     lookbackDate.setDate(lookbackDate.getDate() - FLIGHT_DATA_LOOKBACK_DAYS);
     const { data: recentLogs } = await supabaseAdmin
       .from('aft_flight_logs')
-      .select('aircraft_id, ftt, tach, created_at')
-      .gte('created_at', lookbackDate.toISOString())
+      .select('aircraft_id, ftt, tach, created_at, occurred_at')
+      .is('deleted_at', null)
+      .gte('occurred_at', lookbackDate.toISOString())
+      .order('occurred_at', { ascending: true })
       .order('created_at', { ascending: true });
 
     // Build set of MX items already in active events
@@ -127,35 +134,23 @@ export async function GET(req: Request) {
         // Skip items already in an active maintenance event
         if (mxIdsInActiveEvents.has(mx.id)) continue;
 
-        // Which dimensions this item tracks + whether they're filled in.
-        // 'both' items (annuals: tracking_type='both', time_interval=100,
-        // date_interval_days=365) MUST fire on whichever deadline hits
-        // first. Prior to this, the threshold-hit checks below only
-        // matched 'time' or 'date' tracking_types — 'both' items
-        // silently never triggered any reminder or scheduling email,
-        // which is a safety-of-flight problem for annuals.
-        const hasTimeDim = mx.tracking_type === 'time' || mx.tracking_type === 'both';
-        const hasDateDim = mx.tracking_type === 'date' || mx.tracking_type === 'both';
-        const hasTimeData = hasTimeDim && mx.due_time !== null && mx.due_time !== undefined;
-        const hasDateData = hasDateDim && mx.due_date !== null && mx.due_date !== undefined;
+        // Per-dimension due state — shared helper used by the client
+        // UI (`processMxItem`) and here. One formula, one place to
+        // update. 'both' items (annuals: tracking_type='both',
+        // time_interval=100, date_interval_days=365) fire on whichever
+        // deadline hits first; the helper populates both sides so the
+        // threshold-hit checks below can pick either.
+        const state = computeMxDueState(
+          mx,
+          aircraft.total_engine_time || 0,
+          burnRate,
+          aircraft.time_zone,
+        );
+        const { hasTimeData, hasDateData, hoursLeft, daysFromHours, daysLeft } = state;
 
         // Skip items that haven't been set up yet (no relevant due value
         // configured — a template insert that was never filled in).
         if (!hasTimeData && !hasDateData) continue;
-
-        // Per-dimension remaining. Infinity when the dimension isn't
-        // applicable or isn't configured, so the min() below naturally
-        // picks the populated dimension.
-        const hoursLeft = hasTimeData
-          ? (mx.due_time as number) - (aircraft.total_engine_time || 0)
-          : Infinity;
-        const daysFromHours = hasTimeData && burnRate > 0 ? hoursLeft / burnRate : Infinity;
-        // Compute "days to due_date" against today in the pilot's
-        // timezone, not the Vercel UTC runtime. Without this, a
-        // reminder email at the UTC day-boundary rounded a
-        // tomorrow-for-the-pilot item to "due today".
-        const daysLeftRaw = hasDateData ? daysUntilDate(mx.due_date, aircraft.time_zone) : Infinity;
-        const daysLeft = hasDateData ? (Number.isFinite(daysLeftRaw) ? daysLeftRaw : 0) : Infinity;
 
         // Headline `remaining` + `projectedDays` for downstream sort
         // and aggregation window. For 'time'-only it's hours; for

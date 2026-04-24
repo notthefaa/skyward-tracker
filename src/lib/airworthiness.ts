@@ -147,7 +147,10 @@ export function computeAirworthinessStatus(input: Inputs): AirworthinessVerdict 
   // (e.g. oil change reminders) shouldn't flip the nav to red.
   for (const item of input.mxItems) {
     if (item.is_required !== true) continue;
-    if (isMxExpired(item, input.aircraft.total_engine_time || 0)) {
+    // Pass the aircraft's zone so a late-evening Howard call from a
+    // western-US pilot doesn't see a UTC-midnight-crossed item as
+    // expired before the pilot's own calendar has rolled over.
+    if (isMxExpired(item, input.aircraft.total_engine_time || 0, input.aircraft.time_zone)) {
       findings.push({
         severity: 'grounded',
         citation: '91.417',

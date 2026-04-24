@@ -14,17 +14,39 @@
 //   aggressively drops confidence regardless of historical data quality.
 // - Projection range uses a proper percentile-style spread based on
 //   the weekly variance, not just the CV.
-//
-// Backward-compatible: same function signatures, same return shape.
+// - All time-of-flight math keys off `occurred_at` when present (added
+//   in migration 039). `created_at` remains as a fallback for any log
+//   that somehow lacks it, but the authoritative event time is the
+//   pilot-supplied `occurred_at`. Without this the companion-app
+//   offline queue would skew burn rate + recency toward whenever the
+//   queue flushed, not when the flight actually happened.
 // =============================================================
 
 import type { AircraftWithMetrics, ProcessedMxItem } from './types';
+import { daysUntilDate, isDateExpiredInZone } from './pilotTime';
 
 interface MinimalFlightLog {
   aircraft_id: string;
   ftt: number | null;
   tach: number | null;
   created_at: string;
+  /** When the flight physically occurred. Present on every row
+   *  post-migration-039 (backfilled from created_at). Optional on
+   *  this type so upstream fetchers that haven't been migrated yet
+   *  still compile; `getEventTime` below resolves to created_at
+   *  when missing. */
+  occurred_at?: string | null;
+}
+
+/**
+ * Canonical event-time resolver. Prefer occurred_at (when the flight
+ * actually happened), fall back to created_at (when the server wrote
+ * the row). Returns epoch-ms. The rest of the engine talks in
+ * timestamps, so this is the single point where the fallback lives.
+ */
+function getEventTime(log: MinimalFlightLog): number {
+  const raw = log.occurred_at ?? log.created_at;
+  return new Date(raw).getTime();
 }
 
 // ---------------------------------------------------------------
@@ -54,7 +76,7 @@ const RECENCY_KILL_DAYS = 90;
 
 interface FlightEvent {
   hoursFlown: number;       // Engine hours consumed this flight
-  timestamp: number;        // Epoch ms of this flight
+  timestamp: number;        // Epoch ms of this flight (occurred_at)
   daysAgo: number;          // Calendar days from now
   dailyRate: number;        // hours / daysSincePrevFlight
   daysSincePrev: number;    // Gap since previous flight
@@ -62,7 +84,7 @@ interface FlightEvent {
 
 /**
  * Converts sequential logs into flight events with computed rates.
- * Logs MUST be sorted ascending by created_at.
+ * Logs MUST be sorted ascending by occurred_at (fetcher responsibility).
  */
 function extractFlightEvents(
   planeLogs: MinimalFlightLog[],
@@ -83,8 +105,8 @@ function extractFlightEvents(
 
     if (hoursFlown <= 0) continue; // Skip bad data
 
-    const timestamp = new Date(curr.created_at).getTime();
-    const prevTimestamp = new Date(prev.created_at).getTime();
+    const timestamp = getEventTime(curr);
+    const prevTimestamp = getEventTime(prev);
     const daysSincePrev = Math.max(1, (timestamp - prevTimestamp) / MS_PER_DAY);
     const daysAgo = Math.max(0, (now - timestamp) / MS_PER_DAY);
 
@@ -107,21 +129,20 @@ function extractFlightEvents(
 /**
  * Computes the exponentially-weighted burn rate using active-day weighting.
  *
- * Instead of dividing total hours by total calendar days (which dilutes the
- * rate during idle periods), we compute two separate metrics:
+ * Two metrics:
  *
  * 1. activeRate: How fast the plane burns hours when it IS flying
- *    (weighted average of hoursFlown / daysSincePrev, but only counting
- *    the active periods — gaps > 14 days are capped so they don't dilute)
+ *    (weighted average of hoursFlown / daysSincePrev, gaps > 14 days
+ *    capped so they don't dilute).
  *
- * 2. activityRatio: What fraction of the time the plane is in active use
- *    (measured over the most recent 90 days)
+ * 2. activityRatio: What fraction of the last 90 days had at least
+ *    one flight. This is a strict flight-day count — gaps between
+ *    flights don't get counted as "in rotation" because that
+ *    overstates utilization for sporadic aircraft. A plane that
+ *    flew on 10 separate days in the last 90 has activityRatio ≈
+ *    0.11, which correctly shows up as a low calendar rate.
  *
  * calendarBurnRate = activeRate * activityRatio
- *
- * This means: a plane that flies 4 hrs/day when active but only flies
- * 50% of the time gets a calendar rate of 2 hrs/day — which is what
- * the mechanic actually cares about for scheduling.
  */
 function computeBurnRate(events: FlightEvent[]): {
   calendarRate: number;
@@ -147,21 +168,22 @@ function computeBurnRate(events: FlightEvent[]): {
   const activeRate = weightedActiveDays > 0 ? weightedHours / weightedActiveDays : 0;
 
   // --- Activity ratio (last 90 days) ---
+  // Count DISTINCT days that had at least one flight. The old logic
+  // filled days between flights which overstated activity — a plane
+  // that flew once on day 0 and once on day 30 would mark all 30
+  // intermediate days as "active," inflating the ratio to 33% on an
+  // aircraft that was parked 93% of the month. Strict flight-day
+  // count is the operationally honest metric.
   const now = Date.now();
   const ninetyDaysAgo = now - (90 * MS_PER_DAY);
   const recentEvents = events.filter(e => e.timestamp >= ninetyDaysAgo);
 
   let activityRatio = 0;
   if (recentEvents.length > 0) {
-    // Count days that had flight activity within the 90-day window
     const activeDaySet = new Set<number>();
     for (const evt of recentEvents) {
-      // Mark each day in the flight's active period
-      const flightEndDay = Math.floor((now - evt.timestamp) / MS_PER_DAY);
-      const flightStartDay = Math.min(flightEndDay + Math.ceil(evt.daysSincePrev), 90);
-      for (let d = flightEndDay; d < flightStartDay && d < 90; d++) {
-        activeDaySet.add(d);
-      }
+      const flightDay = Math.floor((now - evt.timestamp) / MS_PER_DAY);
+      if (flightDay >= 0 && flightDay < 90) activeDaySet.add(flightDay);
     }
     activityRatio = activeDaySet.size / 90;
   }
@@ -192,7 +214,6 @@ function computeWeeklyCV(events: FlightEvent[]): number {
   // Bucket flights into 7-day windows going back MAX_LOOKBACK_DAYS
   const numWindows = Math.floor(MAX_LOOKBACK_DAYS / VARIANCE_WINDOW_DAYS);
   const weeklyHours: number[] = new Array(numWindows).fill(0);
-  const now = Date.now();
 
   for (const evt of events) {
     const windowIndex = Math.floor(evt.daysAgo / VARIANCE_WINDOW_DAYS);
@@ -246,7 +267,7 @@ function computeConfidence(
 
   // 1. History depth: 0-20 pts
   const oldestLog = planeLogs[0];
-  const daysSpan = Math.max(1, (now - new Date(oldestLog.created_at).getTime()) / MS_PER_DAY);
+  const daysSpan = Math.max(1, (now - getEventTime(oldestLog)) / MS_PER_DAY);
   const depthScore = Math.min(20, (daysSpan / MAX_LOOKBACK_DAYS) * 20);
 
   // 2. Data density: 0-20 pts (target: 4 flights per month)
@@ -263,7 +284,7 @@ function computeConfidence(
 
   // 4. Recency: 0-30 pts — decays aggressively when the plane stops flying
   const newestLog = planeLogs[planeLogs.length - 1];
-  const daysSinceLastFlight = (now - new Date(newestLog.created_at).getTime()) / MS_PER_DAY;
+  const daysSinceLastFlight = (now - getEventTime(newestLog)) / MS_PER_DAY;
 
   let recencyScore = 30;
   if (daysSinceLastFlight > RECENCY_GRACE_PERIOD) {
@@ -332,7 +353,7 @@ function computeFallbackBurnRate(plane: any, planeLogs: MinimalFlightLog[]): num
   const currentTime = plane.total_engine_time || 0;
   const log = planeLogs[0];
   const logTime = isTurbine ? (log.ftt ?? 0) : (log.tach ?? 0);
-  const daysElapsed = Math.max(1, (Date.now() - new Date(log.created_at).getTime()) / MS_PER_DAY);
+  const daysElapsed = Math.max(1, (Date.now() - getEventTime(log)) / MS_PER_DAY);
   return currentTime > logTime ? (currentTime - logTime) / daysElapsed : 0;
 }
 
@@ -358,47 +379,117 @@ export function enrichAircraftWithMetrics(
 // MAINTENANCE PROCESSING
 // ---------------------------------------------------------------
 
+/**
+ * Per-dimension numeric state for a maintenance item. The shared
+ * primitive that both `processMxItem` (UI formatting) and the
+ * mx-reminders cron (threshold decisions) build on top of. Pulling
+ * it out means the hours-left + days-left formulas have a single
+ * source of truth — the cron can't drift from the UI.
+ */
+export interface MxDueState {
+  /** true if the item is configured to track hours at all */
+  hasTimeData: boolean;
+  /** true if the item is configured to track calendar days at all */
+  hasDateData: boolean;
+  /** engine hours remaining until due_time (Infinity when no time data) */
+  hoursLeft: number;
+  /** calendar days projected from hours-remaining / burn-rate (Infinity
+   *  when no time data or no burn rate) */
+  daysFromHours: number;
+  /** calendar days until due_date in the aircraft's local zone
+   *  (Infinity when no date data, handles UTC-boundary skew) */
+  daysLeft: number;
+  /** hours-side past due */
+  isTimeExpired: boolean;
+  /** date-side past due (timezone-aware) */
+  isDateExpired: boolean;
+}
+
+/**
+ * Compute the raw numeric due-state for an MX item. Timezone-aware
+ * on the date side so "today" matches the pilot's perception rather
+ * than the server runtime's UTC wall-clock.
+ */
+export function computeMxDueState(
+  item: any,
+  currentEngineTime: number,
+  burnRate: number,
+  timeZone?: string | null,
+): MxDueState {
+  const hasTimeDim = item.tracking_type === 'time' || item.tracking_type === 'both';
+  const hasDateDim = item.tracking_type === 'date' || item.tracking_type === 'both';
+  const hasTimeData = hasTimeDim && item.due_time !== null && item.due_time !== undefined;
+  const hasDateData = hasDateDim && item.due_date !== null && item.due_date !== undefined;
+
+  const hoursLeft = hasTimeData
+    ? (item.due_time as number) - (currentEngineTime || 0)
+    : Infinity;
+  const daysFromHours = hasTimeData && burnRate > 0
+    ? hoursLeft / burnRate
+    : Infinity;
+
+  // Date side: use pilot-zone "today" so a UTC-evening cron or
+  // server-side Howard call doesn't flip an item to expired the night
+  // before the pilot's local calendar rolls over.
+  const daysLeftRaw = hasDateData ? daysUntilDate(item.due_date, timeZone) : Infinity;
+  const daysLeft = hasDateData ? (Number.isFinite(daysLeftRaw) ? daysLeftRaw : 0) : Infinity;
+
+  const isTimeExpired = hasTimeData && hoursLeft <= 0;
+  const isDateExpired = hasDateData && isDateExpiredInZone(item.due_date, timeZone);
+
+  return {
+    hasTimeData,
+    hasDateData,
+    hoursLeft,
+    daysFromHours,
+    daysLeft,
+    isTimeExpired,
+    isDateExpired,
+  };
+}
+
 export function processMxItem(
   item: any,
   currentEngineTime: number,
   burnRate: number,
   burnRateLow?: number,
-  burnRateHigh?: number
+  burnRateHigh?: number,
+  /** Pilot's aircraft timezone — optional. Client-side this is safe
+   *  to omit (browser already runs in the pilot's local time). Pass it
+   *  when rendering from a server-side runtime (Howard, cron) so the
+   *  date-side "days remaining" uses the pilot's calendar, not UTC. */
+  timeZone?: string | null,
 ): ProcessedMxItem {
+  const state = computeMxDueState(item, currentEngineTime, burnRate, timeZone);
+
   // Compute time-side status (hours remaining + projected days)
-  const timeResult = item.due_time != null ? (() => {
-    const remaining = (item.due_time ?? 0) - currentEngineTime;
-    const isExpired = remaining <= 0;
+  const timeResult = state.hasTimeData ? (() => {
+    const remaining = state.hoursLeft;
+    const isExpired = state.isTimeExpired;
     let dueText = isExpired
       ? `Expired by ${Math.abs(remaining).toFixed(1)} hrs`
       : `Due in ${remaining.toFixed(1)} hrs (@ ${item.due_time})`;
-    let projectedDays = Infinity;
-    if (burnRate > 0) {
-      projectedDays = remaining / burnRate;
-      if (!isExpired) {
-        if (burnRateLow && burnRateHigh && burnRateHigh > 0 && burnRateLow !== burnRateHigh) {
-          const daysHigh = Math.ceil(remaining / burnRateLow);
-          const daysLow = Math.ceil(remaining / burnRateHigh);
-          if (daysLow !== daysHigh && daysHigh - daysLow > 2) {
-            dueText += ` (~${daysLow}-${daysHigh} days)`;
-          } else {
-            dueText += ` (~${Math.ceil(projectedDays)} days)`;
-          }
+    let projectedDays = state.daysFromHours;
+    if (burnRate > 0 && !isExpired) {
+      if (burnRateLow && burnRateHigh && burnRateHigh > 0 && burnRateLow !== burnRateHigh) {
+        const daysHigh = Math.ceil(remaining / burnRateLow);
+        const daysLow = Math.ceil(remaining / burnRateHigh);
+        if (daysLow !== daysHigh && daysHigh - daysLow > 2) {
+          dueText += ` (~${daysLow}-${daysHigh} days)`;
         } else {
           dueText += ` (~${Math.ceil(projectedDays)} days)`;
         }
+      } else {
+        dueText += ` (~${Math.ceil(projectedDays)} days)`;
       }
     }
     return { remaining, isExpired, projectedDays, dueText };
   })() : null;
 
   // Compute date-side status (days remaining)
-  const dateResult = item.due_date != null ? (() => {
-    const diffTime =
-      new Date((item.due_date ?? '') + 'T00:00:00').getTime() -
-      new Date(new Date().setHours(0, 0, 0, 0)).getTime();
-    const remaining = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    const isExpired = remaining < 0;
+  const dateResult = state.hasDateData ? (() => {
+    const remaining = state.daysLeft;
+    const isExpired = state.isDateExpired;
     const projectedDays = remaining;
     const dueText = isExpired
       ? `Expired ${Math.abs(remaining)} days ago`
@@ -456,11 +547,25 @@ export function getMxTextColor(
   return 'text-success';
 }
 
-export function isMxExpired(item: any, currentEngineTime: number): boolean {
+/**
+ * Hard "is this item past due?" check for grounding verdicts.
+ *
+ * Pass the aircraft's `time_zone` so the date-side comparison uses
+ * the pilot's calendar rather than the runtime's UTC wall-clock.
+ * Without it, Howard's server-side check_airworthiness would misfire
+ * "grounded" for ~5-8 hrs every evening in western US zones — UTC had
+ * rolled over to the next day but the pilot's local day hadn't. When
+ * `timeZone` is omitted the helper defaults to UTC, which matches
+ * the pre-timezone-aware behavior for existing callers.
+ */
+export function isMxExpired(
+  item: any,
+  currentEngineTime: number,
+  timeZone?: string | null,
+): boolean {
   if (!item.is_required) return false;
   const timeExpired = item.due_time != null && item.due_time <= currentEngineTime;
-  const dateExpired = item.due_date != null
-    && new Date(item.due_date + 'T00:00:00') < new Date(new Date().setHours(0, 0, 0, 0));
+  const dateExpired = isDateExpiredInZone(item.due_date, timeZone);
   if (item.tracking_type === 'both') return timeExpired || dateExpired;
   if (item.tracking_type === 'time') return timeExpired;
   if (item.tracking_type === 'date') return dateExpired;
