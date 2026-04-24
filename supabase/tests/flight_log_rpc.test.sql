@@ -389,4 +389,159 @@ END $$;
 -- lock is known correct from migration 010's track record; the
 -- change in 042 preserves the same PERFORM 1 ... FOR UPDATE.)
 
+-- ─── Scenario 10: piston aircraft — tach-only log advances totals ──
+-- Regression guard for migration 045. Before 045, the RPC derived
+-- aircraft totals from log.aftt/log.ftt exclusively, which are NULL
+-- on piston logs (piston fills tach + hobbs). The result was every
+-- piston POST being a silent no-op on aircraft totals, which froze
+-- every maintenance interval. This scenario seeds a tach-only payload
+-- and asserts the aircraft total_engine_time moves.
+DO $$
+DECLARE
+  v_aircraft uuid;
+  v_user     uuid := gen_random_uuid();
+  v_aftt     numeric;
+  v_ftt      numeric;
+BEGIN
+  PERFORM test_reset();
+  v_aircraft := test_seed_aircraft();
+
+  -- Piston submission shape: tach populated, ftt + aftt NULL.
+  -- hobbs also populated for this scenario so we exercise the full
+  -- coalesce chain on the airframe side.
+  PERFORM log_flight_atomic(
+    v_aircraft, v_user,
+    jsonb_build_object(
+      'initials', 'AG',
+      'tach', 1002.5,
+      'hobbs', 1003.0,
+      'occurred_at', '2026-04-24T14:00:00Z'
+    ),
+    '{}'::jsonb
+  );
+
+  SELECT total_engine_time, total_airframe_time INTO v_ftt, v_aftt
+    FROM aft_aircraft WHERE id = v_aircraft;
+
+  PERFORM test_assert(v_ftt = 1002.5, 'piston total_engine_time should advance to tach (1002.5)');
+  PERFORM test_assert(v_aftt = 1003.0, 'piston total_airframe_time should advance to hobbs (1003.0)');
+  RAISE NOTICE 'PASS: Scenario 10 — piston tach/hobbs advances aircraft aggregates';
+END $$;
+
+-- ─── Scenario 11: piston without a hobbs meter — tach drives both ──
+-- Some piston aircraft don't have a hobbs meter at all; tach is the
+-- only time source. The coalesce chain on the airframe side
+-- (aftt → hobbs → tach) should fall through to tach.
+DO $$
+DECLARE
+  v_aircraft uuid;
+  v_user     uuid := gen_random_uuid();
+  v_aftt     numeric;
+  v_ftt      numeric;
+BEGIN
+  PERFORM test_reset();
+  v_aircraft := test_seed_aircraft();
+
+  PERFORM log_flight_atomic(
+    v_aircraft, v_user,
+    jsonb_build_object(
+      'initials', 'AG',
+      'tach', 1007.2,
+      'occurred_at', '2026-04-24T14:00:00Z'
+      -- no hobbs, no ftt, no aftt — pure tach-only piston
+    ),
+    '{}'::jsonb
+  );
+
+  SELECT total_engine_time, total_airframe_time INTO v_ftt, v_aftt
+    FROM aft_aircraft WHERE id = v_aircraft;
+
+  PERFORM test_assert(v_ftt = 1007.2, 'tach-only piston: total_engine_time = tach');
+  PERFORM test_assert(v_aftt = 1007.2, 'tach-only piston: total_airframe_time falls back to tach');
+  RAISE NOTICE 'PASS: Scenario 11 — tach-only piston: coalesce chain falls back correctly';
+END $$;
+
+-- ─── Scenario 12: piston 24hr sanity bound fires against prior tach ──
+-- The pre-045 RPC compared incoming aftt/ftt to prior aftt/ftt. On
+-- piston that meant the bound never triggered (both sides NULL). Post-
+-- 045 the coalesce chain supplies tach, so the bound actually works
+-- for piston typos too.
+DO $$
+DECLARE
+  v_aircraft uuid;
+  v_user     uuid := gen_random_uuid();
+  v_failed   boolean := false;
+BEGIN
+  PERFORM test_reset();
+  v_aircraft := test_seed_aircraft();
+
+  -- Seed a piston leg at 14:00 with tach=1000.
+  PERFORM log_flight_atomic(
+    v_aircraft, v_user,
+    jsonb_build_object(
+      'initials', 'AG', 'tach', 1000.0,
+      'occurred_at', '2026-04-24T14:00:00Z'
+    ),
+    '{}'::jsonb
+  );
+
+  -- Submit a piston leg at 14:30 claiming tach=1030 (30hr delta typo).
+  BEGIN
+    PERFORM log_flight_atomic(
+      v_aircraft, v_user,
+      jsonb_build_object(
+        'initials', 'AG', 'tach', 1030.0,
+        'occurred_at', '2026-04-24T14:30:00Z'
+      ),
+      '{}'::jsonb
+    );
+  EXCEPTION WHEN SQLSTATE 'P0001' THEN
+    v_failed := true;
+  END;
+
+  PERFORM test_assert(v_failed, '30hr single-leg tach delta must be rejected on piston too');
+  RAISE NOTICE 'PASS: Scenario 12 — piston sanity bound fires against prior tach';
+END $$;
+
+-- ─── Scenario 13: mixed fleet replay preserves each aircraft's truth ──
+-- Two aircraft on the same server, different engine types. Out-of-
+-- order replays on both must each converge to the right derive path.
+DO $$
+DECLARE
+  v_piston  uuid;
+  v_turbine uuid;
+  v_user    uuid := gen_random_uuid();
+  v_ptotal  numeric;
+  v_ttotal  numeric;
+BEGIN
+  PERFORM test_reset();
+  -- Two aircraft, two engine shapes.
+  INSERT INTO aft_aircraft (tail_number, total_airframe_time, total_engine_time)
+  VALUES ('N100PA', 500.0, 500.0) RETURNING id INTO v_piston;
+  INSERT INTO aft_aircraft (tail_number, total_airframe_time, total_engine_time)
+  VALUES ('N200TP', 2000.0, 2000.0) RETURNING id INTO v_turbine;
+
+  -- Piston log: tach only.
+  PERFORM log_flight_atomic(
+    v_piston, v_user,
+    jsonb_build_object('initials', 'AG', 'tach', 501.5,
+                       'occurred_at', '2026-04-24T14:00:00Z'),
+    '{}'::jsonb
+  );
+  -- Turbine log: ftt + aftt.
+  PERFORM log_flight_atomic(
+    v_turbine, v_user,
+    jsonb_build_object('initials', 'BP', 'ftt', 2001.2, 'aftt', 2001.2,
+                       'occurred_at', '2026-04-24T14:00:00Z'),
+    '{}'::jsonb
+  );
+
+  SELECT total_engine_time INTO v_ptotal FROM aft_aircraft WHERE id = v_piston;
+  SELECT total_engine_time INTO v_ttotal FROM aft_aircraft WHERE id = v_turbine;
+
+  PERFORM test_assert(v_ptotal = 501.5, 'piston aircraft advances via tach');
+  PERFORM test_assert(v_ttotal = 2001.2, 'turbine aircraft advances via ftt');
+  RAISE NOTICE 'PASS: Scenario 13 — mixed-fleet POST converges both paths';
+END $$;
+
 DO $$ BEGIN RAISE NOTICE 'All flight-log RPC scenarios passed'; END $$;
