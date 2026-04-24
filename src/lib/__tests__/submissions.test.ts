@@ -50,14 +50,14 @@ describe('validateFlightLogInput', () => {
   });
 
   it('rejects occurred_at in the future (beyond clock-skew buffer)', () => {
-    const farFuture = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+    const farFuture = new Date(Date.now() + 20 * 60 * 1000).toISOString();
     expect(() => validateFlightLogInput({
       initials: 'AG', occurred_at: farFuture,
     })).toThrow(/future/);
   });
 
-  it('allows occurred_at within the 5-minute clock-skew buffer', () => {
-    const nearFuture = new Date(Date.now() + 2 * 60 * 1000).toISOString();
+  it('allows occurred_at within the 10-minute clock-skew buffer', () => {
+    const nearFuture = new Date(Date.now() + 5 * 60 * 1000).toISOString();
     const input = validateFlightLogInput({
       initials: 'AG', aftt: 1234.5, occurred_at: nearFuture,
     });

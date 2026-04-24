@@ -40,10 +40,13 @@ function normalizeOccurredAt(raw: unknown): string | null {
   if (!isIsoDateTime(raw)) {
     throw new CodedError('VALIDATION_ERROR', 'occurred_at must be an ISO datetime with timezone (e.g. 2026-04-24T14:30:00Z).', 400);
   }
-  // Reject future-dated submissions beyond a small clock-skew buffer.
-  // Phones can be a few minutes off; refuse anything further out.
+  // Reject future-dated submissions beyond a clock-skew buffer.
+  // Android/iOS can drift 5-10 minutes without NTP sync, especially
+  // after airplane-mode cycles. 10 minutes is the compromise: loose
+  // enough for real-world phone clocks, tight enough to catch
+  // intentionally-backfilled-forward compliance games.
   const t = Date.parse(raw);
-  if (t > Date.now() + 5 * 60 * 1000) {
+  if (t > Date.now() + 10 * 60 * 1000) {
     throw new CodedError('VALIDATION_ERROR', 'occurred_at is in the future.', 400);
   }
   return raw;
