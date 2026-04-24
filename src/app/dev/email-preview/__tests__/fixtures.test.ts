@@ -1,7 +1,11 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { variants, findVariant, isPreviewEnabled } from '../fixtures';
 
 describe('email preview fixtures', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   it('renders all variants as non-empty HTML documents', () => {
     for (const v of variants) {
       expect(v.html.length).toBeGreaterThan(500);
@@ -29,9 +33,16 @@ describe('email preview fixtures', () => {
     expect(findVariant('nonsense')).toBeUndefined();
   });
 
-  it('isPreviewEnabled returns true in test/dev env', () => {
-    // Vitest sets NODE_ENV=test → the helper treats that as "not
-    // production" and allows the surface.
+  it('isPreviewEnabled returns true outside production', () => {
+    vi.stubEnv('NODE_ENV', 'development');
+    expect(isPreviewEnabled()).toBe(true);
+  });
+
+  it('isPreviewEnabled returns false in production unless flag is set', () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('ENABLE_EMAIL_PREVIEW', '');
+    expect(isPreviewEnabled()).toBe(false);
+    vi.stubEnv('ENABLE_EMAIL_PREVIEW', 'true');
     expect(isPreviewEnabled()).toBe(true);
   });
 
