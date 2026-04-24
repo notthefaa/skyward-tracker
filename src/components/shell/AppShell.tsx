@@ -651,8 +651,8 @@ export default function AppShell({ session }: AppShellProps) {
           <div role="dialog" aria-label="Install Log It companion app" className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 border-t-8 border-info animate-slide-up relative" onClick={e => e.stopPropagation()}>
             <button onClick={() => setShowLogItModal(false)} aria-label="Close" className="absolute top-4 right-4 text-gray-400 hover:text-danger"><X size={24}/></button>
             <h3 className="font-oswald text-2xl font-bold uppercase tracking-widest text-navy mb-4">Install Log It</h3>
-            <p className="text-sm text-gray-600 font-roboto mb-4 leading-relaxed">Log It is a companion app that is designed to make logging times and squawks easy on the go.</p>
-            <ol className="text-left text-sm text-gray-600 font-roboto mb-8 space-y-2 max-w-xs mx-auto list-decimal pl-4"><li>Tap below to copy the app link.</li><li>Open your phone&apos;s browser and paste the link.</li><li>Use the Share menu <Share size={14} className="inline text-blue-500 mb-1"/> to Add to Home Screen.</li></ol>
+            <p className="text-sm text-gray-600 font-roboto mb-4 leading-relaxed">Companion app for logging from the ramp — flights, VOR, oil, tire, squawks. Works without signal and flushes when you&apos;re back in range.</p>
+            <ol className="text-left text-sm text-gray-600 font-roboto mb-8 space-y-2 max-w-xs mx-auto list-decimal pl-4"><li>Tap below to copy the link.</li><li>Open it in your phone&apos;s browser.</li><li>Use the Share menu <Share size={14} className="inline text-blue-500 mb-1"/> to add it to your home screen.</li></ol>
             <button onClick={handleCopyQuickLink} className="w-full bg-info text-white font-oswald text-xl font-bold uppercase tracking-widest py-4 rounded-xl shadow-lg active:scale-95 transition-transform flex items-center justify-center gap-2"><Copy size={20} /> Copy App Link</button>
           </div>
           </div>

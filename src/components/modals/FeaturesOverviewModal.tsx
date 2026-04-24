@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import {
   X, Home, PenLine, Calendar, Wrench, FolderOpen, MessageSquare, Settings,
   ShieldCheck, ShieldAlert, Plane, Users, Bell, Smartphone, BookOpen, CheckSquare,
-  AlertTriangle, ClipboardList, Gauge, CloudSun,
+  AlertTriangle, ClipboardList, Gauge, CloudSun, Send,
   type LucideIcon,
 } from "lucide-react";
 import { useModalScrollLock } from "@/hooks/useModalScrollLock";
@@ -75,6 +75,12 @@ const SECTIONS: Section[] = [
         name: "Ops Checks",
         blurb: "VOR check every 30 days per §91.171, oil burn trending across your engine hours, tire PSI. All three on one dashboard. Oil dial turns orange, then red, as the hours between top-offs shrink — Howard flags it if consumption starts climbing.",
         where: "Log → Ops Checks",
+      },
+      {
+        icon: Send, accent: '#3AB0FF',
+        name: "Log It — ramp companion",
+        blurb: "Lightweight sister app for logging on the go. Flights, VOR, oil, tire, squawks — all five live on your phone's home screen. Works without signal: entries hold with their real timestamps and flush when you're back in range, so a late upload doesn't fake a fresh compliance clock.",
+        where: "Log It button in the header",
       },
     ],
   },

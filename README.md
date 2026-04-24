@@ -113,7 +113,7 @@ Handles expired Supabase sessions gracefully. When the PWA returns from the back
 The active tab is preserved when switching browser tabs or backgrounding the app, so you always return to where you left off. Closing the browser or app entirely starts fresh at the fleet summary.
 
 ### Companion App (Log It)
-Lightweight PWA for ramp use. Log flights and report squawks from the phone's home screen. Includes an optional pilot notes step in the flight log flow — leave a note for the next pilot with optional photo attachments. Notes sync directly to the Notes tab in the main app, and all assigned pilots are notified. Same secure login, instant sync. No app store required.
+Lightweight PWA for ramp use. Log flights, VOR checks, oil, tire pressure, and squawks from the phone's home screen. Works without signal — entries queue locally with their real timestamps and flush to the main app when connection comes back. The server stamps events by `occurred_at` (when it actually happened), not when the upload lands, so compliance math and chronology stay honest even after a long offline stretch. Retry-safe via per-submission idempotency keys — a network flap never creates duplicate rows. Includes an optional pilot notes step in the flight log flow — leave a note for the next pilot with optional photo attachments. Same secure login, no app store required.
 
 ### Observability
 - **Sentry** wired per-runtime (server / edge / client). No-ops when `SENTRY_DSN` is unset.
@@ -281,8 +281,8 @@ src/
 - **Home:** Aircraft summary with hero image, times, fuel (with quick update), contacts, next upcoming reservations, next MX due, active squawks, latest note, and collapsible assigned users list with role management.
 - **Log:** Opens a secondary tray — Times (flight logs), Oil, Tire, VOR. Drag-reorderable, persists per user.
 - **Calendar:** Dashboard gauges above the Reserve Aircraft button, followed by month/week/day views with reservation booking and MX event blocks.
-- **MX:** Secondary tray — Maintenance, Squawks, ADs, Equipment, Documents. Active service events, scheduling, and work package management visible to Admins only.
-- **More:** Secondary tray — Fleet, Howard Usage (admin), etc.
+- **MX:** Section selector — Maintenance, Squawks, Service, ADs. Active service events, scheduling, and work package management visible to Admins only.
+- **More:** Section selector — Notes, Docs, Equipment, Howard.
 
 **Header:** Tail number selector (with "+ Add Aircraft" at bottom), status dot, Fleet button (only if 2+ aircraft), Log It, Admin (global admins only), Settings, Logout.
 
