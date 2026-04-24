@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
+import { ModalPortal } from "@/components/ModalPortal";
 import { authFetch } from "@/lib/authFetch";
 import { swrKeys } from "@/lib/swrKeys";
 import type { AircraftWithMetrics, TireCheck } from "@/lib/types";
@@ -241,8 +242,8 @@ export default function TireTab({
       </div>
 
       {/* Modal */}
-      {showModal && (
-        <div className="fixed inset-0 z-[10000] bg-black/60 animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => setShowModal(false)}>
+      {showModal && <ModalPortal>
+        <div className="fixed inset-0 bg-black/60 z-[10000] overflow-y-auto animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => setShowModal(false)}>
           <div className="flex min-h-full items-center justify-center p-4">
             <div className="bg-white rounded-lg shadow-2xl w-full max-w-sm p-5 border-t-4 border-[#525659] animate-slide-up" onClick={e => e.stopPropagation()}>
               <div className="flex justify-between items-center mb-4">
@@ -309,7 +310,7 @@ export default function TireTab({
             </div>
           </div>
         </div>
-      )}
+      </ModalPortal>}
     </>
   );
 }
