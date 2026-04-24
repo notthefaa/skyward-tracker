@@ -13,6 +13,11 @@
 import { NextResponse } from 'next/server';
 import { findVariant, isPreviewEnabled } from '../fixtures';
 
+// Env-gated surface — must re-run per request so runtime env changes
+// (ENABLE_EMAIL_PREVIEW) take effect. Without this, Next.js statically
+// caches the 404 body at build time and never re-evaluates the gate.
+export const dynamic = 'force-dynamic';
+
 export async function GET(
   _req: Request,
   { params }: { params: Promise<{ variant: string }> },
