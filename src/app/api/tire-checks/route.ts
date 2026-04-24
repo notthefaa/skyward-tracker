@@ -5,6 +5,7 @@ import { idempotency } from '@/lib/idempotency';
 import { apiErrorCoded, handleCodedError } from '@/lib/apiResponse';
 import { validateTireCheckInput, submitTireCheck } from '@/lib/submissions';
 import { requireAircraftAccessCoded } from '@/lib/submissionAuth';
+import { checkSubmitRateLimit } from '@/lib/submitRateLimit';
 
 // POST — create tire check (any user with aircraft access).
 // occurred_at + idempotency contract same as flight-logs / VOR / oil.
@@ -14,6 +15,12 @@ import { requireAircraftAccessCoded } from '@/lib/submissionAuth';
 export async function POST(req: Request) {
   try {
     const { user, supabaseAdmin } = await requireAuth(req);
+
+    const rl = await checkSubmitRateLimit(supabaseAdmin, user.id);
+    if (!rl.allowed) {
+      return apiErrorCoded('RATE_LIMITED', `Too many submissions. Retry in ${Math.ceil(rl.retryAfterMs / 1000)}s.`, 429, req);
+    }
+
     const idem = idempotency(supabaseAdmin, user.id, req, 'tire-checks/POST');
     const cached = await idem.check();
     if (cached) return cached;

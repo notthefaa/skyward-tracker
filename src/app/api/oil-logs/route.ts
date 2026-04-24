@@ -5,12 +5,19 @@ import { idempotency } from '@/lib/idempotency';
 import { apiErrorCoded, handleCodedError } from '@/lib/apiResponse';
 import { validateOilLogInput, submitOilLog } from '@/lib/submissions';
 import { requireAircraftAccessCoded } from '@/lib/submissionAuth';
+import { checkSubmitRateLimit } from '@/lib/submitRateLimit';
 
 // POST — create oil log (any user with aircraft access).
 // occurred_at + idempotency contract same as flight-logs / VOR.
 export async function POST(req: Request) {
   try {
     const { user, supabaseAdmin } = await requireAuth(req);
+
+    const rl = await checkSubmitRateLimit(supabaseAdmin, user.id);
+    if (!rl.allowed) {
+      return apiErrorCoded('RATE_LIMITED', `Too many submissions. Retry in ${Math.ceil(rl.retryAfterMs / 1000)}s.`, 429, req);
+    }
+
     const idem = idempotency(supabaseAdmin, user.id, req, 'oil-logs/POST');
     const cached = await idem.check();
     if (cached) return cached;

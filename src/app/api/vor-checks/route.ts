@@ -5,6 +5,7 @@ import { idempotency } from '@/lib/idempotency';
 import { apiErrorCoded, handleCodedError } from '@/lib/apiResponse';
 import { validateVorCheckInput, submitVorCheck } from '@/lib/submissions';
 import { requireAircraftAccessCoded } from '@/lib/submissionAuth';
+import { checkSubmitRateLimit } from '@/lib/submitRateLimit';
 
 // POST — create VOR check (any user with aircraft access).
 // Companion-app queue contract:
@@ -17,6 +18,12 @@ import { requireAircraftAccessCoded } from '@/lib/submissionAuth';
 export async function POST(req: Request) {
   try {
     const { user, supabaseAdmin } = await requireAuth(req);
+
+    const rl = await checkSubmitRateLimit(supabaseAdmin, user.id);
+    if (!rl.allowed) {
+      return apiErrorCoded('RATE_LIMITED', `Too many submissions. Retry in ${Math.ceil(rl.retryAfterMs / 1000)}s.`, 429, req);
+    }
+
     const idem = idempotency(supabaseAdmin, user.id, req, 'vor-checks/POST');
     const cached = await idem.check();
     if (cached) return cached;

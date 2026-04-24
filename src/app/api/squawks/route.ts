@@ -6,6 +6,7 @@ import { stripProtectedFields } from '@/lib/validation';
 import { apiErrorCoded, handleCodedError } from '@/lib/apiResponse';
 import { validateSquawkInput, submitSquawk } from '@/lib/submissions';
 import { requireAircraftAccessCoded } from '@/lib/submissionAuth';
+import { checkSubmitRateLimit } from '@/lib/submitRateLimit';
 
 // POST — report squawk (any user with aircraft access).
 // occurred_at + idempotency. Mass-assignment still handled by
@@ -13,6 +14,12 @@ import { requireAircraftAccessCoded } from '@/lib/submissionAuth';
 export async function POST(req: Request) {
   try {
     const { user, supabaseAdmin } = await requireAuth(req);
+
+    const rl = await checkSubmitRateLimit(supabaseAdmin, user.id);
+    if (!rl.allowed) {
+      return apiErrorCoded('RATE_LIMITED', `Too many submissions. Retry in ${Math.ceil(rl.retryAfterMs / 1000)}s.`, 429, req);
+    }
+
     const idem = idempotency(supabaseAdmin, user.id, req, 'squawks/POST');
     const cached = await idem.check();
     if (cached) return cached;

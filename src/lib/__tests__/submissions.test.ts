@@ -64,6 +64,25 @@ describe('validateFlightLogInput', () => {
     expect(input.occurred_at).toBe(nearFuture);
   });
 
+  it('rejects occurred_at more than a year in the past with STALE_REPLAY', () => {
+    const longAgo = new Date(Date.now() - 400 * 24 * 60 * 60 * 1000).toISOString();
+    try {
+      validateFlightLogInput({ initials: 'AG', aftt: 1234.5, occurred_at: longAgo });
+      expect.fail('should have thrown');
+    } catch (err: any) {
+      expect(err.code).toBe('STALE_REPLAY');
+      expect(err.status).toBe(400);
+    }
+  });
+
+  it('allows occurred_at from 30 days ago (normal offline buffer)', () => {
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    const input = validateFlightLogInput({
+      initials: 'AG', aftt: 1234.5, occurred_at: thirtyDaysAgo,
+    });
+    expect(input.occurred_at).toBe(thirtyDaysAgo);
+  });
+
   it('rejects Infinity in aftt (defense against malformed queue payloads)', () => {
     expect(() => validateFlightLogInput({
       initials: 'AG', aftt: 'Infinity',

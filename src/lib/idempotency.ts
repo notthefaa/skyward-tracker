@@ -41,11 +41,16 @@ export function idempotency(
         .lt('created_at', new Date(Date.now() - RETENTION_MS).toISOString())
         .then(() => {});
 
+      // Scope the lookup to route too — a client reusing the same
+      // key across /api/oil-logs and /api/batch-submit (via different
+      // code paths) would otherwise cross-cache-hit and return the
+      // wrong response shape. See migration 043.
       const { data } = await sb
         .from('aft_idempotency_keys')
         .select('response_status, response_body')
         .eq('user_id', userId)
         .eq('key', key)
+        .eq('route', route)
         .maybeSingle();
 
       if (data) {
@@ -70,7 +75,7 @@ export function idempotency(
             response_status: status,
             response_body: body,
           },
-          { onConflict: 'user_id,key' },
+          { onConflict: 'user_id,key,route' },
         )
         .then(() => {});
     },

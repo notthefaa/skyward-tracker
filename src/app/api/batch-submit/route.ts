@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
 import { apiErrorCoded, handleCodedError, CodedError } from '@/lib/apiResponse';
 import type { ApiErrorCode } from '@/lib/apiResponse';
+import { checkSubmitRateLimit } from '@/lib/submitRateLimit';
 import {
   validateFlightLogInput,
   validateVorCheckInput,
@@ -66,8 +67,13 @@ import { requireAircraftAccessCoded } from '@/lib/submissionAuth';
 // If the companion app sends an `idempotencyKey` on each item, a
 // replay of the same batch (e.g. network flap after partial
 // success) returns the cached per-item response instead of
-// re-inserting. Implemented by writing (user_id, key) into
-// aft_idempotency_keys just like the individual routes.
+// re-inserting. Scoped to (user_id, key, route) via migration 043
+// so a key reused across entry points can't cross-cache-hit.
+//
+// Rate limit: one check per batch call. 60 calls / rolling minute
+// (shared with the 5 individual routes via submit_rate_limit_check).
+// A batch of 100 items still only costs one rate-budget token, so
+// a legit queue flush after going offline is not throttled.
 //
 // Limits: 100 submissions per batch. Larger batches should be
 // chunked client-side — keeps request bodies reasonable and the
@@ -111,6 +117,19 @@ function getOccurredAt(submission: BatchSubmission): number {
 export async function POST(req: Request) {
   try {
     const { user, supabaseAdmin } = await requireAuth(req);
+
+    // Rate limit BEFORE we parse the body. A runaway client hitting
+    // us 1000x/sec shouldn't be allowed to do per-request JSON parsing.
+    const rl = await checkSubmitRateLimit(supabaseAdmin, user.id);
+    if (!rl.allowed) {
+      return apiErrorCoded(
+        'RATE_LIMITED',
+        `Too many submissions. Retry in ${Math.ceil(rl.retryAfterMs / 1000)}s.`,
+        429,
+        req,
+      );
+    }
+
     const body = await req.json();
     const submissions = body?.submissions;
 
@@ -148,13 +167,17 @@ export async function POST(req: Request) {
         }
 
         // Per-item idempotency — if the companion app supplied a key,
-        // check for a cached response and short-circuit.
+        // check for a cached response and short-circuit. Scoped to
+        // this item's batch-submit/<type> route so a key reuse across
+        // entry points doesn't cross-pollute (see migration 043).
         if (s.idempotencyKey) {
+          const itemRoute = `batch-submit/${s.type}`;
           const { data: cached } = await supabaseAdmin
             .from('aft_idempotency_keys')
             .select('response_status, response_body')
             .eq('user_id', user.id)
             .eq('key', s.idempotencyKey)
+            .eq('route', itemRoute)
             .maybeSingle();
           if (cached) {
             const body = cached.response_body as any;
@@ -218,7 +241,8 @@ export async function POST(req: Request) {
           }
         }
 
-        // Cache the success response for idempotent retries.
+        // Cache the success response for idempotent retries. Same
+        // per-route scoping as the check above.
         if (s.idempotencyKey) {
           await supabaseAdmin
             .from('aft_idempotency_keys')
@@ -230,7 +254,7 @@ export async function POST(req: Request) {
                 response_status: 200,
                 response_body: responseBody,
               },
-              { onConflict: 'user_id,key' },
+              { onConflict: 'user_id,key,route' },
             );
         }
 

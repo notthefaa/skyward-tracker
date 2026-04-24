@@ -282,17 +282,24 @@ export default function TimesTab({
         .eq('id', editingId).maybeSingle();
       if (!editingLog) return showError("Flight log not found.");
 
-      const pivot = editingLog.occurred_at ?? editingLog.created_at;
+      const pivotOccurred = editingLog.occurred_at ?? editingLog.created_at;
+      const pivotCreated = editingLog.created_at;
+      // Tuple compare on (occurred_at, created_at) so two logs sharing
+      // the same occurred_at don't exclude each other. Using .lt() on
+      // occurred_at alone would skip a sibling with the same timestamp,
+      // giving us the wrong neighbor and a misleading validation preview.
+      // created_at is the server tiebreaker, matching how the RPC's
+      // derive-latest SELECT orders rows.
       const [{ data: prevLogs }, { data: nextLogs }] = await Promise.all([
         supabase.from('aft_flight_logs').select('*')
           .eq('aircraft_id', aircraft!.id)
           .is('deleted_at', null)
-          .lt('occurred_at', pivot)
+          .or(`occurred_at.lt.${pivotOccurred},and(occurred_at.eq.${pivotOccurred},created_at.lt.${pivotCreated})`)
           .order('occurred_at', { ascending: false }).order('created_at', { ascending: false }).limit(1),
         supabase.from('aft_flight_logs').select('*')
           .eq('aircraft_id', aircraft!.id)
           .is('deleted_at', null)
-          .gt('occurred_at', pivot)
+          .or(`occurred_at.gt.${pivotOccurred},and(occurred_at.eq.${pivotOccurred},created_at.gt.${pivotCreated})`)
           .order('occurred_at', { ascending: true }).order('created_at', { ascending: true }).limit(1),
       ]);
       const prevLog = prevLogs?.[0] || null;

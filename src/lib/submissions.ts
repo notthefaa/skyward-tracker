@@ -32,6 +32,9 @@ type AdminClient = SupabaseClient<any, any, any>;
  * the ISO string (DB coerces to timestamptz) or null to let the
  * DB default fire. Throws on garbage.
  */
+const STALE_REPLAY_LIMIT_DAYS = 365;
+const FUTURE_CLOCK_SKEW_MS = 10 * 60 * 1000;
+
 function normalizeOccurredAt(raw: unknown): string | null {
   if (raw === null || raw === undefined || raw === '') return null;
   if (typeof raw !== 'string') {
@@ -40,14 +43,26 @@ function normalizeOccurredAt(raw: unknown): string | null {
   if (!isIsoDateTime(raw)) {
     throw new CodedError('VALIDATION_ERROR', 'occurred_at must be an ISO datetime with timezone (e.g. 2026-04-24T14:30:00Z).', 400);
   }
-  // Reject future-dated submissions beyond a clock-skew buffer.
-  // Android/iOS can drift 5-10 minutes without NTP sync, especially
-  // after airplane-mode cycles. 10 minutes is the compromise: loose
-  // enough for real-world phone clocks, tight enough to catch
-  // intentionally-backfilled-forward compliance games.
   const t = Date.parse(raw);
-  if (t > Date.now() + 10 * 60 * 1000) {
+  // Future bound: Android/iOS can drift 5-10 minutes without NTP
+  // sync, especially after airplane-mode cycles. 10 minutes is the
+  // compromise: loose enough for real phones, tight enough to catch
+  // intentionally-backfilled-forward compliance games.
+  if (t > Date.now() + FUTURE_CLOCK_SKEW_MS) {
     throw new CodedError('VALIDATION_ERROR', 'occurred_at is in the future.', 400);
+  }
+  // Past bound: anything older than a year is almost certainly a
+  // clock-bugged device or a buggy queue. Legitimate offline
+  // buffering tops out at weeks, not months. Returns the dedicated
+  // STALE_REPLAY code so the companion app can choose to drop +
+  // surface rather than retry.
+  const staleCutoff = Date.now() - STALE_REPLAY_LIMIT_DAYS * 24 * 60 * 60 * 1000;
+  if (t < staleCutoff) {
+    throw new CodedError(
+      'STALE_REPLAY',
+      `occurred_at is more than ${STALE_REPLAY_LIMIT_DAYS} days old. Check the device's clock or drop the entry.`,
+      400,
+    );
   }
   return raw;
 }
