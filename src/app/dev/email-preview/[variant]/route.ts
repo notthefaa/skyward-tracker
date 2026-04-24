@@ -18,7 +18,8 @@ export async function GET(
   { params }: { params: Promise<{ variant: string }> },
 ) {
   if (!isPreviewEnabled()) {
-    return new NextResponse('Not found', { status: 404 });
+    const diag = `Not found (gate closed: NODE_ENV=${JSON.stringify(process.env.NODE_ENV)}, ENABLE_EMAIL_PREVIEW=${JSON.stringify(process.env.ENABLE_EMAIL_PREVIEW)})`;
+    return new NextResponse(diag, { status: 404 });
   }
 
   const { variant } = await params;
