@@ -846,7 +846,13 @@ export default function AppShell({ session }: AppShellProps) {
       />
 
       {/* ─── HOWARD FLOATING LAUNCHER ─── */}
-      {activeTab !== 'howard' && activeTab !== 'howard-usage' && (
+      {/* Hidden while a bottom NavTray is open — the tray's rightmost
+       * item (ADs in the MX tray, Howard in More) lives in the same
+       * bottom-right corner as the FAB on narrow phones, and the FAB
+       * was sitting on top of those tap targets. Trays are transient
+       * (tap → pick → dismiss), so hiding the FAB for that moment
+       * doesn't cost the user access to Howard. */}
+      {activeTab !== 'howard' && activeTab !== 'howard-usage' && expandedNav === null && (
         <HowardLauncher currentAircraft={selectedAircraftData} userFleet={aircraftList} session={session} />
       )}
 
