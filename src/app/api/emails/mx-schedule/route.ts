@@ -3,6 +3,7 @@ import { Resend } from 'resend';
 import { requireAuth, requireAircraftAccess, handleApiError } from '@/lib/auth';
 import { env } from '@/lib/env';
 import { escapeHtml } from '@/lib/sanitize';
+import { emailShell, heading, paragraph, callout, keyValueBlock } from '@/lib/email/layout';
 
 const resend = new Resend(env.RESEND_API_KEY);
 const FROM_EMAIL = 'notifications@skywardsociety.com';
@@ -36,33 +37,39 @@ export async function POST(req: Request) {
         ? `at ${escapeHtml(String(mxItem.due_time))} hours`
         : `on ${escapeHtml(mxItem.due_date)}`;
 
+      const signature = `
+        <div style="margin-top:20px;padding-top:16px;border-top:1px solid #E5E7EB;font-size:14px;line-height:1.6;color:#374151;">
+          Thank you,<br />
+          <strong>${safeMainContact}</strong>
+          ${safeMainPhone ? `<br />${safeMainPhone}` : ''}
+          ${safeMainEmail ? `<br /><a href="mailto:${safeMainEmail}" style="color:#091F3C;text-decoration:underline;">${safeMainEmail}</a>` : ''}
+        </div>
+      `;
+
       await resend.emails.send({
         from: `Skyward Maintenance <${FROM_EMAIL}>`,
         to: [aircraft.mx_contact_email],
         cc: mxCc,
         replyTo: aircraft.main_contact_email || undefined,
         subject: `Scheduling Request: ${safeTail} Maintenance`,
-        html: `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; border-radius: 8px;">
-            <h2 style="color: #091F3C; text-transform: uppercase; letter-spacing: 2px; border-bottom: 2px solid #091F3C; padding-bottom: 10px;">Skyward Society</h2>
-            <p style="color: #525659; font-size: 16px;">Hello ${safeMxContact || ''},</p>
-            <p style="color: #525659; font-size: 16px;">The following maintenance item is coming due for <strong>${safeTail}</strong>. Let us know when you can fit this aircraft into your schedule.</p>
-            
-            <div style="background-color: #FDFCF4; padding: 20px; border-left: 4px solid #F08B46; margin: 25px 0; border-radius: 4px;">
-              <p style="margin: 0 0 10px 0; color: #091F3C; font-size: 18px;"><strong>Item:</strong> ${safeItemName}</p>
-              <p style="margin: 0; color: #091F3C; font-size: 16px;"><strong>Due:</strong> ${dueString}</p>
-            </div>
-
-            <p style="color: #525659; font-size: 16px;">Reply to this email to coordinate scheduling.</p>
-
-            <p style="color: #525659; font-size: 16px; margin-top: 20px;">
-              Thank you,<br/>
-              <strong>${safeMainContact}</strong>
-              ${safeMainPhone ? `<br/>${safeMainPhone}` : ''}
-              ${safeMainEmail ? `<br/><a href="mailto:${safeMainEmail}" style="color: #091F3C;">${safeMainEmail}</a>` : ''}
-            </p>
-          </div>
-        `
+        html: emailShell({
+          title: `Scheduling Request: ${safeTail}`,
+          preheader: `${safeItemName} coming due ${dueString} on ${safeTail}.`,
+          body: `
+            ${heading('Scheduling Request')}
+            ${paragraph(`Hello ${safeMxContact || 'there'},`)}
+            ${paragraph(`The following maintenance item is coming due for <strong>${safeTail}</strong>. Let us know when you can fit this aircraft into your schedule.`)}
+            ${callout(
+              keyValueBlock([
+                { label: 'Item', value: safeItemName },
+                { label: 'Due', value: dueString },
+              ]),
+              { variant: 'warning' }
+            )}
+            ${paragraph('Reply to this email to coordinate scheduling.')}
+            ${signature}
+          `,
+        }),
       });
 
       // Update the database to clear the manual trigger button

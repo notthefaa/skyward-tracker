@@ -4,6 +4,7 @@ import { createAdminClient, handleApiError } from '@/lib/auth';
 import { env } from '@/lib/env';
 import { escapeHtml } from '@/lib/sanitize';
 import { PORTAL_EXPIRY_DAYS } from '@/lib/constants';
+import { emailShell, heading, paragraph, callout, bulletList, button } from '@/lib/email/layout';
 
 const resend = new Resend(env.RESEND_API_KEY);
 const FROM_EMAIL = 'notifications@skywardsociety.com';
@@ -183,30 +184,27 @@ export async function POST(req: Request) {
       const safeMxName = escapeHtml(event.mx_contact_name || 'Your mechanic');
       const safeDescription = escapeHtml(description);
 
-      const fileList = attachments
-        .map(a => {
-          const isImage = a.type.startsWith('image/');
-          const safeFilename = escapeHtml(a.filename);
-          return `<li style="margin-bottom: 4px;">${isImage ? '📷' : '📎'} ${safeFilename}</li>`;
-        })
-        .join('');
+      const fileLines = attachments.map(a => {
+        const isImage = a.type.startsWith('image/');
+        const safeFilename = escapeHtml(a.filename);
+        return `${isImage ? '📷' : '📎'} ${safeFilename}`;
+      });
 
       await resend.emails.send({
         from: `Skyward Operations <${FROM_EMAIL}>`,
         to: [event.primary_contact_email],
         subject: `${safeMxName} uploaded files to your work package`,
-        html: `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-            <h2 style="color: #091F3C;">Files Uploaded</h2>
-            <p>${safeMxName} has uploaded ${attachments.length} file${attachments.length > 1 ? 's' : ''} to your service event:</p>
-            ${safeDescription ? `<p style="margin-top: 15px; padding: 15px; background: #f9f9f9; border-left: 4px solid #3AB0FF; border-radius: 4px;"><em>${safeDescription}</em></p>` : ''}
-            <ul style="margin-top: 15px; font-size: 14px; color: #333;">${fileList}</ul>
-            <p style="margin-top: 15px; color: #666;">Open the app to view the full details.</p>
-            <div style="margin-top: 25px; text-align: center;">
-              <a href="${appUrl}" style="display: inline-block; background-color: #091F3C; color: white; text-decoration: none; padding: 12px 28px; border-radius: 6px; font-weight: bold; font-size: 14px; letter-spacing: 1px;">OPEN AIRCRAFT MANAGER</a>
-            </div>
-          </div>
-        `,
+        html: emailShell({
+          title: `Files Uploaded`,
+          preheader: `${safeMxName} uploaded ${attachments.length} file${attachments.length > 1 ? 's' : ''} to your service event.`,
+          body: `
+            ${heading('Files Uploaded', 'note')}
+            ${paragraph(`${safeMxName} has uploaded ${attachments.length} file${attachments.length > 1 ? 's' : ''} to your service event:`)}
+            ${safeDescription ? callout(`<em>${safeDescription}</em>`, { variant: 'note' }) : ''}
+            ${bulletList(fileLines)}
+            ${button(appUrl, 'Open Skyward')}
+          `,
+        }),
       });
     }
 

@@ -6,15 +6,10 @@ import { escapeHtml } from '@/lib/sanitize';
 import { cancelConflictingReservations } from '@/lib/mxConflicts';
 import { PORTAL_EXPIRY_DAYS } from '@/lib/constants';
 import { isIsoDate } from '@/lib/validation';
+import { emailShell, heading, paragraph, callout, bulletList, button } from '@/lib/email/layout';
 
 const resend = new Resend(env.RESEND_API_KEY);
 const FROM_EMAIL = 'notifications@skywardsociety.com';
-
-const ctaButton = (url: string, label: string) => `
-  <div style="margin-top: 25px; text-align: center;">
-    <a href="${url}" style="display: inline-block; background-color: #091F3C; color: white; text-decoration: none; padding: 12px 28px; border-radius: 6px; font-weight: bold; font-size: 14px; letter-spacing: 1px;">${escapeHtml(label)}</a>
-  </div>
-`;
 
 /**
  * Computes the estimated_completion date from a start date and duration in days.
@@ -115,16 +110,18 @@ export async function POST(req: Request) {
           from: `Skyward Operations <${FROM_EMAIL}>`,
           to: [event.primary_contact_email],
           subject: `Schedule Update: ${safeMxName} proposed ${escapeHtml(proposedDate)}`,
-          html: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-              <h2 style="color: #091F3C;">Schedule Proposal</h2>
-              <p>${safeMxName} has proposed <strong>${escapeHtml(proposedDate)}</strong> for service on your aircraft.</p>
-              <p style="margin-top: 10px;">Estimated duration: <strong>${durationLabel}</strong> (through ${escapeHtml(estCompletion)})</p>
-              ${safeMessage ? `<p style="margin-top: 15px; padding: 15px; background: #f9f9f9; border-left: 4px solid #F08B46; border-radius: 4px;"><em>${safeMessage}</em></p>` : ''}
-              <p style="margin-top: 15px; color: #666;">Open the app to confirm or propose a different date.</p>
-              ${ctaButton(appUrl, 'OPEN AIRCRAFT MANAGER')}
-            </div>
-          `
+          html: emailShell({
+            title: `Schedule Proposal — ${escapeHtml(proposedDate)}`,
+            preheader: `${safeMxName} proposed ${escapeHtml(proposedDate)}, estimated ${durationLabel}. Confirm or counter via the app.`,
+            body: `
+              ${heading('Schedule Proposal', 'warning')}
+              ${paragraph(`${safeMxName} has proposed <strong>${escapeHtml(proposedDate)}</strong> for service on your aircraft.`)}
+              ${paragraph(`Estimated duration: <strong>${durationLabel}</strong> (through ${escapeHtml(estCompletion)})`)}
+              ${safeMessage ? callout(`<em>${safeMessage}</em>`, { variant: 'warning' }) : ''}
+              ${paragraph('Open the app to confirm or propose a different date.')}
+              ${button(appUrl, 'Open Skyward')}
+            `,
+          }),
         });
       }
 
@@ -159,15 +156,17 @@ export async function POST(req: Request) {
           from: `Skyward Operations <${FROM_EMAIL}>`,
           to: [event.primary_contact_email],
           subject: `Confirmed: ${escapeHtml(confirmedDate)} Service Appointment`,
-          html: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-              <h2 style="color: #56B94A;">Appointment Confirmed</h2>
-              <p>${safeMxName} has confirmed service for <strong>${escapeHtml(confirmedDate)}</strong>.</p>
-              <p style="margin-top: 10px;">Estimated duration: <strong>${durationLabel}</strong> (through ${escapeHtml(estCompletion)})</p>
-              ${safeMessage ? `<p style="margin-top: 15px; padding: 15px; background: #f9f9f9; border-left: 4px solid #56B94A; border-radius: 4px;"><em>${safeMessage}</em></p>` : ''}
-              ${ctaButton(appUrl, 'OPEN AIRCRAFT MANAGER')}
-            </div>
-          `
+          html: emailShell({
+            title: `Appointment Confirmed`,
+            preheader: `${safeMxName} confirmed ${escapeHtml(confirmedDate)}, ${durationLabel}. Calendar conflicts auto-cancelled.`,
+            body: `
+              ${heading('Appointment Confirmed', 'success')}
+              ${paragraph(`${safeMxName} has confirmed service for <strong>${escapeHtml(confirmedDate)}</strong>.`)}
+              ${paragraph(`Estimated duration: <strong>${durationLabel}</strong> (through ${escapeHtml(estCompletion)})`)}
+              ${safeMessage ? callout(`<em>${safeMessage}</em>`, { variant: 'success' }) : ''}
+              ${button(appUrl, 'Open Skyward', { variant: 'success' })}
+            `,
+          }),
         });
       }
 
@@ -201,14 +200,16 @@ export async function POST(req: Request) {
           from: `Skyward Operations <${FROM_EMAIL}>`,
           to: [event.primary_contact_email],
           subject: `Service Update from ${safeMxName}`,
-          html: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-              <h2 style="color: #091F3C;">Service Update</h2>
-              <p>${safeMxName} sent a message:</p>
-              <p style="padding: 15px; background: #f9f9f9; border-left: 4px solid #3AB0FF; border-radius: 4px;">${safeMessage}</p>
-              ${ctaButton(appUrl, 'OPEN AIRCRAFT MANAGER')}
-            </div>
-          `
+          html: emailShell({
+            title: `Service Update from ${safeMxName}`,
+            preheader: `${safeMxName} sent you a message about your aircraft.`,
+            body: `
+              ${heading('Service Update', 'note')}
+              ${paragraph(`${safeMxName} sent a message:`)}
+              ${callout(safeMessage, { variant: 'note' })}
+              ${button(appUrl, 'Open Skyward')}
+            `,
+          }),
         });
       }
 
@@ -236,26 +237,29 @@ export async function POST(req: Request) {
 
           const summaryLine = `${completedItems}/${totalItems} items complete` + (inProgressItems > 0 ? `, ${inProgressItems} in progress` : '');
 
+          const itemLines = allItems.map((li: any) => {
+            const color = li.line_status === 'complete' ? '#56B94A'
+              : li.line_status === 'in_progress' ? '#3AB0FF'
+              : li.line_status === 'deferred' ? '#6B7280'
+              : '#F08B46';
+            return `${escapeHtml(li.item_name)} — <span style="color:${color};font-weight:700;text-transform:uppercase;font-size:11px;letter-spacing:1px;">${escapeHtml(li.line_status)}</span>`;
+          });
+
           await resend.emails.send({
             from: `Skyward Operations <${FROM_EMAIL}>`,
             to: [event.primary_contact_email],
             subject: `Work Package Update — ${summaryLine}`,
-            html: `
-              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-                <h2 style="color: #091F3C;">Work Package Progress</h2>
-                <p>${safeMxName} updated the status of work items on your aircraft.</p>
-                <div style="margin-top: 15px; padding: 15px; background: #f9f9f9; border-radius: 4px;">
-                  <p style="margin: 0; font-size: 16px;"><strong>${summaryLine}</strong></p>
-                </div>
-                <div style="margin-top: 15px;">
-                  ${allItems.map((li: any) => {
-                    const color = li.line_status === 'complete' ? '#56B94A' : li.line_status === 'in_progress' ? '#3AB0FF' : li.line_status === 'deferred' ? '#999' : '#F08B46';
-                    return `<p style="margin: 4px 0; font-size: 14px;">• ${escapeHtml(li.item_name)} — <span style="color: ${color}; font-weight: bold; text-transform: uppercase;">${escapeHtml(li.line_status)}</span></p>`;
-                  }).join('')}
-                </div>
-                ${ctaButton(appUrl, 'OPEN AIRCRAFT MANAGER')}
-              </div>
-            `
+            html: emailShell({
+              title: `Work Package Progress`,
+              preheader: `${summaryLine} on your aircraft.`,
+              body: `
+                ${heading('Work Package Progress')}
+                ${paragraph(`${safeMxName} updated the status of work items on your aircraft.`)}
+                ${callout(`<strong style="font-size:16px;">${summaryLine}</strong>`, { variant: 'info' })}
+                ${bulletList(itemLines)}
+                ${button(appUrl, 'Open Skyward')}
+              `,
+            }),
           });
         }
       }
@@ -273,14 +277,16 @@ export async function POST(req: Request) {
           from: `Skyward Operations <${FROM_EMAIL}>`,
           to: [event.primary_contact_email],
           subject: `Estimated Completion: ${escapeHtml(proposedDate)}`,
-          html: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-              <h2 style="color: #091F3C;">Completion Estimate</h2>
-              <p>${safeMxName} estimates your aircraft will be ready by <strong>${escapeHtml(proposedDate)}</strong>.</p>
-              ${safeMessage ? `<p style="margin-top: 15px; padding: 15px; background: #f9f9f9; border-left: 4px solid #F08B46; border-radius: 4px;"><em>${safeMessage}</em></p>` : ''}
-              ${ctaButton(appUrl, 'OPEN AIRCRAFT MANAGER')}
-            </div>
-          `
+          html: emailShell({
+            title: `Estimated Completion`,
+            preheader: `${safeMxName} estimates your aircraft ready by ${escapeHtml(proposedDate)}.`,
+            body: `
+              ${heading('Completion Estimate')}
+              ${paragraph(`${safeMxName} estimates your aircraft will be ready by <strong>${escapeHtml(proposedDate)}</strong>.`)}
+              ${safeMessage ? callout(`<em>${safeMessage}</em>`, { variant: 'warning' }) : ''}
+              ${button(appUrl, 'Open Skyward')}
+            `,
+          }),
         });
       }
 
@@ -311,17 +317,19 @@ export async function POST(req: Request) {
           from: `Skyward Operations <${FROM_EMAIL}>`,
           to: [event.primary_contact_email],
           subject: `Additional Work Suggested: ${safeSuggestedName}`,
-          html: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-              <h2 style="color: #F08B46;">Additional Work Found</h2>
-              <p>${safeMxName} has identified additional work needed on your aircraft:</p>
-              <div style="margin-top: 15px; padding: 15px; background: #FFF7ED; border-left: 4px solid #F08B46; border-radius: 4px;">
-                <strong>${safeSuggestedName}</strong>
-                ${safeItemDescription ? `<p style="margin-top: 8px; color: #666;">${safeItemDescription}</p>` : ''}
-              </div>
-              ${ctaButton(appUrl, 'OPEN AIRCRAFT MANAGER')}
-            </div>
-          `
+          html: emailShell({
+            title: `Additional Work Found`,
+            preheader: `${safeMxName} found something else that needs attention on your aircraft.`,
+            body: `
+              ${heading('Additional Work Found', 'warning')}
+              ${paragraph(`${safeMxName} has identified additional work needed on your aircraft:`)}
+              ${callout(
+                `<strong>${safeSuggestedName}</strong>${safeItemDescription ? `<div style="margin-top:8px;color:#6B7280;">${safeItemDescription}</div>` : ''}`,
+                { variant: 'warning' }
+              )}
+              ${button(appUrl, 'Open Skyward')}
+            `,
+          }),
         });
       }
 
@@ -343,15 +351,17 @@ export async function POST(req: Request) {
           from: `Skyward Operations <${FROM_EMAIL}>`,
           to: [event.primary_contact_email],
           subject: `Service Declined by ${safeMxName}`,
-          html: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-              <h2 style="color: #CE3732;">Service Declined</h2>
-              <p>${safeMxName} can&apos;t accommodate this service request.</p>
-              ${safeMessage ? `<p style="margin-top: 15px; padding: 15px; background: #f9f9f9; border-left: 4px solid #CE3732; border-radius: 4px;"><em>${safeMessage}</em></p>` : ''}
-              <p style="margin-top: 15px; color: #666;">You might want to reach out to a different mechanic or reschedule.</p>
-              ${ctaButton(appUrl, 'OPEN AIRCRAFT MANAGER')}
-            </div>
-          `
+          html: emailShell({
+            title: `Service Declined`,
+            preheader: `${safeMxName} can't accommodate this service request.`,
+            body: `
+              ${heading('Service Declined', 'danger')}
+              ${paragraph(`${safeMxName} can&apos;t accommodate this service request.`)}
+              ${safeMessage ? callout(`<em>${safeMessage}</em>`, { variant: 'danger' }) : ''}
+              ${paragraph(`You might want to reach out to a different mechanic or reschedule.`)}
+              ${button(appUrl, 'Open Skyward')}
+            `,
+          }),
         });
       }
 
@@ -372,15 +382,17 @@ export async function POST(req: Request) {
           from: `Skyward Operations <${FROM_EMAIL}>`,
           to: [event.primary_contact_email],
           subject: `Aircraft Ready for Pickup`,
-          html: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-              <h2 style="color: #56B94A;">Aircraft Ready for Pickup!</h2>
-              <p>${safeMxName} has completed all work and your aircraft is ready.</p>
-              ${safeMessage ? `<p style="margin-top: 15px; padding: 15px; background: #f0fdf4; border-left: 4px solid #56B94A; border-radius: 4px;"><em>${safeMessage}</em></p>` : ''}
-              <p style="margin-top: 15px; color: #666;">Log in to enter the logbook data from your mechanic&apos;s sign-off. That closes out the service event and resets maintenance tracking.</p>
-              ${ctaButton(appUrl, 'OPEN AIRCRAFT MANAGER')}
-            </div>
-          `
+          html: emailShell({
+            title: `Aircraft Ready for Pickup`,
+            preheader: `All work complete. Enter logbook data to close out the service event.`,
+            body: `
+              ${heading('Aircraft Ready for Pickup', 'success')}
+              ${paragraph(`${safeMxName} has completed all work and your aircraft is ready.`)}
+              ${safeMessage ? callout(`<em>${safeMessage}</em>`, { variant: 'success' }) : ''}
+              ${paragraph(`Log in to enter the logbook data from your mechanic&apos;s sign-off. That closes out the service event and resets maintenance tracking.`)}
+              ${button(appUrl, 'Enter Logbook Data', { variant: 'success' })}
+            `,
+          }),
         });
       }
     }

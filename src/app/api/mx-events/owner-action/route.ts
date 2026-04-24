@@ -7,6 +7,7 @@ import { env } from '@/lib/env';
 import { escapeHtml } from '@/lib/sanitize';
 import { cancelConflictingReservations } from '@/lib/mxConflicts';
 import { isIsoDate } from '@/lib/validation';
+import { emailShell, heading, paragraph, callout, button } from '@/lib/email/layout';
 
 const resend = new Resend(env.RESEND_API_KEY);
 const FROM_EMAIL = 'notifications@skywardsociety.com';
@@ -70,15 +71,17 @@ export async function POST(req: Request) {
           cc: primaryEmail ? [primaryEmail] : [],
           replyTo: primaryEmail || undefined,
           subject: `Date Confirmed — ${event.proposed_date}`,
-          html: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-              <h2 style="color: #091F3C;">Date Confirmed</h2>
-              <p>Hello ${safeMxName},</p>
-              <p>${safePrimaryName} has confirmed the proposed service date of <strong>${escapeHtml(event.proposed_date)}</strong>${durationLabel}.</p>
-              ${safeMessage ? `<p style="margin-top: 15px; padding: 15px; background: #f9f9f9; border-left: 4px solid #56B94A; border-radius: 4px;"><em>${safeMessage}</em></p>` : ''}
-              <p style="margin-top: 20px;"><a href="${portalUrl}" style="background: #091F3C; color: white; padding: 12px 24px; border-radius: 4px; text-decoration: none; font-weight: bold;">View Service Portal</a></p>
-            </div>
-          `
+          html: emailShell({
+            title: `Date Confirmed`,
+            preheader: `${safePrimaryName} confirmed ${escapeHtml(event.proposed_date)}${durationLabel}.`,
+            body: `
+              ${heading('Date Confirmed', 'success')}
+              ${paragraph(`Hello ${safeMxName},`)}
+              ${paragraph(`${safePrimaryName} has confirmed the proposed service date of <strong>${escapeHtml(event.proposed_date)}</strong>${durationLabel}.`)}
+              ${safeMessage ? callout(`<em>${safeMessage}</em>`, { variant: 'success' }) : ''}
+              ${button(portalUrl, 'View Service Portal', { variant: 'success' })}
+            `,
+          }),
         });
       }
 
@@ -126,15 +129,17 @@ export async function POST(req: Request) {
           cc: primaryEmail ? [primaryEmail] : [],
           replyTo: primaryEmail || undefined,
           subject: `New Date Proposed — ${proposedDate}`,
-          html: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-              <h2 style="color: #091F3C;">Counter Proposal</h2>
-              <p>Hello ${safeMxName},</p>
-              <p>${safePrimaryName} has proposed a different service date: <strong>${escapeHtml(proposedDate)}</strong>.</p>
-              ${safeMessage ? `<p style="margin-top: 15px; padding: 15px; background: #f9f9f9; border-left: 4px solid #F08B46; border-radius: 4px;"><em>${safeMessage}</em></p>` : ''}
-              <p style="margin-top: 20px;"><a href="${portalUrl}" style="background: #091F3C; color: white; padding: 12px 24px; border-radius: 4px; text-decoration: none; font-weight: bold;">View Service Portal</a></p>
-            </div>
-          `
+          html: emailShell({
+            title: `Counter Proposal`,
+            preheader: `${safePrimaryName} proposed ${escapeHtml(proposedDate)} instead.`,
+            body: `
+              ${heading('Counter Proposal', 'warning')}
+              ${paragraph(`Hello ${safeMxName},`)}
+              ${paragraph(`${safePrimaryName} has proposed a different service date: <strong>${escapeHtml(proposedDate)}</strong>.`)}
+              ${safeMessage ? callout(`<em>${safeMessage}</em>`, { variant: 'warning' }) : ''}
+              ${button(portalUrl, 'View Service Portal')}
+            `,
+          }),
         });
       }
 
@@ -155,15 +160,17 @@ export async function POST(req: Request) {
           cc: primaryEmail ? [primaryEmail] : [],
           replyTo: primaryEmail || undefined,
           subject: `Message from ${safePrimaryName}`,
-          html: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-              <h2 style="color: #091F3C;">New Message</h2>
-              <p>Hello ${safeMxName},</p>
-              <p>${safePrimaryName} sent you a message:</p>
-              <p style="margin-top: 15px; padding: 15px; background: #f9f9f9; border-left: 4px solid #3AB0FF; border-radius: 4px;"><em>${safeMessage}</em></p>
-              <p style="margin-top: 20px;"><a href="${portalUrl}" style="background: #091F3C; color: white; padding: 12px 24px; border-radius: 4px; text-decoration: none; font-weight: bold;">View Service Portal</a></p>
-            </div>
-          `
+          html: emailShell({
+            title: `Message from ${safePrimaryName}`,
+            preheader: `${safePrimaryName} sent you a message about the service event.`,
+            body: `
+              ${heading('New Message', 'note')}
+              ${paragraph(`Hello ${safeMxName},`)}
+              ${paragraph(`${safePrimaryName} sent you a message:`)}
+              ${callout(`<em>${safeMessage}</em>`, { variant: 'note' })}
+              ${button(portalUrl, 'View Service Portal')}
+            `,
+          }),
         });
       }
 
@@ -194,15 +201,17 @@ export async function POST(req: Request) {
           cc: primaryEmail ? [primaryEmail] : [],
           replyTo: primaryEmail || undefined,
           subject: `Service Cancelled — ${safePrimaryName}`,
-          html: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-              <h2 style="color: #CE3732;">Service Event Cancelled</h2>
-              <p>Hello ${safeMxName},</p>
-              <p>${safePrimaryName} has cancelled the pending service event.</p>
-              ${safeMessage ? `<p style="margin-top: 15px; padding: 15px; background: #f9f9f9; border-left: 4px solid #CE3732; border-radius: 4px;"><em>${safeMessage}</em></p>` : ''}
-              <p style="margin-top: 15px; color: #666;">Nothing more to do on your end. Sorry for the inconvenience.</p>
-            </div>
-          `
+          html: emailShell({
+            title: `Service Cancelled`,
+            preheader: `${safePrimaryName} cancelled the pending service event — nothing more to do on your end.`,
+            body: `
+              ${heading('Service Event Cancelled', 'danger')}
+              ${paragraph(`Hello ${safeMxName},`)}
+              ${paragraph(`${safePrimaryName} has cancelled the pending service event.`)}
+              ${safeMessage ? callout(`<em>${safeMessage}</em>`, { variant: 'danger' }) : ''}
+              ${paragraph(`Nothing more to do on your end. Sorry for the inconvenience.`)}
+            `,
+          }),
         });
       }
 

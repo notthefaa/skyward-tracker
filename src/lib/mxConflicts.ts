@@ -15,6 +15,7 @@ import { Resend } from 'resend';
 import { env } from '@/lib/env';
 import { escapeHtml } from '@/lib/sanitize';
 import { safeTimeZone, formatInTimeZone } from '@/lib/dateFormat';
+import { emailShell, heading, paragraph, callout, bulletList, button } from '@/lib/email/layout';
 
 const resend = new Resend(env.RESEND_API_KEY);
 const FROM_EMAIL = 'notifications@skywardsociety.com';
@@ -133,37 +134,31 @@ export async function cancelConflictingReservations({
       const end = formatInTimeZone(r.end_time, rowTz);
       const safeTitle = r.title ? ` (${escapeHtml(r.title)})` : '';
       const safeRoute = r.route ? ` • ${escapeHtml(r.route)}` : '';
-      return `<li style="margin-bottom: 8px;">${start} — ${end}${safeTitle}${safeRoute}</li>`;
-    }).join('');
+      return `${start} — ${end}${safeTitle}${safeRoute}`;
+    });
 
+    const plural = pilot.reservations.length > 1;
     try {
       await resend.emails.send({
-      from: `Skyward Alerts <${FROM_EMAIL}>`,
-      to: [pilot.email],
-      subject: `Reservation Cancelled: ${safeTailNumber} — Maintenance Scheduled`,
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-          <h2 style="color: #CE3732;">Reservation Cancelled</h2>
-          <p>Your reservation${pilot.reservations.length > 1 ? 's' : ''} for <strong>${safeTailNumber}</strong> ${pilot.reservations.length > 1 ? 'have' : 'has'} been automatically cancelled due to scheduled maintenance.</p>
-          
-          <div style="margin: 20px 0; padding: 15px; background: #FEF2F2; border-left: 4px solid #CE3732; border-radius: 4px;">
-            <p style="margin: 0 0 8px 0; font-size: 12px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; color: #CE3732;">Cancelled Reservation${pilot.reservations.length > 1 ? 's' : ''}</p>
-            <ul style="margin: 0; padding-left: 16px; color: #333; font-size: 14px; line-height: 1.6;">${reservationLines}</ul>
-          </div>
-
-          <div style="margin: 20px 0; padding: 15px; background: #FFF7ED; border-left: 4px solid #F08B46; border-radius: 4px;">
-            <p style="margin: 0 0 8px 0; font-size: 12px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; color: #F08B46;">Maintenance Period</p>
-            <p style="margin: 0; color: #333; font-size: 14px;"><strong>${mxDateRange}</strong></p>
-            <p style="margin: 4px 0 0 0; color: #666; font-size: 13px;">Serviced by ${mechanicLabel}</p>
-          </div>
-
-          <p style="color: #666; font-size: 14px;">Rebook your flight for after the maintenance period. Sorry for the inconvenience.</p>
-
-          <div style="margin-top: 25px; text-align: center;">
-            <a href="${appUrl}" style="display: inline-block; background-color: #091F3C; color: white; text-decoration: none; padding: 12px 28px; border-radius: 6px; font-weight: bold; font-size: 14px; letter-spacing: 1px;">OPEN AIRCRAFT MANAGER</a>
-          </div>
-        </div>
-      `,
+        from: `Skyward Alerts <${FROM_EMAIL}>`,
+        to: [pilot.email],
+        subject: `Reservation Cancelled: ${safeTailNumber} — Maintenance Scheduled`,
+        html: emailShell({
+          title: `Reservation Cancelled — ${safeTailNumber}`,
+          preheader: `Your ${safeTailNumber} reservation${plural ? 's' : ''} ${plural ? 'have' : 'has'} been cancelled: maintenance scheduled ${mxDateRange}.`,
+          body: `
+            ${heading('Reservation Cancelled', 'danger')}
+            ${paragraph(`Your reservation${plural ? 's' : ''} for <strong>${safeTailNumber}</strong> ${plural ? 'have' : 'has'} been automatically cancelled due to scheduled maintenance.`)}
+            ${callout(bulletList(reservationLines), { variant: 'danger', label: `Cancelled Reservation${plural ? 's' : ''}` })}
+            ${callout(
+              `<strong>${mxDateRange}</strong><div style="margin-top:4px;color:#6B7280;font-size:13px;">Serviced by ${mechanicLabel}</div>`,
+              { variant: 'warning', label: 'Maintenance Period' }
+            )}
+            ${paragraph(`Rebook your flight for after the maintenance period. Sorry for the inconvenience.`)}
+            ${button(appUrl, 'Open Skyward')}
+          `,
+          preferencesUrl: `${appUrl}#settings`,
+        }),
       });
     } catch (err: any) {
       emailFailures.push(`${pilot.email}: ${err?.message || 'unknown'}`);

@@ -13,6 +13,7 @@ import {
   zonedDateStartAsUtc,
   zonedDateEndAsUtc,
 } from '@/lib/dateFormat';
+import { emailShell, heading, paragraph, callout, bulletList, button, keyValueBlock } from '@/lib/email/layout';
 
 const resend = new Resend(env.RESEND_API_KEY);
 const FROM_EMAIL = 'notifications@skywardsociety.com';
@@ -267,60 +268,63 @@ export async function POST(req: Request) {
           const safeTitle = title ? escapeHtml(title) : '';
           const safeRoute = route ? escapeHtml(route) : '';
 
+          const appUrl = new URL(req.url).origin;
+
           if (created.length === 1) {
-            // Single reservation email (original format)
             const startStr = formatInTimeZone(created[0].start, tz);
             const endStr = formatInTimeZone(created[0].end, tz);
+            const details: Array<{ label: string; value: string }> = [
+              { label: 'From', value: startStr },
+              { label: 'To', value: endStr },
+            ];
+            if (safeTitle) details.push({ label: 'Purpose', value: safeTitle });
+            if (safeRoute) details.push({ label: 'Route', value: safeRoute });
 
             await resend.emails.send({
               from: `Skyward Aircraft Manager <${FROM_EMAIL}>`,
               to: emails,
               subject: `${safeTail} Reserved: ${formatShortDateInTimeZone(created[0].start, tz)}`,
-              html: `
-                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-                  <h2 style="color: #091F3C;">New Reservation</h2>
-                  <p>${reservedByLine}</p>
-                  <div style="margin: 20px 0; padding: 15px; background: #f9f9f9; border-left: 4px solid #3AB0FF; border-radius: 4px;">
-                    <p style="margin: 0 0 8px 0;"><strong>From:</strong> ${startStr}</p>
-                    <p style="margin: 0 0 8px 0;"><strong>To:</strong> ${endStr}</p>
-                    ${safeTitle ? `<p style="margin: 0 0 8px 0;"><strong>Purpose:</strong> ${safeTitle}</p>` : ''}
-                    ${safeRoute ? `<p style="margin: 0;"><strong>Route:</strong> ${safeRoute}</p>` : ''}
-                  </div>
-                  <div style="margin-top: 25px; text-align: center;">
-                    <a href="${new URL(req.url).origin}" style="display: inline-block; background-color: #091F3C; color: white; text-decoration: none; padding: 12px 28px; border-radius: 6px; font-weight: bold; font-size: 14px; letter-spacing: 1px;">OPEN AIRCRAFT MANAGER</a>
-                  </div>
-                </div>
-              `,
+              html: emailShell({
+                title: `${safeTail} Reserved`,
+                preheader: `${safeTargetInitials} reserved ${safeTail} — ${startStr} → ${endStr}.`,
+                body: `
+                  ${heading('New Reservation', 'note')}
+                  ${paragraph(reservedByLine)}
+                  ${callout(keyValueBlock(details), { variant: 'note' })}
+                  ${button(appUrl, 'Open Skyward')}
+                `,
+                preferencesUrl: `${appUrl}#settings`,
+              }),
             });
           } else {
             // Recurring reservation email (consolidated)
-            const dateList = created.map(occ => {
+            const dateLines = created.map(occ => {
               const dayLabel = formatDateInTimeZone(occ.start, tz);
               const startLabel = formatTimeInTimeZone(occ.start, tz);
               const endLabel = formatTimeInTimeZone(occ.end, tz);
-              return `<li>${dayLabel} — ${startLabel} to ${endLabel}</li>`;
-            }).join('');
+              return `${dayLabel} — ${startLabel} to ${endLabel}`;
+            });
+            const introLine = bookingForOther
+              ? `<strong>${safeCallerInitials}</strong> has booked <strong>${safeTail}</strong> for <strong>${safeTargetInitials}</strong> on ${created.length} dates:`
+              : `<strong>${safeTargetInitials}</strong> has reserved <strong>${safeTail}</strong> for ${created.length} dates:`;
 
             await resend.emails.send({
               from: `Skyward Aircraft Manager <${FROM_EMAIL}>`,
               to: emails,
               subject: `${safeTail} Reserved: ${created.length} recurring bookings`,
-              html: `
-                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-                  <h2 style="color: #091F3C;">Recurring Reservation</h2>
-                  <p>${bookingForOther
-                    ? `<strong>${safeCallerInitials}</strong> has booked <strong>${safeTail}</strong> for <strong>${safeTargetInitials}</strong> on ${created.length} dates:`
-                    : `<strong>${safeTargetInitials}</strong> has reserved <strong>${safeTail}</strong> for ${created.length} dates:`}</p>
-                  ${safeTitle ? `<p style="color: #666;"><strong>Purpose:</strong> ${safeTitle}</p>` : ''}
-                  ${safeRoute ? `<p style="color: #666;"><strong>Route:</strong> ${safeRoute}</p>` : ''}
-                  <div style="margin: 20px 0; padding: 15px; background: #f9f9f9; border-left: 4px solid #3AB0FF; border-radius: 4px;">
-                    <ul style="margin: 0; padding-left: 18px;">${dateList}</ul>
-                  </div>
-                  <div style="margin-top: 25px; text-align: center;">
-                    <a href="${new URL(req.url).origin}" style="display: inline-block; background-color: #091F3C; color: white; text-decoration: none; padding: 12px 28px; border-radius: 6px; font-weight: bold; font-size: 14px; letter-spacing: 1px;">OPEN AIRCRAFT MANAGER</a>
-                  </div>
-                </div>
-              `,
+              html: emailShell({
+                title: `${safeTail} Reserved — ${created.length} bookings`,
+                preheader: `${safeTargetInitials} booked ${safeTail} on ${created.length} dates.`,
+                body: `
+                  ${heading('Recurring Reservation', 'note')}
+                  ${paragraph(introLine)}
+                  ${safeTitle ? paragraph(`<strong>Purpose:</strong> ${safeTitle}`) : ''}
+                  ${safeRoute ? paragraph(`<strong>Route:</strong> ${safeRoute}`) : ''}
+                  ${callout(bulletList(dateLines), { variant: 'note' })}
+                  ${button(appUrl, 'Open Skyward')}
+                `,
+                preferencesUrl: `${appUrl}#settings`,
+              }),
             });
           }
         }
@@ -503,23 +507,25 @@ export async function PUT(req: Request) {
             const newStartStr = formatInTimeZone(newStart, tz);
             const newEndStr = formatInTimeZone(newEnd, tz);
 
+            const appUrl = new URL(req.url).origin;
             await resend.emails.send({
               from: `Skyward Aircraft Manager <${FROM_EMAIL}>`,
               to: emails,
               subject: `${safeTail} Reservation Updated: ${formatShortDateInTimeZone(newStart, tz)}`,
-              html: `
-                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-                  <h2 style="color: #091F3C;">Reservation Updated</h2>
-                  <p><strong>${safePilot}</strong> has updated their reservation for <strong>${safeTail}</strong>:</p>
-                  <div style="margin: 20px 0; padding: 15px; background: #f9f9f9; border-left: 4px solid #F08B46; border-radius: 4px;">
-                    <p style="margin: 0 0 8px 0;"><strong>New From:</strong> ${newStartStr}</p>
-                    <p style="margin: 0;"><strong>New To:</strong> ${newEndStr}</p>
-                  </div>
-                  <div style="margin-top: 25px; text-align: center;">
-                    <a href="${new URL(req.url).origin}" style="display: inline-block; background-color: #091F3C; color: white; text-decoration: none; padding: 12px 28px; border-radius: 6px; font-weight: bold; font-size: 14px; letter-spacing: 1px;">OPEN AIRCRAFT MANAGER</a>
-                  </div>
-                </div>
-              `,
+              html: emailShell({
+                title: `${safeTail} Reservation Updated`,
+                preheader: `${safePilot} moved their ${safeTail} reservation — ${newStartStr} → ${newEndStr}.`,
+                body: `
+                  ${heading('Reservation Updated', 'warning')}
+                  ${paragraph(`<strong>${safePilot}</strong> has updated their reservation for <strong>${safeTail}</strong>:`)}
+                  ${callout(keyValueBlock([
+                    { label: 'New From', value: newStartStr },
+                    { label: 'New To', value: newEndStr },
+                  ]), { variant: 'warning' })}
+                  ${button(appUrl, 'Open Skyward')}
+                `,
+                preferencesUrl: `${appUrl}#settings`,
+              }),
             });
           }
         }
@@ -626,20 +632,22 @@ export async function DELETE(req: Request) {
           const safeTail = escapeHtml(aircraft.tail_number);
           const safePilotName = escapeHtml(reservation.pilot_name);
 
+          const appUrl = new URL(req.url).origin;
           await resend.emails.send({
             from: `Skyward Aircraft Manager <${FROM_EMAIL}>`,
             to: emails,
             subject: `${safeTail} Reservation Cancelled: ${formatShortDateInTimeZone(reservation.start_time, displayTz)}`,
-            html: `
-              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-                <h2 style="color: #CE3732;">Reservation Cancelled</h2>
-                <p>A reservation for <strong>${safeTail}</strong> on <strong>${startStr}</strong> has been cancelled.</p>
-                ${safePilotName ? `<p style="color: #666;">Originally booked by: ${safePilotName}</p>` : ''}
-                <div style="margin-top: 25px; text-align: center;">
-                  <a href="${new URL(req.url).origin}" style="display: inline-block; background-color: #091F3C; color: white; text-decoration: none; padding: 12px 28px; border-radius: 6px; font-weight: bold; font-size: 14px; letter-spacing: 1px;">OPEN AIRCRAFT MANAGER</a>
-                </div>
-              </div>
-            `,
+            html: emailShell({
+              title: `${safeTail} Reservation Cancelled`,
+              preheader: `Reservation on ${safeTail} for ${startStr} has been cancelled.`,
+              body: `
+                ${heading('Reservation Cancelled', 'danger')}
+                ${paragraph(`A reservation for <strong>${safeTail}</strong> on <strong>${startStr}</strong> has been cancelled.`)}
+                ${safePilotName ? paragraph(`<span style="color:#6B7280;">Originally booked by: ${safePilotName}</span>`) : ''}
+                ${button(appUrl, 'Open Skyward')}
+              `,
+              preferencesUrl: `${appUrl}#settings`,
+            }),
           });
         }
       }

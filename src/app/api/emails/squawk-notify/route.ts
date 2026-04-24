@@ -3,6 +3,7 @@ import { Resend } from 'resend';
 import { requireAuth, requireAircraftAccess, handleApiError } from '@/lib/auth';
 import { env } from '@/lib/env';
 import { escapeHtml } from '@/lib/sanitize';
+import { emailShell, heading, paragraph, callout, button, keyValueBlock } from '@/lib/email/layout';
 
 const resend = new Resend(env.RESEND_API_KEY);
 const FROM_EMAIL = 'notifications@skywardsociety.com';
@@ -35,18 +36,18 @@ export async function POST(req: Request) {
     // 1. EMAIL TO MECHANIC (only if reporter checked "Notify MX?")
     if (notifyMx && aircraft.mx_contact_email) {
       const mxCc = aircraft.main_contact_email ? [aircraft.main_contact_email] : [];
+      const squawkUrl = `${mainAppUrl}/squawk/${squawk.access_token}`;
+      const statusBadge = squawk.affects_airworthiness
+        ? `<span style="color:#CE3732;font-weight:700;">AOG / GROUNDED</span>`
+        : 'Monitor';
 
-      const mxGreeting = safeMxContact
-        ? `<p style="margin-bottom: 20px;">Hello ${safeMxContact},</p>`
-        : `<p style="margin-bottom: 20px;">Hello,</p>`;
-
-      const mxSignature = `
-        <p style="margin-top: 20px;">
-          Thank you,<br/>
-          <strong>${safeMainContact}</strong><br/>
-          ${safeMainPhone ? `${safeMainPhone}<br/>` : ''}
-          ${safeMainEmail ? `<a href="mailto:${safeMainEmail}" style="color: #333333;">${safeMainEmail}</a>` : ''}
-        </p>
+      const signature = `
+        <div style="margin-top:20px;padding-top:16px;border-top:1px solid #E5E7EB;font-size:14px;line-height:1.6;color:#374151;">
+          Thank you,<br />
+          <strong>${safeMainContact}</strong>
+          ${safeMainPhone ? `<br />${safeMainPhone}` : ''}
+          ${safeMainEmail ? `<br /><a href="mailto:${safeMainEmail}" style="color:#091F3C;text-decoration:underline;">${safeMainEmail}</a>` : ''}
+        </div>
       `;
 
       await resend.emails.send({
@@ -55,23 +56,25 @@ export async function POST(req: Request) {
         cc: mxCc,
         replyTo: aircraft.main_contact_email || undefined,
         subject: `Service Request: ${safeTail} Squawk`,
-        html: `
-          <div style="font-family: Arial, sans-serif; font-size: 14px; color: #333333; line-height: 1.6; max-width: 600px;">
-            ${mxGreeting}
-            
-            <p>A new squawk was reported for ${safeTail}. Let us know when you can accommodate this aircraft to address the issue.</p>
-            
-            <p style="margin-top: 20px;"><strong>Squawk Details:</strong><br/>
-            Location: ${safeLocation}<br/>
-            Status: ${squawk.affects_airworthiness ? 'AOG / GROUNDED' : 'Monitor'}<br/>
-            Description: ${safeDescription}</p>
-            
-            <p style="margin-top: 20px;">View the full report and attached photos here:<br/>
-            <a href="${mainAppUrl}/squawk/${squawk.access_token}">${mainAppUrl}/squawk/${squawk.access_token}</a></p>
-            
-            ${mxSignature}
-          </div>
-        `
+        html: emailShell({
+          title: `Service Request: ${safeTail}`,
+          preheader: `New squawk on ${safeTail} — ${squawk.affects_airworthiness ? 'aircraft is grounded' : 'monitor and schedule when able'}.`,
+          body: `
+            ${heading('Service Request')}
+            ${paragraph(`Hello ${safeMxContact || 'there'},`)}
+            ${paragraph(`A new squawk was reported for <strong>${safeTail}</strong>. Let us know when you can accommodate this aircraft to address the issue.`)}
+            ${callout(
+              keyValueBlock([
+                { label: 'Location', value: safeLocation },
+                { label: 'Status', value: statusBadge },
+                { label: 'Description', value: safeDescription },
+              ]),
+              { variant: squawk.affects_airworthiness ? 'danger' : 'warning', label: 'Squawk Details' }
+            )}
+            ${button(squawkUrl, 'View Full Report')}
+            ${signature}
+          `,
+        }),
       });
     }
 
@@ -115,30 +118,24 @@ export async function POST(req: Request) {
               from: `Skyward Alerts <${FROM_EMAIL}>`,
               to: dedupedRecipients,
               subject: `New Squawk: ${safeTail}`,
-              html: `
-                <div style="font-family: Arial, sans-serif; font-size: 14px; color: #333333; line-height: 1.6; max-width: 600px;">
-                  <p>A new squawk was reported on ${safeTail} by ${safeInitials}.</p>
-                  
-                  <p style="margin-top: 20px;"><strong>Squawk Details:</strong><br/>
-                  Location: ${safeLocation}<br/>
-                  Grounded: ${squawk.affects_airworthiness ? 'YES' : 'NO'}<br/>
-                  Description: ${safeDescription}</p>
-                  
-                  <div style="margin-top: 25px; text-align: center;">
-                    <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center" style="margin: 0 auto;">
-                      <tr>
-                        <td style="background-color: #091F3C; border-radius: 6px; text-align: center;">
-                          <a href="${mainAppUrl}" target="_blank" style="display: inline-block; background-color: #091F3C; color: #ffffff; text-decoration: none; padding: 14px 32px; font-family: Arial, sans-serif; font-weight: bold; font-size: 14px; letter-spacing: 1px; border-radius: 6px; mso-padding-alt: 0; text-underline-color: #091F3C;">
-                            <!--[if mso]><i style="mso-font-width:150%;mso-text-raise:21pt" hidden>&emsp;</i><![endif]-->
-                            <span style="mso-text-raise:10pt;">OPEN AIRCRAFT MANAGER</span>
-                            <!--[if mso]><i style="mso-font-width:150%;" hidden>&emsp;&#8203;</i><![endif]-->
-                          </a>
-                        </td>
-                      </tr>
-                    </table>
-                  </div>
-                </div>
-              `
+              html: emailShell({
+                title: `New Squawk: ${safeTail}`,
+                preheader: `${safeInitials} reported a squawk on ${safeTail}${squawk.affects_airworthiness ? ' — aircraft is grounded' : ''}.`,
+                body: `
+                  ${heading('New Squawk', squawk.affects_airworthiness ? 'danger' : 'warning')}
+                  ${paragraph(`A new squawk was reported on <strong>${safeTail}</strong> by <strong>${safeInitials}</strong>.`)}
+                  ${callout(
+                    keyValueBlock([
+                      { label: 'Location', value: safeLocation },
+                      { label: 'Grounded', value: squawk.affects_airworthiness ? `<span style="color:#CE3732;font-weight:700;">Yes</span>` : 'No' },
+                      { label: 'Description', value: safeDescription },
+                    ]),
+                    { variant: squawk.affects_airworthiness ? 'danger' : 'warning', label: 'Squawk Details' }
+                  )}
+                  ${button(mainAppUrl, 'Open Skyward')}
+                `,
+                preferencesUrl: `${mainAppUrl}#settings`,
+              }),
             });
           }
         }
