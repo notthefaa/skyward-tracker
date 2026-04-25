@@ -324,7 +324,7 @@ export async function POST(req: Request) {
               ${heading('Additional Work Found', 'warning')}
               ${paragraph(`${safeMxName} has identified additional work needed on your aircraft:`)}
               ${callout(
-                `<strong>${safeSuggestedName}</strong>${safeItemDescription ? `<div style="margin-top:8px;color:#6B7280;">${safeItemDescription}</div>` : ''}`,
+                `<strong>${safeSuggestedName}</strong>${safeItemDescription ? `<div style="margin-top:8px;color:#091F3C;">${safeItemDescription}</div>` : ''}`,
                 { variant: 'warning' }
               )}
               ${button(appUrl, 'Open Skyward')}

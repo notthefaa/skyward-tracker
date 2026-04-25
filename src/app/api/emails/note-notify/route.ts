@@ -81,7 +81,7 @@ export async function POST(req: Request) {
       // bracket.
       const noteHtml = contentPreview.replace(/\n/g, '<br />');
       const photoNote = hasPhotos
-        ? `<div style="margin-top:10px;font-size:12px;color:#6B7280;">${note.pictures.length} photo${note.pictures.length > 1 ? 's' : ''} attached</div>`
+        ? `<div class="sw-callout-muted" style="margin-top:10px;font-size:12px;color:#091F3C;">${note.pictures.length} photo${note.pictures.length > 1 ? 's' : ''} attached</div>`
         : '';
 
       await resend.emails.send({

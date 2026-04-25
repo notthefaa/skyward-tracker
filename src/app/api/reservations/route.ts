@@ -643,7 +643,7 @@ export async function DELETE(req: Request) {
               body: `
                 ${heading('Reservation Cancelled', 'danger')}
                 ${paragraph(`A reservation for <strong>${safeTail}</strong> on <strong>${startStr}</strong> has been cancelled.`)}
-                ${safePilotName ? paragraph(`<span style="color:#6B7280;">Originally booked by: ${safePilotName}</span>`) : ''}
+                ${safePilotName ? paragraph(`<span style="color:#525659;">Originally booked by: ${safePilotName}</span>`) : ''}
                 ${button(appUrl, 'Open Skyward')}
               `,
               preferencesUrl: `${appUrl}#settings`,

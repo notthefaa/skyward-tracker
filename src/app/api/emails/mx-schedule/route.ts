@@ -38,7 +38,7 @@ export async function POST(req: Request) {
         : `on ${escapeHtml(mxItem.due_date)}`;
 
       const signature = `
-        <div style="margin-top:20px;padding-top:16px;border-top:1px solid #E5E7EB;font-size:14px;line-height:1.6;color:#374151;">
+        <div class="sw-paragraph" style="margin-top:20px;padding-top:16px;border-top:1px solid #E5E7EB;font-size:14px;line-height:1.6;color:#091F3C;">
           Thank you,<br />
           <strong>${safeMainContact}</strong>
           ${safeMainPhone ? `<br />${safeMainPhone}` : ''}

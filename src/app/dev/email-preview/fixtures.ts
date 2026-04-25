@@ -34,7 +34,7 @@ const PORTAL_URL = 'https://track.skywardsociety.com/service/sample-token-abc123
 const SQUAWK_URL = 'https://track.skywardsociety.com/squawk/sample-token-xyz789';
 
 const SIGNATURE_MX = `
-  <div style="margin-top:20px;padding-top:16px;border-top:1px solid #E5E7EB;font-size:14px;line-height:1.6;color:#374151;">
+  <div class="sw-paragraph" style="margin-top:20px;padding-top:16px;border-top:1px solid #E5E7EB;font-size:14px;line-height:1.6;color:#091F3C;">
     Thank you,<br />
     <strong>Alex Gornakov</strong><br />
     (555) 867-5309<br />
@@ -70,7 +70,7 @@ const noteNew: Variant = {
       ${heading('New Note')}
       ${paragraph(`<strong>AG</strong> posted a note on <strong>N205WH</strong>.`)}
       ${callout(
-        `Fuel truck was 30 min late — might wanna pad before your next slot. Left tire still holding pressure fine after last top-off.<div style="margin-top:10px;font-size:12px;color:#6B7280;">2 photos attached</div>`,
+        `Fuel truck was 30 min late — might wanna pad before your next slot. Left tire still holding pressure fine after last top-off.<div style="margin-top:10px;font-size:12px;color:#091F3C;">2 photos attached</div>`,
         { variant: 'info' },
       )}
       ${button(APP_URL, 'Open Skyward')}
@@ -189,9 +189,9 @@ const cronDraft: Variant = {
       ${paragraph(`The following maintenance items are approaching for <strong>N205WH</strong>:`)}
       ${callout(
         bulletList([
-          `<strong>100-Hour Inspection</strong> — <span style="color:#6B7280;">due at 1247.5 hours</span>`,
-          `<strong>Annual Inspection</strong> — <span style="color:#6B7280;">due 2026-06-14</span>`,
-          `<strong>Transponder Check (§91.413)</strong> — <span style="color:#6B7280;">due 2026-06-01</span>`,
+          `<strong>100-Hour Inspection</strong> — <span style="color:#091F3C;">due at 1247.5 hours</span>`,
+          `<strong>Annual Inspection</strong> — <span style="color:#091F3C;">due 2026-06-14</span>`,
+          `<strong>Transponder Check (§91.413)</strong> — <span style="color:#091F3C;">due 2026-06-01</span>`,
         ]),
         { variant: 'warning' },
       )}
@@ -534,7 +534,7 @@ const mechSuggest: Variant = {
       ${heading('Additional Work Found', 'warning')}
       ${paragraph(`Dave Reynolds has identified additional work needed on your aircraft:`)}
       ${callout(
-        `<strong>Alternator Brush Replacement</strong><div style="margin-top:8px;color:#6B7280;">Brushes are down to ~30% — not critical yet but worth doing while the cowling is off. Adds ~1 hour + $85 parts.</div>`,
+        `<strong>Alternator Brush Replacement</strong><div style="margin-top:8px;color:#091F3C;">Brushes are down to ~30% — not critical yet but worth doing while the cowling is off. Adds ~1 hour + $85 parts.</div>`,
         { variant: 'warning' },
       )}
       ${button(APP_URL, 'Open Skyward')}
@@ -715,7 +715,7 @@ const reservationCancelled: Variant = {
     body: `
       ${heading('Reservation Cancelled', 'danger')}
       ${paragraph(`A reservation for <strong>N205WH</strong> on <strong>Tue May 20, 08:00 PDT</strong> has been cancelled.`)}
-      ${paragraph(`<span style="color:#6B7280;">Originally booked by: Alex Gornakov</span>`)}
+      ${paragraph(`<span style="color:#525659;">Originally booked by: Alex Gornakov</span>`)}
       ${button(APP_URL, 'Open Skyward')}
     `,
     preferencesUrl: `${APP_URL}#settings`,
@@ -747,7 +747,7 @@ const mxConflictCancel: Variant = {
         { variant: 'danger', label: 'Cancelled Reservations' },
       )}
       ${callout(
-        `<strong>May 15, 2026 – May 17, 2026</strong><div style="margin-top:4px;color:#6B7280;font-size:13px;">Serviced by Dave Reynolds</div>`,
+        `<strong>May 15, 2026 – May 17, 2026</strong><div style="margin-top:4px;color:#091F3C;font-size:13px;">Serviced by Dave Reynolds</div>`,
         { variant: 'warning', label: 'Maintenance Period' },
       )}
       ${paragraph(`Rebook your flight for after the maintenance period. Sorry for the inconvenience.`)}

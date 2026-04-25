@@ -274,7 +274,7 @@ export async function GET(req: Request) {
             const safeMxContact = escapeHtml(aircraft.mx_contact || 'your mechanic');
 
             const itemListHtml = lineItemDescriptions.map(({ mx, dueString }) =>
-              `<strong>${escapeHtml(mx.item_name)}</strong> — <span style="color:#6B7280;">due ${escapeHtml(dueString)}</span>`
+              `<strong>${escapeHtml(mx.item_name)}</strong> — <span style="color:#091F3C;">due ${escapeHtml(dueString)}</span>`
             );
 
             try {

@@ -102,7 +102,7 @@ export function emailShell(opts: ShellOpts): string {
   const preheader = opts.preheader.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   const title = opts.title.replace(/</g, '&lt;').replace(/>/g, '&gt;');
   const preferencesLink = opts.preferencesUrl
-    ? ` · <a href="${opts.preferencesUrl}" style="color:#6B7280;text-decoration:underline;">Manage preferences</a>`
+    ? ` · <a href="${opts.preferencesUrl}" style="color:#525659;text-decoration:underline;">Manage preferences</a>`
     : '';
 
   return `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
@@ -136,18 +136,28 @@ export function emailShell(opts: ShellOpts): string {
      ignores it (so light-mode palette remains the safe default). */
   @media (prefers-color-scheme: dark) {
     .sw-body { background-color:#0b1a2e !important; }
-    .sw-card { background-color:#0f2340 !important; color:#e5e7eb !important; }
+    .sw-card { background-color:#0f2340 !important; color:#FDFCF4 !important; }
     .sw-heading { color:#ffffff !important; }
-    .sw-paragraph { color:#d1d5db !important; }
-    .sw-label { color:#cbd5e1 !important; }
+    .sw-paragraph { color:#FDFCF4 !important; }
+    .sw-label { color:#FDFCF4 !important; }
     .sw-footer { color:#cbd5e1 !important; }
     .sw-footer a { color:#cbd5e1 !important; }
     /* Info-variant button is navy, which visually vanishes against
        the dark-navy card in dark mode. Flip it to brand gold with
        dark text so the primary CTA still reads as a CTA. Other
        variants have enough hue distance to stay visible. */
-    .sw-btn-info-bg { background-color:#F5B05B !important; }
+    .sw-btn-info-bg { background-color:#F4C458 !important; }
     .sw-btn-info-text { color:#091F3C !important; }
+    /* Callouts have light tinted backgrounds (slate-50, blue-50,
+       green-50, etc.) in BOTH modes — they're meant to read as
+       quote/highlight blocks against the card. So their inner
+       text must stay dark, not flip to the dark-mode light-gray.
+       That's why callout bodies use sw-callout-body, not sw-paragraph,
+       and any nested .sw-paragraph / .sw-label gets re-darkened. */
+    .sw-callout-body { color:#091F3C !important; }
+    .sw-callout-body .sw-paragraph { color:#091F3C !important; }
+    .sw-callout-body .sw-label { color:#091F3C !important; }
+    .sw-callout-muted { color:#091F3C !important; }
   }
 </style>
 </head>
@@ -178,7 +188,7 @@ export function emailShell(opts: ShellOpts): string {
             <div style="font-family:'Oswald','Arial Narrow',Arial,sans-serif;color:#ffffff;font-size:22px;font-weight:700;letter-spacing:3px;text-transform:uppercase;line-height:1.2;">
               Skyward Society
             </div>
-            <div style="font-family:'Oswald','Arial Narrow',Arial,sans-serif;color:#F5B05B;font-size:11px;font-weight:700;letter-spacing:4px;text-transform:uppercase;line-height:1.2;margin-top:4px;">
+            <div style="font-family:'Oswald','Arial Narrow',Arial,sans-serif;color:#F4C458;font-size:11px;font-weight:700;letter-spacing:4px;text-transform:uppercase;line-height:1.2;margin-top:4px;">
               Aircraft Manager
             </div>
           </td>
@@ -193,10 +203,10 @@ export function emailShell(opts: ShellOpts): string {
 
         <!-- Footer — why you got this + preferences link -->
         <tr>
-          <td class="sw-footer" align="center" style="padding:20px 12px 8px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;font-size:11px;line-height:1.6;color:#4B5563;">
+          <td class="sw-footer" align="center" style="padding:20px 12px 8px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;font-size:11px;line-height:1.6;color:#525659;">
             You're getting this because you have access to this aircraft on Skyward${preferencesLink}.
             <br />
-            <span style="color:#6B7280;">Skyward Society · <a href="https://track.skywardsociety.com" style="color:#6B7280;text-decoration:underline;">track.skywardsociety.com</a></span>
+            <span style="color:#525659;">Skyward Society · <a href="https://track.skywardsociety.com" style="color:#525659;text-decoration:underline;">track.skywardsociety.com</a></span>
           </td>
         </tr>
       </table>
@@ -224,7 +234,7 @@ export function heading(text: string, variant: Variant = 'info'): string {
 
 /** Body paragraph. Pass pre-escaped HTML. */
 export function paragraph(html: string): string {
-  return `<p class="sw-paragraph" style="margin:0 0 12px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;font-size:15px;line-height:1.6;color:#374151;">${html}</p>`;
+  return `<p class="sw-paragraph" style="margin:0 0 12px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;font-size:15px;line-height:1.6;color:#091F3C;">${html}</p>`;
 }
 
 /**
@@ -239,13 +249,13 @@ export function callout(
 ): string {
   const v = VARIANTS[opts.variant ?? 'info'];
   const labelHtml = opts.label
-    ? `<div class="sw-label" style="margin:0 0 8px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:${v.accent};">${opts.label}</div>`
+    ? `<div class="sw-callout-label" style="margin:0 0 8px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:${v.accent};">${opts.label}</div>`
     : '';
   return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:16px 0;">
   <tr>
     <td style="background-color:${v.bg};border-left:4px solid ${v.accent};padding:16px 18px;border-radius:4px;">
       ${labelHtml}
-      <div class="sw-paragraph" style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;font-size:14px;line-height:1.6;color:#374151;">${innerHtml}</div>
+      <div class="sw-callout-body" style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;font-size:14px;line-height:1.6;color:#091F3C;">${innerHtml}</div>
     </td>
   </tr>
 </table>`;
@@ -259,8 +269,8 @@ export function callout(
 export function keyValueBlock(pairs: Array<{ label: string; value: string }>): string {
   const rows = pairs
     .map(p => `<tr>
-      <td style="padding:4px 12px 4px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;font-size:13px;font-weight:700;color:#6B7280;white-space:nowrap;vertical-align:top;">${p.label}</td>
-      <td style="padding:4px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;font-size:14px;color:#111827;line-height:1.5;">${p.value}</td>
+      <td class="sw-label" style="padding:4px 12px 4px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;font-size:13px;font-weight:700;color:#091F3C;white-space:nowrap;vertical-align:top;">${p.label}</td>
+      <td class="sw-paragraph" style="padding:4px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;font-size:14px;color:#091F3C;line-height:1.5;">${p.value}</td>
     </tr>`)
     .join('\n');
   return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:12px 0;">${rows}</table>`;
@@ -272,9 +282,9 @@ export function keyValueBlock(pairs: Array<{ label: string; value: string }>): s
  */
 export function bulletList(items: string[]): string {
   const lis = items
-    .map(i => `<li style="margin:4px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;font-size:14px;line-height:1.6;color:#374151;">${i}</li>`)
+    .map(i => `<li class="sw-paragraph" style="margin:4px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;font-size:14px;line-height:1.6;color:#091F3C;">${i}</li>`)
     .join('\n');
-  return `<ul style="margin:12px 0;padding-left:20px;color:#374151;">${lis}</ul>`;
+  return `<ul style="margin:12px 0;padding-left:20px;color:#091F3C;">${lis}</ul>`;
 }
 
 /**
