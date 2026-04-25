@@ -27,7 +27,7 @@ interface AdminUser {
   role: AppRole;
   aircraft: AdminUserAircraftAccess[];
 }
-import { ShieldCheck, Settings, MailOpen, Database, Sliders, Globe, Users, PlaneTakeoff, X, ChevronRight, ChevronDown, Loader2, Mail, Trash2, KeyRound, Search } from "lucide-react";
+import { ShieldCheck, Settings, MailOpen, Database, Sliders, Globe, Users, PlaneTakeoff, X, ChevronRight, ChevronDown, Loader2, Mail, Trash2, KeyRound, Search, CalendarPlus } from "lucide-react";
 import { PrimaryButton } from "@/components/AppButtons";
 
 const whiteBg = { backgroundColor: '#ffffff' } as const;
@@ -58,7 +58,8 @@ export default function AdminModals({
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [showAccessModal, setShowAccessModal] = useState(false);
   const [showUsersModal, setShowUsersModal] = useState(false);
-  useModalScrollLock(showAdminMenu || showToolsMenu || showGlobalFleetModal || showSettingsModal || showEmailPreview || showInviteModal || showAccessModal || showUsersModal);
+  const [showInsertLogModal, setShowInsertLogModal] = useState(false);
+  useModalScrollLock(showAdminMenu || showToolsMenu || showGlobalFleetModal || showSettingsModal || showEmailPreview || showInviteModal || showAccessModal || showUsersModal || showInsertLogModal);
 
   const [globalFleetSearch, setGlobalFleetSearch] = useState("");
   const [globalFleetList, setGlobalFleetList] = useState<FleetIndexEntry[]>([]);
@@ -83,7 +84,107 @@ export default function AdminModals({
   const [expandedUserId, setExpandedUserId] = useState<string | null>(null);
   const [isLoadingUsers, setIsLoadingUsers] = useState(false);
 
-  if (!showAdminMenu && !showGlobalFleetModal && !showToolsMenu && !showSettingsModal && !showEmailPreview && !showAccessModal && !showInviteModal && !showUsersModal) return null;
+  // Insert-missing-flight-log form state. Populated when the admin
+  // opens the modal; cleared on close. Aircraft picker drives the
+  // engine-type branch (turbine: aftt/ftt/cycles, piston: hobbs/tach).
+  const [insertAircraftId, setInsertAircraftId] = useState("");
+  const [insertOccurredAt, setInsertOccurredAt] = useState("");
+  const [insertPod, setInsertPod] = useState("");
+  const [insertPoa, setInsertPoa] = useState("");
+  const [insertAftt, setInsertAftt] = useState("");
+  const [insertFtt, setInsertFtt] = useState("");
+  const [insertHobbs, setInsertHobbs] = useState("");
+  const [insertTach, setInsertTach] = useState("");
+  const [insertLandings, setInsertLandings] = useState("");
+  const [insertCycles, setInsertCycles] = useState("");
+  const [insertFuel, setInsertFuel] = useState("");
+  const [insertInitials, setInsertInitials] = useState("");
+  const [insertReason, setInsertReason] = useState("");
+  const [insertPax, setInsertPax] = useState("");
+
+  const insertAircraft = allAircraftList.find(ac => ac.id === insertAircraftId);
+  const insertIsTurbine = insertAircraft?.engine_type === 'Turbine';
+  const insertHasAirframeMeter = insertIsTurbine
+    ? (insertAircraft?.setup_aftt != null)
+    : (insertAircraft?.setup_hobbs != null);
+
+  const resetInsertForm = () => {
+    setInsertAircraftId("");
+    setInsertOccurredAt("");
+    setInsertPod(""); setInsertPoa("");
+    setInsertAftt(""); setInsertFtt(""); setInsertHobbs(""); setInsertTach("");
+    setInsertLandings(""); setInsertCycles(""); setInsertFuel("");
+    setInsertInitials(""); setInsertReason(""); setInsertPax("");
+  };
+
+  const openInsertLogModal = () => {
+    resetInsertForm();
+    setShowToolsMenu(false);
+    setShowInsertLogModal(true);
+  };
+
+  const handleInsertFlightLog = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!insertAircraftId || !insertAircraft) return showError("Pick an aircraft.");
+    if (!insertOccurredAt) return showError("Pick the date and time of the flight.");
+    if (!insertInitials.trim()) return showError("Initials are required.");
+    if (!insertLandings) return showError("Landings are required.");
+    if (insertIsTurbine) {
+      if (!insertFtt) return showError("FTT is required for turbine aircraft.");
+      if (!insertCycles) return showError("Engine cycles are required for turbine aircraft.");
+    } else {
+      if (!insertTach) return showError("Tach is required for piston aircraft.");
+    }
+
+    // <input type="datetime-local"> emits a naive local-time string
+    // ("2026-04-25T14:30"). The server validator wants a real ISO
+    // datetime — Date converts the local-clock value into the right
+    // wall-clock UTC instant for whatever the admin's browser
+    // currently thinks "local" is, then toISOString stamps a Z suffix.
+    const isoOccurred = new Date(insertOccurredAt).toISOString();
+
+    const logData: Record<string, any> = {
+      pod: insertPod.toUpperCase() || null,
+      poa: insertPoa.toUpperCase() || null,
+      initials: insertInitials.toUpperCase(),
+      landings: parseInt(insertLandings),
+      pax_info: insertPax || null,
+      trip_reason: insertReason || null,
+      occurred_at: isoOccurred,
+    };
+    if (insertIsTurbine) {
+      logData.ftt = parseFloat(insertFtt);
+      if (insertAftt) logData.aftt = parseFloat(insertAftt);
+      logData.engine_cycles = parseInt(insertCycles);
+    } else {
+      logData.tach = parseFloat(insertTach);
+      if (insertHobbs) logData.hobbs = parseFloat(insertHobbs);
+      logData.engine_cycles = 0;
+    }
+    if (insertFuel) logData.fuel_gallons = parseFloat(insertFuel);
+
+    setIsSubmitting(true);
+    try {
+      const res = await authFetch('/api/admin/flight-logs', {
+        method: 'POST',
+        body: JSON.stringify({ aircraftId: insertAircraftId, logData }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || "Couldn't insert the flight log");
+      }
+      showSuccess("Flight log inserted in correct slot. Totals recalculated.");
+      setShowInsertLogModal(false);
+      resetInsertForm();
+      refreshData();
+    } catch (err: any) {
+      showError(err?.message || "Couldn't insert the flight log.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  if (!showAdminMenu && !showGlobalFleetModal && !showToolsMenu && !showSettingsModal && !showEmailPreview && !showAccessModal && !showInviteModal && !showUsersModal && !showInsertLogModal) return null;
 
   const handleDatabaseCleanup = async () => {
     const ok = await confirm({
@@ -442,6 +543,7 @@ export default function AdminModals({
             <div className="space-y-4">
               <button onClick={() => { setShowToolsMenu(false); setShowEmailPreview(true); }} className="w-full border border-gray-300 text-navy font-bold py-3 px-4 rounded hover:bg-gray-50 active:scale-95 transition-all flex justify-center items-center gap-2 text-xs uppercase tracking-widest"><MailOpen size={16} /> Preview Automated Emails</button>
               <button onClick={() => { setShowToolsMenu(false); setShowSettingsModal(true); }} className="w-full border border-gray-300 text-navy font-bold py-3 px-4 rounded hover:bg-gray-50 active:scale-95 transition-all flex justify-center items-center gap-2 text-xs uppercase tracking-widest"><Sliders size={16} /> Maintenance Triggers</button>
+              <button onClick={openInsertLogModal} className="w-full border border-gray-300 text-navy font-bold py-3 px-4 rounded hover:bg-gray-50 active:scale-95 transition-all flex justify-center items-center gap-2 text-xs uppercase tracking-widest"><CalendarPlus size={16} /> Insert Missing Flight Log</button>
               <div className="border-t border-gray-200 pt-4"><p className="text-[10px] text-gray-500 uppercase tracking-widest mb-3 text-center">Database Maintenance</p><button onClick={handleDatabaseCleanup} disabled={isSubmitting} className="w-full bg-danger text-white font-bold py-3 px-4 rounded hover:bg-red-700 active:scale-95 transition-all flex justify-center items-center gap-2 text-xs uppercase tracking-widest shadow-md"><Database size={16} /> {isSubmitting ? 'Running...' : 'Run Health & Cleanup Check'}</button></div>
             </div>
           </div>
@@ -697,6 +799,121 @@ export default function AdminModals({
                 })
               ); })()}
             </div>
+          </div>
+          </div>
+        </div>
+      )}
+
+      {showInsertLogModal && (
+        <div className="fixed inset-0 bg-black/60 z-[10001] overflow-y-auto animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => setShowInsertLogModal(false)}>
+          <div className="flex min-h-full items-center justify-center p-4">
+          <div className="bg-white rounded shadow-2xl w-full max-w-md p-6 border-t-4 border-mxOrange animate-slide-up" onClick={(e) => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-2">
+              <h2 className="font-oswald text-xl font-bold uppercase text-navy flex items-center gap-2"><CalendarPlus size={20}/> Insert Missing Flight Log</h2>
+              <button onClick={() => setShowInsertLogModal(false)} className="text-gray-400 hover:text-danger"><X size={24}/></button>
+            </div>
+            <p className="text-[10px] text-gray-500 mb-4 leading-tight">
+              Slots into the log timeline by date/time. Aircraft totals re-derive from the latest log automatically. <span className="text-danger font-bold">*</span> required &middot; <span className="font-bold">(Opt)</span> optional
+            </p>
+            <form onSubmit={handleInsertFlightLog} className="space-y-4">
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-widest text-navy mb-1">Aircraft <span className="text-danger">*</span></label>
+                <select value={insertAircraftId} onChange={e => setInsertAircraftId(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-navy outline-none">
+                  <option value="">Select aircraft...</option>
+                  {allAircraftList.map(ac => (
+                    <option key={ac.id} value={ac.id}>{ac.tail_number} — {ac.aircraft_type} ({ac.engine_type})</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-widest text-navy mb-1">Date &amp; Time of Flight <span className="text-danger">*</span></label>
+                <input type="datetime-local" value={insertOccurredAt} onChange={e => setInsertOccurredAt(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-navy outline-none" />
+              </div>
+
+              {insertAircraft && (
+                <>
+                  <div className="grid grid-cols-2 gap-4 border-b border-gray-100 pb-4">
+                    <div><label className="block text-[10px] font-bold uppercase tracking-widest text-navy mb-1">POD (Depart)</label><input type="text" style={whiteBg} maxLength={4} value={insertPod} onChange={e => setInsertPod(e.target.value.toUpperCase())} className="w-full border border-gray-300 rounded p-3 text-sm uppercase focus:border-navy outline-none text-center font-bold" placeholder="ICAO" /></div>
+                    <div><label className="block text-[10px] font-bold uppercase tracking-widest text-navy mb-1">POA (Arrive)</label><input type="text" style={whiteBg} maxLength={4} value={insertPoa} onChange={e => setInsertPoa(e.target.value.toUpperCase())} className="w-full border border-gray-300 rounded p-3 text-sm uppercase focus:border-navy outline-none text-center font-bold" placeholder="ICAO" /></div>
+                  </div>
+
+                  <div className={`grid ${insertHasAirframeMeter ? 'grid-cols-2' : 'grid-cols-1'} gap-4`}>
+                    {insertIsTurbine ? (
+                      <>
+                        {insertHasAirframeMeter && (
+                          <div>
+                            <label className="block text-[10px] font-bold uppercase tracking-widest text-navy mb-1">AFTT (Opt)</label>
+                            <input type="number" min="0" step="0.1" style={whiteBg} value={insertAftt} onChange={e => setInsertAftt(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-navy outline-none" />
+                          </div>
+                        )}
+                        <div>
+                          <label className="block text-[10px] font-bold uppercase tracking-widest text-navy mb-1">FTT <span className="text-danger">*</span></label>
+                          <input type="number" min="0" step="0.1" required style={whiteBg} value={insertFtt} onChange={e => setInsertFtt(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-navy outline-none" />
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        {insertHasAirframeMeter && (
+                          <div>
+                            <label className="block text-[10px] font-bold uppercase tracking-widest text-navy mb-1">Hobbs (Opt)</label>
+                            <input type="number" min="0" step="0.1" style={whiteBg} value={insertHobbs} onChange={e => setInsertHobbs(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-navy outline-none" />
+                          </div>
+                        )}
+                        <div>
+                          <label className="block text-[10px] font-bold uppercase tracking-widest text-navy mb-1">Tach <span className="text-danger">*</span></label>
+                          <input type="number" min="0" step="0.1" required style={whiteBg} value={insertTach} onChange={e => setInsertTach(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-navy outline-none" />
+                        </div>
+                      </>
+                    )}
+                  </div>
+
+                  <div className={`grid ${insertIsTurbine ? 'grid-cols-2' : 'grid-cols-1'} gap-4`}>
+                    <div>
+                      <label className="block text-[10px] font-bold uppercase tracking-widest text-navy mb-1">Landings <span className="text-danger">*</span></label>
+                      <input type="number" min="0" required style={whiteBg} value={insertLandings} onChange={e => setInsertLandings(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-navy outline-none" placeholder="0 for ferry" />
+                    </div>
+                    {insertIsTurbine && (
+                      <div>
+                        <label className="block text-[10px] font-bold uppercase tracking-widest text-navy mb-1">Engine Cycles <span className="text-danger">*</span></label>
+                        <input type="number" min="0" required style={whiteBg} value={insertCycles} onChange={e => setInsertCycles(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-navy outline-none" placeholder="0" />
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-widest text-navy mb-1">Fuel After Flight (Gallons, Opt)</label>
+                    <input type="number" min="0" step="0.1" style={whiteBg} value={insertFuel} onChange={e => setInsertFuel(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-navy outline-none" placeholder="Gallons" />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[10px] font-bold uppercase tracking-widest text-navy mb-1">Initials <span className="text-danger">*</span></label>
+                      <input type="text" maxLength={3} required style={whiteBg} value={insertInitials} onChange={e => setInsertInitials(e.target.value.toUpperCase())} className="w-full border border-gray-300 rounded p-3 text-sm uppercase focus:border-navy outline-none" placeholder="ABC" />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold uppercase tracking-widest text-navy mb-1">Reason (Opt)</label>
+                      <select value={insertReason} onChange={e => setInsertReason(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-navy outline-none">
+                        <option value="">Select...</option>
+                        <option value="PE">PE</option>
+                        <option value="BE">BE</option>
+                        <option value="MX">MX</option>
+                        <option value="T">T</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-widest text-navy mb-1">Passengers (Opt)</label>
+                    <input type="text" style={whiteBg} value={insertPax} onChange={e => setInsertPax(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-navy outline-none" placeholder="Names or notes..." />
+                  </div>
+                </>
+              )}
+
+              <div className="pt-4">
+                <PrimaryButton disabled={isSubmitting || !insertAircraftId}>{isSubmitting ? "Inserting..." : "Insert Flight Log"}</PrimaryButton>
+              </div>
+            </form>
           </div>
           </div>
         </div>
