@@ -338,7 +338,7 @@ const ownerConfirm: Variant = {
       ${heading('Date Confirmed', 'success')}
       ${paragraph(`Hello Dave,`)}
       ${paragraph(`Alex Gornakov has confirmed the proposed service date of <strong>2026-05-15</strong> (3 days).`)}
-      ${callout(`<em>Perfect, see you Tuesday. I'll drop it off around 0730.</em>`, { variant: 'success' })}
+      ${callout(`Perfect, see you Tuesday. I'll drop it off around 0730.`, { variant: 'success' })}
       ${button(PORTAL_URL, 'View Service Portal', { variant: 'success' })}
     `,
   }),
@@ -359,7 +359,7 @@ const ownerCounter: Variant = {
       ${heading('Counter Proposal', 'warning')}
       ${paragraph(`Hello Dave,`)}
       ${paragraph(`Alex Gornakov has proposed a different service date: <strong>2026-05-22</strong>.`)}
-      ${callout(`<em>Tuesday I'm teaching a checkride that morning — Thursday would work better if your shop has the slot.</em>`, { variant: 'warning' })}
+      ${callout(`Tuesday I'm teaching a checkride that morning — Thursday would work better if your shop has the slot.`, { variant: 'warning' })}
       ${button(PORTAL_URL, 'View Service Portal')}
     `,
   }),
@@ -380,7 +380,7 @@ const ownerMessage: Variant = {
       ${heading('New Message', 'note')}
       ${paragraph(`Hello Dave,`)}
       ${paragraph(`Alex Gornakov sent you a message:`)}
-      ${callout(`<em>Heads up — the left brake has been a little soft lately. Not a squawk yet, but might be worth eyeballing while you've got it in the shop.</em>`, { variant: 'note' })}
+      ${callout(`Heads up — the left brake has been a little soft lately. Not a squawk yet, but might be worth eyeballing while you've got it in the shop.`, { variant: 'note' })}
       ${button(PORTAL_URL, 'View Service Portal')}
     `,
   }),
@@ -401,7 +401,7 @@ const ownerCancel: Variant = {
       ${heading('Service Event Cancelled', 'danger')}
       ${paragraph(`Hello Dave,`)}
       ${paragraph(`Alex Gornakov has cancelled the pending service event.`)}
-      ${callout(`<em>Going to hold off — the squawk turned out to be a loose fitting and I handled it myself. Thanks for being ready.</em>`, { variant: 'danger' })}
+      ${callout(`Going to hold off — the squawk turned out to be a loose fitting and I handled it myself. Thanks for being ready.`, { variant: 'danger' })}
       ${paragraph(`Nothing more to do on your end. Sorry for the inconvenience.`)}
     `,
   }),
@@ -424,7 +424,7 @@ const mechPropose: Variant = {
       ${heading('Schedule Proposal', 'warning')}
       ${paragraph(`Dave Reynolds has proposed <strong>2026-05-15</strong> for service on your aircraft.`)}
       ${paragraph(`Estimated duration: <strong>3 days</strong> (through 2026-05-17)`)}
-      ${callout(`<em>I can fit the 100-hour + the squawk work in that window. Tuesday morning drop-off works best for my schedule.</em>`, { variant: 'warning' })}
+      ${callout(`I can fit the 100-hour + the squawk work in that window. Tuesday morning drop-off works best for my schedule.`, { variant: 'warning' })}
       ${paragraph('Open the app to confirm or propose a different date.')}
       ${button(APP_URL, 'Open Skyward')}
     `,
@@ -446,7 +446,7 @@ const mechConfirm: Variant = {
       ${heading('Appointment Confirmed', 'success')}
       ${paragraph(`Dave Reynolds has confirmed service for <strong>2026-05-15</strong>.`)}
       ${paragraph(`Estimated duration: <strong>3 days</strong> (through 2026-05-17)`)}
-      ${callout(`<em>Confirmed. Bring the logbooks and I'll get you rolling first thing Tuesday.</em>`, { variant: 'success' })}
+      ${callout(`Confirmed. Bring the logbooks and I'll get you rolling first thing Tuesday.`, { variant: 'success' })}
       ${button(APP_URL, 'Open Skyward', { variant: 'success' })}
     `,
   }),
@@ -513,7 +513,7 @@ const mechEstimate: Variant = {
     body: `
       ${heading('Completion Estimate')}
       ${paragraph(`Dave Reynolds estimates your aircraft will be ready by <strong>2026-05-18</strong>.`)}
-      ${callout(`<em>Waiting on the nav database — shipment arriving Friday. Everything else is done.</em>`, { variant: 'warning' })}
+      ${callout(`Waiting on the nav database — shipment arriving Friday. Everything else is done.`, { variant: 'warning' })}
       ${button(APP_URL, 'Open Skyward')}
     `,
   }),
@@ -556,7 +556,7 @@ const mechDecline: Variant = {
     body: `
       ${heading('Service Declined', 'danger')}
       ${paragraph(`Dave Reynolds can&apos;t accommodate this service request.`)}
-      ${callout(`<em>Booked solid through June. I can refer you to Carlos over at Palo Alto — he's got openings and does good work.</em>`, { variant: 'danger' })}
+      ${callout(`Booked solid through June. I can refer you to Carlos over at Palo Alto — he's got openings and does good work.`, { variant: 'danger' })}
       ${paragraph(`You might want to reach out to a different mechanic or reschedule.`)}
       ${button(APP_URL, 'Open Skyward')}
     `,
@@ -577,7 +577,7 @@ const mechReady: Variant = {
     body: `
       ${heading('Aircraft Ready for Pickup', 'success')}
       ${paragraph(`Dave Reynolds has completed all work and your aircraft is ready.`)}
-      ${callout(`<em>All squared away. Logbook is stamped, oil is warm. You're good to fly whenever you get over here.</em>`, { variant: 'success' })}
+      ${callout(`All squared away. Logbook is stamped, oil is warm. You're good to fly whenever you get over here.`, { variant: 'success' })}
       ${paragraph(`Log in to enter the logbook data from your mechanic&apos;s sign-off. That closes out the service event and resets maintenance tracking.`)}
       ${button(APP_URL, 'Enter Logbook Data', { variant: 'success' })}
     `,
@@ -600,7 +600,7 @@ const mechFiles: Variant = {
     body: `
       ${heading('Files Uploaded', 'note')}
       ${paragraph(`Dave Reynolds has uploaded 3 files to your service event:`)}
-      ${callout(`<em>Here's the teardown photos of the oil filter element and the inspection sheet for the 100-hour.</em>`, { variant: 'note' })}
+      ${callout(`Here's the teardown photos of the oil filter element and the inspection sheet for the 100-hour.`, { variant: 'note' })}
       ${bulletList([
         '📷 oil-filter-element-teardown.jpg',
         '📷 left-tire-sidewall.jpg',

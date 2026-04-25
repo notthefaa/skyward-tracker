@@ -200,7 +200,7 @@ export async function POST(req: Request) {
           body: `
             ${heading('Files Uploaded', 'note')}
             ${paragraph(`${safeMxName} has uploaded ${attachments.length} file${attachments.length > 1 ? 's' : ''} to your service event:`)}
-            ${safeDescription ? callout(`<em>${safeDescription}</em>`, { variant: 'note' }) : ''}
+            ${safeDescription ? callout(safeDescription, { variant: 'note' }) : ''}
             ${bulletList(fileLines)}
             ${button(appUrl, 'Open Skyward')}
           `,

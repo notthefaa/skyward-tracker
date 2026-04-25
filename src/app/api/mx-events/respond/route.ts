@@ -117,7 +117,7 @@ export async function POST(req: Request) {
               ${heading('Schedule Proposal', 'warning')}
               ${paragraph(`${safeMxName} has proposed <strong>${escapeHtml(proposedDate)}</strong> for service on your aircraft.`)}
               ${paragraph(`Estimated duration: <strong>${durationLabel}</strong> (through ${escapeHtml(estCompletion)})`)}
-              ${safeMessage ? callout(`<em>${safeMessage}</em>`, { variant: 'warning' }) : ''}
+              ${safeMessage ? callout(safeMessage, { variant: 'warning' }) : ''}
               ${paragraph('Open the app to confirm or propose a different date.')}
               ${button(appUrl, 'Open Skyward')}
             `,
@@ -163,7 +163,7 @@ export async function POST(req: Request) {
               ${heading('Appointment Confirmed', 'success')}
               ${paragraph(`${safeMxName} has confirmed service for <strong>${escapeHtml(confirmedDate)}</strong>.`)}
               ${paragraph(`Estimated duration: <strong>${durationLabel}</strong> (through ${escapeHtml(estCompletion)})`)}
-              ${safeMessage ? callout(`<em>${safeMessage}</em>`, { variant: 'success' }) : ''}
+              ${safeMessage ? callout(safeMessage, { variant: 'success' }) : ''}
               ${button(appUrl, 'Open Skyward', { variant: 'success' })}
             `,
           }),
@@ -283,7 +283,7 @@ export async function POST(req: Request) {
             body: `
               ${heading('Completion Estimate')}
               ${paragraph(`${safeMxName} estimates your aircraft will be ready by <strong>${escapeHtml(proposedDate)}</strong>.`)}
-              ${safeMessage ? callout(`<em>${safeMessage}</em>`, { variant: 'warning' }) : ''}
+              ${safeMessage ? callout(safeMessage, { variant: 'warning' }) : ''}
               ${button(appUrl, 'Open Skyward')}
             `,
           }),
@@ -357,7 +357,7 @@ export async function POST(req: Request) {
             body: `
               ${heading('Service Declined', 'danger')}
               ${paragraph(`${safeMxName} can&apos;t accommodate this service request.`)}
-              ${safeMessage ? callout(`<em>${safeMessage}</em>`, { variant: 'danger' }) : ''}
+              ${safeMessage ? callout(safeMessage, { variant: 'danger' }) : ''}
               ${paragraph(`You might want to reach out to a different mechanic or reschedule.`)}
               ${button(appUrl, 'Open Skyward')}
             `,
@@ -388,7 +388,7 @@ export async function POST(req: Request) {
             body: `
               ${heading('Aircraft Ready for Pickup', 'success')}
               ${paragraph(`${safeMxName} has completed all work and your aircraft is ready.`)}
-              ${safeMessage ? callout(`<em>${safeMessage}</em>`, { variant: 'success' }) : ''}
+              ${safeMessage ? callout(safeMessage, { variant: 'success' }) : ''}
               ${paragraph(`Log in to enter the logbook data from your mechanic&apos;s sign-off. That closes out the service event and resets maintenance tracking.`)}
               ${button(appUrl, 'Enter Logbook Data', { variant: 'success' })}
             `,

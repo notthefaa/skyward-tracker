@@ -78,7 +78,7 @@ export async function POST(req: Request) {
               ${heading('Date Confirmed', 'success')}
               ${paragraph(`Hello ${safeMxName},`)}
               ${paragraph(`${safePrimaryName} has confirmed the proposed service date of <strong>${escapeHtml(event.proposed_date)}</strong>${durationLabel}.`)}
-              ${safeMessage ? callout(`<em>${safeMessage}</em>`, { variant: 'success' }) : ''}
+              ${safeMessage ? callout(safeMessage, { variant: 'success' }) : ''}
               ${button(portalUrl, 'View Service Portal', { variant: 'success' })}
             `,
           }),
@@ -136,7 +136,7 @@ export async function POST(req: Request) {
               ${heading('Counter Proposal', 'warning')}
               ${paragraph(`Hello ${safeMxName},`)}
               ${paragraph(`${safePrimaryName} has proposed a different service date: <strong>${escapeHtml(proposedDate)}</strong>.`)}
-              ${safeMessage ? callout(`<em>${safeMessage}</em>`, { variant: 'warning' }) : ''}
+              ${safeMessage ? callout(safeMessage, { variant: 'warning' }) : ''}
               ${button(portalUrl, 'View Service Portal')}
             `,
           }),
@@ -167,7 +167,7 @@ export async function POST(req: Request) {
               ${heading('New Message', 'note')}
               ${paragraph(`Hello ${safeMxName},`)}
               ${paragraph(`${safePrimaryName} sent you a message:`)}
-              ${callout(`<em>${safeMessage}</em>`, { variant: 'note' })}
+              ${callout(safeMessage, { variant: 'note' })}
               ${button(portalUrl, 'View Service Portal')}
             `,
           }),
@@ -208,7 +208,7 @@ export async function POST(req: Request) {
               ${heading('Service Event Cancelled', 'danger')}
               ${paragraph(`Hello ${safeMxName},`)}
               ${paragraph(`${safePrimaryName} has cancelled the pending service event.`)}
-              ${safeMessage ? callout(`<em>${safeMessage}</em>`, { variant: 'danger' }) : ''}
+              ${safeMessage ? callout(safeMessage, { variant: 'danger' }) : ''}
               ${paragraph(`Nothing more to do on your end. Sorry for the inconvenience.`)}
             `,
           }),
