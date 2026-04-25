@@ -59,7 +59,8 @@ export default function AdminModals({
   const [showAccessModal, setShowAccessModal] = useState(false);
   const [showUsersModal, setShowUsersModal] = useState(false);
   const [showInsertLogModal, setShowInsertLogModal] = useState(false);
-  useModalScrollLock(showAdminMenu || showToolsMenu || showGlobalFleetModal || showSettingsModal || showEmailPreview || showInviteModal || showAccessModal || showUsersModal || showInsertLogModal);
+  const [showDbHealthModal, setShowDbHealthModal] = useState(false);
+  useModalScrollLock(showAdminMenu || showToolsMenu || showGlobalFleetModal || showSettingsModal || showEmailPreview || showInviteModal || showAccessModal || showUsersModal || showInsertLogModal || showDbHealthModal);
 
   const [globalFleetSearch, setGlobalFleetSearch] = useState("");
   const [globalFleetList, setGlobalFleetList] = useState<FleetIndexEntry[]>([]);
@@ -83,6 +84,14 @@ export default function AdminModals({
   const [usersSearch, setUsersSearch] = useState("");
   const [expandedUserId, setExpandedUserId] = useState<string | null>(null);
   const [isLoadingUsers, setIsLoadingUsers] = useState(false);
+
+  // Database Health modal state. Stats load on open via GET; cleanup
+  // runs via POST and replaces results inline (no toast-and-forget
+  // — the admin needs to see what was actually purged).
+  const [dbStats, setDbStats] = useState<Record<string, number> | null>(null);
+  const [cleanupResults, setCleanupResults] = useState<Record<string, number> | null>(null);
+  const [isLoadingDbStats, setIsLoadingDbStats] = useState(false);
+  const [isRunningCleanup, setIsRunningCleanup] = useState(false);
 
   // Insert-missing-flight-log form state. Populated when the admin
   // opens the modal; cleared on close. Aircraft picker drives the
@@ -184,23 +193,51 @@ export default function AdminModals({
     }
   };
 
-  if (!showAdminMenu && !showGlobalFleetModal && !showToolsMenu && !showSettingsModal && !showEmailPreview && !showAccessModal && !showInviteModal && !showUsersModal && !showInsertLogModal) return null;
+  if (!showAdminMenu && !showGlobalFleetModal && !showToolsMenu && !showSettingsModal && !showEmailPreview && !showAccessModal && !showInviteModal && !showUsersModal && !showInsertLogModal && !showDbHealthModal) return null;
 
+  // Cleanup scope is much wider than the old confirm copy advertised
+  // — read receipts (30d), notes (6mo), flight logs (5y), completed
+  // MX events (12mo), cancelled MX events (3mo), orphaned messages /
+  // line items / access rows, plus orphaned images in 4 storage
+  // buckets. Show the full scope so the admin isn't surprised.
   const handleDatabaseCleanup = async () => {
     const ok = await confirm({
-      title: "Run Health Check?",
-      message: "Deletes read-receipts older than 30 days. Keeps the database fast.",
-      confirmText: "Run Check",
+      title: "Run Database Cleanup?",
+      message:
+        "Permanently purges: read receipts > 30d, notes > 6mo, flight logs > 5y, completed MX events > 12mo, cancelled MX events > 3mo, plus orphaned records and unreferenced images. No undo.",
+      confirmText: "Run Cleanup",
+      variant: "danger",
     });
     if (!ok) return;
-    setIsSubmitting(true);
+    setIsRunningCleanup(true);
     try {
       const res = await authFetch('/api/admin/db-health', { method: 'POST' });
       if (!res.ok) { const errData = await res.json(); throw new Error(errData.error || "Cleanup didn't finish"); }
       const data = await res.json();
+      setCleanupResults(data.cleaned || {});
+      setDbStats(data.table_row_counts || null);
       showSuccess("Database cleanup completed");
     } catch (e: any) { showError("Cleanup didn't finish: " + e.message); }
-    setIsSubmitting(false);
+    setIsRunningCleanup(false);
+  };
+
+  const openDbHealthModal = async () => {
+    setShowToolsMenu(false);
+    setShowDbHealthModal(true);
+    setCleanupResults(null);
+    setIsLoadingDbStats(true);
+    try {
+      const res = await authFetch('/api/admin/db-health');
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || "Couldn't load database stats");
+      }
+      const data = await res.json();
+      setDbStats(data.table_row_counts || null);
+    } catch (e: any) {
+      showError(e?.message || "Couldn't load database stats");
+    }
+    setIsLoadingDbStats(false);
   };
 
   const handleSaveSettings = async (e: React.FormEvent) => {
@@ -496,7 +533,7 @@ export default function AdminModals({
       {showAdminMenu && (
         <div className="fixed inset-0 bg-black/60 z-[10000] overflow-y-auto animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => setShowAdminMenu(false)}>
           <div className="flex min-h-full items-center justify-center p-4">
-          <div className="bg-white rounded shadow-2xl w-full max-w-sm p-6 border-t-4 border-navy animate-slide-up" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-white rounded shadow-2xl w-full max-w-sm p-6 border-t-4 border-navy max-h-full overflow-y-auto modal-scroll animate-slide-up" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-6"><h2 className="font-oswald text-xl font-bold uppercase text-navy flex items-center gap-2"><ShieldCheck size={20}/> Admin Center</h2><button onClick={() => setShowAdminMenu(false)} className="text-gray-400 hover:text-danger"><X size={24}/></button></div>
             <div className="space-y-3">
               <button onClick={openGlobalFleetModal} className="w-full bg-gray-50 border border-gray-200 p-4 rounded text-left flex items-center gap-3 hover:border-navy hover:bg-blue-50 transition-colors active:scale-95"><Globe size={18} className="text-navy" /><div><span className="block font-bold text-navy text-sm uppercase">Global Fleet</span><span className="block text-[10px] text-gray-500 uppercase tracking-widest mt-0.5">View all aircraft in system</span></div></button>
@@ -513,7 +550,7 @@ export default function AdminModals({
       {showGlobalFleetModal && (
         <div className="fixed inset-0 bg-black/60 z-[10000] overflow-y-auto animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => { setShowGlobalFleetModal(false); setGlobalFleetSearch(""); }}>
           <div className="flex min-h-full items-center justify-center p-4">
-          <div className="bg-white rounded shadow-2xl w-full max-w-md p-6 border-t-4 border-navy animate-slide-up flex flex-col" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-white rounded shadow-2xl w-full max-w-md p-6 border-t-4 border-navy max-h-full animate-slide-up flex flex-col" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-6 shrink-0"><h2 className="font-oswald text-2xl font-bold uppercase text-navy flex items-center gap-2"><Globe size={20} className="text-navy"/> Global Fleet</h2><button onClick={() => { setShowGlobalFleetModal(false); setGlobalFleetSearch(""); }} className="text-gray-400 hover:text-danger"><X size={24}/></button></div>
             <div className="mb-4 shrink-0"><input type="text" placeholder="Search Tail Number..." value={globalFleetSearch} onChange={(e) => setGlobalFleetSearch(e.target.value.toUpperCase())} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-navy outline-none uppercase font-bold" /></div>
             <div className="overflow-y-auto space-y-2 pr-2 flex-1">
@@ -538,13 +575,13 @@ export default function AdminModals({
       {showToolsMenu && (
         <div className="fixed inset-0 bg-black/60 z-[10000] overflow-y-auto animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => setShowToolsMenu(false)}>
           <div className="flex min-h-full items-center justify-center p-4">
-          <div className="bg-white rounded shadow-2xl w-full max-w-sm p-6 border-t-4 border-mxOrange animate-slide-up" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-white rounded shadow-2xl w-full max-w-sm p-6 border-t-4 border-mxOrange max-h-full overflow-y-auto modal-scroll animate-slide-up" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-6"><h2 className="font-oswald text-xl font-bold uppercase text-navy flex items-center gap-2"><Settings size={20}/> System Tools</h2><button onClick={() => setShowToolsMenu(false)} className="text-gray-400 hover:text-danger"><X size={24}/></button></div>
             <div className="space-y-4">
               <button onClick={() => { setShowToolsMenu(false); setShowEmailPreview(true); }} className="w-full border border-gray-300 text-navy font-bold py-3 px-4 rounded hover:bg-gray-50 active:scale-95 transition-all flex justify-center items-center gap-2 text-xs uppercase tracking-widest"><MailOpen size={16} /> Preview Automated Emails</button>
               <button onClick={() => { setShowToolsMenu(false); setShowSettingsModal(true); }} className="w-full border border-gray-300 text-navy font-bold py-3 px-4 rounded hover:bg-gray-50 active:scale-95 transition-all flex justify-center items-center gap-2 text-xs uppercase tracking-widest"><Sliders size={16} /> Maintenance Triggers</button>
               <button onClick={openInsertLogModal} className="w-full border border-gray-300 text-navy font-bold py-3 px-4 rounded hover:bg-gray-50 active:scale-95 transition-all flex justify-center items-center gap-2 text-xs uppercase tracking-widest"><CalendarPlus size={16} /> Insert Missing Flight Log</button>
-              <div className="border-t border-gray-200 pt-4"><p className="text-[10px] text-gray-500 uppercase tracking-widest mb-3 text-center">Database Maintenance</p><button onClick={handleDatabaseCleanup} disabled={isSubmitting} className="w-full bg-danger text-white font-bold py-3 px-4 rounded hover:bg-red-700 active:scale-95 transition-all flex justify-center items-center gap-2 text-xs uppercase tracking-widest shadow-md"><Database size={16} /> {isSubmitting ? 'Running...' : 'Run Health & Cleanup Check'}</button></div>
+              <button onClick={openDbHealthModal} className="w-full border border-gray-300 text-navy font-bold py-3 px-4 rounded hover:bg-gray-50 active:scale-95 transition-all flex justify-center items-center gap-2 text-xs uppercase tracking-widest"><Database size={16} /> Database Health</button>
             </div>
           </div>
           </div>
@@ -554,7 +591,7 @@ export default function AdminModals({
       {showSettingsModal && (
         <div className="fixed inset-0 bg-black/60 z-[10001] overflow-y-auto animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => setShowSettingsModal(false)}>
           <div className="flex min-h-full items-center justify-center p-3">
-          <div className="bg-white rounded shadow-2xl w-full max-w-sm p-5 border-t-4 border-navy animate-slide-up" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-white rounded shadow-2xl w-full max-w-sm p-5 border-t-4 border-navy max-h-full overflow-y-auto modal-scroll animate-slide-up" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-6"><h2 className="font-oswald text-xl font-bold uppercase text-navy flex items-center gap-2"><Sliders size={20}/> Maintenance Triggers</h2><button onClick={() => setShowSettingsModal(false)} className="text-gray-400 hover:text-danger"><X size={24}/></button></div>
             <form onSubmit={handleSaveSettings} className="space-y-4">
               <p className="text-[10px] text-gray-500 uppercase tracking-widest border-b pb-1">Internal Alerts - Date Based (Days)</p>
@@ -589,7 +626,7 @@ export default function AdminModals({
       {showEmailPreview && (
         <div className="fixed inset-0 bg-black/60 z-[10001] overflow-y-auto animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => setShowEmailPreview(false)}>
           <div className="flex min-h-full items-center justify-center p-4">
-          <div className="bg-white rounded shadow-2xl w-full max-w-lg p-6 border-t-4 border-navy animate-slide-up" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-white rounded shadow-2xl w-full max-w-lg p-6 border-t-4 border-navy max-h-full overflow-y-auto modal-scroll animate-slide-up" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-4"><h2 className="font-oswald text-xl font-bold uppercase text-navy flex items-center gap-2"><MailOpen size={20}/> Email Previewer</h2><button onClick={() => setShowEmailPreview(false)} className="text-gray-400 hover:text-danger"><X size={24}/></button></div>
             <div className="mb-4">
               <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Select Template to Preview</label>
@@ -609,7 +646,7 @@ export default function AdminModals({
       {showAccessModal && (
         <div className="fixed inset-0 bg-black/60 z-[10000] overflow-y-auto animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => setShowAccessModal(false)}>
           <div className="flex min-h-full items-center justify-center p-4">
-          <div className="bg-white rounded shadow-2xl w-full max-w-md p-6 border-t-4 border-navy animate-slide-up" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-white rounded shadow-2xl w-full max-w-md p-6 border-t-4 border-navy max-h-full overflow-y-auto modal-scroll animate-slide-up" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-6"><h2 className="font-oswald text-2xl font-bold uppercase text-navy flex items-center gap-2"><ShieldCheck size={20}/> Assign Aircraft</h2><button onClick={() => setShowAccessModal(false)} className="text-gray-400 hover:text-danger"><X size={24}/></button></div>
             <div className="space-y-6">
               <div>
@@ -652,7 +689,7 @@ export default function AdminModals({
       {showInviteModal && (
         <div className="fixed inset-0 bg-black/60 z-[10000] overflow-y-auto animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => setShowInviteModal(false)}>
           <div className="flex min-h-full items-center justify-center p-4">
-          <div className="bg-white rounded shadow-2xl w-full max-w-sm p-6 border-t-4 border-navy animate-slide-up" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-white rounded shadow-2xl w-full max-w-sm p-6 border-t-4 border-navy max-h-full overflow-y-auto modal-scroll animate-slide-up" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-6"><h2 className="font-oswald text-2xl font-bold uppercase text-navy flex items-center gap-2"><Users size={20}/> Invite User</h2><button onClick={() => { setShowInviteModal(false); setInviteAircraftIds([]); }} className="text-gray-400 hover:text-danger"><X size={24}/></button></div>
             <form onSubmit={handleInviteUser} className="space-y-4">
               <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Email Address</label><input type="email" required value={inviteEmail} onChange={e=>setInviteEmail(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 outline-none focus:border-navy" /></div>
@@ -684,7 +721,7 @@ export default function AdminModals({
       {showUsersModal && (
         <div className="fixed inset-0 bg-black/60 z-[10000] overflow-y-auto animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => { setShowUsersModal(false); setExpandedUserId(null); setUsersSearch(""); }}>
           <div className="flex min-h-full items-center justify-center p-4">
-          <div className="bg-white rounded shadow-2xl w-full max-w-md p-6 border-t-4 border-navy animate-slide-up flex flex-col" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-white rounded shadow-2xl w-full max-w-md p-6 border-t-4 border-navy max-h-full animate-slide-up flex flex-col" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-4 shrink-0">
               <h2 className="font-oswald text-2xl font-bold uppercase text-navy flex items-center gap-2"><Users size={20} className="text-navy" /> Global Users</h2>
               <button onClick={() => { setShowUsersModal(false); setExpandedUserId(null); setUsersSearch(""); }} className="text-gray-400 hover:text-danger"><X size={24} /></button>
@@ -916,6 +953,70 @@ export default function AdminModals({
                 <PrimaryButton disabled={isSubmitting || !insertAircraftId}>{isSubmitting ? "Inserting..." : "Insert Flight Log"}</PrimaryButton>
               </div>
             </form>
+          </div>
+          </div>
+        </div>
+      )}
+
+      {showDbHealthModal && (
+        <div className="fixed inset-0 bg-black/60 z-[10001] overflow-y-auto animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => setShowDbHealthModal(false)}>
+          <div className="flex min-h-full items-center justify-center p-3">
+          <div className="bg-white rounded shadow-2xl w-full max-w-sm p-5 border-t-4 border-mxOrange max-h-full overflow-y-auto modal-scroll animate-slide-up" onClick={(e) => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="font-oswald text-xl font-bold uppercase text-navy flex items-center gap-2"><Database size={20}/> Database Health</h2>
+              <button onClick={() => setShowDbHealthModal(false)} className="text-gray-400 hover:text-danger"><X size={24}/></button>
+            </div>
+
+            <p className="text-[10px] text-gray-500 uppercase tracking-widest border-b pb-1">Current Row Counts</p>
+            {isLoadingDbStats ? (
+              <div className="flex items-center justify-center py-6"><Loader2 size={20} className="text-navy animate-spin" /></div>
+            ) : dbStats ? (
+              <div className="grid grid-cols-2 gap-1.5 mt-2 text-[11px]">
+                {Object.entries(dbStats)
+                  .sort(([a], [b]) => a.localeCompare(b))
+                  .map(([table, count]) => (
+                    <div key={table} className="flex justify-between bg-gray-50 border border-gray-200 rounded px-2 py-1">
+                      <span className="text-gray-600 font-mono truncate">{table.replace('aft_', '')}</span>
+                      <span className="font-bold text-navy">{count.toLocaleString()}</span>
+                    </div>
+                  ))}
+              </div>
+            ) : (
+              <p className="text-[11px] text-gray-400 text-center py-4">Couldn&apos;t load stats.</p>
+            )}
+
+            {cleanupResults && (
+              <>
+                <p className="text-[10px] text-gray-500 uppercase tracking-widest border-b pb-1 mt-5">Last Cleanup Purged</p>
+                <div className="grid grid-cols-2 gap-1.5 mt-2 text-[11px]">
+                  {Object.entries(cleanupResults)
+                    .filter(([, count]) => count > 0)
+                    .sort(([a], [b]) => a.localeCompare(b))
+                    .map(([key, count]) => (
+                      <div key={key} className="flex justify-between bg-green-50 border border-green-200 rounded px-2 py-1">
+                        <span className="text-gray-600 truncate">{key.replace(/_/g, ' ')}</span>
+                        <span className="font-bold text-[#56B94A]">{count.toLocaleString()}</span>
+                      </div>
+                    ))}
+                </div>
+                {Object.values(cleanupResults).every(v => v === 0) && (
+                  <p className="text-[11px] text-gray-400 text-center py-2 mt-2">Nothing to purge — database is clean.</p>
+                )}
+              </>
+            )}
+
+            <div className="border-t border-gray-200 pt-4 mt-5">
+              <p className="text-[10px] text-gray-500 leading-tight mb-3">
+                Cleanup deletes records past their retention windows: read receipts &gt; 30d, notes &gt; 6mo, flight logs &gt; 5y, completed MX events &gt; 12mo, cancelled MX events &gt; 3mo, plus orphaned messages, line items, access rows, and unreferenced storage images. Squawks are kept forever.
+              </p>
+              <button
+                onClick={handleDatabaseCleanup}
+                disabled={isRunningCleanup || isLoadingDbStats}
+                className="w-full bg-danger text-white font-bold py-3 px-4 rounded hover:bg-red-700 active:scale-95 transition-all flex justify-center items-center gap-2 text-xs uppercase tracking-widest shadow-md disabled:opacity-60"
+              >
+                <Database size={16} /> {isRunningCleanup ? 'Running...' : 'Run Cleanup'}
+              </button>
+            </div>
           </div>
           </div>
         </div>

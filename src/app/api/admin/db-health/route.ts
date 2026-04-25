@@ -67,6 +67,34 @@ async function sweepBucket(
   return filesToDelete.length;
 }
 
+// GET — read-only stats. Returns row counts for the same tables the
+// POST cleanup tracks, so the admin UI can show a live picture
+// before deciding to run a destructive purge. No writes, still
+// requires global admin.
+export async function GET(req: Request) {
+  try {
+    const { supabaseAdmin } = await requireAuth(req, 'admin');
+    const tables = [
+      'aft_aircraft', 'aft_flight_logs', 'aft_maintenance_items',
+      'aft_squawks', 'aft_notes', 'aft_note_reads',
+      'aft_maintenance_events', 'aft_event_line_items', 'aft_event_messages',
+      'aft_user_roles', 'aft_user_aircraft_access',
+      'aft_reservations', 'aft_notification_preferences',
+    ];
+    const countResults = await Promise.all(
+      tables.map(async (table) => {
+        const { count } = await supabaseAdmin.from(table).select('*', { count: 'exact', head: true });
+        return { table, count: count || 0 };
+      }),
+    );
+    const counts: Record<string, number> = {};
+    for (const { table, count } of countResults) counts[table] = count;
+    return NextResponse.json({ table_row_counts: counts });
+  } catch (error) {
+    return handleApiError(error);
+  }
+}
+
 export async function POST(req: Request) {
   try {
     const { supabaseAdmin } = await requireAuth(req, 'admin');
