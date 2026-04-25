@@ -264,7 +264,7 @@ export default function FeaturesOverviewModal({
                 <h3 className="font-oswald text-lg font-bold uppercase text-navy leading-none">
                   {section.title}
                 </h3>
-                <p className="text-[11px] font-roboto italic text-gray-500 mt-1">
+                <p className="text-[11px] font-roboto text-gray-500 mt-1">
                   {section.subtitle}
                 </p>
               </div>
@@ -308,7 +308,7 @@ export default function FeaturesOverviewModal({
 
           {/* Footer — friendly close line */}
           <div className="pt-2 pb-1 text-center">
-            <p className="text-[11px] font-roboto italic text-gray-400">
+            <p className="text-[11px] font-roboto text-gray-400">
               Anything unclear? Tap the orange button and ask.
             </p>
           </div>

@@ -469,7 +469,7 @@ export default function SquawksTab({
           </button>
         </div>
         <div className="space-y-4">
-          {activeSquawks.length === 0 ? (<p className="text-center text-sm text-gray-400 italic py-4">No active squawks.</p>) : (
+          {activeSquawks.length === 0 ? (<p className="text-center text-sm text-gray-400 py-4">No active squawks.</p>) : (
             activeSquawks.map(sq => (
               <div key={sq.id} className="relative">
                 <button onClick={() => openDetailModal(sq)} className={`w-full text-left p-4 border rounded transition-colors active:scale-[0.98] ${sq.affects_airworthiness ? 'border-danger/30 bg-danger/10 hover:bg-danger/15' : 'border-mxOrange/30 bg-mxOrange/10 hover:bg-mxOrange/15'}`}>
@@ -525,7 +525,7 @@ export default function SquawksTab({
         <h2 className="font-oswald text-xl md:text-2xl font-bold uppercase text-gray-500 m-0 mb-6 leading-none">Archived History</h2>
         <div className="space-y-4">
           {displayedResolved.length === 0 ? (
-            <p className="text-center text-sm text-gray-400 italic py-4">No archived history.</p>
+            <p className="text-center text-sm text-gray-400 py-4">No archived history.</p>
           ) : (
             displayedResolved.map(sq => (
               <button key={sq.id} onClick={() => openDetailModal(sq)} className="w-full text-left p-4 border border-gray-300 bg-white rounded opacity-70 hover:opacity-100 transition-all active:scale-[0.98]">
@@ -535,7 +535,7 @@ export default function SquawksTab({
                 <div className="mt-3">
                   <p className="text-xs text-gray-500 font-bold uppercase tracking-widest">{new Date(sq.occurred_at ?? sq.created_at).toLocaleDateString()} | {sq.location} {sq.reporter_initials ? `| ${sq.reporter_initials}` : ''}</p>
                   <p className="text-sm text-gray-700 mt-1 font-roboto whitespace-pre-wrap line-clamp-2">{sq.description}</p>
-                  {sq.resolved_note && <p className="text-xs text-[#56B94A] mt-2 italic">Resolution: {sq.resolved_note}</p>}
+                  {sq.resolved_note && <p className="text-xs text-[#56B94A] mt-2">Resolution: {sq.resolved_note}</p>}
                   {renderResolvedBy(sq)}
                   {sq.edited_at && <p className="text-[9px] text-gray-400 mt-2 font-bold uppercase tracking-widest">Edited {new Date(sq.edited_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}{sq.edited_by_initials ? ` by ${sq.edited_by_initials}` : ''}</p>}
                 </div>

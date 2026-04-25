@@ -326,7 +326,7 @@ export default function EquipmentTab({ aircraft, role, aircraftRole }: Props) {
       <div className="bg-cream shadow-lg rounded-sm p-4 md:p-6 border-t-4 border-[#56B94A]">
         <h3 className="font-oswald text-lg font-bold uppercase text-navy mb-4">Currently Installed</h3>
         {active.length === 0 ? (
-          <p className="text-sm text-gray-400 italic text-center py-4">No equipment logged yet.</p>
+          <p className="text-sm text-gray-400 text-center py-4">No equipment logged yet.</p>
         ) : (
           <div className="space-y-2">
             {active.map(e => {
@@ -418,7 +418,7 @@ export default function EquipmentTab({ aircraft, role, aircraftRole }: Props) {
                   {catalogOpen && catalogQuery.trim() !== '' && (
                     <div className="absolute left-0 right-0 top-full mt-1 z-20 bg-white border border-gray-300 rounded shadow-lg max-h-64 overflow-y-auto">
                       {catalogResults.length === 0 ? (
-                        <div className="px-3 py-2 text-xs text-gray-500 italic">Not in the catalog — fill the fields manually below.</div>
+                        <div className="px-3 py-2 text-xs text-gray-500">Not in the catalog — fill the fields manually below.</div>
                       ) : (
                         catalogResults.map(entry => {
                           const catLabel = CATEGORIES.find(c => c.value === entry.category)?.label || entry.category;

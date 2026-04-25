@@ -94,7 +94,7 @@ export default function HowardWelcome({
               </button>
             </div>
 
-            <p className="text-[10px] font-roboto italic text-gray-500 text-center mt-4 leading-snug">
+            <p className="text-[10px] font-roboto text-gray-500 text-center mt-4 leading-snug">
               Either way, Howard&apos;s always one tap away via the orange button after you finish.
             </p>
           </div>

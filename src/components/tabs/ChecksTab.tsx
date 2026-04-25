@@ -408,7 +408,7 @@ export default function ChecksTab({ aircraft, session, role, userInitials }: Pro
             </span>
           )}
         </div>
-        <p className="text-[10px] text-gray-500 italic mb-2 pl-1 leading-snug">
+        <p className="text-[10px] text-gray-500 mb-2 pl-1 leading-snug">
           &ldquo;Hrs since add&rdquo; resets only when you log an actual oil addition. Routine level checks (no oil added) keep the clock running so the consumption-rate math stays honest.
         </p>
         <OilTab aircraft={aircraft} session={session} role={role} userInitials={userInitials} openFormSignal={oilOpenSignal} />

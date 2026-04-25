@@ -340,7 +340,7 @@ export default function OilTab({
                     <input type="number" step="0.5" min="0" value={oilAdded} onChange={e => setOilAdded(e.target.value)} placeholder="Leave blank for level check" className="w-full rounded p-3 text-sm border border-gray-300 focus:border-danger outline-none" style={whiteBg} />
                   </div>
                 </div>
-                <p className="text-[10px] text-gray-500 italic leading-snug -mt-2">
+                <p className="text-[10px] text-gray-500 leading-snug -mt-2">
                   Log the dipstick reading <em>before</em> pouring anything in. Leave &ldquo;Oil Added&rdquo; blank for a routine level check — we&rsquo;ll compute the end-state automatically when you top her off.
                   {oilQty && oilAdded && Number(oilQty) >= 0 && Number(oilAdded) > 0 && (
                     <span className="block mt-1 not-italic text-navy">

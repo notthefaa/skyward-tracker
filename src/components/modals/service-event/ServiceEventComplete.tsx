@@ -253,7 +253,7 @@ export default function ServiceEventComplete({
       ))}
 
       {completionItems.length === 0 && (
-        <p className="text-center text-sm text-gray-400 italic py-4">Every item is either completed or deferred.</p>
+        <p className="text-center text-sm text-gray-400 py-4">Every item is either completed or deferred.</p>
       )}
 
       {completionItems.length > 0 && (

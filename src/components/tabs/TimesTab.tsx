@@ -445,37 +445,37 @@ export default function TimesTab({
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
+          <table className="w-full border-collapse">
             <thead>
               <tr className="border-b-2 border-navy text-[10px] font-bold uppercase tracking-widest text-gray-500">
-                <th className="pb-2 pr-4">DATE</th>
-                <th className="pb-2 pr-4">PIC</th>
-                <th className="pb-2 pr-4">FLT</th>
-                {hasAirframeMeter && <th className="pb-2 pr-4">{isTurbine ? 'AFTT' : 'Hobbs'}</th>}
-                <th className="pb-2 pr-4">{isTurbine ? 'FTT' : 'Tach'}</th>
-                <th className="pb-2 pr-4">LDG</th>
-                {isTurbine && <th className="pb-2 pr-4">Cyc</th>}
-                <th className="pb-2 pr-4">RSN</th>
-                <th className="pb-2 text-center">PAX</th>
+                <th className="pb-2 px-2 text-center">DATE</th>
+                <th className="pb-2 px-2 text-center">PIC</th>
+                <th className="pb-2 px-2 text-center">FLT</th>
+                {hasAirframeMeter && <th className="pb-2 px-2 text-center">{isTurbine ? 'AFTT' : 'Hobbs'}</th>}
+                <th className="pb-2 px-2 text-center">{isTurbine ? 'FTT' : 'Tach'}</th>
+                <th className="pb-2 px-2 text-center">LDG</th>
+                {isTurbine && <th className="pb-2 px-2 text-center">Cyc</th>}
+                <th className="pb-2 px-2 text-center">RSN</th>
+                <th className="pb-2 px-2 text-center">PAX</th>
                 {role === 'admin' && <th className="pb-2"></th>}
               </tr>
             </thead>
             <tbody className="text-xs font-roboto text-navy">
               {displayLogsReversed.map((log) => (
                 <tr key={log.id} className="border-b border-gray-200 hover:bg-blue-50/50 transition-colors">
-                  <td className="py-3 pr-4 whitespace-nowrap">{new Date(log.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</td>
-                  <td className="py-3 pr-4 font-bold">{log.initials}</td>
-                  <td className="py-3 pr-4 text-info font-bold">
+                  <td className="py-3 px-2 text-center whitespace-nowrap">{new Date(log.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' })}</td>
+                  <td className="py-3 px-2 text-center font-bold">{log.initials}</td>
+                  <td className="py-3 px-2 text-center text-info font-bold">
                     {log.pod || log.poa ? (
                       <button onClick={() => setViewRouting({ pod: log.pod, poa: log.poa })} className="underline active:scale-95 transition-transform" title="View Routing">{log.fltTime}</button>
                     ) : <span>{log.fltTime}</span>}
                   </td>
-                  {hasAirframeMeter && <td className="py-3 pr-4">{isTurbine ? (log.aftt?.toFixed(1) || '-') : (log.hobbs?.toFixed(1) || '-')}</td>}
-                  <td className="py-3 pr-4">{isTurbine ? log.ftt?.toFixed(1) : log.tach?.toFixed(1)}</td>
-                  <td className="py-3 pr-4">{log.landings}</td>
-                  {isTurbine && <td className="py-3 pr-4">{log.engine_cycles}</td>}
-                  <td className="py-3 pr-4">{log.trip_reason || "-"}</td>
-                  <td className="py-3 text-center">
+                  {hasAirframeMeter && <td className="py-3 px-2 text-center">{isTurbine ? (log.aftt?.toFixed(1) || '-') : (log.hobbs?.toFixed(1) || '-')}</td>}
+                  <td className="py-3 px-2 text-center">{isTurbine ? log.ftt?.toFixed(1) : log.tach?.toFixed(1)}</td>
+                  <td className="py-3 px-2 text-center">{log.landings}</td>
+                  {isTurbine && <td className="py-3 px-2 text-center">{log.engine_cycles}</td>}
+                  <td className="py-3 px-2 text-center">{log.trip_reason || "-"}</td>
+                  <td className="py-3 px-2 text-center">
                     {log.pax_info ? <button onClick={() => setViewPax(log.pax_info)} className="text-info font-bold underline active:scale-95 transition-transform">Y</button> : <span className="text-gray-400 font-medium">N</span>}
                   </td>
                   {role === 'admin' && (
@@ -498,7 +498,7 @@ export default function TimesTab({
           <button onClick={() => setLogPage(p => p + 1)} disabled={!hasMoreLogs} className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-navy disabled:opacity-30 disabled:cursor-not-allowed hover:text-info transition-colors">Next <ChevronRight size={14} /></button>
         </div>
         {role === 'admin' && flightLogs.length > 0 && (
-          <p className="text-[10px] text-gray-400 italic mt-3 leading-tight">
+          <p className="text-[10px] text-gray-400 mt-3 leading-tight">
             Only the most recent log can be deleted (this rolls aircraft totals back to the prior entry). Older logs can be edited — use edit to correct a mistake.
           </p>
         )}
@@ -629,7 +629,7 @@ export default function TimesTab({
                   {editingId ? (
                     <>
                       <input type="text" value="Gallons" readOnly className="w-full border border-gray-300 rounded p-3 text-sm mt-1 bg-gray-50 text-gray-600 cursor-not-allowed" />
-                      <p className="text-[9px] text-gray-500 mt-1 italic leading-tight">Flight logs are stored in gallons. Enter the edited value in gallons.</p>
+                      <p className="text-[9px] text-gray-500 mt-1 leading-tight">Flight logs are stored in gallons. Enter the edited value in gallons.</p>
                     </>
                   ) : (
                     <select value={logFuelUnit} onChange={e=>{ const v = e.target.value as 'gallons' | 'lbs'; setLogFuelUnit(v); if (typeof window !== 'undefined') window.localStorage.setItem('aft_fuel_unit', v); }} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 bg-white focus:border-info outline-none"><option value="gallons">Gallons</option><option value="lbs">Lbs</option></select>

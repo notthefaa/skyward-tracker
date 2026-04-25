@@ -72,7 +72,7 @@ export default function HowardOnboardingChat({
           </div>
         </div>
         <div className="max-w-3xl mx-auto px-4 py-1.5 border-t border-brandOrange/10 bg-brandOrange/5">
-          <p className="text-[10px] font-roboto italic text-gray-600 leading-snug">
+          <p className="text-[10px] font-roboto text-gray-600 leading-snug">
             {HOWARD_PIC_DISCLAIMER}
           </p>
         </div>

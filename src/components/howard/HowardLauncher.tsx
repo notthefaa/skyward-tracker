@@ -231,7 +231,7 @@ export default function HowardLauncher({ currentAircraft, userFleet = [], sessio
             {/* PIC-authority disclaimer — visible in every mode so the
              * pilot sees it before any back-and-forth with Howard. */}
             <div className="px-4 py-2.5 bg-brandOrange/5 border-b border-brandOrange/20 shrink-0">
-              <p className="text-[10px] font-roboto italic text-gray-600 leading-snug">
+              <p className="text-[10px] font-roboto text-gray-600 leading-snug">
                 {HOWARD_PIC_DISCLAIMER}
               </p>
             </div>

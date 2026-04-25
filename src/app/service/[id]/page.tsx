@@ -439,7 +439,7 @@ export default function ServicePortal() {
                       <div>
                         <h4 className="font-oswald font-bold uppercase text-sm text-navy">{li.item_name}</h4>
                         {li.item_description && <p className="text-xs text-gray-500 mt-1">{li.item_description}</p>}
-                        {li.mechanic_comment && <p className="text-xs text-info mt-2 italic">Note: {li.mechanic_comment}</p>}
+                        {li.mechanic_comment && <p className="text-xs text-info mt-2">Note: {li.mechanic_comment}</p>}
                       </div>
                       {event.status !== 'complete' && (
                         <select value={li.line_status} onChange={e => handleLineStatusUpdate(li.id, e.target.value)} style={whiteBg} className="text-[10px] font-bold uppercase border border-gray-300 rounded px-2 py-1 focus:border-mxOrange outline-none">
@@ -469,7 +469,7 @@ export default function ServicePortal() {
                         <div className="flex-1 min-w-0">
                           <h4 className="font-oswald font-bold uppercase text-sm text-navy">{li.item_name}</h4>
                           {li.item_description && <p className="text-xs text-gray-600 mt-1 whitespace-pre-wrap">{li.item_description}</p>}
-                          {li.mechanic_comment && <p className="text-xs text-info mt-2 italic">Note: {li.mechanic_comment}</p>}
+                          {li.mechanic_comment && <p className="text-xs text-info mt-2">Note: {li.mechanic_comment}</p>}
                           {photos.length > 0 && (
                             <div className="mt-3">
                               <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2 flex items-center gap-1"><Image size={12} /> {photos.length} Photo{photos.length > 1 ? 's' : ''} Attached</p>
@@ -666,7 +666,7 @@ export default function ServicePortal() {
             <h3 className="font-oswald text-lg font-bold uppercase tracking-widest text-navy mb-4 flex items-center gap-2"><MessageSquare size={18} className="text-gray-500"/> Communication</h3>
             <div className="space-y-3 mb-6 max-h-[400px] overflow-y-auto">
               {messages.length === 0 ? (
-                <p className="text-center text-sm text-gray-400 italic py-4">No messages yet.</p>
+                <p className="text-center text-sm text-gray-400 py-4">No messages yet.</p>
               ) : (
                 messages.map((msg: any) => (
                   <div key={msg.id} className={`p-3 rounded text-sm ${msg.sender === 'mechanic' ? 'bg-blue-50 border-l-4 border-info' : msg.sender === 'owner' ? 'bg-orange-50 border-l-4 border-mxOrange' : 'bg-gray-50 border-l-4 border-gray-300'}`}>

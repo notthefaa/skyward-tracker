@@ -220,7 +220,7 @@ export default function MxGuideModal({ show, onClose }: MxGuideModalProps) {
                 <li className="flex items-start gap-3"><XCircle size={16} className="text-danger shrink-0 mt-0.5" /> <span><strong>Decline the job:</strong> If they can't take it, they can decline with a reason. You're notified and can reach out to a different mechanic.</span></li>
               </ul>
             </div>
-            <p className="text-xs text-gray-500 font-roboto italic">
+            <p className="text-xs text-gray-500 font-roboto">
               You can open the same portal yourself from the "Portal" button on any active service event — handy for seeing exactly what your mechanic sees.
             </p>
           </div>

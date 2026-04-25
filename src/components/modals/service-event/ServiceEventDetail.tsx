@@ -134,7 +134,7 @@ export default function ServiceEventDetail({
         {selectedEvent.proposed_date && !selectedEvent.confirmed_date && <p className="text-sm"><strong className="text-navy">Proposed:</strong> {selectedEvent.proposed_date} <span className="text-gray-400">(by {selectedEvent.proposed_by})</span></p>}
         {selectedEvent.estimated_completion && <p className="text-sm mt-1"><strong className="text-navy">Est. Completion:</strong> {selectedEvent.estimated_completion}</p>}
         {selectedEvent.service_duration_days && <p className="text-sm mt-1"><strong className="text-navy">Duration:</strong> {selectedEvent.service_duration_days} day{selectedEvent.service_duration_days > 1 ? 's' : ''}</p>}
-        {selectedEvent.mechanic_notes && <p className="text-xs text-gray-500 mt-2 italic">{selectedEvent.mechanic_notes}</p>}
+        {selectedEvent.mechanic_notes && <p className="text-xs text-gray-500 mt-2">{selectedEvent.mechanic_notes}</p>}
       </div>
 
       {/* Owner scheduling actions (scheduling + mechanic proposed) */}
@@ -198,7 +198,7 @@ export default function ServiceEventDetail({
                     {li.line_status}
                   </span>
                 </div>
-                {li.mechanic_comment && <p className="text-[10px] text-info mt-1 italic">{li.mechanic_comment}</p>}
+                {li.mechanic_comment && <p className="text-[10px] text-info mt-1">{li.mechanic_comment}</p>}
                 {li.line_status === 'complete' && li.completion_date && (
                   <p className="text-[10px] text-[#56B94A] mt-1 flex items-center gap-1"><Link2 size={10} /> Completed {li.completion_date}{li.completed_by_name ? ` by ${li.completed_by_name}` : ''}{li.completion_time ? ` @ ${li.completion_time} hrs` : ''}</p>
                 )}

@@ -232,7 +232,7 @@ export default function NotesTab({ aircraft, session, role, aircraftRole, userIn
         <h2 className="font-oswald text-2xl md:text-3xl font-bold uppercase text-navy m-0 mb-6 leading-none">Flight Notes</h2>
         
         <div className="space-y-4">
-          {notes.length === 0 ? (<p className="text-center text-sm text-gray-400 italic py-4">No notes for this aircraft.</p>) : (
+          {notes.length === 0 ? (<p className="text-center text-sm text-gray-400 py-4">No notes for this aircraft.</p>) : (
             notes.map(note => (
               <div key={note.id} className="p-4 border border-navy/20 bg-white rounded shadow-sm">
                 

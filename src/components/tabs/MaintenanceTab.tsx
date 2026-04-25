@@ -664,7 +664,7 @@ export default function MaintenanceTab({
               </div>
             </div>
             {activeItems.length === 0 ? (
-              <p className="text-center text-sm text-gray-400 italic py-4">
+              <p className="text-center text-sm text-gray-400 py-4">
                 {needsSetupItems.length > 0 ? 'All items need setup — fill in the last-completed info above to start tracking.' : 'Nothing tracked yet.'}
               </p>
             ) : (
@@ -682,7 +682,7 @@ export default function MaintenanceTab({
                     <h3 className="text-[11px] font-bold uppercase tracking-widest text-mxOrange mb-2 flex items-center gap-1.5">
                       <AlertTriangle size={13} /> Past due — optional items ({watchlist.length})
                     </h3>
-                    <p className="text-[10px] text-gray-500 mb-2 italic">These are past due but marked optional, so they don&apos;t ground the airplane.</p>
+                    <p className="text-[10px] text-gray-500 mb-2">These are past due but marked optional, so they don&apos;t ground the airplane.</p>
                     <div className="space-y-3">{watchlist.map(renderRow)}</div>
                   </div>
                 )}
@@ -748,7 +748,7 @@ export default function MaintenanceTab({
                               </p>
                             )}
                             {item?.work_description && (
-                              <p className="text-[10px] text-gray-400 italic mt-1 leading-tight">{item.work_description}</p>
+                              <p className="text-[10px] text-gray-400 mt-1 leading-tight">{item.work_description}</p>
                             )}
                           </div>
                         </label>
@@ -797,7 +797,7 @@ export default function MaintenanceTab({
                         />
                       </div>
                       {scanPrefillHint && (
-                        <p className="text-[10px] text-purple-900/80 italic mt-2 leading-tight">{scanPrefillHint}</p>
+                        <p className="text-[10px] text-purple-900/80 mt-2 leading-tight">{scanPrefillHint}</p>
                       )}
                     </div>
                   )}
@@ -816,7 +816,7 @@ export default function MaintenanceTab({
                         </button>
                       </div>
                       {scanPrefillHint && (
-                        <p className="text-[10px] text-purple-900/80 italic mt-2 leading-tight">{scanPrefillHint}</p>
+                        <p className="text-[10px] text-purple-900/80 mt-2 leading-tight">{scanPrefillHint}</p>
                       )}
                     </div>
                   )}
@@ -1030,7 +1030,7 @@ function ServiceEventsList({
           </span>
         </div>
         {activeEvents.length === 0 ? (
-          <p className="text-xs text-gray-500 italic bg-gray-50 rounded p-3 border border-gray-200">
+          <p className="text-xs text-gray-500 bg-gray-50 rounded p-3 border border-gray-200">
             Nothing open right now. {canEditMx ? 'Tap Schedule Service to bundle items into a trip to the shop.' : 'Your aircraft admin can schedule service when needed.'}
           </p>
         ) : (

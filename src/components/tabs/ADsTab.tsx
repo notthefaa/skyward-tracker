@@ -336,7 +336,7 @@ export default function ADsTab({ aircraft, role, aircraftRole }: Props) {
       <div className="bg-cream shadow-lg rounded-sm p-4 md:p-6 border-t-4 border-[#56B94A]">
         <h3 className="font-oswald text-lg font-bold uppercase text-[#56B94A] mb-4 flex items-center gap-2"><CheckCircle size={16} /> In Compliance ({compliant.length})</h3>
         {compliant.length === 0 ? (
-          <p className="text-sm text-gray-400 italic text-center py-4">No ADs currently compliant.</p>
+          <p className="text-sm text-gray-400 text-center py-4">No ADs currently compliant.</p>
         ) : (
           <div className="space-y-2">
             {compliant.map(c => renderAdRow(c, canEdit, openEdit, handleDelete, handleCheckApplicability, checkingId))}
@@ -452,7 +452,7 @@ function renderAdRow(
         </div>
         <p className="text-sm text-navy mt-1 leading-tight">{ad.subject}</p>
         {ad.applicability_reason && (
-          <p className="text-[10px] text-gray-500 mt-1 italic">{ad.applicability_reason}</p>
+          <p className="text-[10px] text-gray-500 mt-1">{ad.applicability_reason}</p>
         )}
         {(ad.next_due_date || ad.next_due_time != null) && (
           <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mt-1">
@@ -462,7 +462,7 @@ function renderAdRow(
           </p>
         )}
         {ad.compliance_method && (
-          <p className="text-[10px] text-gray-500 mt-1 italic">Method: {ad.compliance_method}</p>
+          <p className="text-[10px] text-gray-500 mt-1">Method: {ad.compliance_method}</p>
         )}
         <div className="flex items-center gap-3 mt-1 flex-wrap">
           {ad.source_url && (

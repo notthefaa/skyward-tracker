@@ -384,7 +384,7 @@ export default function FleetSchedule({
                         </div>
                         <div className="flex-1 min-w-0 flex flex-col gap-1">
                           {events.reservations.length === 0 && events.mxBlocks.length === 0 && (
-                            <span className="text-[10px] text-gray-400 font-roboto italic">Available</span>
+                            <span className="text-[10px] text-gray-400 font-roboto">Available</span>
                           )}
                           {events.reservations.map(r => {
                             const meta = tailMeta[r.aircraft_id];
@@ -489,7 +489,7 @@ export default function FleetSchedule({
                           {meta.tail_number}
                         </span>
                         {isFree && (
-                          <span className="text-[10px] font-roboto italic text-gray-500">Available all day</span>
+                          <span className="text-[10px] font-roboto text-gray-500">Available all day</span>
                         )}
                       </div>
                       <span className="text-[9px] font-bold uppercase tracking-widest text-gray-400">Open →</span>

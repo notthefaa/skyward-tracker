@@ -22,13 +22,13 @@ import remarkGfm from "remark-gfm";
 
 /**
  * Tight markdown preset — Howard writes conversationally, so we want
- * bold / italic / lists / inline code to render, but we don't want big
+ * bold / / lists / inline code to render, but we don't want big
  * heading chrome. Pass as `components` to ReactMarkdown.
  */
 const MARKDOWN_COMPONENTS = {
   p: (props: any) => <p className="font-roboto text-sm leading-relaxed mb-2 last:mb-0" {...props} />,
   strong: (props: any) => <strong className="font-bold text-navy" {...props} />,
-  em: (props: any) => <em className="italic" {...props} />,
+  em: (props: any) => <em className="" {...props} />,
   ul: (props: any) => <ul className="list-none pl-0 my-2 space-y-1 text-sm marker:text-brandOrange [&>li]:relative [&>li]:pl-4 [&>li]:before:content-['•'] [&>li]:before:absolute [&>li]:before:left-0 [&>li]:before:text-brandOrange [&>li]:before:font-bold" {...props} />,
   ol: (props: any) => <ol className="list-decimal pl-5 my-2 space-y-1 text-sm marker:text-brandOrange marker:font-bold" {...props} />,
   li: (props: any) => <li className="leading-relaxed" {...props} />,
@@ -43,7 +43,7 @@ const MARKDOWN_COMPONENTS = {
   // Callout block — good for a one-line caveat or advisory handoff.
   blockquote: (props: any) => (
     <blockquote
-      className="relative my-2 pl-3 pr-3 py-2 rounded-r bg-brandOrange/5 border-l-4 border-brandOrange text-sm text-navy italic [&>p]:mb-0"
+      className="relative my-2 pl-3 pr-3 py-2 rounded-r bg-brandOrange/5 border-l-4 border-brandOrange text-sm text-navy [&>p]:mb-0"
       {...props}
     />
   ),
@@ -679,7 +679,7 @@ export default function HowardTab({
             </div>
           </div>
           <div className="mb-4 px-3 py-2 bg-brandOrange/5 border border-brandOrange/20 rounded">
-            <p className="text-[11px] font-roboto italic text-gray-600 leading-snug">
+            <p className="text-[11px] font-roboto text-gray-600 leading-snug">
               {HOWARD_PIC_DISCLAIMER}
             </p>
           </div>

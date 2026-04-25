@@ -36,7 +36,7 @@ function describePayload(action: ProposedAction): React.ReactNode {
       );
     case 'note':
       return (
-        <div className="text-xs text-gray-700 italic whitespace-pre-wrap border-l-2 border-gray-300 pl-2">
+        <div className="text-xs text-gray-700 whitespace-pre-wrap border-l-2 border-gray-300 pl-2">
           {p.content}
         </div>
       );
@@ -106,7 +106,7 @@ function describePayload(action: ProposedAction): React.ReactNode {
             </div>
             {meters && <div className="text-gray-500">{meters}</div>}
           </div>
-          <p className="text-[10px] italic text-gray-500 pt-1 border-t border-gray-200">
+          <p className="text-[10px] text-gray-500 pt-1 border-t border-gray-200">
             On confirm: saves your profile, registers the aircraft, makes you admin on it, and marks onboarding complete.
           </p>
         </div>
@@ -213,9 +213,9 @@ export default function ProposedActionCard({ action, onChange }: Props) {
           <div className="mt-2">{describePayload(action)}</div>
 
           {action.status === 'failed' && action.error_message && (
-            <p className="text-[10px] text-danger mt-2 italic">Error: {action.error_message}</p>
+            <p className="text-[10px] text-danger mt-2">Error: {action.error_message}</p>
           )}
-          {error && <p className="text-[10px] text-danger mt-2 italic">{error}</p>}
+          {error && <p className="text-[10px] text-danger mt-2">{error}</p>}
 
           {action.status === 'pending' && !picConfirming && (
             <div className="flex gap-2 mt-3">

@@ -419,7 +419,7 @@ export default function AdminModals({
               {isLoadingFleet ? (
                 <div className="flex items-center justify-center py-8"><Loader2 size={24} className="text-navy animate-spin" /></div>
               ) : globalFleetList.filter(ac => ac.tail_number.includes(globalFleetSearch)).length === 0 ? (
-                <p className="text-center text-sm text-gray-400 italic py-4">No aircraft found.</p>
+                <p className="text-center text-sm text-gray-400 py-4">No aircraft found.</p>
               ) : (
                 globalFleetList.filter(ac => ac.tail_number.includes(globalFleetSearch)).map(ac => (
                   <button key={ac.id} onClick={() => handleSelectGlobalAircraft(ac)} disabled={isSelectingAircraft === ac.id} className="w-full bg-gray-50 border border-gray-200 p-3 rounded text-left flex justify-between items-center hover:border-navy hover:bg-blue-50 transition-colors active:scale-95 disabled:opacity-50">
@@ -606,7 +606,7 @@ export default function AdminModals({
                 };
                 const filtered = globalUsers.filter(matchUser);
                 return filtered.length === 0 ? (
-                <p className="text-center text-sm text-gray-400 italic py-4">No users found.</p>
+                <p className="text-center text-sm text-gray-400 py-4">No users found.</p>
               ) : (
                 filtered.map(u => {
                   const isExpanded = expandedUserId === u.user_id;
@@ -659,7 +659,7 @@ export default function AdminModals({
                                         ))}
                                       </div>
                                     ) : (
-                                      <p className="text-[10px] text-gray-400 italic">Assign aircraft below first</p>
+                                      <p className="text-[10px] text-gray-400">Assign aircraft below first</p>
                                     )}
                                   </div>
                                 )}
@@ -684,7 +684,7 @@ export default function AdminModals({
                                   </div>
                                 );
                               })}
-                              {allAircraftList.length === 0 && <p className="text-[10px] text-gray-400 italic">No aircraft in system</p>}
+                              {allAircraftList.length === 0 && <p className="text-[10px] text-gray-400">No aircraft in system</p>}
                             </div>
                           </div>
 

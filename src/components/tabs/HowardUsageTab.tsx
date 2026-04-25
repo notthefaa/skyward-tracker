@@ -152,7 +152,7 @@ export default function HowardUsageTab() {
       <div className="bg-cream shadow-lg rounded-sm p-4 md:p-6 border-t-4 border-[#0EA5E9]">
         <h3 className="font-oswald text-lg font-bold uppercase text-navy mb-4">Daily activity</h3>
         {totals.messages === 0 ? (
-          <p className="text-sm text-gray-400 italic text-center py-8">No Howard conversations yet. Start chatting to see your usage here.</p>
+          <p className="text-sm text-gray-400 text-center py-8">No Howard conversations yet. Start chatting to see your usage here.</p>
         ) : (
           <div className="flex items-end gap-[2px] h-32">
             {daySeries.map(d => {

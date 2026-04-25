@@ -628,7 +628,7 @@ export default function CalendarTab({
                     <div className="mt-3 animate-fade-in">
                       <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Pilot *</label>
                       {otherCrew.length === 0 ? (
-                        <p className="text-[11px] text-gray-500 mt-1.5 italic">No other pilots on this aircraft yet.</p>
+                        <p className="text-[11px] text-gray-500 mt-1.5">No other pilots on this aircraft yet.</p>
                       ) : (
                         <select value={bookingForUserId} onChange={e => setBookingForUserId(e.target.value)} style={wb} className="w-full border border-gray-300 rounded p-2.5 text-sm mt-1 focus:border-[#56B94A] outline-none">
                           <option value="">Select pilot…</option>
@@ -685,7 +685,7 @@ export default function CalendarTab({
                   ))}
                 </div>
                 {editingReservationId && bookingRepeat !== 'none' && (
-                  <p className="text-[10px] text-gray-500 italic mt-2">Updates this reservation and adds the additional occurrences.</p>
+                  <p className="text-[10px] text-gray-500 mt-2">Updates this reservation and adds the additional occurrences.</p>
                 )}
                 {bookingRepeat === 'custom' && (
                   <div className="mt-3 space-y-3 animate-fade-in">
