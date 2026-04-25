@@ -15,6 +15,7 @@ import { PrimaryButton } from "@/components/AppButtons";
 import { useToast } from "@/components/ToastProvider";
 import { useModalScrollLock } from "@/hooks/useModalScrollLock";
 import { AircraftAvatarImg } from "@/components/AircraftAvatarImg";
+import { ModalPortal } from "@/components/ModalPortal";
 
 export default function SummaryTab({
   aircraft, setActiveTab, onNavigateToSquawks, role, aircraftRole, onDeleteAircraft, sysSettings, onEditAircraft, refreshData, session, aircraftStatus
@@ -264,6 +265,7 @@ export default function SummaryTab({
     <div className="flex flex-col gap-4 animate-fade-in relative">
       {/* Delete confirmation modal */}
       {showDeleteModal && (
+        <ModalPortal>
         <div className="fixed inset-0 z-[10000] overflow-y-auto bg-black/80 animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => setShowDeleteModal(false)}>
           <div className="flex min-h-full items-center justify-center p-4">
           <div className="bg-white rounded shadow-2xl w-full max-w-sm p-6 border-t-4 border-danger animate-slide-up relative" onClick={(e) => e.stopPropagation()}>
@@ -276,10 +278,12 @@ export default function SummaryTab({
           </div>
           </div>
         </div>
+        </ModalPortal>
       )}
 
       {/* Fuel modal */}
       {showFuelModal && (
+        <ModalPortal>
         <div className="fixed inset-0 z-[10000] overflow-y-auto bg-black/80 animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => setShowFuelModal(false)}>
           <div className="flex min-h-full items-center justify-center p-4">
           <div className="bg-white rounded shadow-2xl w-full max-w-sm p-6 border-t-4 border-blue-500 animate-slide-up" onClick={e => e.stopPropagation()}>
@@ -294,10 +298,12 @@ export default function SummaryTab({
           </div>
           </div>
         </div>
+        </ModalPortal>
       )}
 
       {/* Invite modal */}
       {showInviteModal && (
+        <ModalPortal>
         <div className="fixed inset-0 z-[10000] overflow-y-auto bg-black/80 animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => setShowInviteModal(false)}>
           <div className="flex min-h-full items-center justify-center p-4">
           <div className="bg-white rounded shadow-2xl w-full max-w-sm p-6 border-t-4 border-info animate-slide-up" onClick={e => e.stopPropagation()}>
@@ -311,6 +317,7 @@ export default function SummaryTab({
           </div>
           </div>
         </div>
+        </ModalPortal>
       )}
 
       {/* Hero section */}
@@ -448,6 +455,7 @@ export default function SummaryTab({
               <div className="flex-1"><div className="flex justify-between items-center mb-1"><span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Latest Note</span><span className="text-[10px] text-gray-400 font-bold">{new Date(latestNote.created_at).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: '2-digit' })}</span></div><p className="text-sm font-bold text-navy leading-tight line-clamp-2">{latestNote.content}</p></div>
             </div>
             {showNoteModal && (
+              <ModalPortal>
               <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => setShowNoteModal(false)}>
                 <div className="flex min-h-full items-center justify-center p-4">
                 <div className="bg-white rounded shadow-2xl w-full max-w-md p-6 border-t-4 border-navy animate-slide-up relative" onClick={(e) => e.stopPropagation()}>
@@ -457,6 +465,7 @@ export default function SummaryTab({
                 </div>
                 </div>
               </div>
+              </ModalPortal>
             )}
           </>
         )}

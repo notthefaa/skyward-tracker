@@ -13,6 +13,7 @@ import { swrKeys } from "@/lib/swrKeys";
 import type { AircraftWithMetrics, AirworthinessDirective, AircraftRole } from "@/lib/types";
 import SectionSelector from "@/components/shell/SectionSelector";
 import { MX_ADS_SELECTOR_ITEMS, emitMxAdsNavigate } from "@/components/shell/mxAdsNav";
+import { ModalPortal } from "@/components/ModalPortal";
 
 interface Props {
   aircraft: AircraftWithMetrics | null;
@@ -363,6 +364,7 @@ export default function ADsTab({ aircraft, role, aircraftRole }: Props) {
 
       {/* Form modal */}
       {showForm && canEdit && (
+        <ModalPortal>
         <div className="fixed inset-0 bg-black/60 z-[10000] overflow-y-auto animate-fade-in" style={{ overscrollBehavior: 'contain' }}>
           <div className="flex min-h-full items-center justify-center p-3">
             <div className="bg-white rounded shadow-2xl w-full max-w-md p-5 border-t-4 border-[#7C3AED] animate-slide-up">
@@ -410,6 +412,7 @@ export default function ADsTab({ aircraft, role, aircraftRole }: Props) {
             </div>
           </div>
         </div>
+        </ModalPortal>
       )}
     </div>
   );

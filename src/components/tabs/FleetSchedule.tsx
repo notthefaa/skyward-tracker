@@ -7,6 +7,7 @@ import { swrKeys } from "@/lib/swrKeys";
 import type { AircraftWithMetrics, Reservation } from "@/lib/types";
 import { ChevronLeft, ChevronRight, Wrench, Plane, MapPin, Clock, Filter } from "lucide-react";
 import { useModalScrollLock } from "@/hooks/useModalScrollLock";
+import { ModalPortal } from "@/components/ModalPortal";
 
 type CalendarView = 'month' | 'week' | 'day';
 
@@ -608,6 +609,7 @@ export default function FleetSchedule({
         }
 
         return (
+          <ModalPortal>
           <div
             className="fixed inset-0 bg-black/60 z-[10000] overflow-y-auto animate-fade-in"
             style={{ overscrollBehavior: 'contain' }}
@@ -742,6 +744,7 @@ export default function FleetSchedule({
             </div>
             </div>
           </div>
+          </ModalPortal>
         );
       })()}
     </div>

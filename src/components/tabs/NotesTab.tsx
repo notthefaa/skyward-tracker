@@ -14,6 +14,7 @@ import { useModalScrollLock } from "@/hooks/useModalScrollLock";
 import SectionSelector from "@/components/shell/SectionSelector";
 import { MORE_SELECTOR_ITEMS, emitMoreNavigate } from "@/components/shell/moreNav";
 import { useSignedUrls } from "@/hooks/useSignedUrls";
+import { ModalPortal } from "@/components/ModalPortal";
 
 const whiteBg = { backgroundColor: '#ffffff' } as const;
 
@@ -278,6 +279,7 @@ export default function NotesTab({ aircraft, session, role, aircraftRole, userIn
       </div>
 
       {previewImages && (
+        <ModalPortal>
         <div className="fixed inset-0 z-[10000] bg-black/95 overflow-y-auto animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => setPreviewImages(null)}>
           <div className="flex min-h-full items-center justify-center p-4">
           <button className="absolute top-4 right-4 text-gray-400 hover:text-white z-50 p-2">
@@ -305,9 +307,11 @@ export default function NotesTab({ aircraft, session, role, aircraftRole, userIn
           </div>
           </div>
         </div>
+        </ModalPortal>
       )}
 
       {showModal && (
+        <ModalPortal>
         <div className="fixed inset-0 bg-black/60 z-[10000] overflow-y-auto animate-fade-in" style={{ overscrollBehavior: 'contain' }}>
           <div className="flex min-h-full items-center justify-center p-4">
           <div className="bg-white rounded shadow-2xl w-full max-w-md p-6 border-t-4 border-navy animate-slide-up">
@@ -350,10 +354,11 @@ export default function NotesTab({ aircraft, session, role, aircraftRole, userIn
                 <PrimaryButton disabled={isSubmitting}>{isSubmitting ? "Saving..." : "Post Note"}</PrimaryButton>
               </div>
             </form>
-            
+
           </div>
           </div>
         </div>
+        </ModalPortal>
       )}
     </>
   );

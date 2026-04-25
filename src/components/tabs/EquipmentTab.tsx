@@ -13,6 +13,7 @@ import { swrKeys } from "@/lib/swrKeys";
 import type { AircraftWithMetrics, AircraftEquipment, EquipmentCategory, AircraftRole } from "@/lib/types";
 import SectionSelector from "@/components/shell/SectionSelector";
 import { MORE_SELECTOR_ITEMS, emitMoreNavigate } from "@/components/shell/moreNav";
+import { ModalPortal } from "@/components/ModalPortal";
 import { EQUIPMENT_MAKES, findCatalogEntry, searchCatalog, type EquipmentCatalogEntry } from "@/lib/equipmentCatalog";
 
 const CATEGORIES: Array<{ value: EquipmentCategory; label: string }> = [
@@ -389,6 +390,7 @@ export default function EquipmentTab({ aircraft, role, aircraftRole }: Props) {
 
       {/* Form modal */}
       {showForm && canEdit && (
+        <ModalPortal>
         <div className="fixed inset-0 bg-black/60 z-[10000] overflow-y-auto animate-fade-in" style={{ overscrollBehavior: 'contain' }}>
           <div className="flex min-h-full items-center justify-center p-3">
             <div className="bg-white rounded shadow-2xl w-full max-w-md p-5 border-t-4 border-[#56B94A] animate-slide-up">
@@ -518,6 +520,7 @@ export default function EquipmentTab({ aircraft, role, aircraftRole }: Props) {
             </div>
           </div>
         </div>
+        </ModalPortal>
       )}
     </div>
   );

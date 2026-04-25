@@ -136,6 +136,15 @@ main {
   bottom: calc(env(safe-area-inset-bottom, 0px) + 3.5rem) !important;
   left: 0 !important;
   right: 0 !important;
+  /* The Tailwind utility on this same element is `min-h-full`, which
+     resolves to `min-height: 100%` of the outer overlay (= 100vh).
+     Once we absolutely position it with explicit top + bottom, that
+     min-height overrides our calculated height — the box extends a
+     full viewport from the top edge, well past the `bottom` anchor,
+     and `items-center` then centers the modal in that oversized box
+     so it visually sits low on screen. Reset min-height so the
+     top/bottom constraints fully govern. */
+  min-height: 0 !important;
   overflow-y: auto !important;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;

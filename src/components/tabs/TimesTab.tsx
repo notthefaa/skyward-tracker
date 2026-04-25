@@ -9,6 +9,7 @@ import { PrimaryButton } from "@/components/AppButtons";
 import { useToast } from "@/components/ToastProvider";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { useModalScrollLock } from "@/hooks/useModalScrollLock";
+import { ModalPortal } from "@/components/ModalPortal";
 
 const whiteBg = { backgroundColor: '#ffffff' } as const;
 
@@ -504,6 +505,7 @@ export default function TimesTab({
       </div>
 
       {viewPax && (
+        <ModalPortal>
         <div className="fixed inset-0 z-[10000] overflow-y-auto bg-black/60 animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => setViewPax(null)}>
           <div className="flex min-h-full items-center justify-center p-4">
           <div className="bg-white rounded shadow-2xl w-full max-w-sm p-6 border-t-4 border-info animate-slide-up relative" onClick={(e) => e.stopPropagation()}>
@@ -513,9 +515,11 @@ export default function TimesTab({
           </div>
           </div>
         </div>
+        </ModalPortal>
       )}
 
       {viewRouting && (
+        <ModalPortal>
         <div className="fixed inset-0 z-[10000] overflow-y-auto bg-black/60 animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => setViewRouting(null)}>
           <div className="flex min-h-full items-center justify-center p-4">
           <div className="bg-white rounded shadow-2xl w-full max-w-sm p-6 border-t-4 border-info animate-slide-up relative" onClick={(e) => e.stopPropagation()}>
@@ -535,9 +539,11 @@ export default function TimesTab({
           </div>
           </div>
         </div>
+        </ModalPortal>
       )}
 
       {showLegend && (
+        <ModalPortal>
         <div className="fixed inset-0 z-[10000] overflow-y-auto bg-black/60 animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => setShowLegend(false)}>
           <div className="flex min-h-full items-center justify-center p-4">
           <div className="bg-white rounded shadow-2xl w-full max-w-sm p-6 border-t-4 border-info animate-slide-up relative" onClick={(e) => e.stopPropagation()}>
@@ -552,9 +558,11 @@ export default function TimesTab({
           </div>
           </div>
         </div>
+        </ModalPortal>
       )}
 
       {showLogModal && (
+        <ModalPortal>
         <div className="fixed inset-0 bg-black/60 z-[10000] overflow-y-auto animate-fade-in" style={{ overscrollBehavior: 'contain' }}>
           <div className="flex min-h-full items-center justify-center p-4">
           <div className="bg-white rounded shadow-2xl w-full max-w-md p-6 border-t-4 border-info animate-slide-up">
@@ -649,6 +657,7 @@ export default function TimesTab({
           </div>
           </div>
         </div>
+        </ModalPortal>
       )}
     </>
   );

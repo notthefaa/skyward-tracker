@@ -13,6 +13,7 @@ import imageCompression from "browser-image-compression";
 import { useToast } from "@/components/ToastProvider";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { useModalScrollLock } from "@/hooks/useModalScrollLock";
+import { ModalPortal } from "@/components/ModalPortal";
 
 const whiteBg = { backgroundColor: '#ffffff' } as const;
 
@@ -551,6 +552,7 @@ export default function SquawksTab({
 
       {/* ─── SQUAWK DETAIL MODAL ─── */}
       {detailSquawk && (
+        <ModalPortal>
         <div className="fixed inset-0 bg-black/60 z-[10000] overflow-y-auto animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={closeDetailModal}>
           <div className="flex min-h-full items-center justify-center p-3">
           <div className="bg-white rounded shadow-2xl w-full max-w-lg p-5 border-t-4 border-danger animate-slide-up" style={{ overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch' }} onClick={e => e.stopPropagation()}>
@@ -650,9 +652,11 @@ export default function SquawksTab({
           </div>
           </div>
         </div>
+        </ModalPortal>
       )}
 
       {showExportModal && (
+        <ModalPortal>
         <div className="fixed inset-0 bg-black/60 z-[10000] overflow-y-auto animate-fade-in" style={{ overscrollBehavior: 'contain' }}>
           <div className="flex min-h-full items-center justify-center p-3">
           <div className="bg-white rounded shadow-2xl w-full max-w-md p-5 border-t-4 border-danger animate-slide-up flex flex-col" style={{ overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch' }}>
@@ -683,9 +687,11 @@ export default function SquawksTab({
           </div>
           </div>
         </div>
+        </ModalPortal>
       )}
 
       {previewImages && (
+        <ModalPortal>
         <div className="fixed inset-0 z-[10001] bg-black/95 overflow-y-auto animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => setPreviewImages(null)}>
           <div className="flex min-h-full items-center justify-center">
           <button className="absolute top-4 right-4 text-gray-400 hover:text-white z-50 p-2"><X size={32}/></button>
@@ -695,9 +701,11 @@ export default function SquawksTab({
           <div className="absolute bottom-6 text-gray-400 font-oswald tracking-widest text-sm uppercase">Image {previewIndex + 1} of {previewImages.length}</div>
           </div>
         </div>
+        </ModalPortal>
       )}
 
       {showModal && (
+        <ModalPortal>
         <div className="fixed inset-0 bg-black/60 z-[10000] overflow-y-auto animate-fade-in" style={{ overscrollBehavior: 'contain' }}>
           <div className="flex min-h-full items-center justify-center p-3">
           <div className="bg-white rounded shadow-2xl w-full max-w-lg p-5 border-t-4 border-danger animate-slide-up" style={{ overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch' }}>
@@ -770,6 +778,7 @@ export default function SquawksTab({
           </div>
           </div>
         </div>
+        </ModalPortal>
       )}
     </>
   );

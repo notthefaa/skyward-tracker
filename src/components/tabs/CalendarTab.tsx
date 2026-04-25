@@ -11,6 +11,7 @@ import { PrimaryButton } from "@/components/AppButtons";
 import CalendarDashboard from "@/components/tabs/CalendarDashboard";
 import { useToast } from "@/components/ToastProvider";
 import { useModalScrollLock } from "@/hooks/useModalScrollLock";
+import { ModalPortal } from "@/components/ModalPortal";
 
 type CalendarView = 'month' | 'week' | 'day';
 
@@ -603,6 +604,7 @@ export default function CalendarTab({
 
       {/* BOOKING FORM — z-[10000] to sit above nav bars */}
       {showBookingForm && (
+        <ModalPortal>
         <div className="fixed inset-0 bg-black/60 z-[10000] overflow-y-auto animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => setShowBookingForm(false)}>
           <div className="flex min-h-full items-center justify-center p-4">
           <div className="bg-white rounded shadow-2xl w-full max-w-sm p-5 border-t-4 border-[#56B94A] animate-slide-up" onClick={e => e.stopPropagation()}>
@@ -738,6 +740,7 @@ export default function CalendarTab({
           </div>
           </div>
         </div>
+        </ModalPortal>
       )}
 
       {/* VIEW-AWARE JUMP PICKER — month/week/day */}
@@ -807,6 +810,7 @@ export default function CalendarTab({
         }
 
         return (
+          <ModalPortal>
           <div
             className="fixed inset-0 bg-black/60 z-[10000] overflow-y-auto animate-fade-in"
             style={{ overscrollBehavior: 'contain' }}
@@ -941,11 +945,13 @@ export default function CalendarTab({
             </div>
             </div>
           </div>
+          </ModalPortal>
         );
       })()}
 
       {/* MX BLOCK FORM */}
       {showMxBlockForm && (
+        <ModalPortal>
         <div className="fixed inset-0 bg-black/60 z-[10000] overflow-y-auto animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => setShowMxBlockForm(false)}>
           <div className="flex min-h-full items-center justify-center p-4">
           <div className="bg-white rounded shadow-2xl w-full max-w-sm p-5 border-t-4 border-mxOrange animate-slide-up" onClick={e => e.stopPropagation()}>
@@ -971,6 +977,7 @@ export default function CalendarTab({
           </div>
           </div>
         </div>
+        </ModalPortal>
       )}
     </>
   );
