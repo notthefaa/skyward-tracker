@@ -235,8 +235,8 @@ export default function SettingsModal({
   return (
     <div className="fixed inset-0 bg-black/60 z-[10000] overflow-y-auto animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={onClose}>
       <div className="flex min-h-full items-center justify-center p-4">
-      <div className="bg-white rounded shadow-2xl w-full max-w-md animate-slide-up" onClick={e => e.stopPropagation()}>
-        
+      <div className="bg-white rounded shadow-2xl w-full max-w-md max-h-full overflow-y-auto modal-scroll flex flex-col animate-slide-up" onClick={e => e.stopPropagation()}>
+
         <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center z-10">
           <h2 className="font-oswald text-2xl font-bold uppercase text-navy flex items-center gap-2">
             <Settings size={20} className="text-gray-500" /> Settings
@@ -244,7 +244,7 @@ export default function SettingsModal({
           <button onClick={onClose} className="text-gray-400 hover:text-danger"><X size={24} /></button>
         </div>
 
-        <div className="p-6 space-y-8">
+        <div className="p-6 space-y-6">
 
           {/* ─── PROFILE ─── */}
           <div>
