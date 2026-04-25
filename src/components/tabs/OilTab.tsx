@@ -341,9 +341,9 @@ export default function OilTab({
                   </div>
                 </div>
                 <p className="text-[10px] text-gray-500 leading-snug -mt-2">
-                  Log the dipstick reading <em>before</em> pouring anything in. Leave &ldquo;Oil Added&rdquo; blank for a routine level check — we&rsquo;ll compute the end-state automatically when you top her off.
+                  Log the dipstick reading before pouring anything in. Leave &ldquo;Oil Added&rdquo; blank for a routine level check — we&rsquo;ll compute the end-state automatically when you top her off.
                   {oilQty && oilAdded && Number(oilQty) >= 0 && Number(oilAdded) > 0 && (
-                    <span className="block mt-1 not-italic text-navy">
+                    <span className="block mt-1 text-navy">
                       End state after service: <span className="font-bold">{(Number(oilQty) + Number(oilAdded)).toFixed(1)} qt</span>
                     </span>
                   )}
