@@ -806,95 +806,95 @@ export default function AdminModals({
 
       {showInsertLogModal && (
         <div className="fixed inset-0 bg-black/60 z-[10001] overflow-y-auto animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => setShowInsertLogModal(false)}>
-          <div className="flex min-h-full items-center justify-center p-4">
-          <div className="bg-white rounded shadow-2xl w-full max-w-md p-6 border-t-4 border-mxOrange animate-slide-up" onClick={(e) => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-2">
-              <h2 className="font-oswald text-xl font-bold uppercase text-navy flex items-center gap-2"><CalendarPlus size={20}/> Insert Missing Flight Log</h2>
+          <div className="flex min-h-full items-center justify-center p-3">
+          <div className="bg-white rounded shadow-2xl w-full max-w-sm p-5 border-t-4 border-mxOrange animate-slide-up" onClick={(e) => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="font-oswald text-xl font-bold uppercase text-navy flex items-center gap-2"><CalendarPlus size={20}/> Insert Flight Log</h2>
               <button onClick={() => setShowInsertLogModal(false)} className="text-gray-400 hover:text-danger"><X size={24}/></button>
             </div>
-            <p className="text-[10px] text-gray-500 mb-4 leading-tight">
-              Slots into the log timeline by date/time. Aircraft totals re-derive from the latest log automatically. <span className="text-danger font-bold">*</span> required &middot; <span className="font-bold">(Opt)</span> optional
-            </p>
-            <form onSubmit={handleInsertFlightLog} className="space-y-4">
+            <form onSubmit={handleInsertFlightLog} className="space-y-3">
               <div>
-                <label className="block text-[10px] font-bold uppercase tracking-widest text-navy mb-1">Aircraft <span className="text-danger">*</span></label>
-                <select value={insertAircraftId} onChange={e => setInsertAircraftId(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-navy outline-none">
+                <label className="text-[10px] font-bold uppercase text-navy">Aircraft <span className="text-danger">*</span></label>
+                <select value={insertAircraftId} onChange={e => setInsertAircraftId(e.target.value)} style={whiteBg} className="w-full border rounded p-2 text-sm mt-1 focus:border-navy outline-none">
                   <option value="">Select aircraft...</option>
                   {allAircraftList.map(ac => (
-                    <option key={ac.id} value={ac.id}>{ac.tail_number} — {ac.aircraft_type} ({ac.engine_type})</option>
+                    <option key={ac.id} value={ac.id}>{ac.tail_number} — {ac.engine_type}</option>
                   ))}
                 </select>
               </div>
 
               <div>
-                <label className="block text-[10px] font-bold uppercase tracking-widest text-navy mb-1">Date &amp; Time of Flight <span className="text-danger">*</span></label>
-                <input type="datetime-local" value={insertOccurredAt} onChange={e => setInsertOccurredAt(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-navy outline-none" />
+                <label className="text-[10px] font-bold uppercase text-navy">Date &amp; Time <span className="text-danger">*</span></label>
+                <input type="datetime-local" value={insertOccurredAt} onChange={e => setInsertOccurredAt(e.target.value)} style={whiteBg} className="w-full border rounded p-2 text-sm mt-1 focus:border-navy outline-none" />
               </div>
 
               {insertAircraft && (
                 <>
-                  <div className="grid grid-cols-2 gap-4 border-b border-gray-100 pb-4">
-                    <div><label className="block text-[10px] font-bold uppercase tracking-widest text-navy mb-1">POD (Depart)</label><input type="text" style={whiteBg} maxLength={4} value={insertPod} onChange={e => setInsertPod(e.target.value.toUpperCase())} className="w-full border border-gray-300 rounded p-3 text-sm uppercase focus:border-navy outline-none text-center font-bold" placeholder="ICAO" /></div>
-                    <div><label className="block text-[10px] font-bold uppercase tracking-widest text-navy mb-1">POA (Arrive)</label><input type="text" style={whiteBg} maxLength={4} value={insertPoa} onChange={e => setInsertPoa(e.target.value.toUpperCase())} className="w-full border border-gray-300 rounded p-3 text-sm uppercase focus:border-navy outline-none text-center font-bold" placeholder="ICAO" /></div>
+                  <p className="text-[10px] text-gray-500 uppercase tracking-widest border-b pb-1 mt-4">Routing</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div><label className="text-[10px] font-bold uppercase text-navy">POD</label><input type="text" style={whiteBg} maxLength={4} value={insertPod} onChange={e => setInsertPod(e.target.value.toUpperCase())} className="w-full border rounded p-2 text-sm mt-1 uppercase focus:border-navy outline-none text-center font-bold" placeholder="ICAO" /></div>
+                    <div><label className="text-[10px] font-bold uppercase text-navy">POA</label><input type="text" style={whiteBg} maxLength={4} value={insertPoa} onChange={e => setInsertPoa(e.target.value.toUpperCase())} className="w-full border rounded p-2 text-sm mt-1 uppercase focus:border-navy outline-none text-center font-bold" placeholder="ICAO" /></div>
                   </div>
 
-                  <div className={`grid ${insertHasAirframeMeter ? 'grid-cols-2' : 'grid-cols-1'} gap-4`}>
+                  <p className="text-[10px] text-gray-500 uppercase tracking-widest border-b pb-1 mt-4">Times</p>
+                  <div className={`grid ${insertHasAirframeMeter ? 'grid-cols-2' : 'grid-cols-1'} gap-2`}>
                     {insertIsTurbine ? (
                       <>
                         {insertHasAirframeMeter && (
                           <div>
-                            <label className="block text-[10px] font-bold uppercase tracking-widest text-navy mb-1">AFTT (Opt)</label>
-                            <input type="number" min="0" step="0.1" style={whiteBg} value={insertAftt} onChange={e => setInsertAftt(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-navy outline-none" />
+                            <label className="text-[10px] font-bold uppercase text-navy">AFTT (Opt)</label>
+                            <input type="number" min="0" step="0.1" style={whiteBg} value={insertAftt} onChange={e => setInsertAftt(e.target.value)} className="w-full border rounded p-2 text-sm mt-1 focus:border-navy outline-none" />
                           </div>
                         )}
                         <div>
-                          <label className="block text-[10px] font-bold uppercase tracking-widest text-navy mb-1">FTT <span className="text-danger">*</span></label>
-                          <input type="number" min="0" step="0.1" required style={whiteBg} value={insertFtt} onChange={e => setInsertFtt(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-navy outline-none" />
+                          <label className="text-[10px] font-bold uppercase text-navy">FTT <span className="text-danger">*</span></label>
+                          <input type="number" min="0" step="0.1" required style={whiteBg} value={insertFtt} onChange={e => setInsertFtt(e.target.value)} className="w-full border rounded p-2 text-sm mt-1 focus:border-navy outline-none" />
                         </div>
                       </>
                     ) : (
                       <>
                         {insertHasAirframeMeter && (
                           <div>
-                            <label className="block text-[10px] font-bold uppercase tracking-widest text-navy mb-1">Hobbs (Opt)</label>
-                            <input type="number" min="0" step="0.1" style={whiteBg} value={insertHobbs} onChange={e => setInsertHobbs(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-navy outline-none" />
+                            <label className="text-[10px] font-bold uppercase text-navy">Hobbs (Opt)</label>
+                            <input type="number" min="0" step="0.1" style={whiteBg} value={insertHobbs} onChange={e => setInsertHobbs(e.target.value)} className="w-full border rounded p-2 text-sm mt-1 focus:border-navy outline-none" />
                           </div>
                         )}
                         <div>
-                          <label className="block text-[10px] font-bold uppercase tracking-widest text-navy mb-1">Tach <span className="text-danger">*</span></label>
-                          <input type="number" min="0" step="0.1" required style={whiteBg} value={insertTach} onChange={e => setInsertTach(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-navy outline-none" />
+                          <label className="text-[10px] font-bold uppercase text-navy">Tach <span className="text-danger">*</span></label>
+                          <input type="number" min="0" step="0.1" required style={whiteBg} value={insertTach} onChange={e => setInsertTach(e.target.value)} className="w-full border rounded p-2 text-sm mt-1 focus:border-navy outline-none" />
                         </div>
                       </>
                     )}
                   </div>
 
-                  <div className={`grid ${insertIsTurbine ? 'grid-cols-2' : 'grid-cols-1'} gap-4`}>
+                  <div className={`grid ${insertIsTurbine ? 'grid-cols-2' : 'grid-cols-1'} gap-2`}>
                     <div>
-                      <label className="block text-[10px] font-bold uppercase tracking-widest text-navy mb-1">Landings <span className="text-danger">*</span></label>
-                      <input type="number" min="0" required style={whiteBg} value={insertLandings} onChange={e => setInsertLandings(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-navy outline-none" placeholder="0 for ferry" />
+                      <label className="text-[10px] font-bold uppercase text-navy">Landings <span className="text-danger">*</span></label>
+                      <input type="number" min="0" required style={whiteBg} value={insertLandings} onChange={e => setInsertLandings(e.target.value)} className="w-full border rounded p-2 text-sm mt-1 focus:border-navy outline-none" placeholder="0 for ferry" />
                     </div>
                     {insertIsTurbine && (
                       <div>
-                        <label className="block text-[10px] font-bold uppercase tracking-widest text-navy mb-1">Engine Cycles <span className="text-danger">*</span></label>
-                        <input type="number" min="0" required style={whiteBg} value={insertCycles} onChange={e => setInsertCycles(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-navy outline-none" placeholder="0" />
+                        <label className="text-[10px] font-bold uppercase text-navy">Cycles <span className="text-danger">*</span></label>
+                        <input type="number" min="0" required style={whiteBg} value={insertCycles} onChange={e => setInsertCycles(e.target.value)} className="w-full border rounded p-2 text-sm mt-1 focus:border-navy outline-none" placeholder="0" />
                       </div>
                     )}
                   </div>
 
                   <div>
-                    <label className="block text-[10px] font-bold uppercase tracking-widest text-navy mb-1">Fuel After Flight (Gallons, Opt)</label>
-                    <input type="number" min="0" step="0.1" style={whiteBg} value={insertFuel} onChange={e => setInsertFuel(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-navy outline-none" placeholder="Gallons" />
+                    <label className="text-[10px] font-bold uppercase text-navy">Fuel (Gallons, Opt)</label>
+                    <input type="number" min="0" step="0.1" style={whiteBg} value={insertFuel} onChange={e => setInsertFuel(e.target.value)} className="w-full border rounded p-2 text-sm mt-1 focus:border-navy outline-none" placeholder="Gallons after flight" />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
+                  <p className="text-[10px] text-gray-500 uppercase tracking-widest border-b pb-1 mt-4">Crew &amp; Notes</p>
+                  <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <label className="block text-[10px] font-bold uppercase tracking-widest text-navy mb-1">Initials <span className="text-danger">*</span></label>
-                      <input type="text" maxLength={3} required style={whiteBg} value={insertInitials} onChange={e => setInsertInitials(e.target.value.toUpperCase())} className="w-full border border-gray-300 rounded p-3 text-sm uppercase focus:border-navy outline-none" placeholder="ABC" />
+                      <label className="text-[10px] font-bold uppercase text-navy">Initials <span className="text-danger">*</span></label>
+                      <input type="text" maxLength={3} required style={whiteBg} value={insertInitials} onChange={e => setInsertInitials(e.target.value.toUpperCase())} className="w-full border rounded p-2 text-sm mt-1 uppercase focus:border-navy outline-none" placeholder="ABC" />
                     </div>
                     <div>
-                      <label className="block text-[10px] font-bold uppercase tracking-widest text-navy mb-1">Reason (Opt)</label>
-                      <select value={insertReason} onChange={e => setInsertReason(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-navy outline-none">
-                        <option value="">Select...</option>
+                      <label className="text-[10px] font-bold uppercase text-navy">Reason (Opt)</label>
+                      <select value={insertReason} onChange={e => setInsertReason(e.target.value)} style={whiteBg} className="w-full border rounded p-2 text-sm mt-1 focus:border-navy outline-none">
+                        <option value="">—</option>
                         <option value="PE">PE</option>
                         <option value="BE">BE</option>
                         <option value="MX">MX</option>
@@ -904,13 +904,15 @@ export default function AdminModals({
                   </div>
 
                   <div>
-                    <label className="block text-[10px] font-bold uppercase tracking-widest text-navy mb-1">Passengers (Opt)</label>
-                    <input type="text" style={whiteBg} value={insertPax} onChange={e => setInsertPax(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-navy outline-none" placeholder="Names or notes..." />
+                    <label className="text-[10px] font-bold uppercase text-navy">Passengers (Opt)</label>
+                    <input type="text" style={whiteBg} value={insertPax} onChange={e => setInsertPax(e.target.value)} className="w-full border rounded p-2 text-sm mt-1 focus:border-navy outline-none" placeholder="Names or notes" />
                   </div>
                 </>
               )}
 
-              <div className="pt-4">
+              <p className="text-[10px] text-gray-400 leading-tight pt-2">Slots into log order by date/time. Aircraft totals re-derive from the latest log.</p>
+
+              <div className="pt-2">
                 <PrimaryButton disabled={isSubmitting || !insertAircraftId}>{isSubmitting ? "Inserting..." : "Insert Flight Log"}</PrimaryButton>
               </div>
             </form>
