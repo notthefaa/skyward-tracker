@@ -6,7 +6,7 @@ import { authFetch } from "@/lib/authFetch";
 import { useFleetData, useRealtimeSync, useGroundedStatus, useAircraftRole, usePullToRefresh } from "@/hooks";
 import { useModalScrollLock } from "@/hooks/useModalScrollLock";
 import { NETWORK_TIMEOUT_MS } from "@/lib/constants";
-import { swrKeys } from "@/lib/swrKeys";
+import { swrKeys, matchesAircraft } from "@/lib/swrKeys";
 import useSWR from "swr";
 import { HOWARD_STALE_MS } from "@/lib/howard/quickPrompts";
 import { useToast } from "@/components/ToastProvider";
@@ -418,6 +418,25 @@ export default function AppShell({ session }: AppShellProps) {
   useEffect(() => {
     if (activeTail) localStorage.setItem('aft_active_tail', activeTail);
   }, [activeTail]);
+
+  // ─── Force revalidation of every SWR key for the newly-active aircraft ───
+  // Tabs cache per-aircraft data under aircraftId-suffixed keys. If a fetch
+  // returned empty due to a transient error (auth refresh, network blip)
+  // and SWR cached that empty result as "successful," switching back to
+  // the aircraft would keep showing nothing until the dedupe window
+  // expired AND something triggered a refetch. Forcing a revalidate on
+  // every tail switch makes "switch away and back" a reliable refresh
+  // gesture — same effect as the close-and-restart workaround the user
+  // would otherwise reach for. Skips if the tail is unchanged so this
+  // doesn't fire on unrelated re-renders.
+  const lastRevalidatedTailRef = useRef<string>("");
+  useEffect(() => {
+    if (!activeTail || activeTail === lastRevalidatedTailRef.current) return;
+    const ac = allAircraftList.find(a => a.tail_number === activeTail);
+    if (!ac) return;
+    lastRevalidatedTailRef.current = activeTail;
+    globalMutate(matchesAircraft(ac.id), undefined, { revalidate: true });
+  }, [activeTail, allAircraftList, globalMutate]);
 
   // ─── Persist active tab ───
   useEffect(() => {
