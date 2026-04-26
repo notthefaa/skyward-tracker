@@ -356,6 +356,11 @@ export default function AppShell({ session }: AppShellProps) {
   });
 
   // ─── Disable pull-to-refresh when any modal is open ───
+  // The observer fires on every DOM mutation in the document (Howard
+  // streaming tokens, scroll-driven list renders, etc.), so the
+  // `querySelectorAll` + setState is coalesced into one rAF tick.
+  // Without the coalesce this runs hundreds of times per second on a
+  // busy page and freezes the main thread on slower devices.
   useEffect(() => {
     const anyPageModalOpen = showAdminMenu || showLogItModal || showSettingsModal || expandedNav !== null || showAircraftModal || showTailDropdown;
     if (anyPageModalOpen) {
@@ -363,18 +368,32 @@ export default function AppShell({ session }: AppShellProps) {
       return;
     }
 
+    let lastEnabled: boolean | null = null;
     const checkForChildModals = () => {
-      const fixedElements = document.querySelectorAll('[class*="fixed"][class*="inset-0"]');
-      const hasChildModal = fixedElements.length > 0;
-      setPullEnabled(!hasChildModal);
+      const hasChildModal = document.querySelector('[class*="fixed"][class*="inset-0"]') !== null;
+      const enabled = !hasChildModal;
+      if (enabled !== lastEnabled) {
+        lastEnabled = enabled;
+        setPullEnabled(enabled);
+      }
     };
 
     checkForChildModals();
 
-    const observer = new MutationObserver(checkForChildModals);
+    let rafId: number | null = null;
+    const observer = new MutationObserver(() => {
+      if (rafId !== null) return;
+      rafId = requestAnimationFrame(() => {
+        rafId = null;
+        checkForChildModals();
+      });
+    });
     observer.observe(document.body, { childList: true, subtree: true });
 
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+      if (rafId !== null) cancelAnimationFrame(rafId);
+    };
   }, [showAdminMenu, showLogItModal, showSettingsModal, expandedNav, showAircraftModal, showTailDropdown, setPullEnabled]);
 
   // ─── Initial Data Fetch ───
@@ -408,18 +427,22 @@ export default function AppShell({ session }: AppShellProps) {
   // ─── Enrich active aircraft metrics + refresh status when tail changes ───
   // activeTab is in the dep list so in-app navigation re-runs
   // checkGroundedStatus — otherwise the header status dot goes stale
-  // whenever MX/squawk mutations happen in another tab but the user
-  // never changes tail. enrichSingleAircraft is guarded and fetchUnreadNotes
-  // is cheap, so re-running them on tab switch is harmless and keeps the
-  // unread-notes count fresh too.
+  // whenever MX/squawk mutations happen in another browser tab (realtime
+  // skips events from the same user_id, so a write from a duplicate tab
+  // wouldn't otherwise propagate). Throttled per-tail so a flurry of tab
+  // switches in quick succession doesn't fire 6 queries (4 airworthiness +
+  // 2 unread-notes) every single time. 30 s feels fresh enough for
+  // cross-tab cases without making in-app navigation feel chunky.
+  const lastStatusCheckRef = useRef<Record<string, number>>({});
   useEffect(() => {
-    if (activeTail && allAircraftList.length > 0 && session) {
-      const ac = allAircraftList.find(a => a.tail_number === activeTail);
-      if (ac) {
-        if (ac.burnRate === 0 && ac.confidenceScore === 0) {
-          enrichSingleAircraft(ac.id);
-        }
-      }
+    if (!activeTail || allAircraftList.length === 0 || !session) return;
+    const ac = allAircraftList.find(a => a.tail_number === activeTail);
+    if (ac && ac.burnRate === 0 && ac.confidenceScore === 0) {
+      enrichSingleAircraft(ac.id);
+    }
+    const last = lastStatusCheckRef.current[activeTail] || 0;
+    if (Date.now() - last > 30_000) {
+      lastStatusCheckRef.current[activeTail] = Date.now();
       checkGroundedStatus(activeTail);
       fetchUnreadNotes(activeTail, session.user.id);
     }

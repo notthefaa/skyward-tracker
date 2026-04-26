@@ -120,7 +120,6 @@ export default function SummaryTab({
       if (activeMx && activeMx.length > 0) return { type: 'maintenance' as const, ...activeMx[0] };
       return null;
     },
-    { refreshInterval: 60000 }
   );
 
   const { data: crewMembers = [], mutate: mutateCrew } = useSWR(

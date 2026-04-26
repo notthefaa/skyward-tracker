@@ -3,8 +3,18 @@
 import type { Cache, State } from "swr";
 
 const CACHE_KEY = "aft_swr_cache";
-const CACHE_VERSION = 1;
+const CACHE_VERSION = 2;
 const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+// Cap the persisted cache so the synchronous hydrate on page load and
+// the beforeunload serialize don't grow unbounded across weeks of use.
+// 150 entries comfortably covers a session's working set (active aircraft +
+// fleet summary + a handful of tab queries) without producing a multi-MB
+// JSON blob that stalls boot.
+const MAX_PERSIST_ENTRIES = 150;
+// Skip persisting any single entry larger than this — large objects
+// (full flight-log dumps, big maintenance lists) cost more to serialize
+// than they save by being warm on next load.
+const MAX_PERSIST_VALUE_BYTES = 50 * 1024;
 
 interface CacheEntry {
   v: number;    // version
@@ -15,7 +25,13 @@ interface CacheEntry {
 /**
  * SWR cache provider backed by localStorage.
  * On init, hydrates from localStorage (discarding stale entries).
- * On beforeunload, persists the in-memory map back to localStorage.
+ * On pagehide (mobile-safe; beforeunload doesn't reliably fire on iOS),
+ * persists a bounded slice of the in-memory map.
+ *
+ * The persisted slice is capped at MAX_PERSIST_ENTRIES (the most-recently
+ * inserted keys win) and skips any single value larger than
+ * MAX_PERSIST_VALUE_BYTES, so the sync JSON.parse on the next load stays
+ * fast even after weeks of usage.
  */
 export function localStorageCacheProvider(parentCache: Readonly<Cache<any>>): Cache<any> {
   let seed: [string, State<any, any>][] = [];
@@ -39,19 +55,37 @@ export function localStorageCacheProvider(parentCache: Readonly<Cache<any>>): Ca
 
   const map = new Map<string, State<any, any>>(seed);
 
-  if (typeof window !== "undefined") {
-    window.addEventListener("beforeunload", () => {
-      try {
-        const entry: CacheEntry = {
-          v: CACHE_VERSION,
-          ts: Date.now(),
-          data: Array.from(map.entries()),
-        };
-        localStorage.setItem(CACHE_KEY, JSON.stringify(entry));
-      } catch {
-        // localStorage full or unavailable — silently skip
+  const persist = () => {
+    try {
+      // Map iterates in insertion order — the most-recently-set keys
+      // are at the tail, which is what we want to keep.
+      const allEntries = Array.from(map.entries());
+      const tail = allEntries.slice(-MAX_PERSIST_ENTRIES);
+      const data: [string, State<any, any>][] = [];
+      for (const [k, v] of tail) {
+        try {
+          const json = JSON.stringify(v);
+          if (json.length > MAX_PERSIST_VALUE_BYTES) continue;
+          data.push([k, v]);
+        } catch {
+          // Non-serializable value (function, circular ref) — skip.
+        }
       }
-    });
+      const entry: CacheEntry = {
+        v: CACHE_VERSION,
+        ts: Date.now(),
+        data,
+      };
+      localStorage.setItem(CACHE_KEY, JSON.stringify(entry));
+    } catch {
+      // localStorage full or unavailable — silently skip
+    }
+  };
+
+  if (typeof window !== "undefined") {
+    // pagehide fires on iOS/Safari when the tab is backgrounded or
+    // navigated away; beforeunload doesn't. Both paths converge here.
+    window.addEventListener("pagehide", persist);
   }
 
   return {
