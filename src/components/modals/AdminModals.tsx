@@ -844,12 +844,12 @@ export default function AdminModals({
       {showInsertLogModal && (
         <div className="fixed inset-0 bg-black/60 z-[10001] overflow-y-auto animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => setShowInsertLogModal(false)}>
           <div className="flex min-h-full items-center justify-center p-3">
-          <div className="bg-white rounded shadow-2xl w-full max-w-sm p-5 border-t-4 border-mxOrange animate-slide-up" onClick={(e) => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-4">
+          <div className="bg-white rounded shadow-2xl w-full max-w-sm border-t-4 border-mxOrange max-h-full overflow-y-auto modal-scroll flex flex-col animate-slide-up" onClick={(e) => e.stopPropagation()}>
+            <div className="sticky top-0 bg-white border-b border-gray-200 px-5 py-4 flex justify-between items-center z-10">
               <h2 className="font-oswald text-xl font-bold uppercase text-navy flex items-center gap-2"><CalendarPlus size={20}/> Insert Flight Log</h2>
-              <button onClick={() => setShowInsertLogModal(false)} className="text-gray-400 hover:text-danger"><X size={24}/></button>
+              <button onClick={() => setShowInsertLogModal(false)} className="text-gray-400 hover:text-danger" aria-label="Close"><X size={24}/></button>
             </div>
-            <form onSubmit={handleInsertFlightLog} className="space-y-3">
+            <form onSubmit={handleInsertFlightLog} className="p-5 space-y-3">
               <div>
                 <label className="text-[10px] font-bold uppercase text-navy">Aircraft <span className="text-danger">*</span></label>
                 <select value={insertAircraftId} onChange={e => setInsertAircraftId(e.target.value)} style={whiteBg} className="w-full border rounded p-2 text-sm mt-1 focus:border-navy outline-none">
