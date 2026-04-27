@@ -72,8 +72,14 @@ export async function POST(req: Request) {
         }),
       });
 
-      // Update the database to clear the manual trigger button
-      await supabaseAdmin.from('aft_maintenance_items').update({ mx_schedule_sent: true }).eq('id', mxItem.id);
+      // Update the database to clear the manual trigger button.
+      // Scope the update to the verified aircraft so a caller can't
+      // flip mx_schedule_sent on another aircraft's item by id.
+      await supabaseAdmin
+        .from('aft_maintenance_items')
+        .update({ mx_schedule_sent: true })
+        .eq('id', mxItem.id)
+        .eq('aircraft_id', aircraft.id);
     }
 
     return NextResponse.json({ success: true });

@@ -10,6 +10,7 @@ import { useConfirm } from "@/components/ConfirmProvider";
 import { useModalScrollLock } from "@/hooks/useModalScrollLock";
 import { INPUT_WHITE_BG } from "@/lib/styles";
 import { swrKeys } from "@/lib/swrKeys";
+import { toLocalYmd } from "@/lib/dateFormat";
 import type { AircraftWithMetrics, AircraftEquipment, EquipmentCategory, AircraftRole } from "@/lib/types";
 import SectionSelector from "@/components/shell/SectionSelector";
 import { MORE_SELECTOR_ITEMS, emitMoreNavigate } from "@/components/shell/moreNav";
@@ -269,7 +270,7 @@ export default function EquipmentTab({ aircraft, role, aircraftRole }: Props) {
         body: JSON.stringify({
           equipmentId: e.id,
           aircraftId: aircraft.id,
-          equipmentData: { removed_at: new Date().toISOString().split('T')[0] },
+          equipmentData: { removed_at: toLocalYmd() },
         }),
       });
       if (!res.ok) throw new Error("Couldn't mark it removed");

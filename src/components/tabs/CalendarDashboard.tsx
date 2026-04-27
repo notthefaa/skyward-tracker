@@ -4,6 +4,7 @@ import { swrKeys } from "@/lib/swrKeys";
 import type { AircraftWithMetrics, Reservation } from "@/lib/types";
 import useSWR from "swr";
 import { ChevronDown } from "lucide-react";
+import { toLocalYmd } from "@/lib/dateFormat";
 
 const WINDOW = 30;
 
@@ -62,7 +63,7 @@ function countUniqueDays(reservations: Reservation[], startDate: Date, endDate: 
     const rStart = new Date(r.start_time); const rEnd = new Date(r.end_time);
     const cursor = new Date(Math.max(rStart.getTime(), startDate.getTime())); cursor.setHours(0,0,0,0);
     const limit = new Date(Math.min(rEnd.getTime(), endDate.getTime()));
-    while (cursor <= limit) { days.add(cursor.toISOString().split('T')[0]); cursor.setDate(cursor.getDate() + 1); }
+    while (cursor <= limit) { days.add(toLocalYmd(cursor)); cursor.setDate(cursor.getDate() + 1); }
   }
   return days.size;
 }
@@ -145,12 +146,12 @@ export default function CalendarDashboard({ aircraft, session }: CalendarDashboa
   for (const r of reservations) {
     const cursor = new Date(Math.max(new Date(r.start_time).getTime(), now.getTime())); cursor.setHours(0,0,0,0);
     const limit = new Date(Math.min(new Date(r.end_time).getTime(), windowEnd.getTime()));
-    while (cursor <= limit) { unavailableDays.add(cursor.toISOString().split('T')[0]); cursor.setDate(cursor.getDate() + 1); }
+    while (cursor <= limit) { unavailableDays.add(toLocalYmd(cursor)); cursor.setDate(cursor.getDate() + 1); }
   }
   for (const m of mxBlocks) {
     const cursor = new Date(Math.max(new Date(m.start).getTime(), now.getTime())); cursor.setHours(0,0,0,0);
     const limit = new Date(Math.min(new Date(m.end).getTime(), windowEnd.getTime()));
-    while (cursor <= limit) { unavailableDays.add(cursor.toISOString().split('T')[0]); cursor.setDate(cursor.getDate() + 1); }
+    while (cursor <= limit) { unavailableDays.add(toLocalYmd(cursor)); cursor.setDate(cursor.getDate() + 1); }
   }
   const availableDays = WINDOW - unavailableDays.size;
   const availColor = availableDays <= 5 ? '#CE3732' : availableDays <= 15 ? '#F08B46' : '#3AB0FF';

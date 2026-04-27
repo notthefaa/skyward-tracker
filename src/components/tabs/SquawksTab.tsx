@@ -14,6 +14,7 @@ import { useToast } from "@/components/ToastProvider";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { useModalScrollLock } from "@/hooks/useModalScrollLock";
 import { ModalPortal } from "@/components/ModalPortal";
+import { toLocalYmd } from "@/lib/dateFormat";
 
 const whiteBg = { backgroundColor: '#ffffff' } as const;
 
@@ -25,7 +26,7 @@ export default function SquawksTab({
   const { data: squawks = [], mutate } = useSWR(
     aircraft ? swrKeys.squawks(aircraft.id) : null,
     async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('aft_squawks').select('*').eq('aircraft_id', aircraft!.id)
         .is('deleted_at', null)
         // occurred_at first so offline-queued squawks (stamped with
@@ -33,15 +34,17 @@ export default function SquawksTab({
         // correctly; created_at as tiebreaker.
         .order('occurred_at', { ascending: false })
         .order('created_at', { ascending: false });
+      if (error) throw error;
 
       const resolved = (data || []).filter((s: any) => s.resolved_by_event_id);
       if (resolved.length > 0) {
         const eventIds = resolved.map((s: any) => s.resolved_by_event_id);
-        const { data: events } = await supabase
+        const { data: events, error: evErr } = await supabase
           .from('aft_maintenance_events')
           .select('id, completed_at, confirmed_date')
           .in('id', eventIds);
-        
+        if (evErr) throw evErr;
+
         if (events) {
           const eventMap: Record<string, any> = {};
           for (const ev of events) { eventMap[ev.id] = ev; }
@@ -217,7 +220,7 @@ export default function SquawksTab({
       let signatureData = null; let sigDate = null;
       if (isDeferred && sigCanvas.current && !sigCanvas.current.isEmpty()) {
         signatureData = sigCanvas.current.getTrimmedCanvas().toDataURL('image/png');
-        sigDate = new Date().toISOString().split('T')[0];
+        sigDate = toLocalYmd();
       }
 
       const squawkData: any = {

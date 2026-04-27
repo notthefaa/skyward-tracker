@@ -5,6 +5,7 @@ import { authFetch } from "@/lib/authFetch";
 import { supabase } from "@/lib/supabase";
 import { Wrench, AlertTriangle, ChevronDown, Camera, Loader2 } from "lucide-react";
 import { PrimaryButton } from "@/components/AppButtons";
+import { toLocalYmd } from "@/lib/dateFormat";
 import { INPUT_WHITE_BG } from "./shared";
 import type { ServiceEventChildProps } from "./shared";
 
@@ -18,7 +19,7 @@ export default function ServiceEventComplete({
   isSubmitting, setIsSubmitting, onNavigate, onRefresh, showSuccess, showError, showWarning,
 }: ServiceEventCompleteProps) {
   const isTurbine = aircraft?.engine_type === 'Turbine';
-  const today = new Date().toISOString().split('T')[0];
+  const today = toLocalYmd();
   const currentTime = aircraft?.total_engine_time?.toFixed(1) || "";
 
   const currentHobbs = aircraft?.total_airframe_time?.toFixed(1) || "";

@@ -604,23 +604,29 @@ const handlers: Record<string, ToolHandler> = {
   },
 
   propose_mx_schedule: async (params, sb, aircraftId, ctx) => {
-    // Validate mx_item_ids / squawk_ids belong to this aircraft.
+    // Validate mx_item_ids / squawk_ids belong to this aircraft AND
+    // aren't soft-deleted. The executor filters deleted_at at run-time
+    // and silently drops missing rows; failing fast here means Howard
+    // surfaces the stale id back to the user instead of building a
+    // proposal whose contents quietly shrink on Confirm.
     if (Array.isArray(params.mx_item_ids) && params.mx_item_ids.length > 0) {
       const { data } = await sb.from('aft_maintenance_items')
         .select('id, aircraft_id')
-        .in('id', params.mx_item_ids);
+        .in('id', params.mx_item_ids)
+        .is('deleted_at', null);
       const bad = (data || []).find((r: any) => r.aircraft_id !== aircraftId);
       if (bad || (data || []).length !== params.mx_item_ids.length) {
-        return { error: 'One or more MX items do not belong to this aircraft.' };
+        return { error: 'One or more MX items do not belong to this aircraft or have been deleted.' };
       }
     }
     if (Array.isArray(params.squawk_ids) && params.squawk_ids.length > 0) {
       const { data } = await sb.from('aft_squawks')
         .select('id, aircraft_id')
-        .in('id', params.squawk_ids);
+        .in('id', params.squawk_ids)
+        .is('deleted_at', null);
       const bad = (data || []).find((r: any) => r.aircraft_id !== aircraftId);
       if (bad || (data || []).length !== params.squawk_ids.length) {
-        return { error: 'One or more squawks do not belong to this aircraft.' };
+        return { error: 'One or more squawks do not belong to this aircraft or have been deleted.' };
       }
     }
     return makeProposal(sb, ctx, 'mx_schedule', params);
@@ -956,22 +962,41 @@ export async function executeTool(
   const handler = handlers[name];
   if (!handler) return JSON.stringify({ error: `Unknown tool: ${name}` });
 
-  // Global tools don't need a specific aircraft; invoke directly.
-  if (GLOBAL_TOOLS.has(name)) {
-    const result = await handler(params, supabaseAdmin, '', ctx);
-    return JSON.stringify(capResultSize(result, name));
+  let result: any;
+  try {
+    if (GLOBAL_TOOLS.has(name)) {
+      result = await handler(params, supabaseAdmin, '', ctx);
+    } else {
+      // Aircraft-scoped tool: resolve `tail` to an aircraft_id the user
+      // can read, then run the handler with that.
+      const resolved = await resolveAircraftFromTail(supabaseAdmin, ctx.userId, params?.tail);
+      if (!resolved.ok) return JSON.stringify({ error: resolved.error });
+
+      const enrichedCtx: ToolContext = {
+        ...ctx,
+        aircraftId: resolved.aircraftId,
+        aircraftTail: resolved.tail,
+      };
+      result = await handler(params, supabaseAdmin, resolved.aircraftId, enrichedCtx);
+    }
+  } catch (e: any) {
+    // A handler that throws (vs. returning { error }) is unexpected — the
+    // pattern is to catch DB errors and return them as a string. Log with
+    // the tool name so this shows up in monitoring instead of crashing
+    // the whole stream as a generic 500.
+    logEvent('howard_tool_threw', { tool: name, message: e?.message ?? String(e) });
+    return JSON.stringify({ error: 'Tool failed unexpectedly. Try again or rephrase the request.' });
   }
 
-  // Aircraft-scoped tool: resolve `tail` param to an aircraft_id the
-  // current user is allowed to read, then run the handler with that.
-  const resolved = await resolveAircraftFromTail(supabaseAdmin, ctx.userId, params?.tail);
-  if (!resolved.ok) return JSON.stringify({ error: resolved.error });
+  // Tool returned a normal value but signaled an error via `{ error }`.
+  // Emit a breadcrumb so DB outages aren't masked as "empty result" in
+  // Howard's reply — the tool name is what makes the alert actionable.
+  if (result && typeof result === 'object' && 'error' in result && result.error) {
+    logEvent('howard_tool_error_returned', {
+      tool: name,
+      message: typeof result.error === 'string' ? result.error : 'unknown',
+    });
+  }
 
-  const enrichedCtx: ToolContext = {
-    ...ctx,
-    aircraftId: resolved.aircraftId,
-    aircraftTail: resolved.tail,
-  };
-  const result = await handler(params, supabaseAdmin, resolved.aircraftId, enrichedCtx);
   return JSON.stringify(capResultSize(result, name));
 }

@@ -130,3 +130,21 @@ export function zonedDateEndAsUtc(dateOnly: string, tz: string): Date | null {
   if (!start) return null;
   return new Date(start.getTime() + 86_400_000 - 1);
 }
+
+/**
+ * Format a Date as YYYY-MM-DD using its LOCAL components.
+ * `Date.prototype.toISOString().split('T')[0]` uses the UTC date, which
+ * shifts by a day for evening times in negative-UTC zones and morning
+ * times in positive-UTC zones — so a pilot in PDT signing a deferral
+ * at 19:00 local lands a UTC date string of *the next day*.
+ *
+ * Use this any time you're capturing "today" or a user-visible calendar
+ * date on the client. Server paths should use `todayInZone()` from
+ * `pilotTime.ts` with the aircraft's stored `time_zone` instead.
+ */
+export function toLocalYmd(d: Date = new Date()): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}

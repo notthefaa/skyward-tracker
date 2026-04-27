@@ -67,7 +67,8 @@ export default function MaintenanceTab({
   const { data: mxItems = [], mutate } = useSWR(
     aircraft ? swrKeys.mxItems(aircraft.id) : null,
     async () => {
-      const { data } = await supabase.from('aft_maintenance_items').select('*').eq('aircraft_id', aircraft!.id).is('deleted_at', null).order('due_date').order('due_time');
+      const { data, error } = await supabase.from('aft_maintenance_items').select('*').eq('aircraft_id', aircraft!.id).is('deleted_at', null).order('due_date').order('due_time');
+      if (error) throw error;
       return (data || []) as any[];
     }
   );
@@ -75,7 +76,8 @@ export default function MaintenanceTab({
   const { data: activeEvents = [], mutate: mutateEvents } = useSWR(
     aircraft ? swrKeys.mxEvents(aircraft.id) : null,
     async () => {
-      const { data } = await supabase.from('aft_maintenance_events').select('*').eq('aircraft_id', aircraft!.id).is('deleted_at', null).in('status', ['draft', 'scheduling', 'confirmed', 'in_progress', 'ready_for_pickup']).order('created_at', { ascending: false });
+      const { data, error } = await supabase.from('aft_maintenance_events').select('*').eq('aircraft_id', aircraft!.id).is('deleted_at', null).in('status', ['draft', 'scheduling', 'confirmed', 'in_progress', 'ready_for_pickup']).order('created_at', { ascending: false });
+      if (error) throw error;
       return data || [];
     }
   );
@@ -945,7 +947,7 @@ function ServiceEventsList({
   const { data: pastEvents = [] } = useSWR(
     aircraft ? ['mx-events-past', aircraft.id] : null,
     async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('aft_maintenance_events')
         .select('*')
         .eq('aircraft_id', aircraft!.id)
@@ -953,6 +955,7 @@ function ServiceEventsList({
         .in('status', ['complete', 'cancelled'])
         .order('created_at', { ascending: false })
         .limit(20);
+      if (error) throw error;
       return data || [];
     },
   );

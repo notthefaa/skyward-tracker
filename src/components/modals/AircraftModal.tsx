@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useModalScrollLock } from "@/hooks/useModalScrollLock";
+import { useEscapeKey } from "@/hooks/useEscapeKey";
 import { supabase } from "@/lib/supabase";
 import { authFetch } from "@/lib/authFetch";
 import { useToast } from "@/components/ToastProvider";
@@ -28,6 +29,7 @@ export default function AircraftModal({
   onSuccess: (newTail: string) => void
 }) {
   useModalScrollLock();
+  useEscapeKey(onClose);
   const { showError, showWarning } = useToast();
   const [newTail, setNewTail] = useState("");
   const [newSerial, setNewSerial] = useState("");

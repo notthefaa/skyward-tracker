@@ -9,33 +9,64 @@
 //     method: 'POST',
 //     body: JSON.stringify({ email, role, aircraftIds })
 //   });
+//
+// 401 handling
+// ------------
+// If the server returns 401 (token expired or invalid) we try a
+// single token refresh + retry before bubbling the response up.
+// On a second 401 we dispatch the `authfetch:unauthorized` window
+// event so AppShell can route the user back to sign-in instead of
+// every caller having to invent its own re-auth UX.
 // =============================================================
 
 import { supabase } from './supabase';
 
-/**
- * Performs a fetch request with the current user's Supabase access token
- * automatically attached as `Authorization: Bearer <token>`.
- *
- * Accepts the same arguments as the native fetch() function.
- * Content-Type defaults to application/json if not specified.
- */
+const UNAUTHORIZED_EVENT = 'authfetch:unauthorized';
+
+async function buildHeaders(options: RequestInit): Promise<Headers> {
+  const { data: { session } } = await supabase.auth.getSession();
+  const headers = new Headers(options.headers);
+  if (session?.access_token) {
+    headers.set('Authorization', `Bearer ${session.access_token}`);
+  }
+  if (!headers.has('Content-Type') && options.body) {
+    headers.set('Content-Type', 'application/json');
+  }
+  return headers;
+}
+
 export async function authFetch(
   url: string,
   options: RequestInit = {}
 ): Promise<Response> {
-  const { data: { session } } = await supabase.auth.getSession();
+  const headers = await buildHeaders(options);
+  const res = await fetch(url, { ...options, headers });
 
-  const headers = new Headers(options.headers);
+  if (res.status !== 401) return res;
 
-  if (session?.access_token) {
-    headers.set('Authorization', `Bearer ${session.access_token}`);
+  // First 401: try to refresh the session, then retry once. A live
+  // session whose access token just expired is the most common cause
+  // and refreshing usually succeeds without user interaction.
+  const { data: refreshed } = await supabase.auth.refreshSession();
+  if (!refreshed?.session) {
+    notifyUnauthorized();
+    return res;
   }
 
-  // Default to JSON content type for POST/PUT/PATCH/DELETE
-  if (!headers.has('Content-Type') && options.body) {
-    headers.set('Content-Type', 'application/json');
-  }
+  const retryHeaders = await buildHeaders(options);
+  const retried = await fetch(url, { ...options, headers: retryHeaders });
+  if (retried.status === 401) notifyUnauthorized();
+  return retried;
+}
 
-  return fetch(url, { ...options, headers });
+function notifyUnauthorized() {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent(UNAUTHORIZED_EVENT));
+}
+
+/** Subscribe to 401-after-refresh events (typically AppShell). */
+export function onAuthFetchUnauthorized(handler: () => void): () => void {
+  if (typeof window === 'undefined') return () => {};
+  window.addEventListener(UNAUTHORIZED_EVENT, handler);
+  return () => window.removeEventListener(UNAUTHORIZED_EVENT, handler);
 }

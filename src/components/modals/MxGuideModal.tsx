@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useModalScrollLock } from "@/hooks/useModalScrollLock";
+import { useEscapeKey } from "@/hooks/useEscapeKey";
 import { 
   X, Wrench, Clock, Calendar, Send, CheckCircle, Bell, TrendingUp, 
   ExternalLink, MessageSquare, Sparkles, Plane, XCircle, ChevronRight, 
@@ -40,6 +41,7 @@ const SECTIONS: { id: GuideSection; title: string; icon: React.ReactNode; color:
 export default function MxGuideModal({ show, onClose }: MxGuideModalProps) {
   const [activeSection, setActiveSection] = useState<GuideSection | null>(null);
   useModalScrollLock(show);
+  useEscapeKey(onClose, show);
 
   if (!show) return null;
 

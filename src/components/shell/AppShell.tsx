@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/lib/supabase";
-import { authFetch } from "@/lib/authFetch";
+import { authFetch, onAuthFetchUnauthorized } from "@/lib/authFetch";
 import { useFleetData, useRealtimeSync, useGroundedStatus, useAircraftRole, usePullToRefresh } from "@/hooks";
 import { useModalScrollLock } from "@/hooks/useModalScrollLock";
 import { NETWORK_TIMEOUT_MS } from "@/lib/constants";
@@ -261,6 +261,18 @@ export default function AppShell({ session }: AppShellProps) {
     [session, refreshForAircraft]
   );
   useRealtimeSync(session, boundRefresh, globalMutate);
+
+  // ─── Centralized 401 handler ───
+  // authFetch dispatches `authfetch:unauthorized` after a refresh-and-
+  // retry still returns 401. That means the session is genuinely dead;
+  // sign out locally so the user lands on the auth screen instead of
+  // staring at a tab whose mutations all silently fail.
+  useEffect(() => {
+    return onAuthFetchUnauthorized(() => {
+      showError('Your session expired. Sign back in to continue.');
+      supabase.auth.signOut({ scope: 'local' });
+    });
+  }, [showError]);
 
   // ─── Howard resets on fresh sign-in ───
   // Every new auth SIGNED_IN event (distinct from INITIAL_SESSION,

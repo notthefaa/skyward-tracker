@@ -12,23 +12,13 @@ import CalendarDashboard from "@/components/tabs/CalendarDashboard";
 import { useToast } from "@/components/ToastProvider";
 import { useModalScrollLock } from "@/hooks/useModalScrollLock";
 import { ModalPortal } from "@/components/ModalPortal";
+import { toLocalYmd } from "@/lib/dateFormat";
 
 type CalendarView = 'month' | 'week' | 'day';
 
 const wb: React.CSSProperties = { backgroundColor: '#ffffff' };
 
 const HARD_RECUR_CAP = 100;
-
-/** Format a Date as YYYY-MM-DD using its LOCAL components.
- *  Date.prototype.toISOString().split('T')[0] uses the UTC date, which shifts
- *  by a day for evening reservations in negative-UTC zones and for any time
- *  in positive-UTC zones. This helper is the safe replacement. */
-const toLocalYmd = (d: Date): string => {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-};
 
 interface RecurrenceSpec {
   type: 'none' | 'weekly' | 'biweekly' | 'custom';

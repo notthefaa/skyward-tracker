@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { authFetch } from "@/lib/authFetch";
 import { useToast } from "@/components/ToastProvider";
 import { useModalScrollLock } from "@/hooks/useModalScrollLock";
+import { useEscapeKey } from "@/hooks/useEscapeKey";
 import { NOTIFICATION_TYPES, FAA_RATINGS } from "@/lib/types";
 import type { NotificationType } from "@/lib/types";
 import { friendlyPgError } from "@/lib/pgErrors";
@@ -16,6 +17,7 @@ export default function SettingsModal({
   show: boolean, onClose: () => void, session: any
 }) {
   useModalScrollLock(show);
+  useEscapeKey(onClose, show);
   const { showError, showSuccess } = useToast();
   const [prefs, setPrefs] = useState<Record<NotificationType, boolean>>({} as any);
   const [isLoadingPrefs, setIsLoadingPrefs] = useState(true);

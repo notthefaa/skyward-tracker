@@ -1,6 +1,7 @@
 "use client";
 
 import { Calendar, CalendarCheck, CalendarSearch } from "lucide-react";
+import { toLocalYmd } from "@/lib/dateFormat";
 import { INPUT_WHITE_BG } from "./shared";
 
 interface DateProposalSectionProps {
@@ -46,7 +47,7 @@ export default function DateProposalSection({ wantsToPropose, setWantsToPropose,
           <input
             type="date"
             value={proposedDate}
-            min={new Date().toISOString().slice(0, 10)}
+            min={toLocalYmd()}
             onChange={e => setProposedDate(e.target.value)}
             style={INPUT_WHITE_BG}
             className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none"

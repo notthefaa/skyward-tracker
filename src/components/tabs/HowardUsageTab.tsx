@@ -38,7 +38,10 @@ function formatCost(usd: number): string {
   return '$' + usd.toFixed(2);
 }
 
-/** Build a 30-day bar-chart series, filling in missing days with zero. */
+/** Build a 30-day bar-chart series, filling in missing days with zero.
+ *  The usage API buckets by UTC day (created_at.slice(0,10)), so the
+ *  axis label has to be UTC too — otherwise the "4/27" bar over-counts
+ *  for east-of-UTC viewers and under-counts for west-of-UTC viewers. */
 function buildDaySeries(perDay: UsageResponse['perDay'], days: number) {
   const map = new Map(perDay.map(d => [d.day, d]));
   const out: { day: string; label: string; messages: number; cost_usd: number }[] = [];
@@ -48,7 +51,7 @@ function buildDaySeries(perDay: UsageResponse['perDay'], days: number) {
     const item = map.get(key);
     out.push({
       day: key,
-      label: d.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' }),
+      label: d.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', timeZone: 'UTC' }),
       messages: item?.messages ?? 0,
       cost_usd: item?.cost_usd ?? 0,
     });

@@ -70,13 +70,10 @@ export default function MxTemplatePickerModal({ aircraft, show, onClose, onRefre
   const [duplicateNames, setDuplicateNames] = useState<string[]>([]);
   const [duplicateAction, setDuplicateAction] = useState<'pending' | 'skip' | 'add'>('pending');
 
-  // Lock body scroll when modal is open
-  useEffect(() => {
-    if (show) {
-      document.body.style.overflow = 'hidden';
-      return () => { document.body.style.overflow = ''; };
-    }
-  }, [show]);
+  // Body scroll lock is provided by useModalScrollLock(show) above —
+  // the duplicate imperative block here used to compete with the hook
+  // and could leave body overflow stuck on if the cleanup ordering
+  // resolved against us.
 
   // Fetch existing item names when modal opens
   useEffect(() => {

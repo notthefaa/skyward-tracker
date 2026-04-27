@@ -245,18 +245,20 @@ export default function ChecksTab({ aircraft, session, role, userInitials }: Pro
   const { data: vorLatest } = useSWR<VorCheck | null>(
     aircraft ? swrKeys.vorLatest(aircraft.id) : null,
     async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('aft_vor_checks').select('*').eq('aircraft_id', aircraft!.id).is('deleted_at', null)
         .order('occurred_at', { ascending: false }).order('created_at', { ascending: false }).limit(1);
+      if (error) throw error;
       return (data?.[0] as VorCheck | undefined) || null;
     },
   );
   const { data: tirePage1 } = useSWR(
     aircraft ? swrKeys.tire(aircraft.id, 1) : null,
     async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('aft_tire_checks').select('*').eq('aircraft_id', aircraft!.id).is('deleted_at', null)
         .order('occurred_at', { ascending: false }).order('created_at', { ascending: false }).limit(10);
+      if (error) throw error;
       return { checks: (data || []) as TireCheck[] };
     },
   );
@@ -266,9 +268,10 @@ export default function ChecksTab({ aircraft, session, role, userInitials }: Pro
   const { data: oilLastAdded } = useSWR<OilLog | null>(
     aircraft ? swrKeys.oilLastAdded(aircraft.id) : null,
     async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('aft_oil_logs').select('*').eq('aircraft_id', aircraft!.id).is('deleted_at', null)
         .gt('oil_added', 0).order('occurred_at', { ascending: false }).order('created_at', { ascending: false }).limit(1);
+      if (error) throw error;
       return (data?.[0] as OilLog | undefined) || null;
     },
   );

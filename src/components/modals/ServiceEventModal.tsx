@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { supabase } from "@/lib/supabase";
 import { authFetch } from "@/lib/authFetch";
 import { useModalScrollLock } from "@/hooks/useModalScrollLock";
+import { useEscapeKey } from "@/hooks/useEscapeKey";
 import { Wrench, X, Trash2 } from "lucide-react";
 import { useToast } from "@/components/ToastProvider";
 import type { ServiceEventView } from "./service-event/shared";
@@ -33,6 +34,7 @@ interface ServiceEventModalProps {
 
 export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, canManageService = true, preSelectMxItemId }: ServiceEventModalProps) {
   useModalScrollLock(show);
+  useEscapeKey(onClose, show);
   const [view, setView] = useState<ServiceEventView>('list');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -56,12 +58,9 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
   const [viewingAttachment, setViewingAttachment] = useState<string | null>(null);
   const { showSuccess, showError, showWarning } = useToast();
 
-  useEffect(() => {
-    if (show) {
-      document.body.style.overflow = 'hidden';
-      return () => { document.body.style.overflow = ''; };
-    }
-  }, [show]);
+  // Body scroll lock comes from useModalScrollLock(show) above; the
+  // earlier imperative block here was a duplicate that fought the hook
+  // for the cleanup value.
 
   useEffect(() => {
     if (show && aircraft) {
