@@ -49,7 +49,7 @@ export default function VorTab({
     async () => {
       const from = (page - 1) * PAGE_SIZE;
       const to = from + PAGE_SIZE;
-      const { data: checks, count } = await supabase
+      const { data: checks, count, error } = await supabase
         .from('aft_vor_checks')
         .select('*', { count: 'exact' })
         .eq('aircraft_id', aircraft!.id)
@@ -57,6 +57,7 @@ export default function VorTab({
         .order('occurred_at', { ascending: false })
         .order('created_at', { ascending: false })
         .range(from, to);
+      if (error) throw error;
       const total = count ?? 0;
       return { checks: (checks || []) as VorCheck[], hasMore: total > from + PAGE_SIZE, totalPages: Math.max(1, Math.ceil(total / PAGE_SIZE)) };
     }
@@ -66,7 +67,7 @@ export default function VorTab({
   const { data: latestData } = useSWR(
     aircraft ? swrKeys.vorLatest(aircraft.id) : null,
     async () => {
-      const { data: checks } = await supabase
+      const { data: checks, error } = await supabase
         .from('aft_vor_checks')
         .select('*')
         .eq('aircraft_id', aircraft!.id)
@@ -74,6 +75,7 @@ export default function VorTab({
         .order('occurred_at', { ascending: false })
         .order('created_at', { ascending: false })
         .limit(1);
+      if (error) throw error;
       return (checks && checks.length > 0) ? checks[0] as VorCheck : null;
     }
   );

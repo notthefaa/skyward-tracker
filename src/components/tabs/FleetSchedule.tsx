@@ -93,6 +93,8 @@ export default function FleetSchedule({
         .in('aircraft_id', ids)
         .in('status', ['confirmed', 'in_progress']),
     ]);
+    if (resRes.error) throw resRes.error;
+    if (mxRes.error) throw mxRes.error;
     const reservations = (resRes.data || []) as Reservation[];
     const mxBlocks: MxBlockRow[] = (mxRes.data || [])
       .filter((e: any) => e.confirmed_date)

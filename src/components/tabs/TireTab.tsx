@@ -90,7 +90,7 @@ export default function TireTab({
     async () => {
       const from = (page - 1) * PAGE_SIZE;
       const to = from + PAGE_SIZE;
-      const { data: checks, count } = await supabase
+      const { data: checks, count, error } = await supabase
         .from('aft_tire_checks')
         .select('*', { count: 'exact' })
         .eq('aircraft_id', aircraft!.id)
@@ -98,6 +98,7 @@ export default function TireTab({
         .order('occurred_at', { ascending: false })
         .order('created_at', { ascending: false })
         .range(from, to);
+      if (error) throw error;
       const total = count ?? 0;
       return { checks: (checks || []) as TireCheck[], hasMore: total > from + PAGE_SIZE, totalPages: Math.max(1, Math.ceil(total / PAGE_SIZE)) };
     }

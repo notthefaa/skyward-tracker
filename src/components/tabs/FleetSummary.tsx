@@ -101,6 +101,14 @@ export default function FleetSummary({
           .is('deleted_at', null)
           .eq('is_superseded', false),
       ]);
+      // Throw on any error so SWR retries instead of caching a partial
+      // dataset as success — silent empty squawks would render a
+      // grounded aircraft as airworthy on the fleet card.
+      if (mxRes.error) throw mxRes.error;
+      if (sqRes.error) throw sqRes.error;
+      if (logRes.error) throw logRes.error;
+      if (eqRes.error) throw eqRes.error;
+      if (adRes.error) throw adRes.error;
       const mxData = mxRes.data || [];
       const sqData = sqRes.data || [];
       const logData = logRes.data || [];

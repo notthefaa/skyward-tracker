@@ -147,7 +147,7 @@ export default function OilTab({
       // dated 14:00 may not reach the DB until 16:30 if the phone was
       // out of signal. created_at kicks in as a tiebreaker for entries
       // with identical occurred_at.
-      const { data: logs, count } = await supabase
+      const { data: logs, count, error } = await supabase
         .from('aft_oil_logs')
         .select('*', { count: 'exact' })
         .eq('aircraft_id', aircraft!.id)
@@ -155,6 +155,7 @@ export default function OilTab({
         .order('occurred_at', { ascending: false })
         .order('created_at', { ascending: false })
         .range(from, to);
+      if (error) throw error;
       const total = count ?? 0;
       return { logs: (logs || []) as OilLog[], hasMore: total > from + PAGE_SIZE, totalPages: Math.max(1, Math.ceil(total / PAGE_SIZE)) };
     }
@@ -164,13 +165,14 @@ export default function OilTab({
   const { data: chartEntries } = useSWR(
     aircraft ? swrKeys.oilChart(aircraft.id) : null,
     async () => {
-      const { data: logs } = await supabase
+      const { data: logs, error } = await supabase
         .from('aft_oil_logs')
         .select('*')
         .eq('aircraft_id', aircraft!.id)
         .is('deleted_at', null)
         .order('engine_hours', { ascending: true })
         .limit(15);
+      if (error) throw error;
       return (logs || []) as OilLog[];
     }
   );

@@ -40,9 +40,18 @@ export default function AircraftModal({
   const [newAirframeTime, setNewAirframeTime] = useState("");
   const [newEngineTime, setNewEngineTime] = useState("");
   const [newHomeAirport, setNewHomeAirport] = useState("");
-  // IANA timezone for pilot-local date math. Default UTC keeps
-  // server-side behavior identical for aircraft that don't set it.
-  const [newTimeZone, setNewTimeZone] = useState<string>("UTC");
+  // IANA timezone for pilot-local date math. New aircraft default to
+  // the browser's resolved timezone so MX reminders and "today"
+  // checks fire at the pilot's local cutover, not at UTC midnight.
+  // Falls back to UTC if Intl is unavailable for any reason.
+  const [newTimeZone, setNewTimeZone] = useState<string>(() => {
+    if (typeof Intl === 'undefined') return 'UTC';
+    try {
+      return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+    } catch {
+      return 'UTC';
+    }
+  });
   const [newMainContact, setNewMainContact] = useState("");
   const [newMainContactPhone, setNewMainContactPhone] = useState(""); 
   const [newMainContactEmail, setNewMainContactEmail] = useState(""); 
@@ -181,7 +190,19 @@ export default function AircraftModal({
   };
 
   const handleSaveAircraft = async (e: React.FormEvent) => {
-    e.preventDefault(); 
+    e.preventDefault();
+
+    // Engine time is required: leaving it blank previously coerced to
+    // 0 hours and the flight-log derive anchored against 0 forever
+    // after. Reject blank/non-finite values up front.
+    const parsedEngineTime = parseFloat(newEngineTime);
+    if (newEngineTime.trim() === '' || !Number.isFinite(parsedEngineTime) || parsedEngineTime < 0) {
+      showError(newType === 'Turbine'
+        ? 'Engine time (FTT) is required. Use 0 only if the aircraft is brand-new.'
+        : 'Tach time is required. Use 0 only if the engine is brand-new.');
+      return;
+    }
+
     setIsSubmitting(true);
     let avatarUrl = existingAircraft?.avatar_url || null;
 
@@ -224,7 +245,9 @@ export default function AircraftModal({
     
     if (existingAircraft) {
       const newSetupAirframe = newAirframeTime !== '' ? parseFloat(newAirframeTime) : null;
-      const newSetupEngine = parseFloat(newEngineTime) || 0;
+      // Blank engine field is rejected up-front (the validation block
+      // earlier in handleSave catches it). parseFloat is safe here.
+      const newSetupEngine = parseFloat(newEngineTime);
 
       Object.assign(basePayload, {
         setup_aftt: newType === 'Turbine' ? newSetupAirframe : null,
@@ -273,7 +296,7 @@ export default function AircraftModal({
       }
     } else {
       const setupAirframe = newAirframeTime !== '' ? parseFloat(newAirframeTime) : null;
-      const setupEngine = parseFloat(newEngineTime) || 0;
+      const setupEngine = parseFloat(newEngineTime);
 
       Object.assign(basePayload, {
         total_airframe_time: setupAirframe != null ? setupAirframe : setupEngine,

@@ -219,7 +219,7 @@ export default function SettingsModal({
         const data = await res.json();
         throw new Error(data.error || "Couldn't delete the account");
       }
-      await supabase.auth.signOut();
+      await supabase.auth.signOut({ scope: 'local' });
     } catch (err: any) {
       showError(err.message);
       setIsDeleting(false);

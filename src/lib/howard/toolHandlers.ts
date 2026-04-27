@@ -115,12 +115,15 @@ async function resolveAircraftFromTail(
     .eq('tail_number', normalized)
     .is('deleted_at', null)
     .maybeSingle();
+  // Same error message for "doesn't exist" and "exists but not yours"
+  // — leaking the distinction lets one user enumerate which tails
+  // belong to other users' fleets.
   if (!aircraft) {
-    return { ok: false, error: `No aircraft ${normalized} found in the user's fleet.` };
+    return { ok: false, error: `No aircraft ${normalized} in the user's fleet.` };
   }
   const allowed = await verifyAccess(sb, userId, aircraft.id);
   if (!allowed) {
-    return { ok: false, error: `User doesn't have access to ${normalized}.` };
+    return { ok: false, error: `No aircraft ${normalized} in the user's fleet.` };
   }
   return { ok: true, aircraftId: aircraft.id, tail: aircraft.tail_number };
 }
@@ -833,7 +836,7 @@ const handlers: Record<string, ToolHandler> = {
 
     await Promise.all(airports.map(async (icao: string) => {
       try {
-        const url = `https://external-api.faa.gov/notamapi/v1/notams?icaoLocation=${icao}&pageSize=50&sortBy=effectiveStartDate&sortOrder=Desc`;
+        const url = `https://external-api.faa.gov/notamapi/v1/notams?icaoLocation=${encodeURIComponent(icao)}&pageSize=50&sortBy=effectiveStartDate&sortOrder=Desc`;
         const res = await fetch(url, {
           headers: {
             'client_id': clientId,

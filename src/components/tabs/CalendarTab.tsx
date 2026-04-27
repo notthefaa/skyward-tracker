@@ -189,6 +189,8 @@ export default function CalendarTab({
       supabase.from('aft_reservations').select('*').eq('aircraft_id', aircraft!.id).eq('status', 'confirmed').gte('end_time', rangeStart).lte('start_time', rangeEnd).order('start_time'),
       supabase.from('aft_maintenance_events').select('confirmed_date, estimated_completion, status, mx_contact_name').eq('aircraft_id', aircraft!.id).is('deleted_at', null).in('status', ['confirmed', 'in_progress'])
     ]);
+    if (resRes.error) throw resRes.error;
+    if (mxRes.error) throw mxRes.error;
     return {
       reservations: (resRes.data || []) as Reservation[],
       mxBlocks: (mxRes.data || []).filter((e: any) => e.confirmed_date).map((e: any) => ({
