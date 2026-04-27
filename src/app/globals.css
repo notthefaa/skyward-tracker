@@ -175,3 +175,19 @@ main {
 .modal-scroll::-webkit-scrollbar-thumb:hover {
   background-color: rgba(9, 31, 60, 0.45);
 }
+
+/* ─── Keyboard focus visibility ───────────────────────────────────
+   Most inputs/buttons in the app use Tailwind's `outline-none` to
+   suppress the default browser ring and replace it with a colored
+   border on focus. That works for mouse users, but keyboard-only
+   users (and assistive tech) lose the indicator. `:focus-visible`
+   only fires when focus came from the keyboard, so we can put the
+   ring back without re-introducing the click-to-focus halo on
+   buttons. Layered low so per-component overrides still win. */
+@layer base {
+  *:focus-visible {
+    outline: 2px solid var(--color-info);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+}

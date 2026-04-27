@@ -63,12 +63,25 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   return (
     <ToastContext.Provider value={{ showToast, showSuccess, showError, showWarning, showInfo }}>
       {children}
-      <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[10001] flex flex-col items-center gap-2 pointer-events-none">
+      <div
+        // role="status" + aria-live=polite makes screen readers announce
+        // each toast as it appears without interrupting the user's
+        // current focus. Errors get role="alert" individually below
+        // so they're announced more assertively.
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+        className="fixed left-1/2 -translate-x-1/2 z-[10001] flex flex-col items-center gap-2 pointer-events-none"
+        style={{
+          top: 'calc(env(safe-area-inset-top, 0px) + 5rem)',
+        }}
+      >
         {toasts.map(toast => {
           const { Icon, color } = ICON_MAP[toast.variant];
           return (
             <div
               key={toast.id}
+              role={toast.variant === 'error' ? 'alert' : undefined}
               className={`pointer-events-auto transition-all duration-300 ${toast.isVisible ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-2"}`}
             >
               <div className="bg-[#091F3C] text-white px-5 py-3 rounded-lg shadow-[0_10px_25px_rgba(0,0,0,0.3)] flex items-center gap-3 border border-white/10 max-w-sm">

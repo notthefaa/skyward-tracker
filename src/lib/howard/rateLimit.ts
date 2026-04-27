@@ -23,12 +23,15 @@ export async function checkRateLimit(
     p_max_requests: MAX_REQUESTS,
   });
 
-  // Fail open on an infrastructure hiccup — a broken rate-limit check
-  // should not hard-stop the user from getting a reply. Logged for
-  // observability.
+  // Fail CLOSED on infrastructure hiccup. Howard turns are paid LLM
+  // calls (Anthropic Sonnet/Haiku) plus tool-call cost (Tavily web
+  // search etc.) — a broken rate-limit check is exactly the moment a
+  // misbehaving client can rack up real money in seconds. We'd rather
+  // tell a legitimate user "try in a moment" than absorb a runaway
+  // bill, so we treat RPC failure as "limit exceeded".
   if (error || !data || data.length === 0) {
-    if (error) console.warn('[rateLimit] RPC failed, allowing request:', error.message);
-    return { allowed: true, retryAfterMs: 0 };
+    if (error) console.warn('[rateLimit] RPC failed, blocking request:', error.message);
+    return { allowed: false, retryAfterMs: 30_000 };
   }
 
   const row = data[0] as { allowed: boolean; retry_after_ms: number | string };

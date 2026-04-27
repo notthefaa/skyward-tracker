@@ -7,6 +7,13 @@ import { computeMetrics, computeMxDueState } from '@/lib/math';
 import { FLIGHT_DATA_LOOKBACK_DAYS, MX_AGGREGATION_WINDOW_DAYS } from '@/lib/constants';
 import { emailShell, heading, paragraph, callout, bulletList, button } from '@/lib/email/layout';
 
+// Cap the cron at 5 minutes so a slow Resend round can't let the next
+// scheduled invocation overlap and double-send reminders. Vercel will
+// hard-kill at this boundary; the per-aircraft work is already
+// idempotent (skip-if-already-sent flags on each row), so a partial
+// run resumes cleanly on the next tick.
+export const maxDuration = 300;
+
 // How many days to let an event sit in ready_for_pickup before nudging
 // the primary contact. The cron will re-nudge at the same cadence until
 // the owner closes the event.

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { Resend } from 'resend';
 import { requireAuth, requireAircraftAccess, handleApiError } from '@/lib/auth';
+import { checkEmailRateLimit } from '@/lib/submitRateLimit';
 import { env } from '@/lib/env';
 import { escapeHtml } from '@/lib/sanitize';
 import { emailShell, heading, paragraph, callout, button } from '@/lib/email/layout';
@@ -11,6 +12,15 @@ const FROM_EMAIL = 'notifications@skywardsociety.com';
 export async function POST(req: Request) {
   try {
     const { user, supabaseAdmin } = await requireAuth(req);
+
+    const rl = await checkEmailRateLimit(supabaseAdmin, user.id);
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { error: `Too many email notifications. Retry in ${Math.ceil(rl.retryAfterMs / 1000)}s.` },
+        { status: 429, headers: { 'Retry-After': String(Math.ceil(rl.retryAfterMs / 1000)) } },
+      );
+    }
+
     const { note, aircraft } = await req.json();
 
     if (!note || !aircraft) {

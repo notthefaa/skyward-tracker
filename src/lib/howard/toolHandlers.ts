@@ -7,6 +7,7 @@ import { logEvent } from '@/lib/requestId';
 import { isIsoDate, isIsoDateTime, parseFiniteNumber } from '@/lib/validation';
 import { getOilConsumptionStatus, hoursSinceLastOilAdd } from '@/lib/oilConsumption';
 import { NETWORK_TIMEOUT_MS } from '@/lib/constants';
+import { todayInZone } from '@/lib/pilotTime';
 import { proposeAction, type ActionType } from './proposedActions';
 
 // Allow-list for aft_aircraft_equipment.category. Must match the
@@ -49,6 +50,26 @@ function normalizeIcao(raw: string): string {
   const s = String(raw || '').trim().toUpperCase();
   if (/^[A-Z]{3}$/.test(s)) return `K${s}`;
   return s;
+}
+
+// ─── Tavily web_search per-user daily cap ────────────────────────
+// In-memory bucket: { userId → { day: 'YYYY-MM-DD', count } }.
+// Resets at UTC midnight (good enough — the cap is to bound cost,
+// not enforce a fairness window). Best-effort across serverless
+// instances; tighter enforcement would need a SQL-backed counter.
+const WEB_SEARCH_DAILY_CAP = 20;
+const webSearchBucket = new Map<string, { day: string; count: number }>();
+
+function checkAndRecordWebSearch(userId: string): boolean {
+  const today = new Date().toISOString().slice(0, 10);
+  const cur = webSearchBucket.get(userId);
+  if (!cur || cur.day !== today) {
+    webSearchBucket.set(userId, { day: today, count: 1 });
+    return true;
+  }
+  if (cur.count >= WEB_SEARCH_DAILY_CAP) return false;
+  cur.count += 1;
+  return true;
 }
 
 /**
@@ -121,12 +142,14 @@ const handlers: Record<string, ToolHandler> = {
   },
 
   get_maintenance_items: async (params, sb, aircraftId) => {
+    const limit = clampLimit(params.limit, 25, 100);
     let query = sb.from('aft_maintenance_items')
       .select('*')
       .eq('aircraft_id', aircraftId)
       .is('deleted_at', null)
       .order('due_date', { ascending: true })
-      .order('due_time', { ascending: true });
+      .order('due_time', { ascending: true })
+      .limit(limit);
     if (params.tracking_type) query = query.eq('tracking_type', params.tracking_type);
     if (params.required_only) query = query.eq('is_required', true);
     const { data, error } = await query;
@@ -160,11 +183,13 @@ const handlers: Record<string, ToolHandler> = {
       return { error: 'Event not found for this aircraft.' };
     }
 
+    const limit = clampLimit(params.limit, 50, 100);
     const { data, error } = await sb.from('aft_event_line_items')
       .select('*')
       .eq('event_id', params.event_id)
       .is('deleted_at', null)
-      .order('created_at', { ascending: true });
+      .order('created_at', { ascending: true })
+      .limit(limit);
     if (error) return { error: error.message };
     return { count: (data || []).length, line_items: data };
   },
@@ -238,11 +263,13 @@ const handlers: Record<string, ToolHandler> = {
   },
 
   get_squawks: async (params, sb, aircraftId) => {
+    const limit = clampLimit(params.limit);
     let query = sb.from('aft_squawks')
       .select('*')
       .eq('aircraft_id', aircraftId)
       .is('deleted_at', null)
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false })
+      .limit(limit);
     if (params.status && params.status !== 'all') query = query.eq('status', params.status);
     const { data, error } = await query;
     if (error) return { error: error.message };
@@ -393,8 +420,18 @@ const handlers: Record<string, ToolHandler> = {
     }
   },
 
-  web_search: async (params) => {
+  web_search: async (params, _sb, _aircraftId, ctx) => {
     if (!params.query || typeof params.query !== 'string') return { error: 'Search query is required.' };
+    // Per-user daily Tavily cap. Tavily is paid-per-call; without a
+    // cap a runaway prompt loop can rack up real money in seconds.
+    // In-memory bucket is best-effort across serverless instances —
+    // worst case a user gets `cap × instance_count` calls/day, which
+    // is still bounded. A persistent SQL bucket would be tighter but
+    // requires a migration; this is the launch-day defense.
+    if (!checkAndRecordWebSearch(ctx.userId)) {
+      logEvent('howard_web_search_capped', { user_id: ctx.userId });
+      return { error: 'Daily web-search limit reached. Try again tomorrow or rephrase without needing a fresh search.' };
+    }
     try {
       const client = tavily({ apiKey: process.env.TAVILY_API_KEY! });
       // `advanced` depth pulls richer page content and ranks more
@@ -470,19 +507,26 @@ const handlers: Record<string, ToolHandler> = {
     if (error) return { error: error.message };
 
     const { data: ac } = await sb.from('aft_aircraft')
-      .select('total_engine_time')
+      .select('total_engine_time, time_zone')
       .eq('id', aircraftId)
       .maybeSingle();
     const et = (ac as any)?.total_engine_time || 0;
-    const today = new Date(new Date().setHours(0, 0, 0, 0));
+    // "Today" in the aircraft's local zone, not the Vercel UTC clock —
+    // a pilot in PDT at 23:00 local would otherwise see ADs due
+    // tomorrow flagged as overdue (UTC has already rolled over).
+    // todayInZone returns YYYY-MM-DD; parse as UTC midnight so the
+    // diffing math against next_due_date (also a YYYY-MM-DD string
+    // parsed as UTC midnight below) is consistent.
+    const todayYmd = todayInZone((ac as any)?.time_zone);
+    const today = new Date(todayYmd + 'T00:00:00Z');
 
     const annotated = (ads || []).map((a: any) => {
       const timeOverdue = a.next_due_time != null && et >= a.next_due_time;
       const dateOverdue = a.next_due_date != null &&
-        new Date(a.next_due_date + 'T00:00:00') < today;
+        new Date(a.next_due_date + 'T00:00:00Z') < today;
       const overdue = timeOverdue || dateOverdue;
       const daysOut = a.next_due_date
-        ? Math.ceil((new Date(a.next_due_date + 'T00:00:00').getTime() - today.getTime()) / 86400000)
+        ? Math.round((new Date(a.next_due_date + 'T00:00:00Z').getTime() - today.getTime()) / 86400000)
         : null;
       const hrsOut = a.next_due_time != null ? a.next_due_time - et : null;
       let status: 'overdue' | 'due_soon' | 'compliant' = 'compliant';
@@ -507,11 +551,13 @@ const handlers: Record<string, ToolHandler> = {
   },
 
   get_equipment: async (params, sb, aircraftId) => {
+    const limit = clampLimit(params.limit, 50, 100);
     let query = sb.from('aft_aircraft_equipment')
       .select('*')
       .eq('aircraft_id', aircraftId)
       .is('deleted_at', null)
-      .order('category', { ascending: true });
+      .order('category', { ascending: true })
+      .limit(limit);
     if (params.category) query = query.eq('category', params.category);
     if (!params.include_removed) query = query.is('removed_at', null);
     const { data, error } = await query;

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { Resend } from 'resend';
 import { requireAuth, requireAircraftAdmin, handleApiError } from '@/lib/auth';
+import { checkEmailRateLimit } from '@/lib/submitRateLimit';
 import { setAppUser } from '@/lib/audit';
 import { env } from '@/lib/env';
 import { escapeHtml } from '@/lib/sanitize';
@@ -12,9 +13,23 @@ const FROM_EMAIL = 'notifications@skywardsociety.com';
 export async function POST(req: Request) {
   try {
     const { user, supabaseAdmin } = await requireAuth(req);
+
+    const rl = await checkEmailRateLimit(supabaseAdmin, user.id);
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { error: `Too many email sends. Retry in ${Math.ceil(rl.retryAfterMs / 1000)}s.` },
+        { status: 429, headers: { 'Retry-After': String(Math.ceil(rl.retryAfterMs / 1000)) } },
+      );
+    }
+
     const body = await req.json();
     const { eventId, additionalMxItemIds, additionalSquawkIds, addonServices, proposedDate } = body;
     const isResend = body.resend === true;
+
+    // Tracks the line items inserted in this request so we can undo
+    // them if the mechanic email fails. Resend retries see this stay
+    // empty (the !isResend branch is skipped).
+    let insertedLineItemIds: string[] = [];
 
     if (!eventId) {
       return NextResponse.json({ error: 'Event ID is required.' }, { status: 400 });
@@ -132,8 +147,18 @@ export async function POST(req: Request) {
       }
 
       if (allLineItems.length > 0) {
-        const { error: liErr } = await supabaseAdmin.from('aft_event_line_items').insert(allLineItems);
+        const { data: insertedRows, error: liErr } = await supabaseAdmin
+          .from('aft_event_line_items')
+          .insert(allLineItems)
+          .select('id');
         if (liErr) throw liErr;
+        // Track the freshly-inserted ids so the email-failure branch
+        // below can roll them back. Without this, a failed Resend send
+        // returned 502 but the line items stuck around — a pilot
+        // retrying would re-insert duplicates, and a pilot giving up
+        // would leave the draft event with phantom items they never
+        // approved.
+        insertedLineItemIds = (insertedRows || []).map((r: any) => r.id);
       }
       // NOTE: the status flip to 'scheduling' and the proposed-date
       // message row used to happen right here — they now fire AFTER
@@ -220,8 +245,17 @@ export async function POST(req: Request) {
         }),
       });
       if (emailResult.error) {
-        // Email gateway rejected the send. Don't flip status; let the
-        // pilot retry from the draft.
+        // Email gateway rejected the send. Roll back this request's
+        // line-item inserts so a retry doesn't pile up duplicates
+        // and an abandoned attempt doesn't leave phantom items
+        // attached to the still-draft event. The status flip below
+        // is also skipped, so the event stays a clean draft.
+        if (insertedLineItemIds.length > 0) {
+          await supabaseAdmin
+            .from('aft_event_line_items')
+            .delete()
+            .in('id', insertedLineItemIds);
+        }
         return NextResponse.json(
           { error: `Couldn't deliver the work package to the mechanic (${emailResult.error.message}). Your draft is unchanged — try again in a moment.` },
           { status: 502 },

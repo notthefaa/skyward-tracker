@@ -6,6 +6,7 @@ import { authFetch } from "@/lib/authFetch";
 import { useToast } from "@/components/ToastProvider";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { useModalScrollLock } from "@/hooks/useModalScrollLock";
+import { friendlyPgError } from "@/lib/pgErrors";
 import type { AircraftWithMetrics, SystemSettings, AppTab, AppRole, AircraftRole } from "@/lib/types";
 import type { FleetIndexEntry } from "@/hooks/useFleetData";
 
@@ -296,7 +297,7 @@ export default function AdminModals({
         .delete().match({ user_id: selectedAccessUserId, aircraft_id: aircraftId });
       if (error) {
         setUserAccessList(prev => prev.includes(aircraftId) ? prev : [...prev, aircraftId]);
-        showError("Couldn't revoke access: " + error.message);
+        showError("Couldn't revoke access: " + friendlyPgError(error));
       }
     } else {
       setUserAccessList(prev => [...prev, aircraftId]);
@@ -304,7 +305,7 @@ export default function AdminModals({
         .insert({ user_id: selectedAccessUserId, aircraft_id: aircraftId });
       if (error) {
         setUserAccessList(prev => prev.filter(id => id !== aircraftId));
-        showError("Couldn't grant access: " + error.message);
+        showError("Couldn't grant access: " + friendlyPgError(error));
       }
     }
   };

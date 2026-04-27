@@ -95,3 +95,20 @@ export function localStorageCacheProvider(parentCache: Readonly<Cache<any>>): Ca
     delete: (key: string) => { map.delete(key); },
   };
 }
+
+/**
+ * Wipe the persisted SWR cache. Call from the auth-state listener on
+ * SIGNED_OUT so the next user on a shared device doesn't see the prior
+ * user's notes/squawks/aircraft hydrated from localStorage. The
+ * in-memory SWR map needs a separate `globalMutate(() => true,
+ * undefined, false)` from the caller — this helper only clears the
+ * persisted blob.
+ */
+export function clearPersistedSwrCache(): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.removeItem(CACHE_KEY);
+  } catch {
+    // Storage unavailable — nothing to do.
+  }
+}

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { Resend } from 'resend';
 import { createAdminClient, handleApiError } from '@/lib/auth';
+import { checkEmailRateLimit } from '@/lib/submitRateLimit';
 import { env } from '@/lib/env';
 import { escapeHtml } from '@/lib/sanitize';
 import { cancelConflictingReservations } from '@/lib/mxConflicts';
@@ -72,6 +73,14 @@ export async function POST(req: Request) {
       }
     }
 
+    // Token-gated route — no auth user_id, so rate-limit on the event
+    // owner's quota. A leaked mechanic token can't be used to flood
+    // the owner with notification emails. The data write itself
+    // (status / message row) still happens; only the email is gated.
+    const rl = event.created_by
+      ? await checkEmailRateLimit(supabaseAdmin, event.created_by)
+      : { allowed: true, retryAfterMs: 0 };
+
     const appUrl = baseUrl;
 
     // Sanitize common user-provided values
@@ -106,7 +115,7 @@ export async function POST(req: Request) {
       } as any);
 
       if (event.primary_contact_email) {
-        await resend.emails.send({
+        if (rl.allowed) await resend.emails.send({
           from: `Skyward Operations <${FROM_EMAIL}>`,
           to: [event.primary_contact_email],
           subject: `Schedule Update: ${safeMxName} proposed ${escapeHtml(proposedDate)}`,
@@ -152,7 +161,7 @@ export async function POST(req: Request) {
       } as any);
 
       if (event.primary_contact_email) {
-        await resend.emails.send({
+        if (rl.allowed) await resend.emails.send({
           from: `Skyward Operations <${FROM_EMAIL}>`,
           to: [event.primary_contact_email],
           subject: `Confirmed: ${escapeHtml(confirmedDate)} Service Appointment`,
@@ -196,7 +205,7 @@ export async function POST(req: Request) {
       } as any);
 
       if (event.primary_contact_email) {
-        await resend.emails.send({
+        if (rl.allowed) await resend.emails.send({
           from: `Skyward Operations <${FROM_EMAIL}>`,
           to: [event.primary_contact_email],
           subject: `Service Update from ${safeMxName}`,
@@ -245,7 +254,7 @@ export async function POST(req: Request) {
             return `${escapeHtml(li.item_name)} — <span style="color:${color};font-weight:700;text-transform:uppercase;font-size:11px;letter-spacing:1px;">${escapeHtml(li.line_status)}</span>`;
           });
 
-          await resend.emails.send({
+          if (rl.allowed) await resend.emails.send({
             from: `Skyward Operations <${FROM_EMAIL}>`,
             to: [event.primary_contact_email],
             subject: `Work Package Update — ${summaryLine}`,
@@ -273,7 +282,7 @@ export async function POST(req: Request) {
         .update(updatePayload).eq('id', event.id);
 
       if (event.primary_contact_email && proposedDate) {
-        await resend.emails.send({
+        if (rl.allowed) await resend.emails.send({
           from: `Skyward Operations <${FROM_EMAIL}>`,
           to: [event.primary_contact_email],
           subject: `Estimated Completion: ${escapeHtml(proposedDate)}`,
@@ -313,7 +322,7 @@ export async function POST(req: Request) {
       const safeItemDescription = escapeHtml(itemDescription);
 
       if (event.primary_contact_email) {
-        await resend.emails.send({
+        if (rl.allowed) await resend.emails.send({
           from: `Skyward Operations <${FROM_EMAIL}>`,
           to: [event.primary_contact_email],
           subject: `Additional Work Suggested: ${safeSuggestedName}`,
@@ -347,7 +356,7 @@ export async function POST(req: Request) {
       } as any);
 
       if (event.primary_contact_email) {
-        await resend.emails.send({
+        if (rl.allowed) await resend.emails.send({
           from: `Skyward Operations <${FROM_EMAIL}>`,
           to: [event.primary_contact_email],
           subject: `Service Declined by ${safeMxName}`,
@@ -378,7 +387,7 @@ export async function POST(req: Request) {
       } as any);
 
       if (event.primary_contact_email) {
-        await resend.emails.send({
+        if (rl.allowed) await resend.emails.send({
           from: `Skyward Operations <${FROM_EMAIL}>`,
           to: [event.primary_contact_email],
           subject: `Aircraft Ready for Pickup`,

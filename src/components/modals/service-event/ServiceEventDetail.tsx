@@ -41,8 +41,11 @@ export default function ServiceEventDetail({
       setOwnerMessage("");
       await fetchEventDetail(selectedEvent.id);
       showSuccess("Date confirmed");
-    } catch (err) { showError("Couldn't confirm the date."); }
-    setIsSubmitting(false);
+    } catch (err) {
+      showError("Couldn't confirm the date.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleOwnerCounter = async () => {
@@ -54,8 +57,11 @@ export default function ServiceEventDetail({
       setOwnerMessage(""); setProposedDate("");
       await fetchEventDetail(selectedEvent.id);
       showSuccess("Counter proposal sent");
-    } catch (err) { showError("Couldn't send the counter proposal."); }
-    setIsSubmitting(false);
+    } catch (err) {
+      showError("Couldn't send the counter proposal.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleOwnerComment = async () => {
@@ -67,8 +73,11 @@ export default function ServiceEventDetail({
       setOwnerMessage("");
       await fetchEventDetail(selectedEvent.id);
       showSuccess("Message sent");
-    } catch (err) { showError("Couldn't send the message."); }
-    setIsSubmitting(false);
+    } catch (err) {
+      showError("Couldn't send the message.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleCancelEvent = async () => {
@@ -80,8 +89,11 @@ export default function ServiceEventDetail({
       onRefresh();
       showSuccess("Service event cancelled");
       onNavigate('list');
-    } catch (err) { showError("Couldn't cancel the event."); }
-    setIsSubmitting(false);
+    } catch (err) {
+      showError("Couldn't cancel the event.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleCloseEvent = async () => {
@@ -92,8 +104,11 @@ export default function ServiceEventDetail({
       onRefresh();
       showSuccess("Service event closed");
       onNavigate('list');
-    } catch (err) { showError("Couldn't close the event."); }
-    setIsSubmitting(false);
+    } catch (err) {
+      showError("Couldn't close the event.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const renderMessageAttachments = (attachments: any[]) => {

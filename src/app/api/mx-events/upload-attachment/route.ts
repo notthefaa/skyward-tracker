@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { Resend } from 'resend';
 import { createAdminClient, handleApiError } from '@/lib/auth';
+import { checkEmailRateLimit } from '@/lib/submitRateLimit';
 import { env } from '@/lib/env';
 import { escapeHtml } from '@/lib/sanitize';
 import { PORTAL_EXPIRY_DAYS } from '@/lib/constants';
@@ -102,6 +103,26 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Cannot upload to a completed or cancelled event.' }, { status: 400 });
     }
 
+    // Per-event attachment cap. A leaked mechanic token could
+    // otherwise be used to upload 5 × 10MB files unbounded times,
+    // filling storage. Real service events rarely accumulate more
+    // than 30 files; the cap is well above that and prevents
+    // runaway accumulation. The 5-files-per-call limit + 10MB-per-
+    // file limit upstream means the worst case here is 50 × 10MB =
+    // 500MB per event (still bounded, no longer unbounded).
+    const MAX_ATTACHMENTS_PER_EVENT = 50;
+    const { count: existingAttachments } = await supabaseAdmin
+      .from('aft_event_messages')
+      .select('id', { count: 'exact', head: true })
+      .eq('event_id', event.id)
+      .not('attachments', 'is', null);
+    if ((existingAttachments ?? 0) + files.length > MAX_ATTACHMENTS_PER_EVENT) {
+      return NextResponse.json(
+        { error: `This event already has ${existingAttachments} uploads. Cap is ${MAX_ATTACHMENTS_PER_EVENT} per event — ask the owner to close it and create a follow-up.` },
+        { status: 413 },
+      );
+    }
+
     // Process and upload each file
     const attachments: { url: string; filename: string; size: number; type: string }[] = [];
 
@@ -178,8 +199,24 @@ export async function POST(req: Request) {
       attachments: attachments,
     } as any);
 
-    // Notify the owner
-    if (event.primary_contact_email) {
+    // Notify the owner — rate-limited against the owner's email budget
+    // so a leaked mechanic token can't be replayed to flood the owner.
+    // Token-gated routes have no auth user_id; we charge the owner
+    // (event.created_by) since the email goes to them anyway and a
+    // legitimate mechanic uploads ≤ a few times per event.
+    if (event.primary_contact_email && event.created_by) {
+      const rl = await checkEmailRateLimit(supabaseAdmin, event.created_by);
+      if (!rl.allowed) {
+        // Files already saved + message row already inserted, so the
+        // mechanic upload itself is preserved. We just skip the email
+        // to protect the owner's quota; the owner will see the message
+        // next time they open the event.
+        return NextResponse.json({
+          success: true,
+          attachments,
+          email_skipped: 'Owner has reached today\'s email-notification limit. Files are saved.',
+        });
+      }
       const appUrl = baseUrl;
       const safeMxName = escapeHtml(event.mx_contact_name || 'Your mechanic');
       const safeDescription = escapeHtml(description);

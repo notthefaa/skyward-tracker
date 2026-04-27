@@ -7,6 +7,7 @@ import { useFleetData, useRealtimeSync, useGroundedStatus, useAircraftRole, useP
 import { useModalScrollLock } from "@/hooks/useModalScrollLock";
 import { NETWORK_TIMEOUT_MS } from "@/lib/constants";
 import { swrKeys, matchesAircraft } from "@/lib/swrKeys";
+import { clearPersistedSwrCache } from "@/lib/swrCache";
 import useSWR from "swr";
 import { HOWARD_STALE_MS } from "@/lib/howard/quickPrompts";
 import { useToast } from "@/components/ToastProvider";
@@ -262,6 +263,17 @@ export default function AppShell({ session }: AppShellProps) {
   );
   useRealtimeSync(session, boundRefresh, globalMutate);
 
+  // ─── Slow-network watchdog ───
+  // Providers fires `aft:slow-network` when SWR's loadingTimeout
+  // crosses, capped at one event per cooldown window. We surface a
+  // single info toast so a stuck spinner doesn't look like a hang.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handler = () => showInfo("Network's slow — give it a moment.");
+    window.addEventListener('aft:slow-network', handler);
+    return () => window.removeEventListener('aft:slow-network', handler);
+  }, [showInfo]);
+
   // ─── Centralized 401 handler ───
   // authFetch dispatches `authfetch:unauthorized` after a refresh-and-
   // retry still returns 401. That means the session is genuinely dead;
@@ -284,6 +296,16 @@ export default function AppShell({ session }: AppShellProps) {
   // DELETE happened to fail (offline, auth hiccup).
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, sess) => {
+      if (event === 'SIGNED_OUT') {
+        // Wipe every cached query so the next user on a shared device
+        // doesn't hydrate the previous user's notes / squawks / aircraft
+        // from localStorage. globalMutate(() => true, ..., false) clears
+        // the in-memory SWR map; clearPersistedSwrCache() drops the
+        // localStorage blob so the next page load starts cold.
+        globalMutate(() => true, undefined, { revalidate: false });
+        clearPersistedSwrCache();
+        return;
+      }
       if (event !== 'SIGNED_IN' || !sess?.user?.id) return;
       try {
         await authFetch('/api/howard', { method: 'DELETE' });
