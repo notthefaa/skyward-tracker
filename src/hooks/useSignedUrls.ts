@@ -29,7 +29,19 @@ const CACHE_TTL = 50 * 60 * 1000; // 50 min
 // one of these buckets get signed — public-bucket URLs pass through
 // unchanged, skipping the /api/storage/sign round-trip entirely.
 // When a bucket is flipped to private, add its name here.
-const PRIVATE_BUCKETS = new Set<string>([]);
+//
+// aft_aircraft_avatars is private in production: the public URL path
+// returns 400 "Bucket not found" and Firefox's OpaqueResponseBlocking
+// turns that into an avatar-render failure, which would otherwise
+// drop into the AircraftAvatarImg onError rescue (1 POST per avatar
+// per page session). Routing through this hook batches them.
+const PRIVATE_BUCKETS = new Set<string>(['aft_aircraft_avatars']);
+
+export function isPrivateBucketUrl(url: string | null | undefined): boolean {
+  if (!url || !url.includes('/storage/v1/object/public/')) return false;
+  const bucket = bucketFromPublicUrl(url);
+  return !!bucket && PRIVATE_BUCKETS.has(bucket);
+}
 
 // Module-level cache so multiple component instances share signed URLs.
 const cache = new Map<string, { signed: string; expiresAt: number }>();

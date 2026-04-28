@@ -2,16 +2,26 @@
 
 import { useState, useEffect } from "react";
 import { authFetch } from "@/lib/authFetch";
+import { useSignedUrls, isPrivateBucketUrl } from "@/hooks/useSignedUrls";
 
 /**
- * Aircraft avatar <img> with an onError rescue path. Starts with the
- * public URL (fast, no extra round-trip), and if the browser fails to
- * load it, falls back to a signed URL from /api/storage/sign.
+ * Aircraft avatar <img>.
  *
- * Some stored avatar public URLs fail intermittently (CDN race,
- * caching quirk, or transient 4xx) — the signed-URL rescue makes
- * rendering resilient without paying the double-fetch cost on every
- * render for the avatars that do load fine.
+ * Two paths:
+ *
+ *   1. Private-bucket URL (e.g. aft_aircraft_avatars after the
+ *      privacy flip) — request a signed URL up front via the
+ *      batched useSignedUrls hook. Don't render the broken
+ *      public URL into <img> in the meantime, because Firefox's
+ *      OpaqueResponseBlocking treats the 400-bucket-not-found
+ *      JSON response as a security violation, fires onError, and
+ *      we'd be back in the rescue cascade we're trying to avoid.
+ *      Show a transparent placeholder until the signed URL lands.
+ *
+ *   2. Public-bucket URL — render the public URL directly. If
+ *      something fails (CDN race, transient 4xx), the onError
+ *      rescue dedups across all instances via module-level
+ *      caches so we POST /api/storage/sign at most once per URL.
  */
 interface Props {
   publicUrl: string;
@@ -22,15 +32,8 @@ interface Props {
   height?: number;
 }
 
-// Module-level cache shared across all AircraftAvatarImg instances so
-// the rescue POST to /api/storage/sign fires at most once per public
-// URL per page session. Without this, every fleet card and tab switch
-// re-triggers the rescue cascade — especially painful when many
-// avatars fail simultaneously.
-//
-//   resolved → known good signed URL (use it directly)
-//   failed   → tried and got null/error back; don't retry
-//   pending  → request in flight; subscribers will re-render on resolve
+// Module-level cache shared across all rescue-path instances so the
+// onError POST fires at most once per public URL per page session.
 const resolvedSigned = new Map<string, string>();
 const failedSigned = new Set<string>();
 const pendingSigned = new Map<string, Promise<string | null>>();
@@ -71,19 +74,55 @@ function rescueOnce(publicUrl: string): Promise<string | null> {
 }
 
 export function AircraftAvatarImg({ publicUrl, alt, className, loading, width, height }: Props) {
-  // If we already rescued this URL once, skip the public-URL fetch
-  // entirely and start from the signed URL — the broken-image flash
-  // only needs to happen once per page session.
-  const initial = resolvedSigned.get(publicUrl) ?? publicUrl;
-  const [src, setSrc] = useState(initial);
-  const [triedSigned, setTriedSigned] = useState(initial !== publicUrl);
+  const resolveSigned = useSignedUrls();
+  const isPrivate = isPrivateBucketUrl(publicUrl);
+
+  // Private-bucket path: hook returns the public URL as fallback while
+  // signing is in flight, then re-renders with the signed URL when it
+  // arrives. Don't render the public URL into <img> for private buckets
+  // — it'll 400 and trigger ORB. Hold a placeholder instead.
+  const signedFromHook = resolveSigned(publicUrl);
+  const haveSignedFromHook = !!signedFromHook && signedFromHook !== publicUrl;
+
+  // Rescue-path state for the public-bucket fallback flow.
+  const initialRescued = resolvedSigned.get(publicUrl);
+  const [rescuedSrc, setRescuedSrc] = useState<string | null>(initialRescued ?? null);
+  const [triedRescue, setTriedRescue] = useState(!!initialRescued);
 
   useEffect(() => {
     const cached = resolvedSigned.get(publicUrl);
-    setSrc(cached ?? publicUrl);
-    setTriedSigned(!!cached);
+    setRescuedSrc(cached ?? null);
+    setTriedRescue(!!cached);
   }, [publicUrl]);
 
+  if (isPrivate) {
+    if (!haveSignedFromHook) {
+      // Transparent 1×1 placeholder keeps layout stable while signing
+      // is in flight without rendering a known-bad URL into <img>.
+      return (
+        <div
+          className={className}
+          style={{ width, height, background: 'transparent' }}
+          aria-label={alt}
+          role="img"
+        />
+      );
+    }
+    return (
+      <img
+        src={signedFromHook!}
+        alt={alt}
+        className={className}
+        loading={loading}
+        decoding="async"
+        width={width}
+        height={height}
+      />
+    );
+  }
+
+  // Public-bucket path: try the public URL first, rescue on error.
+  const src = rescuedSrc ?? publicUrl;
   return (
     <img
       src={src}
@@ -94,10 +133,10 @@ export function AircraftAvatarImg({ publicUrl, alt, className, loading, width, h
       width={width}
       height={height}
       onError={async () => {
-        if (triedSigned) return;
-        setTriedSigned(true);
+        if (triedRescue) return;
+        setTriedRescue(true);
         const signed = await rescueOnce(publicUrl);
-        if (signed) setSrc(signed);
+        if (signed) setRescuedSrc(signed);
       }}
     />
   );
