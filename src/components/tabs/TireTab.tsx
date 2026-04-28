@@ -37,6 +37,7 @@ function TireRow({
         <div className="flex items-center gap-1.5">
           <input
             type="number"
+            inputMode="decimal"
             step="0.5"
             min="0"
             value={psi}

@@ -132,6 +132,16 @@ export default function ServiceEventComplete({
       });
       if (!res.ok) throw new Error("Couldn't complete the items");
 
+      // Migration 049: server reports any line-item IDs that didn't
+      // match (stale tab, fabricated payload). Don't fail the submit
+      // — the matched ones still landed — but warn the user that
+      // their list looks out-of-date.
+      const body = await res.json().catch(() => ({} as any));
+      const unmatched = Array.isArray(body?.unmatchedIds) ? body.unmatchedIds : [];
+      if (unmatched.length > 0) {
+        showError(`${unmatched.length} item${unmatched.length > 1 ? 's were' : ' was'} not found — your view may be out of date. Refresh and try again.`);
+      }
+
       onRefresh();
 
       // Check if all items are now resolved
@@ -202,7 +212,7 @@ export default function ServiceEventComplete({
               </div>
               <div>
                 <label className="text-[10px] font-bold uppercase tracking-widest text-navy block">Completion {isTurbine ? 'FTT' : 'Tach'}</label>
-                <input type="number" min="0" step="0.1" value={item.completionTime} onChange={e => updateItem(idx, 'completionTime', e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-[#56B94A] outline-none" placeholder="Engine time at completion" />
+                <input type="number" inputMode="decimal" min="0" step="0.1" value={item.completionTime} onChange={e => updateItem(idx, 'completionTime', e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-[#56B94A] outline-none" placeholder="Engine time at completion" />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="min-w-0">
@@ -233,11 +243,11 @@ export default function ServiceEventComplete({
               <div className="grid grid-cols-2 gap-3">
                 <div className="min-w-0">
                   <label className="text-[10px] font-bold uppercase tracking-widest text-navy block">Tach at Completion</label>
-                  <input type="number" min="0" step="0.1" value={item.tachAtCompletion} onChange={e => updateItem(idx, 'tachAtCompletion', e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-[#56B94A] outline-none" />
+                  <input type="number" inputMode="decimal" min="0" step="0.1" value={item.tachAtCompletion} onChange={e => updateItem(idx, 'tachAtCompletion', e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-[#56B94A] outline-none" />
                 </div>
                 <div className="min-w-0">
                   <label className="text-[10px] font-bold uppercase tracking-widest text-navy block">Hobbs at Completion</label>
-                  <input type="number" min="0" step="0.1" value={item.hobbsAtCompletion} onChange={e => updateItem(idx, 'hobbsAtCompletion', e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-[#56B94A] outline-none" />
+                  <input type="number" inputMode="decimal" min="0" step="0.1" value={item.hobbsAtCompletion} onChange={e => updateItem(idx, 'hobbsAtCompletion', e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-2 text-sm mt-1 focus:border-[#56B94A] outline-none" />
                 </div>
               </div>
               <div>

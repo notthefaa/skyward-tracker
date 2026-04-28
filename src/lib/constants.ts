@@ -67,6 +67,13 @@ export const REALTIME_DEBOUNCE_MS = 1500;
 /** Network timeout (ms) before showing the connection error screen */
 export const NETWORK_TIMEOUT_MS = 12000;
 
+/** Per-tool-call timeout for Howard tool handlers (DB, embeddings, etc.).
+ *  Generous enough to cover an OpenAI embeddings round-trip + a moderate
+ *  Supabase query, tight enough that a hung tool can't eat the whole
+ *  45s round-level budget on its own. web_search has its own tighter
+ *  NETWORK_TIMEOUT_MS race. */
+export const HOWARD_TOOL_TIMEOUT_MS = 15000;
+
 // ─── Fuel Conversion ───
 
 /** Weight per gallon for Jet-A fuel (lbs) */

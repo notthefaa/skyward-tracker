@@ -6,7 +6,7 @@ import { syncAdsForAircraft } from '@/lib/drs';
 import { logEvent } from '@/lib/requestId';
 import { isIsoDate, isIsoDateTime, parseFiniteNumber } from '@/lib/validation';
 import { getOilConsumptionStatus, hoursSinceLastOilAdd } from '@/lib/oilConsumption';
-import { NETWORK_TIMEOUT_MS } from '@/lib/constants';
+import { NETWORK_TIMEOUT_MS, HOWARD_TOOL_TIMEOUT_MS } from '@/lib/constants';
 import { todayInZone } from '@/lib/pilotTime';
 import { proposeAction, type ActionType } from './proposedActions';
 
@@ -53,23 +53,24 @@ function normalizeIcao(raw: string): string {
 }
 
 // ─── Tavily web_search per-user daily cap ────────────────────────
-// In-memory bucket: { userId → { day: 'YYYY-MM-DD', count } }.
-// Resets at UTC midnight (good enough — the cap is to bound cost,
-// not enforce a fairness window). Best-effort across serverless
-// instances; tighter enforcement would need a SQL-backed counter.
+// SQL-backed counter (migration 048) so the cap holds across
+// regional serverless instances. The RPC does check + increment
+// atomically behind SELECT FOR UPDATE so concurrent calls from
+// the same user serialize and can't both squeak past the cap.
+// On RPC failure we fall back to "denied" — Tavily is paid-per-
+// call, same cost-protection logic as the rate limiter.
 const WEB_SEARCH_DAILY_CAP = 20;
-const webSearchBucket = new Map<string, { day: string; count: number }>();
 
-function checkAndRecordWebSearch(userId: string): boolean {
-  const today = new Date().toISOString().slice(0, 10);
-  const cur = webSearchBucket.get(userId);
-  if (!cur || cur.day !== today) {
-    webSearchBucket.set(userId, { day: today, count: 1 });
-    return true;
+async function checkAndRecordWebSearch(sb: SupabaseClient, userId: string): Promise<boolean> {
+  const { data, error } = await sb.rpc('howard_web_search_check', {
+    p_user_id: userId,
+    p_max: WEB_SEARCH_DAILY_CAP,
+  });
+  if (error || !data || data.length === 0) {
+    if (error) console.warn('[web_search] cap RPC failed, denying:', error.message);
+    return false;
   }
-  if (cur.count >= WEB_SEARCH_DAILY_CAP) return false;
-  cur.count += 1;
-  return true;
+  return !!(data[0] as { allowed: boolean }).allowed;
 }
 
 /**
@@ -425,15 +426,13 @@ const handlers: Record<string, ToolHandler> = {
     }
   },
 
-  web_search: async (params, _sb, _aircraftId, ctx) => {
+  web_search: async (params, sb, _aircraftId, ctx) => {
     if (!params.query || typeof params.query !== 'string') return { error: 'Search query is required.' };
-    // Per-user daily Tavily cap. Tavily is paid-per-call; without a
-    // cap a runaway prompt loop can rack up real money in seconds.
-    // In-memory bucket is best-effort across serverless instances —
-    // worst case a user gets `cap × instance_count` calls/day, which
-    // is still bounded. A persistent SQL bucket would be tighter but
-    // requires a migration; this is the launch-day defense.
-    if (!checkAndRecordWebSearch(ctx.userId)) {
+    // Per-user daily Tavily cap, enforced cross-instance via the
+    // howard_web_search_check RPC (migration 048). Tavily is paid-
+    // per-call; without a cap a runaway prompt loop can rack up
+    // real money in seconds.
+    if (!(await checkAndRecordWebSearch(sb, ctx.userId))) {
       logEvent('howard_web_search_capped', { user_id: ctx.userId });
       return { error: 'Daily web-search limit reached. Try again tomorrow or rephrase without needing a fresh search.' };
     }
@@ -1004,6 +1003,21 @@ async function makeProposal(
   };
 }
 
+// Sentinel used by the per-tool-call timeout race below; thrown on
+// expiry so executeTool can distinguish a hung handler from a normal
+// handler error and tell Howard to retry / move on.
+const TOOL_TIMEOUT_SENTINEL = '__howard_tool_timeout__';
+
+function withToolTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<T>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(TOOL_TIMEOUT_SENTINEL)), ms);
+  });
+  return Promise.race([p, timeout]).finally(() => {
+    if (timer) clearTimeout(timer);
+  });
+}
+
 export async function executeTool(
   name: string,
   params: any,
@@ -1016,11 +1030,16 @@ export async function executeTool(
   let result: any;
   try {
     if (GLOBAL_TOOLS.has(name)) {
-      result = await handler(params, supabaseAdmin, '', ctx);
+      result = await withToolTimeout(handler(params, supabaseAdmin, '', ctx), HOWARD_TOOL_TIMEOUT_MS);
     } else {
       // Aircraft-scoped tool: resolve `tail` to an aircraft_id the user
-      // can read, then run the handler with that.
-      const resolved = await resolveAircraftFromTail(supabaseAdmin, ctx.userId, params?.tail);
+      // can read, then run the handler with that. The tail-resolver
+      // shares the per-tool budget so a stuck Supabase lookup can't
+      // bypass the timeout.
+      const resolved = await withToolTimeout(
+        resolveAircraftFromTail(supabaseAdmin, ctx.userId, params?.tail),
+        HOWARD_TOOL_TIMEOUT_MS,
+      );
       if (!resolved.ok) return JSON.stringify({ error: resolved.error });
 
       const enrichedCtx: ToolContext = {
@@ -1028,9 +1047,18 @@ export async function executeTool(
         aircraftId: resolved.aircraftId,
         aircraftTail: resolved.tail,
       };
-      result = await handler(params, supabaseAdmin, resolved.aircraftId, enrichedCtx);
+      result = await withToolTimeout(
+        handler(params, supabaseAdmin, resolved.aircraftId, enrichedCtx),
+        HOWARD_TOOL_TIMEOUT_MS,
+      );
     }
   } catch (e: any) {
+    if (e?.message === TOOL_TIMEOUT_SENTINEL) {
+      logEvent('howard_tool_timeout', { tool: name, timeout_ms: HOWARD_TOOL_TIMEOUT_MS });
+      return JSON.stringify({
+        error: `Tool '${name}' timed out after ${Math.round(HOWARD_TOOL_TIMEOUT_MS / 1000)}s. Try a narrower query or move on without this data.`,
+      });
+    }
     // A handler that throws (vs. returning { error }) is unexpected — the
     // pattern is to catch DB errors and return them as a string. Log with
     // the tool name so this shows up in monitoring instead of crashing

@@ -246,7 +246,7 @@ export default function VorTab({
                 </div>
                 <div>
                   <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1 block">Bearing Error (degrees)</label>
-                  <input type="number" step="0.1" value={bearingError} onChange={e => setBearingError(e.target.value)} placeholder="e.g. 2, -3, 0" className="w-full rounded p-3 text-sm border border-gray-300 focus:border-mxOrange outline-none" style={whiteBg} required />
+                  <input type="number" inputMode="decimal" step="0.1" value={bearingError} onChange={e => setBearingError(e.target.value)} placeholder="e.g. 2, -3, 0" className="w-full rounded p-3 text-sm border border-gray-300 focus:border-mxOrange outline-none" style={whiteBg} required />
                   {previewPassed !== null && bearingError !== '' && (
                     <span className={`text-[10px] font-bold uppercase tracking-widest mt-1 block ${previewPassed ? 'text-[#56B94A]' : 'text-danger'}`}>
                       {Math.abs(previewError)}° — {previewPassed ? `Within ±${selectedTolerance}° tolerance` : `Exceeds ±${selectedTolerance}° tolerance`}

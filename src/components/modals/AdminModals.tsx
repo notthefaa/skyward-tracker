@@ -907,12 +907,12 @@ export default function AdminModals({
                         {insertHasAirframeMeter && (
                           <div>
                             <label className="text-[10px] font-bold uppercase text-navy">AFTT (Opt)</label>
-                            <input type="number" min="0" step="0.1" style={whiteBg} value={insertAftt} onChange={e => setInsertAftt(e.target.value)} className="w-full border rounded p-2 text-sm mt-1 focus:border-navy outline-none" />
+                            <input type="number" inputMode="decimal" min="0" step="0.1" style={whiteBg} value={insertAftt} onChange={e => setInsertAftt(e.target.value)} className="w-full border rounded p-2 text-sm mt-1 focus:border-navy outline-none" />
                           </div>
                         )}
                         <div>
                           <label className="text-[10px] font-bold uppercase text-navy">FTT <span className="text-danger">*</span></label>
-                          <input type="number" min="0" step="0.1" required style={whiteBg} value={insertFtt} onChange={e => setInsertFtt(e.target.value)} className="w-full border rounded p-2 text-sm mt-1 focus:border-navy outline-none" />
+                          <input type="number" inputMode="decimal" min="0" step="0.1" required style={whiteBg} value={insertFtt} onChange={e => setInsertFtt(e.target.value)} className="w-full border rounded p-2 text-sm mt-1 focus:border-navy outline-none" />
                         </div>
                       </>
                     ) : (
@@ -920,12 +920,12 @@ export default function AdminModals({
                         {insertHasAirframeMeter && (
                           <div>
                             <label className="text-[10px] font-bold uppercase text-navy">Hobbs (Opt)</label>
-                            <input type="number" min="0" step="0.1" style={whiteBg} value={insertHobbs} onChange={e => setInsertHobbs(e.target.value)} className="w-full border rounded p-2 text-sm mt-1 focus:border-navy outline-none" />
+                            <input type="number" inputMode="decimal" min="0" step="0.1" style={whiteBg} value={insertHobbs} onChange={e => setInsertHobbs(e.target.value)} className="w-full border rounded p-2 text-sm mt-1 focus:border-navy outline-none" />
                           </div>
                         )}
                         <div>
                           <label className="text-[10px] font-bold uppercase text-navy">Tach <span className="text-danger">*</span></label>
-                          <input type="number" min="0" step="0.1" required style={whiteBg} value={insertTach} onChange={e => setInsertTach(e.target.value)} className="w-full border rounded p-2 text-sm mt-1 focus:border-navy outline-none" />
+                          <input type="number" inputMode="decimal" min="0" step="0.1" required style={whiteBg} value={insertTach} onChange={e => setInsertTach(e.target.value)} className="w-full border rounded p-2 text-sm mt-1 focus:border-navy outline-none" />
                         </div>
                       </>
                     )}
@@ -946,7 +946,7 @@ export default function AdminModals({
 
                   <div>
                     <label className="text-[10px] font-bold uppercase text-navy">Fuel (Gallons, Opt)</label>
-                    <input type="number" min="0" step="0.1" style={whiteBg} value={insertFuel} onChange={e => setInsertFuel(e.target.value)} className="w-full border rounded p-2 text-sm mt-1 focus:border-navy outline-none" placeholder="Gallons after flight" />
+                    <input type="number" inputMode="decimal" min="0" step="0.1" style={whiteBg} value={insertFuel} onChange={e => setInsertFuel(e.target.value)} className="w-full border rounded p-2 text-sm mt-1 focus:border-navy outline-none" placeholder="Gallons after flight" />
                   </div>
 
                   <p className="text-[10px] text-gray-500 uppercase tracking-widest border-b pb-1 mt-4">Crew &amp; Notes</p>

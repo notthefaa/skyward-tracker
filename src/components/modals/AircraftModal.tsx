@@ -611,6 +611,7 @@ export default function AircraftModal({
               </label>
               <input
                 type="number"
+                inputMode="decimal"
                 step="0.1"
                 value={newAirframeTime}
                 onChange={e => setNewAirframeTime(e.target.value)}
@@ -626,6 +627,7 @@ export default function AircraftModal({
               </label>
               <input
                 type="number"
+                inputMode="decimal"
                 step="0.1"
                 required={!timeFieldsLocked}
                 value={newEngineTime}

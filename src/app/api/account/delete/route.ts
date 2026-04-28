@@ -59,6 +59,13 @@ export async function DELETE(req: Request) {
       .eq('status', 'confirmed')
       .gt('start_time', new Date().toISOString());
 
+    // Revoke all refresh tokens before delete so a stolen device can't
+    // continue using a cached token until natural expiry (~7 days).
+    // Best-effort: log and continue if signOut fails — the deleteUser
+    // below is the actual source of truth.
+    const { error: signOutErr } = await supabaseAdmin.auth.admin.signOut(user.id, 'global');
+    if (signOutErr) console.warn('[account/delete] global signOut failed:', signOutErr.message);
+
     // Delete the user from Supabase Auth
     // This will cascade-delete:
     // - aft_aircraft where created_by = user.id (CASCADE)

@@ -335,11 +335,11 @@ export default function OilTab({
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1 block">Oil Before Add (qt)</label>
-                    <input type="number" step="0.5" min="0" value={oilQty} onChange={e => setOilQty(e.target.value)} className="w-full rounded p-3 text-sm border border-gray-300 focus:border-danger outline-none" style={whiteBg} required />
+                    <input type="number" inputMode="decimal" step="0.5" min="0" value={oilQty} onChange={e => setOilQty(e.target.value)} className="w-full rounded p-3 text-sm border border-gray-300 focus:border-danger outline-none" style={whiteBg} required />
                   </div>
                   <div>
                     <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1 block">Oil Added (qt)</label>
-                    <input type="number" step="0.5" min="0" value={oilAdded} onChange={e => setOilAdded(e.target.value)} placeholder="Leave blank for level check" className="w-full rounded p-3 text-sm border border-gray-300 focus:border-danger outline-none" style={whiteBg} />
+                    <input type="number" inputMode="decimal" step="0.5" min="0" value={oilAdded} onChange={e => setOilAdded(e.target.value)} placeholder="Leave blank for level check" className="w-full rounded p-3 text-sm border border-gray-300 focus:border-danger outline-none" style={whiteBg} />
                   </div>
                 </div>
                 <p className="text-[10px] text-gray-500 leading-snug -mt-2">
@@ -352,7 +352,7 @@ export default function OilTab({
                 </p>
                 <div>
                   <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1 block">Engine Hours</label>
-                  <input type="number" step="0.1" min="0" value={engineHours} onChange={e => setEngineHours(e.target.value)} className="w-full rounded p-3 text-sm border border-gray-300 focus:border-danger outline-none" style={whiteBg} required />
+                  <input type="number" inputMode="decimal" step="0.1" min="0" value={engineHours} onChange={e => setEngineHours(e.target.value)} className="w-full rounded p-3 text-sm border border-gray-300 focus:border-danger outline-none" style={whiteBg} required />
                   <span className="text-[9px] text-gray-400 mt-0.5 block">Current: {aircraft?.total_engine_time?.toFixed(1) || '—'} hrs</span>
                 </div>
                 <div>

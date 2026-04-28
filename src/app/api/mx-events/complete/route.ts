@@ -80,7 +80,13 @@ export async function POST(req: Request) {
     }
 
     const allResolved = !!(rpcData as any)?.all_resolved;
-    return NextResponse.json({ success: true, allResolved });
+    // Migration 049 returns unmatched_ids so the UI can surface a
+    // "1 line item was unknown" toast when stale tabs or fabricated
+    // ids slip through. Empty array on the happy path.
+    const unmatchedIds = Array.isArray((rpcData as any)?.unmatched_ids)
+      ? (rpcData as any).unmatched_ids as string[]
+      : [];
+    return NextResponse.json({ success: true, allResolved, unmatchedIds });
   } catch (error) {
     return handleApiError(error);
   }
