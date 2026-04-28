@@ -35,6 +35,16 @@ export function Providers({ children }: { children: React.ReactNode }) {
         dedupingInterval: 10000,
         loadingTimeout: LOADING_TIMEOUT_MS,
         onLoadingSlow: maybeToastSlowNetwork,
+        // Cap retries so a fetcher that consistently throws (RLS gap,
+        // schema drift, persistent 5xx) doesn't burn 30+ seconds of
+        // exponential backoff per key per mount. The recent SWR-throw-
+        // on-error sweep (commits 5cdd8bb…fe1ff6a) made every transient
+        // failure visible to SWR; with 50+ useSWR sites in the app, the
+        // default 5-retry-with-backoff easily snowballs into UI lag.
+        // Two attempts is enough for a real flap; beyond that the
+        // user gets the error UI faster.
+        errorRetryCount: 2,
+        errorRetryInterval: 3000,
       }}
     >
       <ToastProvider>
