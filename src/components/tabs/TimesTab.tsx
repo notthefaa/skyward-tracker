@@ -35,6 +35,7 @@ export default function TimesTab({
         .select('*', { count: 'exact' })
         .eq('aircraft_id', aircraft!.id)
         .is('deleted_at', null)
+        .order('occurred_at', { ascending: false })
         .order('created_at', { ascending: false })
         .range(from, to);
       const total = count ?? 0;
@@ -154,7 +155,7 @@ export default function TimesTab({
       .from('aft_flight_logs').select('*')
       .eq('aircraft_id', aircraft!.id)
       .is('deleted_at', null)
-      .order('created_at', { ascending: false }).limit(2);
+      .order('occurred_at', { ascending: false }).order('created_at', { ascending: false }).limit(2);
     
     const previousLog = previousLogs && previousLogs.length > 1 ? previousLogs[1] : null;
 
@@ -180,7 +181,7 @@ export default function TimesTab({
     }
     
     updateData.current_fuel_gallons = previousLog && previousLog.fuel_gallons !== null ? previousLog.fuel_gallons : 0;
-    updateData.fuel_last_updated = previousLog ? previousLog.created_at : null;
+    updateData.fuel_last_updated = previousLog ? (previousLog.occurred_at ?? previousLog.created_at) : null;
 
     const res = await authFetch('/api/flight-logs', {
       method: 'DELETE',
@@ -201,7 +202,7 @@ export default function TimesTab({
       .from('aft_flight_logs').select('*')
       .eq('aircraft_id', aircraft!.id)
       .is('deleted_at', null)
-      .order('created_at', { ascending: false });
+      .order('occurred_at', { ascending: false }).order('created_at', { ascending: false });
 
     if (!exportData || exportData.length === 0) { 
       showWarning("No logs to export."); setIsExporting(false); return;
@@ -229,7 +230,7 @@ export default function TimesTab({
       fltTime = Math.max(0, diff).toFixed(1);
 
       const row = [
-        new Date(log.created_at).toLocaleDateString('en-US', { year: '2-digit', month: 'numeric', day: 'numeric' }),
+        new Date(log.occurred_at ?? log.created_at).toLocaleDateString('en-US', { year: '2-digit', month: 'numeric', day: 'numeric' }),
         log.pod || '-', log.poa || '-', log.initials, fltTime
       ];
       if (hasAirframeMeter) row.push(isTurbine ? (log.aftt || '') : (log.hobbs || ''));
@@ -463,7 +464,7 @@ export default function TimesTab({
             <tbody className="text-xs font-roboto text-navy">
               {displayLogsReversed.map((log) => (
                 <tr key={log.id} className="border-b border-gray-200 hover:bg-blue-50/50 transition-colors">
-                  <td className="py-3 px-2 text-center whitespace-nowrap">{new Date(log.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</td>
+                  <td className="py-3 px-2 text-center whitespace-nowrap">{new Date(log.occurred_at ?? log.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</td>
                   <td className="py-3 px-2 text-center font-bold">{log.initials}</td>
                   <td className="py-3 px-2 text-center text-info font-bold">
                     {log.pod || log.poa ? (

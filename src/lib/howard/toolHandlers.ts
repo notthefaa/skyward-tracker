@@ -135,10 +135,11 @@ const handlers: Record<string, ToolHandler> = {
       .select('*')
       .eq('aircraft_id', aircraftId)
       .is('deleted_at', null)
+      .order('occurred_at', { ascending: false })
       .order('created_at', { ascending: false })
       .limit(limit);
-    if (params.date_from) query = query.gte('created_at', params.date_from);
-    if (params.date_to) query = query.lte('created_at', params.date_to);
+    if (params.date_from) query = query.gte('occurred_at', params.date_from);
+    if (params.date_to) query = query.lte('occurred_at', params.date_to);
     const { data, error } = await query;
     if (error) return { error: error.message };
     return { count: (data || []).length, logs: data };
@@ -229,9 +230,10 @@ const handlers: Record<string, ToolHandler> = {
     if (!ac) return { error: 'Aircraft not found.' };
 
     const { data: recentLogs } = await sb.from('aft_flight_logs')
-      .select('created_at, pod, poa, initials, fuel_gallons, hobbs, tach')
+      .select('occurred_at, created_at, pod, poa, initials, fuel_gallons, hobbs, tach')
       .eq('aircraft_id', aircraftId)
       .is('deleted_at', null)
+      .order('occurred_at', { ascending: false })
       .order('created_at', { ascending: false })
       .limit(5);
 

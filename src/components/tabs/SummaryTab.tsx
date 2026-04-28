@@ -82,7 +82,7 @@ export default function SummaryTab({
     aircraft ? swrKeys.summaryFlight(aircraft.id) : null,
     async () => {
       const { data, error } = await supabase.from('aft_flight_logs')
-        .select('created_at, initials').eq('aircraft_id', aircraft!.id).order('created_at', { ascending: false }).limit(1);
+        .select('occurred_at, created_at, initials').eq('aircraft_id', aircraft!.id).is('deleted_at', null).order('occurred_at', { ascending: false }).order('created_at', { ascending: false }).limit(1);
       if (error) throw error;
       return data?.[0] || null;
     },
@@ -265,7 +265,7 @@ export default function SummaryTab({
 
   const lastFlownLabel = (() => {
     if (!lastFlight) return null;
-    const flightDate = new Date(lastFlight.created_at);
+    const flightDate = new Date(lastFlight.occurred_at ?? lastFlight.created_at);
     const now = new Date();
     const diffDays = Math.floor((now.getTime() - flightDate.getTime()) / (1000 * 60 * 60 * 24));
     let timeAgo = diffDays === 0 ? 'Today' : diffDays === 1 ? 'Yesterday' : `${diffDays} days ago`;

@@ -263,6 +263,8 @@ export default function AircraftModal({
           .from('aft_flight_logs')
           .select('aftt, ftt, hobbs, tach')
           .eq('aircraft_id', existingAircraft.id)
+          .is('deleted_at', null)
+          .order('occurred_at', { ascending: false })
           .order('created_at', { ascending: false })
           .limit(1);
 

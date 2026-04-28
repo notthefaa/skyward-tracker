@@ -117,7 +117,7 @@ function vorDial(latest: VorCheck | null, now: Date): DialState {
       sublabel: 'No check on file', suffix: 'days',
     };
   }
-  const checked = new Date(latest.created_at);
+  const checked = new Date(latest.occurred_at ?? latest.created_at);
   const expires = new Date(checked);
   expires.setDate(expires.getDate() + 30);
   const daysRemaining = Math.ceil((expires.getTime() - now.getTime()) / 86400_000);
@@ -154,7 +154,7 @@ function tireDial(latest: TireCheck | null, now: Date): DialState {
       warning: 'Check Tire Pressures',
     };
   }
-  const checked = new Date(latest.created_at);
+  const checked = new Date(latest.occurred_at ?? latest.created_at);
   const daysSince = Math.floor((now.getTime() - checked.getTime()) / 86400_000);
   const progress = Math.min(Math.max(daysSince / 30, 0), 1);
 

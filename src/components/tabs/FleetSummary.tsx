@@ -87,8 +87,10 @@ export default function FleetSummary({
           .eq('status', 'open')
           .is('deleted_at', null),
         supabase.from('aft_flight_logs')
-          .select('aircraft_id, created_at, initials')
+          .select('aircraft_id, occurred_at, created_at, initials')
           .in('aircraft_id', aircraftIds)
+          .is('deleted_at', null)
+          .order('occurred_at', { ascending: false })
           .order('created_at', { ascending: false }),
         supabase.from('aft_aircraft_equipment')
           .select('*')
@@ -120,7 +122,7 @@ export default function FleetSummary({
       const sqByAircraft: Record<string, any[]> = {};
       const eqByAircraft: Record<string, any[]> = {};
       const adByAircraft: Record<string, any[]> = {};
-      const lastFlightByAircraft: Record<string, { created_at: string; initials: string | null }> = {};
+      const lastFlightByAircraft: Record<string, { occurred_at: string; initials: string | null }> = {};
 
       for (const m of mxData) {
         if (!mxByAircraft[m.aircraft_id]) mxByAircraft[m.aircraft_id] = [];
@@ -138,10 +140,10 @@ export default function FleetSummary({
         if (!adByAircraft[a.aircraft_id]) adByAircraft[a.aircraft_id] = [];
         adByAircraft[a.aircraft_id].push(a);
       }
-      // Logs are sorted descending — first occurrence per aircraft_id is the latest
+      // Logs are sorted descending by occurred_at — first occurrence per aircraft_id is the latest
       for (const log of logData) {
         if (!lastFlightByAircraft[log.aircraft_id]) {
-          lastFlightByAircraft[log.aircraft_id] = { created_at: log.created_at, initials: log.initials };
+          lastFlightByAircraft[log.aircraft_id] = { occurred_at: log.occurred_at ?? log.created_at, initials: log.initials };
         }
       }
 
@@ -190,7 +192,7 @@ export default function FleetSummary({
           nextMxName: nextMx ? nextMx.item_name : (needsSetupCount > 0 ? `${needsSetupCount} Need Setup` : 'Nothing tracked yet'),
           nextMxDueLabel: nextMx ? formatNextMxDue(nextMx) : null,
           nextMxIsExpired: nextMx ? nextMx.isExpired : false,
-          lastFlownLabel: lastFlight ? formatLastFlown(lastFlight.created_at, lastFlight.initials) : null,
+          lastFlownLabel: lastFlight ? formatLastFlown(lastFlight.occurred_at, lastFlight.initials) : null,
         };
       });
     },
