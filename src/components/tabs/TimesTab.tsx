@@ -30,7 +30,7 @@ export default function TimesTab({
       const pageSize = 10;
       const from = (logPage - 1) * pageSize;
       const to = from + pageSize;
-      const { data: fetchLogs, count } = await supabase
+      const { data: fetchLogs, count, error } = await supabase
         .from('aft_flight_logs')
         .select('*', { count: 'exact' })
         .eq('aircraft_id', aircraft!.id)
@@ -38,6 +38,7 @@ export default function TimesTab({
         .order('occurred_at', { ascending: false })
         .order('created_at', { ascending: false })
         .range(from, to);
+      if (error) throw error;
       const total = count ?? 0;
       return {
         logs: fetchLogs || [],

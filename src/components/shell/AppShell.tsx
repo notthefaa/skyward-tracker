@@ -329,7 +329,11 @@ export default function AppShell({ session }: AppShellProps) {
     howardUserId ? swrKeys.howardUser(howardUserId) : null,
     async () => {
       const res = await authFetch('/api/howard');
-      if (!res.ok) return { thread: null, messages: [] };
+      // /api/howard returns 200 + { thread: null, messages: [] } for users
+      // who have never chatted with Howard — so a !res.ok here is a real
+      // failure, not "no history yet." Throw so SWR retries instead of
+      // pinning an empty thread in cache.
+      if (!res.ok) throw new Error("Couldn't load Howard");
       return await res.json() as { thread: any; messages: any[] };
     },
     { revalidateOnFocus: false, revalidateOnReconnect: false }
@@ -503,21 +507,33 @@ export default function AppShell({ session }: AppShellProps) {
 
   // ─── Helpers ───
   const handleInitialFetch = async (userId: string) => {
-    const { allPlanes, assigned } = await fetchAircraftData(userId);
-    const saved = localStorage.getItem('aft_active_tail');
-    if (saved && allPlanes.some(a => a.tail_number === saved)) {
-      setActiveTail(saved);
-    } else if (assigned.length > 0) {
-      setActiveTail(assigned[0].tail_number);
-    } else {
-      setActiveTail("");
-    }
+    try {
+      const { allPlanes, assigned } = await fetchAircraftData(userId);
+      const saved = localStorage.getItem('aft_active_tail');
+      if (saved && allPlanes.some(a => a.tail_number === saved)) {
+        setActiveTail(saved);
+      } else if (assigned.length > 0) {
+        setActiveTail(assigned[0].tail_number);
+      } else {
+        setActiveTail("");
+      }
 
-    // Single-aircraft users skip the fleet grid and go straight to Home,
-    // unless they had a specific tab saved from a previous session.
-    const savedTab = sessionStorage.getItem('aft_active_tab');
-    if (assigned.length <= 1 && (!savedTab || savedTab === 'fleet')) {
-      setActiveTab('summary');
+      // Single-aircraft users skip the fleet grid and go straight to Home,
+      // unless they had a specific tab saved from a previous session.
+      const savedTab = sessionStorage.getItem('aft_active_tab');
+      if (assigned.length <= 1 && (!savedTab || savedTab === 'fleet')) {
+        setActiveTab('summary');
+      }
+    } catch (err) {
+      // fetchAircraftData now throws on supabase errors so a transient
+      // failure can't render an empty-fleet "no aircraft" recovery
+      // screen to a pilot who actually has aircraft. Reset the trigger
+      // ref so a remount or pull-to-refresh retries, leave isDataLoaded
+      // false so the skeleton + network-timeout UI takes over, and let
+      // the user know.
+      console.error('[AppShell] initial fleet fetch failed', err);
+      dataFetchTriggeredRef.current = false;
+      showError("Couldn't load your fleet — check your connection and pull to refresh.");
     }
   };
 

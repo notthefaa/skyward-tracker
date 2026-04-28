@@ -57,11 +57,23 @@ export function useFleetData() {
     // ─── PHASE 1: Fetch user identity + access in parallel ───
     // These are small, fast queries that tell us WHO the user is
     // and WHICH aircraft they can see.
+    //
+    // Throw on any error rather than swallowing — a transient JWT-refresh
+    // race or network blip otherwise renders an empty fleet to a pilot
+    // who has aircraft set up, and `isDataLoaded` flipping true locks
+    // them out of revalidation until they reload the tab.
     const [sR, rR, aR] = await Promise.all([
       supabase.from('aft_system_settings').select('*').eq('id', 1).single(),
       supabase.from('aft_user_roles').select('role, initials, completed_onboarding, tour_completed').eq('user_id', userId).single(),
       supabase.from('aft_user_aircraft_access').select('aircraft_id, aircraft_role, user_id').eq('user_id', userId),
     ]);
+
+    // Settings + role missing rows are legit (first-run); only throw on
+    // hard errors. PostgREST returns code 'PGRST116' for "no rows" on
+    // .single(), which we tolerate.
+    if (sR.error && sR.error.code !== 'PGRST116') throw sR.error;
+    if (rR.error && rR.error.code !== 'PGRST116') throw rR.error;
+    if (aR.error) throw aR.error;
 
     if (sR.data) setSysSettings(sR.data as SystemSettings);
 
@@ -81,12 +93,14 @@ export function useFleetData() {
     let allPlanes: AircraftWithMetrics[];
 
     if (assignedIds.length > 0) {
-      const { data: aircraftData } = await supabase
+      const { data: aircraftData, error: aircraftErr } = await supabase
         .from('aft_aircraft')
         .select('*')
         .in('id', assignedIds)
         .is('deleted_at', null)
         .order('tail_number');
+
+      if (aircraftErr) throw aircraftErr;
 
       allPlanes = (aircraftData || []).map((plane: any) => ({
         ...plane,

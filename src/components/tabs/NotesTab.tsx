@@ -23,23 +23,25 @@ export default function NotesTab({ aircraft, session, role, aircraftRole, userIn
   const { data: notes = [], mutate } = useSWR(
     aircraft ? swrKeys.notes(aircraft.id) : null,
     async () => {
-      const { data: notesData } = await supabase
+      const { data: notesData, error: notesErr } = await supabase
         .from('aft_notes')
         .select('*')
         .eq('aircraft_id', aircraft.id)
         .is('deleted_at', null)
         .order('created_at', { ascending: false });
-      
+      if (notesErr) throw notesErr;
+
       if (notesData && notesData.length > 0) {
-        const { data: readsData } = await supabase
+        const { data: readsData, error: readsErr } = await supabase
           .from('aft_note_reads')
           .select('note_id')
           .eq('user_id', session.user.id)
           .in('note_id', notesData.map(n => n.id));
-          
+        if (readsErr) throw readsErr;
+
         const readIds = readsData ? readsData.map(r => r.note_id) : [];
         const unreadIds = notesData.filter(n => !readIds.includes(n.id)).map(n => n.id);
-        
+
         if (unreadIds.length > 0) {
           const inserts = unreadIds.map(id => ({ note_id: id, user_id: session.user.id }));
           await supabase.from('aft_note_reads').upsert(inserts, { onConflict: 'note_id,user_id' });

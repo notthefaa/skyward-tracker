@@ -46,7 +46,10 @@ export default function HowardLauncher({ currentAircraft, userFleet = [], sessio
     userId ? swrKeys.howardUser(userId) : null,
     async () => {
       const res = await authFetch(`/api/howard`);
-      if (!res.ok) return { thread: null, messages: [] };
+      // /api/howard returns 200 + { thread: null, messages: [] } for users
+      // with no chat history. A !res.ok is a real failure — throw so SWR
+      // retries instead of caching an empty thread as success.
+      if (!res.ok) throw new Error("Couldn't load Howard");
       return await res.json() as { thread: any; messages: any[] };
     },
     { revalidateOnFocus: false, revalidateOnReconnect: false, revalidateIfStale: false }

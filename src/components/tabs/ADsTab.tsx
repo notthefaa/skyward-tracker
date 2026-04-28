@@ -43,7 +43,7 @@ export default function ADsTab({ aircraft, role, aircraftRole }: Props) {
     aircraft ? ['equipment', aircraft.id] : null,
     async () => {
       const res = await authFetch(`/api/equipment?aircraftId=${aircraft!.id}`);
-      if (!res.ok) return { equipment: [] as EqRow[] };
+      if (!res.ok) throw new Error("Couldn't load equipment");
       const d = await res.json();
       return { equipment: (d.equipment || []) as EqRow[] };
     }

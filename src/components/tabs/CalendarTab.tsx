@@ -210,12 +210,14 @@ export default function CalendarTab({
   const { data: crew = [] } = useSWR(
     canBookForOthers && aircraft ? swrKeys.crew(aircraft.id) : null,
     async () => {
-      const { data: accessData } = await supabase.from('aft_user_aircraft_access')
+      const { data: accessData, error: accessErr } = await supabase.from('aft_user_aircraft_access')
         .select('user_id, aircraft_role').eq('aircraft_id', aircraft!.id);
+      if (accessErr) throw accessErr;
       if (!accessData || accessData.length === 0) return [] as { user_id: string; email: string; initials: string; full_name: string; aircraft_role: string }[];
       const userIds = accessData.map((a: any) => a.user_id);
-      const { data: usersData } = await supabase.from('aft_user_roles')
+      const { data: usersData, error: usersErr } = await supabase.from('aft_user_roles')
         .select('user_id, email, initials, full_name').in('user_id', userIds);
+      if (usersErr) throw usersErr;
       return accessData.map((a: any) => {
         const u = (usersData || []).find((x: any) => x.user_id === a.user_id);
         return {

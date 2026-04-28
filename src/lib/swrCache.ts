@@ -3,7 +3,11 @@
 import type { Cache, State } from "swr";
 
 const CACHE_KEY = "aft_swr_cache";
-const CACHE_VERSION = 2;
+// v3: bumped after fixing ghost-empty fetchers (TimesTab/NotesTab/Calendar
+// crew/ADs equipment/Howard data + useFleetData boot). Version bump forces
+// a one-time wipe so existing pilots whose localStorage has cached an
+// empty result as success start clean on next load.
+const CACHE_VERSION = 3;
 const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 // Cap the persisted cache so the synchronous hydrate on page load and
 // the beforeunload serialize don't grow unbounded across weeks of use.
