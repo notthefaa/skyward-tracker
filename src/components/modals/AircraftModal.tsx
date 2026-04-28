@@ -259,7 +259,7 @@ export default function AircraftModal({
       if (hasFlightLogs) {
         // Flight logs exist — the latest log holds the true current times.
         // Setup changes don't affect totals when there's real flight data.
-        const { data: latestLog } = await supabase
+        const { data: latestLog, error: latestLogErr } = await supabase
           .from('aft_flight_logs')
           .select('aftt, ftt, hobbs, tach')
           .eq('aircraft_id', existingAircraft.id)
@@ -267,6 +267,15 @@ export default function AircraftModal({
           .order('occurred_at', { ascending: false })
           .order('created_at', { ascending: false })
           .limit(1);
+
+        // Without this the engine-type switch would silently skip the
+        // total-time recompute on a transient failure and ship a save
+        // that doesn't reflect actual flight history.
+        if (latestLogErr) {
+          showError("Couldn't read latest flight log to recompute totals. Try saving again.");
+          setIsSubmitting(false);
+          return;
+        }
 
         if (latestLog && latestLog.length > 0) {
           const log = latestLog[0] as any;

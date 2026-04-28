@@ -255,8 +255,11 @@ export default function AdminModals({
     try {
       const index = await fetchGlobalFleetIndex();
       setGlobalFleetList(index);
-    } catch (err) {
-      console.error('Failed to fetch fleet index:', err);
+    } catch (err: any) {
+      // Surface so admin doesn't see an empty list and assume the
+      // fleet is empty — the cache layer also won't poison-cache an
+      // empty result because useFleetData throws before setting state.
+      showError("Couldn't load fleet index: " + (err?.message || 'Unknown error'));
     }
     setIsLoadingFleet(false);
   };
@@ -275,15 +278,31 @@ export default function AdminModals({
 
   const openAccessModal = async () => {
     setIsSubmitting(true);
-    const { data } = await supabase.from('aft_user_roles').select('*').order('role').order('email');
-    if (data) setAllUsers(data); setSelectedAccessUserId(""); setUserAccessList([]);
-    setShowAccessModal(true); setIsSubmitting(false);
+    const { data, error } = await supabase.from('aft_user_roles').select('*').order('role').order('email');
+    if (error) {
+      showError("Couldn't load users: " + friendlyPgError(error));
+      setIsSubmitting(false);
+      return;
+    }
+    if (data) setAllUsers(data);
+    setSelectedAccessUserId("");
+    setUserAccessList([]);
+    setShowAccessModal(true);
+    setIsSubmitting(false);
   };
 
   const fetchUserAccess = async (userId: string) => {
     setSelectedAccessUserId(userId);
-    const { data } = await supabase.from('aft_user_aircraft_access').select('aircraft_id').eq('user_id', userId);
-    if (data) setUserAccessList(data.map(d => d.aircraft_id)); else setUserAccessList([]);
+    const { data, error } = await supabase.from('aft_user_aircraft_access').select('aircraft_id').eq('user_id', userId);
+    if (error) {
+      // Without this list every aircraft toggle would render as
+      // "no access" and a click would silently toggle the wrong way.
+      showError("Couldn't load this user's access: " + friendlyPgError(error));
+      setUserAccessList([]);
+      return;
+    }
+    if (data) setUserAccessList(data.map(d => d.aircraft_id));
+    else setUserAccessList([]);
   };
 
   const toggleAccess = async (aircraftId: string, hasAccess: boolean) => {
@@ -344,8 +363,15 @@ export default function AdminModals({
       const res = await authFetch('/api/users', { method: 'DELETE', body: JSON.stringify({ userId: selectedAccessUserId }) });
       if (!res.ok) { const errData = await res.json(); throw new Error(errData.error || "Couldn't delete the user"); }
       showSuccess("User deleted.");
-      const { data } = await supabase.from('aft_user_roles').select('*').order('role').order('email');
-      if (data) setAllUsers(data); setSelectedAccessUserId(""); setUserAccessList([]);
+      const { data, error: refetchErr } = await supabase.from('aft_user_roles').select('*').order('role').order('email');
+      if (refetchErr) {
+        // Delete already succeeded — just warn that the list is stale.
+        showError("User deleted, but couldn't refresh the list: " + friendlyPgError(refetchErr));
+      } else if (data) {
+        setAllUsers(data);
+      }
+      setSelectedAccessUserId("");
+      setUserAccessList([]);
     } catch (error: any) { showError("Couldn't delete user: " + error.message); }
     setIsSubmitting(false);
   };

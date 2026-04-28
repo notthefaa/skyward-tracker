@@ -152,12 +152,21 @@ export default function TimesTab({
     if (!ok) return;
     setIsSubmitting(true);
 
-    const { data: previousLogs } = await supabase
+    const { data: previousLogs, error: prevErr } = await supabase
       .from('aft_flight_logs').select('*')
       .eq('aircraft_id', aircraft!.id)
       .is('deleted_at', null)
       .order('occurred_at', { ascending: false }).order('created_at', { ascending: false }).limit(2);
-    
+
+    // If we can't read the previous log we MUST NOT proceed — the
+    // delete would otherwise roll totals back to setup_* values and
+    // silently corrupt the airframe history.
+    if (prevErr) {
+      showError("Couldn't load previous flight log: " + (prevErr.message || 'unknown error'));
+      setIsSubmitting(false);
+      return;
+    }
+
     const previousLog = previousLogs && previousLogs.length > 1 ? previousLogs[1] : null;
 
     const updateData: Record<string, any> = {};
@@ -199,13 +208,21 @@ export default function TimesTab({
 
   const exportCSV = async () => {
     setIsExporting(true);
-    const { data: exportData } = await supabase
+    const { data: exportData, error: exportErr } = await supabase
       .from('aft_flight_logs').select('*')
       .eq('aircraft_id', aircraft!.id)
       .is('deleted_at', null)
       .order('occurred_at', { ascending: false }).order('created_at', { ascending: false });
 
-    if (!exportData || exportData.length === 0) { 
+    // Without this we tell the user "No logs to export" on a transient
+    // failure — they'd assume their flight history is gone.
+    if (exportErr) {
+      showError("Couldn't load flight logs to export. Try again.");
+      setIsExporting(false);
+      return;
+    }
+
+    if (!exportData || exportData.length === 0) {
       showWarning("No logs to export."); setIsExporting(false); return;
     }
 
@@ -280,9 +297,13 @@ export default function TimesTab({
       // matching how the server-side derive_latest aggregate works. Using
       // created_at here instead would have us validate against a different
       // neighbor than the RPC picks when the aircraft totals are rederived.
-      const { data: editingLog } = await supabase
+      const { data: editingLog, error: editingLogErr } = await supabase
         .from('aft_flight_logs').select('occurred_at, created_at')
         .eq('id', editingId).maybeSingle();
+      // Distinguish "log doesn't exist" from "couldn't read it" — without
+      // this an RLS/JWT hiccup looks identical to a deleted log and the
+      // user gets a misleading error.
+      if (editingLogErr) return showError("Couldn't load this flight log to validate the edit. Try again.");
       if (!editingLog) return showError("Flight log not found.");
 
       const pivotOccurred = editingLog.occurred_at ?? editingLog.created_at;
@@ -293,7 +314,7 @@ export default function TimesTab({
       // giving us the wrong neighbor and a misleading validation preview.
       // created_at is the server tiebreaker, matching how the RPC's
       // derive-latest SELECT orders rows.
-      const [{ data: prevLogs }, { data: nextLogs }] = await Promise.all([
+      const [prevRes, nextRes] = await Promise.all([
         supabase.from('aft_flight_logs').select('*')
           .eq('aircraft_id', aircraft!.id)
           .is('deleted_at', null)
@@ -305,8 +326,14 @@ export default function TimesTab({
           .or(`occurred_at.gt.${pivotOccurred},and(occurred_at.eq.${pivotOccurred},created_at.gt.${pivotCreated})`)
           .order('occurred_at', { ascending: true }).order('created_at', { ascending: true }).limit(1),
       ]);
-      const prevLog = prevLogs?.[0] || null;
-      nextLog = nextLogs?.[0] || null;
+      // A failed neighbor lookup would silently treat the edit as the
+      // latest log and validate against setup_* — letting the user save
+      // a value that overshoots a newer entry's totals.
+      if (prevRes.error || nextRes.error) {
+        return showError("Couldn't validate the edit against neighboring logs. Try again.");
+      }
+      const prevLog = prevRes.data?.[0] || null;
+      nextLog = nextRes.data?.[0] || null;
       isLatestLog = !nextLog;
 
       prevFtt = prevLog?.ftt ?? aircraft!.setup_ftt ?? 0;

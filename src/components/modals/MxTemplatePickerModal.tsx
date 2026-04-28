@@ -91,11 +91,17 @@ export default function MxTemplatePickerModal({ aircraft, show, onClose, onRefre
   }, [show, aircraft]);
 
   const fetchExistingItems = async () => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('aft_maintenance_items')
       .select('item_name')
       .eq('aircraft_id', aircraft.id)
       .is('deleted_at', null);
+    if (error) {
+      // Without this list the duplicate-detection step is silently
+      // disabled — the user could re-add items they already track.
+      showError("Couldn't check existing items for duplicates. Close and reopen to retry.");
+      return;
+    }
     if (data) {
       setExistingItemNames(new Set(data.map((d: any) => d.item_name.toLowerCase().trim())));
     }

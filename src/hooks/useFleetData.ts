@@ -128,11 +128,16 @@ export function useFleetData() {
     // Return cached index if we already fetched it this session
     if (globalFleetIndex.length > 0) return globalFleetIndex;
 
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('aft_aircraft')
       .select('id, tail_number, aircraft_type')
       .is('deleted_at', null)
       .order('tail_number');
+
+    // Throw rather than caching an empty list — admin would otherwise
+    // see "no aircraft" on a transient failure and stay stuck there
+    // because globalFleetIndex.length === 0 still hits this branch.
+    if (error) throw error;
 
     const index = (data || []) as FleetIndexEntry[];
     setGlobalFleetIndex(index);

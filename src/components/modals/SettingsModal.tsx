@@ -65,11 +65,18 @@ export default function SettingsModal({
 
   const loadProfile = async () => {
     setIsLoadingProfile(true);
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('aft_user_roles')
       .select('full_name, initials, faa_ratings')
       .eq('user_id', session.user.id)
       .maybeSingle();
+    if (error) {
+      // Don't seed empty strings on transient failure — saving over a
+      // blank field would otherwise wipe the pilot's name/initials/ratings.
+      showError("Couldn't load your profile: " + friendlyPgError(error));
+      setIsLoadingProfile(false);
+      return;
+    }
     const name = data?.full_name || "";
     const inits = data?.initials || "";
     setFullName(name);
@@ -122,10 +129,16 @@ export default function SettingsModal({
 
   const loadPreferences = async () => {
     setIsLoadingPrefs(true);
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('aft_notification_preferences')
       .select('notification_type, enabled')
       .eq('user_id', session.user.id);
+
+    if (error) {
+      showError("Couldn't load notification preferences: " + friendlyPgError(error));
+      setIsLoadingPrefs(false);
+      return;
+    }
 
     const prefMap: Record<string, boolean> = {};
     for (const t of NOTIFICATION_TYPES) {
@@ -145,23 +158,33 @@ export default function SettingsModal({
     const userEmail = session.user.email?.toLowerCase();
     if (!userEmail) return;
 
-    // Get all aircraft the user has access to
-    const { data: accessData } = await supabase
+    // Get all aircraft the user has access to. Errors here would otherwise
+    // leave isPrimaryContact stuck at false, which mis-tells the user their
+    // delete-account impact — surface so they know to retry.
+    const { data: accessData, error: accessErr } = await supabase
       .from('aft_user_aircraft_access')
       .select('aircraft_id')
       .eq('user_id', session.user.id);
 
+    if (accessErr) {
+      showError("Couldn't check primary-contact status: " + friendlyPgError(accessErr));
+      return;
+    }
     if (!accessData || accessData.length === 0) {
       setIsPrimaryContact(false);
       return;
     }
 
     const aircraftIds = accessData.map(a => a.aircraft_id);
-    const { data: aircraftData } = await supabase
+    const { data: aircraftData, error: aircraftErr } = await supabase
       .from('aft_aircraft')
       .select('main_contact_email')
       .in('id', aircraftIds);
 
+    if (aircraftErr) {
+      showError("Couldn't check primary-contact status: " + friendlyPgError(aircraftErr));
+      return;
+    }
     if (aircraftData) {
       const isPC = aircraftData.some(
         ac => ac.main_contact_email && ac.main_contact_email.toLowerCase() === userEmail

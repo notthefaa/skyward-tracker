@@ -77,31 +77,46 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
   }, [show, aircraft, preSelectMxItemId]);
 
   const fetchEvents = async () => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('aft_maintenance_events').select('*').eq('aircraft_id', aircraft.id).is('deleted_at', null)
       .neq('status', 'cancelled').order('created_at', { ascending: false });
+    if (error) {
+      showError("Couldn't load service events. Pull to refresh.");
+      setView('list');
+      return;
+    }
     setEvents(data || []);
     setView('list');
   };
 
   const fetchEventDetail = async (eventId: string) => {
-    const [{ data: ev }, { data: lines }, { data: msgs }] = await Promise.all([
+    const [evRes, linesRes, msgsRes] = await Promise.all([
       supabase.from('aft_maintenance_events').select('*').eq('id', eventId).is('deleted_at', null).maybeSingle(),
       supabase.from('aft_event_line_items').select('*').eq('event_id', eventId).is('deleted_at', null).order('created_at'),
       supabase.from('aft_event_messages').select('*').eq('event_id', eventId).order('created_at'),
     ]);
-    if (ev) setSelectedEvent(ev);
-    setEventLineItems(lines || []);
-    setEventMessages(msgs || []);
+    // Surface partial-load failures — silent missing line items would
+    // otherwise look like the event has no work scope.
+    if (evRes.error || linesRes.error || msgsRes.error) {
+      showError("Couldn't load the full service event. Pull to refresh.");
+      return;
+    }
+    if (evRes.data) setSelectedEvent(evRes.data);
+    setEventLineItems(linesRes.data || []);
+    setEventMessages(msgsRes.data || []);
   };
 
   const loadMxAndSquawks = async () => {
-    const [{ data: mx }, { data: sq }] = await Promise.all([
+    const [mxRes, sqRes] = await Promise.all([
       supabase.from('aft_maintenance_items').select('*').eq('aircraft_id', aircraft.id).is('deleted_at', null).order('due_time').order('due_date'),
       supabase.from('aft_squawks').select('*').eq('aircraft_id', aircraft.id).eq('status', 'open').is('deleted_at', null).order('occurred_at', { ascending: false }).order('created_at', { ascending: false }),
     ]);
-    setMxItems(mx || []);
-    setSquawks(sq || []);
+    if (mxRes.error || sqRes.error) {
+      showError("Couldn't load MX items / squawks for this event.");
+      return;
+    }
+    setMxItems(mxRes.data || []);
+    setSquawks(sqRes.data || []);
   };
 
   /** Collect IDs of MX items and squawks already in draft/active events */
@@ -141,10 +156,17 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
       .filter(e => ['draft', 'scheduling', 'confirmed', 'in_progress'].includes(e.status))
       .map(e => e.id);
     if (activeEventIds.length > 0) {
-      const { data: allLines } = await supabase
+      const { data: allLines, error: linesErr } = await supabase
         .from('aft_event_line_items').select('maintenance_item_id, squawk_id')
         .in('event_id', activeEventIds);
-      setAllActiveLineItems(allLines || []);
+      if (linesErr) {
+        // Without these the create flow would let the user re-add an
+        // item that's already on a draft — surface so they can retry.
+        showError("Couldn't load drafted items. Some items may show as available even if already drafted.");
+        setAllActiveLineItems([]);
+      } else {
+        setAllActiveLineItems(allLines || []);
+      }
     } else {
       setAllActiveLineItems([]);
     }

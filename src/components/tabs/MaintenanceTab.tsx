@@ -156,10 +156,13 @@ export default function MaintenanceTab({
     if (!aircraft) return;
     setIsExportingMx(true);
     try {
-      const { data: completedEvents } = await supabase
+      const { data: completedEvents, error: eventsErr } = await supabase
         .from('aft_maintenance_events').select('*')
         .eq('aircraft_id', aircraft.id).eq('status', 'complete').is('deleted_at', null)
         .order('completed_at', { ascending: false });
+      // Without throw the catch below would never fire and the user
+      // would see the misleading "No completed events" toast.
+      if (eventsErr) throw eventsErr;
 
       if (!completedEvents || completedEvents.length === 0) {
         showWarning("No completed service events to export.");
@@ -168,8 +171,9 @@ export default function MaintenanceTab({
       }
 
       const eventIds = completedEvents.map((e: any) => e.id);
-      const { data: allLineItems } = await supabase
+      const { data: allLineItems, error: linesErr } = await supabase
         .from('aft_event_line_items').select('*').in('event_id', eventIds);
+      if (linesErr) throw linesErr;
 
       const { jsPDF } = await import("jspdf");
       const doc = new jsPDF();
