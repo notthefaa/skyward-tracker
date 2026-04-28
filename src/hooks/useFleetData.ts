@@ -185,13 +185,22 @@ export function useFleetData() {
     // occurred_at (physical flight time) rather than created_at (server
     // write time) so the companion app's offline queue doesn't skew
     // burn-rate projections when old flights flush late.
-    const { data: logs } = await supabase
+    //
+    // Bail on error rather than treating "no logs" and "fetch failed"
+    // identically — the latter would lock the aircraft into the
+    // DEFAULT_METRICS zero state set by fetchAircraftData and look like
+    // "this plane has no flight history."
+    const { data: logs, error: logsErr } = await supabase
       .from('aft_flight_logs')
       .select('aircraft_id, ftt, tach, created_at, occurred_at')
       .eq('aircraft_id', aircraftId)
       .gte('occurred_at', ago.toISOString())
       .order('occurred_at', { ascending: true })
       .order('created_at', { ascending: true });
+    if (logsErr) {
+      console.error('[enrichSingleAircraft] flight-log fetch failed', logsErr);
+      return;
+    }
 
     const planeLogs = logs || [];
     flightLogCacheRef.current[aircraftId] = planeLogs;
@@ -219,6 +228,15 @@ export function useFleetData() {
       // 170-day-old data point, not a fresh one.
       supabase.from('aft_flight_logs').select('aircraft_id, ftt, tach, created_at, occurred_at').eq('aircraft_id', aircraftId).is('deleted_at', null).gte('occurred_at', ago.toISOString()).order('occurred_at', { ascending: true }).order('created_at', { ascending: true }),
     ]);
+
+    // If either fetch errored, leave the in-memory aircraft state alone
+    // (callers see stale-but-correct rather than partially-rebuilt) and
+    // skip the SWR invalidation — there's nothing fresher to revalidate
+    // from. Realtime will fire again on the next change.
+    if (pR.error || lR.error) {
+      console.error('[refreshForAircraft] fetch failed', { p: pR.error, l: lR.error });
+      return;
+    }
 
     if (pR.data) {
       const planeLogs = lR.data || [];

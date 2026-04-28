@@ -30,6 +30,18 @@ export function useGroundedStatus(allAircraftList: AircraftWithMetrics[]) {
         .eq('aircraft_id', ac.id).is('deleted_at', null).eq('is_superseded', false),
     ]);
 
+    // If any fetch failed, abort — leave the previous status in place
+    // rather than computing an airworthy verdict from a partial dataset.
+    // A transient network blip otherwise flips a grounded plane to
+    // airworthy in the header dot, which is a flight-safety call that
+    // should fail closed (last-known) instead of fail open (default OK).
+    if (mxRes.error || sqRes.error || eqRes.error || adRes.error) {
+      console.error('[useGroundedStatus] fetch failed — keeping last verdict', {
+        mx: mxRes.error, sq: sqRes.error, eq: eqRes.error, ad: adRes.error,
+      });
+      return;
+    }
+
     const verdict = computeAirworthinessStatus({
       aircraft: {
         id: ac.id,
