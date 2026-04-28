@@ -32,16 +32,13 @@ export default function AuthGate({ children }: AuthGateProps) {
 
   // ─── Auth Init ───
   useEffect(() => {
-    // App version check
+    // App version check on mount: this client already has the new
+    // bundle (it just executed), so no reload is needed — just sync
+    // localStorage to the version we're actually running. The boot
+    // path doesn't have any user state worth preserving anyway.
     const appVersion = process.env.NEXT_PUBLIC_APP_VERSION;
     if (appVersion) {
-      const lv = localStorage.getItem('aft_app_version');
-      if (lv && lv !== appVersion) {
-        localStorage.setItem('aft_app_version', appVersion);
-        window.location.reload();
-      } else if (!lv) {
-        localStorage.setItem('aft_app_version', appVersion);
-      }
+      localStorage.setItem('aft_app_version', appVersion);
     }
 
     supabase.auth.getSession().then(({ data: { session }, error }) => {
@@ -90,7 +87,11 @@ export default function AuthGate({ children }: AuthGateProps) {
           }
         });
 
-        // Version check with cooldown to prevent rapid reloads
+        // Version check with cooldown to prevent banner spam.
+        // Dispatch an event instead of force-reloading so a pilot
+        // mid-form (flight log, mx event, Howard chat) gets to
+        // finish before refreshing — UpdateAvailableBanner handles
+        // the soft prompt and the actual reload.
         const now = Date.now();
         if (appVersion && now - lastVersionCheck > VERSION_CHECK_COOLDOWN) {
           lastVersionCheck = now;
@@ -98,11 +99,12 @@ export default function AuthGate({ children }: AuthGateProps) {
             .then(r => r.ok ? r.json() : null)
             .then(data => {
               if (data?.version && data.version !== appVersion) {
-                localStorage.setItem('aft_app_version', data.version);
-                window.location.reload();
+                window.dispatchEvent(
+                  new CustomEvent('aft:version-stale', { detail: { version: data.version } }),
+                );
               }
             })
-            .catch(() => {}); // Silent fail — network issues shouldn't trigger reload
+            .catch(() => {}); // Silent fail — network issues shouldn't surface
         }
       }
     };
