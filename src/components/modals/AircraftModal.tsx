@@ -211,8 +211,11 @@ export default function AircraftModal({
       if (croppedFile) {
         try {
           const compressed = await imageCompression(croppedFile, { maxSizeMB: 0.2, maxWidthOrHeight: 800, useWebWorker: true });
-          const fileName = `${newTail.toUpperCase()}_${Date.now()}`;
-          const { data } = await supabase.storage.from('aft_aircraft_avatars').upload(fileName, compressed);
+          // Extension + explicit contentType: without these, Supabase
+          // serves the object as application/octet-stream, and Firefox's
+          // OpaqueResponseBlocking refuses to render it inside <img>.
+          const fileName = `${newTail.toUpperCase()}_${Date.now()}.jpg`;
+          const { data } = await supabase.storage.from('aft_aircraft_avatars').upload(fileName, compressed, { contentType: 'image/jpeg' });
           if (data) {
             const { data: urlData } = supabase.storage.from('aft_aircraft_avatars').getPublicUrl(data.path);
             avatarUrl = urlData.publicUrl;
