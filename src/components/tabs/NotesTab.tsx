@@ -7,7 +7,7 @@ import type { AircraftRole } from "@/lib/types";
 import useSWR from "swr";
 import { FileText, Plus, X, Upload, Edit2, ChevronLeft, ChevronRight, Trash2 } from "lucide-react";
 import { PrimaryButton } from "@/components/AppButtons";
-import imageCompression from "browser-image-compression";
+import { compressImage } from "@/lib/imageCompress";
 import { useToast } from "@/components/ToastProvider";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { useModalScrollLock } from "@/hooks/useModalScrollLock";
@@ -106,7 +106,7 @@ export default function NotesTab({ aircraft, session, role, aircraftRole, userIn
 
     for (const file of selectedImages) {
       try {
-        const compressedFile = await imageCompression(file, options);
+        const compressedFile = await compressImage(file, options);
         const fileName = `${aircraft.tail_number}_${Date.now()}_${compressedFile.name}`;
 
         const { data } = await supabase.storage.from('aft_note_images').upload(fileName, compressedFile);

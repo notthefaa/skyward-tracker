@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import dynamic from "next/dynamic";
 import { useToast } from "@/components/ToastProvider";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { supabase } from "@/lib/supabase";
@@ -11,10 +12,13 @@ import useSWR from "swr";
 import { Wrench, Trash2, Plus, X, Edit2, Calendar, Send, ExternalLink, ChevronRight, HelpCircle, AlertTriangle, Download, Layers, Settings, ClipboardList, ShieldAlert, Camera, Loader2 } from "lucide-react";
 import { PrimaryButton } from "@/components/AppButtons";
 import { useModalScrollLock } from "@/hooks/useModalScrollLock";
-import ServiceEventModal from "@/components/modals/ServiceEventModal";
-import MxGuideModal from "@/components/modals/MxGuideModal";
-import MxTemplatePickerModal from "@/components/modals/MxTemplatePickerModal";
 import SquawksTab from "@/components/tabs/SquawksTab";
+
+// Click-triggered modals — keep them out of the MX tab's eager chunk.
+// MxTemplatePickerModal alone pulls 25 KB of MX_TEMPLATES data.
+const ServiceEventModal = dynamic(() => import("@/components/modals/ServiceEventModal"), { ssr: false });
+const MxGuideModal = dynamic(() => import("@/components/modals/MxGuideModal"), { ssr: false });
+const MxTemplatePickerModal = dynamic(() => import("@/components/modals/MxTemplatePickerModal"), { ssr: false });
 import SectionSelector from "@/components/shell/SectionSelector";
 import { MX_ADS_SELECTOR_ITEMS, emitMxAdsNavigate } from "@/components/shell/mxAdsNav";
 import { ModalPortal } from "@/components/ModalPortal";
@@ -551,8 +555,8 @@ export default function MaintenanceTab({
             </div>
           )}
 
-          <MxGuideModal show={showGuideModal} onClose={() => setShowGuideModal(false)} />
-          <MxTemplatePickerModal aircraft={aircraft} show={showTemplateModal} onClose={() => setShowTemplateModal(false)} onRefresh={() => { mutate(); onGroundedStatusChange(); }} />
+          {showGuideModal && <MxGuideModal show onClose={() => setShowGuideModal(false)} />}
+          {showTemplateModal && <MxTemplatePickerModal aircraft={aircraft} show onClose={() => setShowTemplateModal(false)} onRefresh={() => { mutate(); onGroundedStatusChange(); }} />}
 
           {canEditMx && activeEvents.length > 0 && (
             <div className="mb-4 space-y-2">
@@ -937,7 +941,7 @@ export default function MaintenanceTab({
         />
       )}
 
-      <ServiceEventModal aircraft={aircraft} show={showServiceModal} onClose={() => { setShowServiceModal(false); setPreSelectMxItemId(null); mutateEvents(); }} onRefresh={() => { mutate(); mutateEvents(); }} canManageService={canEditMx} preSelectMxItemId={preSelectMxItemId} />
+      {showServiceModal && <ServiceEventModal aircraft={aircraft} show onClose={() => { setShowServiceModal(false); setPreSelectMxItemId(null); mutateEvents(); }} onRefresh={() => { mutate(); mutateEvents(); }} canManageService={canEditMx} preSelectMxItemId={preSelectMxItemId} />}
     </div>
   );
 }

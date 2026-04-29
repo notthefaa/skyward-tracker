@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import dynamic from "next/dynamic";
 import { useModalScrollLock } from "@/hooks/useModalScrollLock";
 import { useEscapeKey } from "@/hooks/useEscapeKey";
 import { supabase } from "@/lib/supabase";
@@ -13,9 +14,10 @@ import type { AircraftWithMetrics } from "@/lib/types";
 import { X, Info, Camera, Upload, Plus, Trash2, ChevronDown, ChevronUp, MessageSquare, FileText } from "lucide-react";
 import { PrimaryButton } from "@/components/AppButtons";
 import { HOWARD_LOGO_PATH } from "@/lib/howard/persona";
-import imageCompression from "browser-image-compression";
-import ReactCrop, { Crop } from "react-image-crop";
-import "react-image-crop/dist/ReactCrop.css";
+import { compressImage } from "@/lib/imageCompress";
+import type { Crop } from "react-image-crop";
+
+const AvatarCropper = dynamic(() => import("@/components/AvatarCropper"), { ssr: false });
 
 export default function AircraftModal({ 
   session, 
@@ -210,7 +212,7 @@ export default function AircraftModal({
       const croppedFile = await getCroppedImg();
       if (croppedFile) {
         try {
-          const compressed = await imageCompression(croppedFile, { maxSizeMB: 0.2, maxWidthOrHeight: 800, useWebWorker: true });
+          const compressed = await compressImage(croppedFile, { maxSizeMB: 0.2, maxWidthOrHeight: 800, useWebWorker: true });
           // Extension + explicit contentType: without these, Supabase
           // serves the object as application/octet-stream, and Firefox's
           // OpaqueResponseBlocking refuses to render it inside <img>.
@@ -481,9 +483,14 @@ export default function AircraftModal({
                   Adjust Photo Alignment
                 </label>
                 <div className="w-full flex justify-center bg-black rounded overflow-hidden" style={{ aspectRatio: '16/9' }}>
-                  <ReactCrop crop={crop} onChange={c => setCrop(c)} aspect={16 / 9}>
-                    <img ref={imageRef} src={avatarSrc} alt="Crop preview" className="max-h-[200px] object-contain" />
-                  </ReactCrop>
+                  <AvatarCropper
+                    ref={imageRef}
+                    src={avatarSrc}
+                    crop={crop}
+                    onCropChange={c => setCrop(c)}
+                    aspect={16 / 9}
+                    imgClassName="max-h-[200px] object-contain"
+                  />
                 </div>
               </>
             )}

@@ -1,4 +1,9 @@
 import { withSentryConfig } from '@sentry/nextjs';
+import bundleAnalyzer from '@next/bundle-analyzer';
+
+const withBundleAnalyzer = bundleAnalyzer({
+  enabled: process.env.ANALYZE === 'true',
+});
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -30,9 +35,11 @@ const nextConfig = {
 // shaking. It's safe to run without DSN / auth token — it just skips
 // the upload step. Setting `silent: true` when there's no auth token
 // keeps build output clean on dev / preview.
-export default withSentryConfig(nextConfig, {
+export default withSentryConfig(withBundleAnalyzer(nextConfig), {
   silent: !process.env.SENTRY_AUTH_TOKEN,
   widenClientFileUpload: true,
-  disableLogger: true,
-  automaticVercelMonitors: false,
+  webpack: {
+    treeshake: { removeDebugLogging: true },
+    automaticVercelMonitors: false,
+  },
 });

@@ -7,10 +7,11 @@ import type { AircraftWithMetrics, AircraftRole } from "@/lib/types";
 import useSWR from "swr";
 import { AlertTriangle, Plus, X, Upload, Mail, MailWarning, Edit2, ChevronLeft, ChevronRight, Download, CheckSquare, Trash2, CheckCircle, Link2, Clock, MapPin, User, Send } from "lucide-react";
 import { PrimaryButton } from "@/components/AppButtons";
-import SignatureCanvas from "react-signature-canvas";
+import type SignatureCanvas from "react-signature-canvas";
+import SignaturePad from "@/components/SignaturePad";
 import { useSignedUrls, fetchSignedUrls } from "@/hooks/useSignedUrls";
 import { newIdempotencyKey, idempotencyHeader } from "@/lib/idempotencyClient";
-import imageCompression from "browser-image-compression";
+import { compressImage } from "@/lib/imageCompress";
 import { useToast } from "@/components/ToastProvider";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { useModalScrollLock } from "@/hooks/useModalScrollLock";
@@ -180,7 +181,7 @@ export default function SquawksTab({
     const options = { maxSizeMB: 1, maxWidthOrHeight: 1920, useWebWorker: true };
     for (const file of selectedImages) {
       try {
-        const compressedFile = await imageCompression(file, options);
+        const compressedFile = await compressImage(file, options);
         const fileName = `${aircraft!.tail_number}_${Date.now()}_${compressedFile.name}`;
         const { data } = await supabase.storage.from('aft_squawk_images').upload(fileName, compressedFile);
         if (data) {
@@ -795,7 +796,7 @@ export default function SquawksTab({
                       </div>
                       <div className="pt-4 border-t border-gray-200">
                         <label className="text-[10px] font-bold uppercase tracking-widest text-navy block mb-2">Signature *</label>
-                        <div className="border border-gray-300 rounded bg-white"><SignatureCanvas ref={sigCanvas} penColor="black" canvasProps={{ className: 'w-full h-32 rounded' }} /></div>
+                        <div className="border border-gray-300 rounded bg-white"><SignaturePad ref={sigCanvas} penColor="black" canvasProps={{ className: 'w-full h-32 rounded' }} /></div>
                         <button type="button" onClick={() => sigCanvas.current?.clear()} className="text-[10px] font-bold uppercase text-gray-500 mt-1 hover:text-danger">Clear Signature</button>
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
