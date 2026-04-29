@@ -65,10 +65,12 @@ export function computeAirworthinessStatus(input: Inputs): AirworthinessVerdict 
 
   const findings: AirworthinessFinding[] = [];
   const activeEquipment = input.equipment.filter(e => !e.deleted_at && !e.removed_at);
-  // Treat an entirely empty equipment list as "tracking not set up yet"
-  // rather than "equipment is missing". Without this, every aircraft
-  // that hasn't populated the equipment tab reads as grounded on 91.207
-  // even when it's actually airworthy.
+  // Empty equipment list = "operator hasn't started tracking" — leave
+  // them at airworthy (the explicit default). Operators who have NOT
+  // tracked equipment likely manage compliance outside the app; raising
+  // a status to "issues" for every untracked aircraft would punish the
+  // common case. The targeted gap warnings below only fire when the
+  // operator IS tracking but missed a regulatorily-expected category.
   const equipmentTracked = activeEquipment.length > 0;
 
   // ─── 91.207 ELT ─────────────────────────────────────────────
@@ -91,7 +93,20 @@ export function computeAirworthinessStatus(input: Inputs): AirworthinessVerdict 
   }
 
   // ─── 91.413 Transponder (24 months) ─────────────────────────
+  // Pre-fix this only fired when a transponder row existed. An
+  // aircraft with equipment otherwise tracked but no transponder row
+  // silently passed 91.413 — but 91.215 actually requires a
+  // transponder for most controlled-airspace ops. We can't know from
+  // app state alone whether the aircraft is exempt (e.g., an antique
+  // grandfathered out of 91.215), so warn rather than ground.
   const transponder = activeEquipment.find(e => e.category === CATEGORY_TRANSPONDER);
+  if (equipmentTracked && !transponder) {
+    findings.push({
+      severity: 'warning',
+      citation: '91.215',
+      message: 'No transponder tracked. Required for most controlled-airspace ops; verify or document the exemption.',
+    });
+  }
   if (transponder && isDateExpired(transponder.transponder_due_date)) {
     findings.push({
       severity: 'grounded',
@@ -101,9 +116,19 @@ export function computeAirworthinessStatus(input: Inputs): AirworthinessVerdict 
   }
 
   // ─── 91.411 Altimeter + Pitot-Static (24 months) ────────────
+  // Gated on `is_ifr_equipped` rather than on actual IFR operation —
+  // intentionally over-conservative; documented elsewhere as a
+  // known design trade-off.
   const ifrRelevant = input.aircraft.is_ifr_equipped === true;
   if (ifrRelevant) {
     const altimeter = activeEquipment.find(e => e.category === CATEGORY_ALTIMETER);
+    if (equipmentTracked && !altimeter) {
+      findings.push({
+        severity: 'warning',
+        citation: '91.411',
+        message: 'No altimeter tracked but aircraft is marked IFR-equipped. 24-month check status is unknown.',
+      });
+    }
     if (altimeter && isDateExpired(altimeter.altimeter_due_date)) {
       findings.push({
         severity: 'grounded',
@@ -112,6 +137,13 @@ export function computeAirworthinessStatus(input: Inputs): AirworthinessVerdict 
       });
     }
     const pitot = activeEquipment.find(e => e.category === CATEGORY_PITOT_STATIC);
+    if (equipmentTracked && !pitot) {
+      findings.push({
+        severity: 'warning',
+        citation: '91.411',
+        message: 'No pitot-static system tracked but aircraft is marked IFR-equipped. 24-month check status is unknown.',
+      });
+    }
     if (pitot && isDateExpired(pitot.pitot_static_due_date)) {
       findings.push({
         severity: 'grounded',

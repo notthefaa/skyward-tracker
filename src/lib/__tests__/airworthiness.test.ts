@@ -101,7 +101,11 @@ describe('computeAirworthinessStatus', () => {
     const v = computeAirworthinessStatus({
       aircraft: aircraft({ is_ifr_equipped: false }),
       equipment: [
+        // Include a transponder so the missing-transponder warning
+        // doesn't fire and bump status to 'issues' for unrelated
+        // reasons. We're testing 91.411 gating on `is_ifr_equipped`.
         { ...baseEquipment, id: 'eq-elt', category: 'elt', name: 'ELT', is_elt: true } as AircraftEquipment,
+        { ...baseEquipment, id: 'eq-xp', category: 'transponder', name: 'XPDR' } as AircraftEquipment,
         { ...baseEquipment, id: 'eq-alt', category: 'altimeter', name: 'Altimeter', altimeter_due_date: daysFromNow(-30) } as AircraftEquipment,
       ],
       mxItems: [],
@@ -115,7 +119,9 @@ describe('computeAirworthinessStatus', () => {
       aircraft: aircraft({ is_ifr_equipped: true }),
       equipment: [
         { ...baseEquipment, id: 'eq-elt', category: 'elt', name: 'ELT', is_elt: true } as AircraftEquipment,
+        { ...baseEquipment, id: 'eq-xp', category: 'transponder', name: 'XPDR' } as AircraftEquipment,
         { ...baseEquipment, id: 'eq-alt', category: 'altimeter', name: 'Altimeter', altimeter_due_date: daysFromNow(-30) } as AircraftEquipment,
+        { ...baseEquipment, id: 'eq-pitot', category: 'pitot_static', name: 'Pitot' } as AircraftEquipment,
       ],
       mxItems: [],
       squawks: [],
@@ -124,18 +130,75 @@ describe('computeAirworthinessStatus', () => {
     expect(v.citation).toBe('91.411');
   });
 
+  // Pre-fix the airworthiness gate quietly passed a tracked aircraft
+  // that was missing a transponder row entirely — but 91.215 requires
+  // a transponder for most controlled-airspace ops. Now warn (not
+  // ground — we can't know exemptions from app state alone).
+  it('warns when equipment is tracked but no transponder is logged (91.215)', () => {
+    const v = computeAirworthinessStatus({
+      aircraft: aircraft({ is_ifr_equipped: false }),
+      equipment: [
+        { ...baseEquipment, id: 'eq-elt', category: 'elt', name: 'ELT', is_elt: true } as AircraftEquipment,
+      ],
+      mxItems: [],
+      squawks: [],
+    });
+    expect(v.status).toBe('issues');
+    expect(v.findings.some(f => f.citation === '91.215' && f.severity === 'warning')).toBe(true);
+  });
+
+  it('warns when IFR-equipped but altimeter or pitot-static is missing (91.411)', () => {
+    const v = computeAirworthinessStatus({
+      aircraft: aircraft({ is_ifr_equipped: true }),
+      equipment: [
+        { ...baseEquipment, id: 'eq-elt', category: 'elt', name: 'ELT', is_elt: true } as AircraftEquipment,
+        { ...baseEquipment, id: 'eq-xp', category: 'transponder', name: 'XPDR' } as AircraftEquipment,
+        // Altimeter + pitot intentionally omitted.
+      ],
+      mxItems: [],
+      squawks: [],
+    });
+    expect(v.status).toBe('issues');
+    const altWarn = v.findings.find(f => f.citation === '91.411' && f.message.toLowerCase().includes('altimeter'));
+    const pitotWarn = v.findings.find(f => f.citation === '91.411' && f.message.toLowerCase().includes('pitot'));
+    expect(altWarn).toBeTruthy();
+    expect(pitotWarn).toBeTruthy();
+  });
+
+  it('does NOT warn for missing categories when equipment list is entirely empty', () => {
+    // An operator with no tracked equipment shouldn't get a flood of
+    // warnings — they probably manage compliance outside the app, and
+    // the targeted gap warnings only make sense when we have evidence
+    // the operator IS tracking but missed something.
+    const v = computeAirworthinessStatus({
+      aircraft: aircraft({ is_ifr_equipped: true }),
+      equipment: [],
+      mxItems: [],
+      squawks: [],
+    });
+    expect(v.status).toBe('airworthy');
+    expect(v.findings.length).toBe(0);
+  });
+
   it('issues a warning on expired VOR for IFR aircraft (91.171)', () => {
     const v = computeAirworthinessStatus({
       aircraft: aircraft({ is_ifr_equipped: true }),
       equipment: [
         { ...baseEquipment, id: 'eq-elt', category: 'elt', name: 'ELT', is_elt: true } as AircraftEquipment,
+        { ...baseEquipment, id: 'eq-xp', category: 'transponder', name: 'XPDR' } as AircraftEquipment,
+        { ...baseEquipment, id: 'eq-alt', category: 'altimeter', name: 'Altimeter' } as AircraftEquipment,
+        { ...baseEquipment, id: 'eq-pitot', category: 'pitot_static', name: 'Pitot' } as AircraftEquipment,
         { ...baseEquipment, id: 'eq-nav', category: 'instrument', name: 'NAV', vor_due_date: daysFromNow(-2) } as AircraftEquipment,
       ],
       mxItems: [],
       squawks: [],
     });
     expect(v.status).toBe('issues');
-    expect(v.citation).toBe('91.171');
+    // The VOR warning must be among findings; status verdict picks
+    // the *first* warning's citation, which can be any of the
+    // simultaneous IFR warnings — assert the substantive finding
+    // rather than the surface citation field.
+    expect(v.findings.some(f => f.citation === '91.171')).toBe(true);
   });
 
   it('grounds on an open AOG squawk', () => {
