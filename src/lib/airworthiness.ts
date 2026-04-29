@@ -232,10 +232,24 @@ export function computeAirworthinessStatus(input: Inputs): AirworthinessVerdict 
   }
 
   // ─── For-hire-only checks ───────────────────────────────────
-  if (input.aircraft.is_for_hire) {
-    // 100-hour inspection — tracked as an MX item; already covered above
-    // if set up. No extra check here unless the UI hasn't created it.
-  }
+  // 91.409(b) requires a 100-hour inspection for aircraft carrying
+  // persons for hire OR given for flight instruction for hire. Pre-fix
+  // there was an empty `if (is_for_hire) {}` branch here that never
+  // did anything — leaving the field as a stored hint with no behavior.
+  //
+  // We don't auto-check here because there's no reliable way to
+  // identify a "100-hour inspection" MX item from app state alone.
+  // Fuzzy-matching the item name (`/100[\s-]?h/i` etc.) gives
+  // operators a false sense of coverage: a slight rename and the
+  // warning silently stops firing. The right fix is a dedicated
+  // `is_100_hour_inspection` flag on `aft_maintenance_items` that
+  // operators set explicitly when adding the item — that lives on
+  // the P3 backlog.
+  //
+  // For now `is_for_hire` continues to flow through to Howard (which
+  // fetches it for context-awareness in commercial-vs-private
+  // questions) and to the aircraft form, but it does NOT influence
+  // the airworthiness verdict on its own.
 
   // ─── Verdict ────────────────────────────────────────────────
   const grounded = findings.find(f => f.severity === 'grounded');

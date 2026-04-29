@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 import { requireAuth, requireAircraftAdmin, handleApiError } from '@/lib/auth';
+import { fileBytesMatchType } from '@/lib/fileMagic';
 
 const client = new Anthropic();
 
@@ -45,6 +46,13 @@ export async function POST(req: Request) {
     await requireAircraftAdmin(supabaseAdmin, user.id, aircraftId);
 
     const buffer = Buffer.from(await image.arrayBuffer());
+    // Magic-byte check — the multipart File's `type` is a Content-Type
+    // header echoed from the client and trivial to spoof. Renaming
+    // anything.exe to anything.jpg would otherwise reach Anthropic's
+    // vision endpoint and burn tokens producing garbage.
+    if (!fileBytesMatchType(buffer, image.type, image.name)) {
+      return NextResponse.json({ error: `File contents don't match the declared type (${image.type}).` }, { status: 400 });
+    }
     const base64 = buffer.toString('base64');
     const mediaType = image.type as 'image/jpeg' | 'image/png' | 'image/webp';
 
