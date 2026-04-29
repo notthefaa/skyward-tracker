@@ -88,8 +88,11 @@ describe('matchesAircraft + cache.keys() iteration (the AppShell tail-switch pat
       [`howard-user-some-user-id`, { data: {} }],
     ]);
 
+    // tsconfig targets es5 without downlevelIteration, so iterating a
+    // raw MapIterator with for...of is a type error. Same `Array.from`
+    // pattern AppShell uses on the live SWR cache.
     const matched: string[] = [];
-    for (const k of cache.keys()) {
+    for (const k of Array.from(cache.keys())) {
       if (typeof k === 'string' && matcher(k)) matched.push(k);
     }
 
