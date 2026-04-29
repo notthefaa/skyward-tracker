@@ -2,20 +2,12 @@ import { NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 import { requireAuth, requireAircraftAdmin, handleApiError } from '@/lib/auth';
 import { setAppUser } from '@/lib/audit';
+import { computeVerdict, type ParsedApplicability } from '@/lib/adApplicability';
 
 export const maxDuration = 60;
 
 const client = new Anthropic();
 const MODEL = 'claude-haiku-4-5-20251001';
-
-// Structured output we want from Haiku for a single AD.
-interface ParsedApplicability {
-  serial_ranges: Array<{ start?: number; end?: number; inclusive?: boolean; openEnd?: boolean; openStart?: boolean }>;
-  specific_serials: number[];
-  engine_references: string[];
-  prop_references: string[];
-  notes: string;
-}
 
 const TOOL_SCHEMA: Anthropic.Tool = {
   name: 'report_applicability',
@@ -60,71 +52,10 @@ const TOOL_SCHEMA: Anthropic.Tool = {
   },
 };
 
-function serialNumericCore(serial: string): number | null {
-  const m = serial.match(/\d{3,}/);
-  return m ? parseInt(m[0], 10) : null;
-}
-
-function rangeIncludes(r: ParsedApplicability['serial_ranges'][number], serial: number): boolean {
-  if (r.start != null && r.end != null) return serial >= r.start && serial <= r.end;
-  if (r.openEnd && r.start != null) return serial >= r.start;
-  if (r.openStart && r.end != null) return serial <= r.end;
-  return false;
-}
-
-function computeVerdict(
-  parsed: ParsedApplicability,
-  aircraft: { serial_number?: string | null },
-  equipment: Array<{ category: string; make?: string | null; model?: string | null }>,
-): { status: 'applies' | 'does_not_apply' | 'review_required'; reason: string } {
-  const serialStr = aircraft.serial_number?.trim();
-
-  // Engine / prop reference hits: if the AD names a specific engine/prop
-  // family and the aircraft has that equipment installed, it applies.
-  const hasEngineHit = parsed.engine_references.some(ref => {
-    const needle = ref.toLowerCase();
-    return equipment.some(e =>
-      e.category === 'engine' &&
-      [(e.make || '').toLowerCase(), (e.model || '').toLowerCase()].filter(Boolean).join(' ').includes(needle) ||
-      needle.includes((e.make || '').toLowerCase())
-    );
-  });
-  const hasPropHit = parsed.prop_references.some(ref => {
-    const needle = ref.toLowerCase();
-    return equipment.some(e =>
-      e.category === 'propeller' &&
-      ([(e.make || '').toLowerCase(), (e.model || '').toLowerCase()].filter(Boolean).join(' ').includes(needle) ||
-       needle.includes((e.make || '').toLowerCase()))
-    );
-  });
-
-  if (hasEngineHit) return { status: 'applies', reason: 'Aircraft has a matching engine installed.' };
-  if (hasPropHit) return { status: 'applies', reason: 'Aircraft has a matching propeller installed.' };
-
-  // Serial check path.
-  if (!serialStr) {
-    return { status: 'review_required', reason: 'Aircraft has no serial number on file — can\'t check range.' };
-  }
-  const serialNum = serialNumericCore(serialStr);
-  if (serialNum == null) {
-    return { status: 'review_required', reason: `Serial "${serialStr}" couldn't be parsed numerically.` };
-  }
-
-  if (parsed.specific_serials.includes(serialNum)) {
-    return { status: 'applies', reason: `Serial ${serialStr} is explicitly called out.` };
-  }
-  if (parsed.serial_ranges.length > 0) {
-    const hit = parsed.serial_ranges.find(r => rangeIncludes(r, serialNum));
-    if (hit) return { status: 'applies', reason: `Serial ${serialStr} falls within a cited range.` };
-    return { status: 'does_not_apply', reason: `Serial ${serialStr} is outside all ${parsed.serial_ranges.length} cited range(s).` };
-  }
-
-  // AD didn't name serials or engines/props — review required.
-  return {
-    status: 'review_required',
-    reason: parsed.notes || 'AD text does not narrow applicability by serial, engine, or propeller.',
-  };
-}
+// computeVerdict + serial helpers live in src/lib/adApplicability.ts so
+// the matcher is unit-testable. Next.js App Router only allows HTTP
+// method exports + a small allowlist of metadata exports from a
+// route file.
 
 export async function POST(req: Request) {
   try {

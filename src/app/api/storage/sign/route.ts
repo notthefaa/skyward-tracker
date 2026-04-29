@@ -152,19 +152,26 @@ export async function POST(req: Request) {
           }
         }
       } else if (bucket === 'aft_note_images' || bucket === 'aft_squawk_images') {
-        // Image URLs are stored in array columns (notes.image_urls /
-        // squawks.image_urls). Postgres array overlap (`overlaps` /
-        // `cs`) lets us check membership in one query per bucket.
+        // Both aft_notes and aft_squawks store URLs in the `pictures`
+        // text[] column (see migration 029 + the orphan-sweep in
+        // /api/admin/db-health). The earlier `image_urls` selects here
+        // matched zero rows silently, so `signed[url]` came back null
+        // for every photo and the client fell through to the still-
+        // public stored URL — fine while the buckets are public, but
+        // the moment either bucket is flipped private (the same
+        // pattern that broke avatars in `project_avatar_bucket_private`)
+        // every squawk and note photo across the app, the PDF export,
+        // and the public /squawk/[token] page would 403.
         const table = bucket === 'aft_note_images' ? 'aft_notes' : 'aft_squawks';
         let q = supabaseAdmin
           .from(table)
-          .select('image_urls, aircraft_id')
-          .overlaps('image_urls', urlList)
+          .select('pictures, aircraft_id')
+          .overlaps('pictures', urlList)
           .is('deleted_at', null);
         if (!isGlobalAdmin) q = q.in('aircraft_id', accessibleAircraftIds);
         const { data } = await q;
         for (const row of data || []) {
-          for (const u of (row.image_urls || []) as string[]) {
+          for (const u of (row.pictures || []) as string[]) {
             if (urlList.includes(u)) allowed.add(u);
           }
         }

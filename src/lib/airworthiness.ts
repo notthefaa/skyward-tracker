@@ -159,18 +159,41 @@ export function computeAirworthinessStatus(input: Inputs): AirworthinessVerdict 
     }
   }
 
-  // ─── ADs (active, affects airworthiness, due-date passed) ───
+  // ─── ADs (active, applicable, affects airworthiness) ───
+  // The Federal Register sync + Haiku drill-down (project_ad_applicability)
+  // tags each AD per-aircraft as 'applies' / 'does_not_apply' /
+  // 'review_required'. Honor that here:
+  //   - 'does_not_apply' is skipped entirely; the regulatory model
+  //     determined this AD doesn't bind this aircraft and grounding
+  //     against it would be a false positive.
+  //   - 'applies' with neither next_due_date nor next_due_time set is
+  //     a known-applicable AD with no compliance ever logged — that's
+  //     a hard grounding (91.403 — operator must comply), not a
+  //     warning. Previously the date/time predicates both came back
+  //     false and the AD silently passed.
+  //   - 'review_required' falls back to the date/time predicates so
+  //     ambiguous matches keep their prior behavior; a separate UI
+  //     surface should prompt the operator to resolve the ambiguity.
+  //   - null (never checked) keeps the old date/time-only behavior so
+  //     pre-applicability rows aren't suddenly downgraded.
   if (input.ads && input.ads.length > 0) {
     for (const ad of input.ads) {
       if (ad.deleted_at || ad.is_superseded || !ad.affects_airworthiness) continue;
+      if (ad.applicability_status === 'does_not_apply') continue;
       const timeExpired =
         ad.next_due_time != null && (input.aircraft.total_engine_time || 0) >= ad.next_due_time;
       const dateExpired = isDateExpired(ad.next_due_date);
-      if (timeExpired || dateExpired) {
+      const noComplianceLogged =
+        ad.applicability_status === 'applies' &&
+        ad.next_due_date == null &&
+        ad.next_due_time == null;
+      if (timeExpired || dateExpired || noComplianceLogged) {
         findings.push({
           severity: 'grounded',
-          citation: '91.417(b)',
-          message: `AD ${ad.ad_number} not in compliance.`,
+          citation: '91.403',
+          message: noComplianceLogged
+            ? `AD ${ad.ad_number} applicable — no compliance logged.`
+            : `AD ${ad.ad_number} not in compliance.`,
         });
       }
     }

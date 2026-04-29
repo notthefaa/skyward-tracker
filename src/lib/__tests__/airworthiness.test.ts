@@ -208,7 +208,82 @@ describe('computeAirworthinessStatus', () => {
       } as any],
     });
     expect(v.status).toBe('grounded');
-    expect(v.citation).toBe('91.417(b)');
+    // 91.403(a) is the operator-responsibility prohibition; 91.417 is
+    // the recordkeeping rule, which was the previous (incorrect)
+    // citation.
+    expect(v.citation).toBe('91.403');
+  });
+
+  it('skips an AD flagged does_not_apply', () => {
+    const v = computeAirworthinessStatus({
+      aircraft: aircraft({ total_engine_time: 3000 }),
+      equipment: [],
+      mxItems: [],
+      squawks: [],
+      ads: [{
+        id: 'ad-doesnt',
+        aircraft_id: 'ac-1',
+        ad_number: '2024-99-01',
+        affects_airworthiness: true,
+        is_superseded: false,
+        deleted_at: null,
+        // Past-due numbers that *would* ground if applicability were ignored.
+        next_due_time: 100,
+        next_due_date: '2020-01-01',
+        applicability_status: 'does_not_apply',
+      } as any],
+    });
+    expect(v.status).toBe('airworthy');
+  });
+
+  it('grounds on an applicable AD with no compliance logged', () => {
+    // applicability_status='applies' but neither next_due_date nor
+    // next_due_time set means the operator has never logged compliance
+    // — that's a 91.403 violation as soon as the AD is matched, not a
+    // warning. The previous code passed this case as airworthy because
+    // both date and time predicates returned false.
+    const v = computeAirworthinessStatus({
+      aircraft: aircraft({ total_engine_time: 3000 }),
+      equipment: [],
+      mxItems: [],
+      squawks: [],
+      ads: [{
+        id: 'ad-no-compl',
+        aircraft_id: 'ac-1',
+        ad_number: '2025-04-12',
+        affects_airworthiness: true,
+        is_superseded: false,
+        deleted_at: null,
+        next_due_time: null,
+        next_due_date: null,
+        applicability_status: 'applies',
+      } as any],
+    });
+    expect(v.status).toBe('grounded');
+    expect(v.findings.some(f => f.message.includes('no compliance logged'))).toBe(true);
+  });
+
+  it('legacy AD with no applicability_status keeps the date/time-only behavior', () => {
+    // Pre-applicability rows (applicability_status === null) should
+    // not be downgraded by the new compliance-logged check.
+    const v = computeAirworthinessStatus({
+      aircraft: aircraft({ total_engine_time: 3000 }),
+      equipment: [],
+      mxItems: [],
+      squawks: [],
+      ads: [{
+        id: 'ad-legacy',
+        aircraft_id: 'ac-1',
+        ad_number: '2010-01-01',
+        affects_airworthiness: true,
+        is_superseded: false,
+        deleted_at: null,
+        next_due_time: null,
+        next_due_date: null,
+        applicability_status: null,
+      } as any],
+    });
+    expect(v.status).toBe('airworthy');
   });
 
   it('ignores a superseded AD', () => {
