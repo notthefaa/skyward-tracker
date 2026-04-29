@@ -490,30 +490,40 @@ export default function AppShell({ session }: AppShellProps) {
   }, [activeTail]);
 
   // ─── Hard-reset SWR for one aircraft ───
-  // `globalMutate(matcher, undefined, { revalidate: true })` only sets
-  // data → undefined on the in-memory map; it does NOT delete the State
-  // entry, and SWR's filter path runs the matcher against
-  // `cache.get(key)._k` which is undefined for entries hydrated from
-  // localStorage but not yet resubscribed in the current session. So
-  // unmounted tabs (every tab the user hasn't visited yet on the
-  // destination aircraft) never see the broadcast and keep returning
-  // their stale `[]`.
+  // Two SWR-internal traps to navigate at the same time:
   //
-  // Iterating cache.keys() and calling cache.delete(key) directly
-  // bypasses both quirks: next mount sees undefined and SWR
-  // unconditionally fires the fetcher. The follow-up globalMutate
-  // still kicks an in-place revalidation for any subscriber that's
-  // already mounted (Summary on the destination aircraft).
+  //   (a) The filter form `globalMutate(matcher, ...)` runs the matcher
+  //       against `cache.get(key)._k`, which is undefined for entries
+  //       hydrated from localStorage but not yet resubscribed in this
+  //       session. Hydrated entries get skipped → tabs the user hasn't
+  //       visited yet on the destination aircraft keep their stale `[]`.
+  //
+  //   (b) SWR keeps an internal `FETCH[key]` map of in-flight requests.
+  //       When iOS suspends a fetch mid-flight (PWA backgrounded) the
+  //       promise hangs forever and `FETCH[key]` stays set. On resume
+  //       any `softRevalidate(WITH_DEDUPE)` sees the entry, decides a
+  //       request is "already in flight," and waits on the dead
+  //       promise instead of starting a fresh one. Pilots described
+  //       this exactly: data disappears, refresh hangs, switching
+  //       aircraft fixes it (because the new keys have no FETCH entry).
+  //       `cache.delete(key)` does NOT clear FETCH[key] — only mutate
+  //       does, and only on its non-filter path.
+  //
+  // Walk `cache.keys()` directly (bypasses (a)) and call
+  // `globalMutate(key, undefined, { revalidate: true })` per matched
+  // key (bypasses (b) — that path explicitly does `delete FETCH[key];
+  // delete PRELOAD[key]` before triggering the revalidator). For
+  // unmounted subscribers the cache lands at `data: undefined`, so the
+  // next mount sees no cache and unconditionally fires the fetcher.
   const wipeAircraftCache = useCallback((aircraftId: string) => {
     const matcher = matchesAircraft(aircraftId);
-    // Snapshot keys first — deleting while iterating the live iterator
-    // is asking for trouble.
-    const toDelete: string[] = [];
+    const keys: string[] = [];
     for (const k of Array.from(swrCache.keys())) {
-      if (typeof k === 'string' && matcher(k)) toDelete.push(k);
+      if (typeof k === 'string' && matcher(k)) keys.push(k);
     }
-    for (const k of toDelete) swrCache.delete(k);
-    globalMutate(matcher, undefined, { revalidate: true });
+    for (const k of keys) {
+      globalMutate(k, undefined, { revalidate: true });
+    }
   }, [globalMutate, swrCache]);
 
   // ─── On tail switch, wipe + revalidate the destination aircraft ───
@@ -527,23 +537,26 @@ export default function AppShell({ session }: AppShellProps) {
   }, [activeTail, allAircraftList, wipeAircraftCache]);
 
   // ─── Resume-from-background recovery ───
-  // iOS PWAs / Safari suspend in-flight fetches when the app
-  // backgrounds and don't reliably finalize them on resume. Pilots
-  // see: tabs that were showing data when they put the phone down
-  // come back empty, and pull-to-refresh hangs until the supabase
-  // fetch timeout (15 s) trips. The fetch timeout is necessary but
-  // not sufficient — we still want fresh data fast on resume rather
-  // than waiting 15 s for SWR's natural retry path.
+  // iOS PWAs / Safari suspend in-flight fetches AND pause the
+  // supabase auto-refresh timer when the app backgrounds. On resume:
+  // (a) old fetches may never finalize, and (b) the JWT in memory
+  // can be hours past expiry. Without intervention the first round
+  // of refetches goes out with a dead token, gets 401s, and SWR's
+  // 2 retries × 3 s + the 15 s fetch timeout we just installed
+  // burns 30+ seconds before any tab shows data again — which is
+  // exactly the "still timing out after sitting for a while" symptom
+  // pilots reported.
   //
-  // On any visibility transition back to visible (after > 2 s
-  // hidden, to ignore quick app-switcher peeks), refresh the auth
-  // session — JWT may have expired during sleep — then wipe the
-  // active aircraft's cache so every mounted/about-to-mount tab
-  // refetches against the revived connection.
+  // The refresh has to *complete* before we wipe the cache and let
+  // refetches run, otherwise they race the new JWT. Use a generation
+  // counter to make sure a slow refresh from one resume can't
+  // clobber a newer resume's wipe.
+  const resumeGenerationRef = useRef(0);
   useEffect(() => {
     if (typeof document === 'undefined') return;
     let hiddenAt = 0;
     const RESUME_THRESHOLD_MS = 2_000;
+    const REFRESH_TIMEOUT_MS = 8_000;
     const onVis = () => {
       if (document.hidden) {
         hiddenAt = Date.now();
@@ -555,11 +568,21 @@ export default function AppShell({ session }: AppShellProps) {
       if (!activeTail) return;
       const ac = allAircraftList.find(a => a.tail_number === activeTail);
       if (!ac) return;
-      // Fire-and-forget — supabase auto-refreshes on the next call
-      // anyway, this just front-runs the JWT-expired round trip.
-      supabase.auth.refreshSession().catch(() => {});
-      wipeAircraftCache(ac.id);
-      checkGroundedStatus(activeTail);
+      const gen = ++resumeGenerationRef.current;
+      (async () => {
+        // Race the refresh against a tight timeout — we'd rather
+        // wipe with a stale token (and let SWR retry on 401) than
+        // leave the user staring at stale data while a hung refresh
+        // call sits indefinitely.
+        await Promise.race([
+          supabase.auth.refreshSession().catch(() => {}),
+          new Promise<void>(resolve => setTimeout(resolve, REFRESH_TIMEOUT_MS)),
+        ]);
+        // A newer resume already ran — let it own the wipe.
+        if (resumeGenerationRef.current !== gen) return;
+        wipeAircraftCache(ac.id);
+        checkGroundedStatus(activeTail);
+      })();
     };
     document.addEventListener('visibilitychange', onVis);
     return () => document.removeEventListener('visibilitychange', onVis);
