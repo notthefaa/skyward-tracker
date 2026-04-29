@@ -8,9 +8,14 @@ interface UsePullToRefreshOptions {
   /** Minimum downward distance (px) before pull-to-refresh engages.
    *  Prevents accidental activation when scrolling up inside content. */
   activationDistance?: number;
+  /** Hard ceiling on how long the 'refreshing' phase can hold the spinner.
+   *  If `onRefresh` never resolves (hung supabase request, dead socket, etc.)
+   *  the watchdog forces phase back to 'idle' so the user can pull again
+   *  without restarting the app. */
+  watchdogMs?: number;
 }
 
-export function usePullToRefresh({ onRefresh, threshold = 80, activationDistance = 15 }: UsePullToRefreshOptions) {
+export function usePullToRefresh({ onRefresh, threshold = 80, activationDistance = 15, watchdogMs = 20_000 }: UsePullToRefreshOptions) {
   const [pullProgress, setPullProgress] = useState(0);
   const [phase, setPhase] = useState<'idle' | 'pulling' | 'refreshing' | 'done'>('idle');
   const [enabled, setEnabled] = useState(true);
@@ -19,6 +24,10 @@ export function usePullToRefresh({ onRefresh, threshold = 80, activationDistance
   const active = useRef(false);
   const engaged = useRef(false);
   const scrollEl = useRef<HTMLElement | null>(null);
+  // Bumped on every refresh attempt; the watchdog only fires phase-reset
+  // for the attempt it was scheduled with, so a slow refresh that finally
+  // resolves after the watchdog ran can't stomp on a *subsequent* pull.
+  const refreshSeqRef = useRef(0);
 
   // Native non-passive touchmove to enable preventDefault on iOS
   useEffect(() => {
@@ -99,23 +108,49 @@ export function usePullToRefresh({ onRefresh, threshold = 80, activationDistance
       setPhase('refreshing');
       setPullProgress(1);
 
+      // Watchdog: if onRefresh hangs (stuck supabase RPC, dead socket),
+      // bail out of the spinner after `watchdogMs` so the user isn't
+      // stranded staring at a refresh that never ends. The seq guard
+      // makes sure a hung onRefresh that *does* eventually resolve can't
+      // re-flash the spinner over a fresh state — the watchdog bumps the
+      // seq itself on fire, so the late-resolving onRefresh sees a
+      // mismatch and bails out of the rest of the close-out sequence.
+      const seq = ++refreshSeqRef.current;
+      const watchdog = setTimeout(() => {
+        if (refreshSeqRef.current !== seq) return;
+        console.warn(`[PullToRefresh] onRefresh exceeded ${watchdogMs}ms — forcing reset`);
+        refreshSeqRef.current++;
+        setPullProgress(0);
+        setPhase('idle');
+      }, watchdogMs);
+
       try {
         await onRefresh();
       } catch (err) {
         console.error('[PullToRefresh]', err);
+      } finally {
+        clearTimeout(watchdog);
+      }
+
+      // If the watchdog already reset us, don't run the normal close.
+      if (refreshSeqRef.current !== seq) {
+        engaged.current = false;
+        return;
       }
 
       setPhase('done');
       setPullProgress(0);
       await new Promise(r => setTimeout(r, 600));
-      setPhase('idle');
+      // Same guard for the post-done idle transition: if a new pull
+      // started during the 600 ms cooldown, leave its phase alone.
+      if (refreshSeqRef.current === seq) setPhase('idle');
     } else {
       setPullProgress(0);
       setPhase('idle');
     }
 
     engaged.current = false;
-  }, [pullProgress, onRefresh, enabled]);
+  }, [pullProgress, onRefresh, enabled, watchdogMs]);
 
   return {
     pullHandlers: { onTouchStart, onTouchMove, onTouchEnd },

@@ -8,7 +8,7 @@ import { useModalScrollLock } from "@/hooks/useModalScrollLock";
 import { NETWORK_TIMEOUT_MS } from "@/lib/constants";
 import { swrKeys, matchesAircraft } from "@/lib/swrKeys";
 import { clearPersistedSwrCache } from "@/lib/swrCache";
-import useSWR from "swr";
+import useSWR, { useSWRConfig } from "swr";
 import { HOWARD_STALE_MS } from "@/lib/howard/quickPrompts";
 import { useToast } from "@/components/ToastProvider";
 import dynamic from "next/dynamic";
@@ -92,6 +92,13 @@ export default function AppShell({ session }: AppShellProps) {
     fetchAircraftData, enrichSingleAircraft, refreshForAircraft, globalMutate,
     globalFleetIndex, fetchGlobalFleetIndex, fetchSingleAircraft,
   } = useFleetData();
+
+  // Direct cache handle — `globalMutate(matcher, undefined, ...)` only
+  // sets data to undefined on the in-memory map; the entry's State
+  // object lingers and the localStorage persistence layer keeps shipping
+  // it forward across reloads. For a hard reset on tail switch we need
+  // `cache.delete(key)` so the next subscriber starts truly cold.
+  const { cache: swrCache } = useSWRConfig();
 
   // ─── Navigation State ───
   const companionUrl = process.env.NEXT_PUBLIC_COMPANION_URL || "https://skyward-logit.vercel.app/";
@@ -375,19 +382,44 @@ export default function AppShell({ session }: AppShellProps) {
   }, [howardUserId, mutateHoward]);
 
   // ─── Pull to Refresh ───
+  // The supabase JS client doesn't honor a global request timeout, so a
+  // dropped socket / hung pool / stuck JWT-refresh leaves these awaits
+  // pending forever. Without the race below, `phase` in usePullToRefresh
+  // stays at 'refreshing' until the user kills the app — the original
+  // bug report. The watchdog in the hook is still in place as a
+  // defense-in-depth, but this is the primary guard: fail fast, tell the
+  // pilot the refresh didn't complete, and let them try again.
   const handlePullRefresh = useCallback(async () => {
-    if (session?.user?.id) {
+    if (!session?.user?.id) return;
+    const PULL_REFRESH_TIMEOUT_MS = 10_000;
+    const work = (async () => {
       await fetchAircraftData(session.user.id);
       globalMutate(() => true, undefined, { revalidate: true });
       if (activeTail) {
-        // Re-enrich the active aircraft after full refresh
         const ac = allAircraftList.find(a => a.tail_number === activeTail);
         if (ac) await enrichSingleAircraft(ac.id);
         checkGroundedStatus(activeTail);
         fetchUnreadNotes(activeTail, session.user.id);
       }
+    })();
+    const REFRESH_TIMEOUT_SENTINEL = '__pull_refresh_timeout__';
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<void>((_, reject) => {
+      timer = setTimeout(() => reject(new Error(REFRESH_TIMEOUT_SENTINEL)), PULL_REFRESH_TIMEOUT_MS);
+    });
+    try {
+      await Promise.race([work, timeout]);
+    } catch (err: any) {
+      if (err?.message === REFRESH_TIMEOUT_SENTINEL) {
+        showError("Refresh timed out — check your connection and try again.");
+      } else {
+        showError("Refresh failed — try again.");
+        console.error('[handlePullRefresh]', err);
+      }
+    } finally {
+      if (timer) clearTimeout(timer);
     }
-  }, [session, fetchAircraftData, globalMutate, activeTail, allAircraftList, enrichSingleAircraft, checkGroundedStatus]);
+  }, [session, fetchAircraftData, globalMutate, activeTail, allAircraftList, enrichSingleAircraft, checkGroundedStatus, showError]);
 
   const { pullHandlers, pullProgress, phase: pullPhase, setEnabled: setPullEnabled } = usePullToRefresh({
     onRefresh: handlePullRefresh,
@@ -457,24 +489,37 @@ export default function AppShell({ session }: AppShellProps) {
     if (activeTail) localStorage.setItem('aft_active_tail', activeTail);
   }, [activeTail]);
 
-  // ─── Force revalidation of every SWR key for the newly-active aircraft ───
-  // Tabs cache per-aircraft data under aircraftId-suffixed keys. If a fetch
-  // returned empty due to a transient error (auth refresh, network blip)
-  // and SWR cached that empty result as "successful," switching back to
-  // the aircraft would keep showing nothing until the dedupe window
-  // expired AND something triggered a refetch. Forcing a revalidate on
-  // every tail switch makes "switch away and back" a reliable refresh
-  // gesture — same effect as the close-and-restart workaround the user
-  // would otherwise reach for. Skips if the tail is unchanged so this
-  // doesn't fire on unrelated re-renders.
+  // ─── Wipe + revalidate every SWR key for the newly-active aircraft ───
+  // Tabs cache per-aircraft data under aircraftId-suffixed keys. The
+  // earlier fix called `globalMutate(matcher, undefined, { revalidate: true })`,
+  // which only sets data → undefined on the in-memory map; it does NOT
+  // delete the State entry, and unmounted subscribers (every tab the user
+  // hasn't visited yet on the destination aircraft) don't fire a fetcher.
+  // The pilot-visible symptom: after switching aircraft, Summary loads
+  // (its useSWRs are mounted, so the broadcast reaches them), but Times /
+  // MX / Squawks render empty until the user pulls to refresh.
+  //
+  // The fix here deletes the matched cache entries outright so the next
+  // mount of those tabs sees `cache.get(key) === undefined` and SWR
+  // unconditionally fires the fetcher. The follow-up globalMutate is
+  // still useful for currently-mounted subscribers that need an in-place
+  // revalidation (Summary on the new aircraft).
   const lastRevalidatedTailRef = useRef<string>("");
   useEffect(() => {
     if (!activeTail || activeTail === lastRevalidatedTailRef.current) return;
     const ac = allAircraftList.find(a => a.tail_number === activeTail);
     if (!ac) return;
     lastRevalidatedTailRef.current = activeTail;
-    globalMutate(matchesAircraft(ac.id), undefined, { revalidate: true });
-  }, [activeTail, allAircraftList, globalMutate]);
+    const matcher = matchesAircraft(ac.id);
+    // Snapshot keys first — deleting while iterating the live iterator
+    // is asking for trouble.
+    const toDelete: string[] = [];
+    for (const k of Array.from(swrCache.keys())) {
+      if (typeof k === 'string' && matcher(k)) toDelete.push(k);
+    }
+    for (const k of toDelete) swrCache.delete(k);
+    globalMutate(matcher, undefined, { revalidate: true });
+  }, [activeTail, allAircraftList, globalMutate, swrCache]);
 
   // ─── Persist active tab ───
   useEffect(() => {
