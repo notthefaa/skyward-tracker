@@ -399,41 +399,41 @@ export default function SummaryTab({
         <ModalPortal>
         <div className="fixed inset-0 z-[10000] overflow-y-auto bg-black/80 animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => setShowQuickLogModal(false)}>
           <div className="flex min-h-full items-center justify-center p-4">
-          <div className="bg-white rounded shadow-2xl w-full max-w-sm p-6 border-t-4 border-mxOrange animate-slide-up" onClick={e => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-3"><h2 className="font-oswald text-xl font-bold uppercase text-navy flex items-center gap-2"><PenSquare size={20} className="text-mxOrange" /> Quick Log Flight</h2><button onClick={() => setShowQuickLogModal(false)} className="text-gray-400 hover:text-danger"><X size={24} /></button></div>
+          <div className="bg-white rounded shadow-2xl w-full max-w-sm p-6 border-t-4 border-info animate-slide-up" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-3"><h2 className="font-oswald text-xl font-bold uppercase text-navy flex items-center gap-2"><PenSquare size={20} className="text-info" /> Quick Log Flight</h2><button onClick={() => setShowQuickLogModal(false)} className="text-gray-400 hover:text-danger"><X size={24} /></button></div>
             <p className="text-xs text-gray-500 font-roboto mb-4 leading-relaxed">Just hours, landings, and purpose. For fuel, route, and pax, head to the Flight Times tab.</p>
             <form onSubmit={handleQuickLog} className="space-y-3">
               <div className={`grid ${hasAirframeMeter ? 'grid-cols-2' : 'grid-cols-1'} gap-3`}>
                 <div>
                   <label className="text-[10px] font-bold uppercase tracking-widest text-navy">{isTurbine ? 'FTT' : 'Tach'} *</label>
-                  <input type="number" inputMode="decimal" step="0.1" required value={qlEngineHours} onChange={e => setQlEngineHours(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none" placeholder={(aircraft.total_engine_time || 0).toFixed(1)} />
+                  <input type="number" inputMode="decimal" step="0.1" required value={qlEngineHours} onChange={e => setQlEngineHours(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-info outline-none" placeholder={(aircraft.total_engine_time || 0).toFixed(1)} />
                 </div>
                 {hasAirframeMeter && (
                   <div>
                     <label className="text-[10px] font-bold uppercase tracking-widest text-navy">{isTurbine ? 'AFTT' : 'Hobbs'}</label>
-                    <input type="number" inputMode="decimal" step="0.1" value={qlAirframeHours} onChange={e => setQlAirframeHours(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none" placeholder={(aircraft.total_airframe_time || 0).toFixed(1)} />
+                    <input type="number" inputMode="decimal" step="0.1" value={qlAirframeHours} onChange={e => setQlAirframeHours(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-info outline-none" placeholder={(aircraft.total_airframe_time || 0).toFixed(1)} />
                   </div>
                 )}
               </div>
               <div className={`grid ${isTurbine ? 'grid-cols-2' : 'grid-cols-1'} gap-3`}>
                 <div>
                   <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Landings</label>
-                  <input type="number" inputMode="numeric" min="0" step="1" value={qlLandings} onChange={e => setQlLandings(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none" />
+                  <input type="number" inputMode="numeric" min="0" step="1" value={qlLandings} onChange={e => setQlLandings(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-info outline-none" />
                 </div>
                 {isTurbine && (
                   <div>
                     <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Cycles</label>
-                    <input type="number" inputMode="numeric" min="0" step="1" value={qlCycles} onChange={e => setQlCycles(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none" />
+                    <input type="number" inputMode="numeric" min="0" step="1" value={qlCycles} onChange={e => setQlCycles(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-info outline-none" />
                   </div>
                 )}
               </div>
               <div>
                 <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Purpose</label>
-                <input type="text" value={qlReason} onChange={e => setQlReason(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none" placeholder="Training, $100 hamburger, charter…" />
+                <input type="text" value={qlReason} onChange={e => setQlReason(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-info outline-none" placeholder="Training, $100 hamburger, charter…" />
               </div>
               <div>
                 <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Initials *</label>
-                <input type="text" required value={qlInitials} onChange={e => setQlInitials(e.target.value.toUpperCase())} maxLength={4} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 uppercase focus:border-mxOrange outline-none" />
+                <input type="text" required value={qlInitials} onChange={e => setQlInitials(e.target.value.toUpperCase())} maxLength={4} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 uppercase focus:border-info outline-none" />
               </div>
               <div className="pt-2"><PrimaryButton disabled={isSavingQuickLog}>{isSavingQuickLog ? <><Loader2 size={16} className="animate-spin" /> Saving...</> : "Log Flight"}</PrimaryButton></div>
             </form>
@@ -570,7 +570,7 @@ export default function SummaryTab({
         <div className="flex justify-between items-start mb-3 border-b border-gray-100 pb-3">
           <div className="flex flex-col gap-1"><div className="flex items-center gap-2"><Clock size={20} className={statusIconColor} /><h3 className="font-oswald text-xl font-bold uppercase text-navy m-0 leading-none">Flight Times</h3></div>{lastFlownLabel && <span className="text-[9px] font-bold uppercase tracking-widest text-gray-400 mt-1">Last Flown: {lastFlownLabel}</span>}</div>
           <div className="flex items-center gap-2">
-            <button onClick={(e) => { e.stopPropagation(); openQuickLog(); }} className="text-[10px] font-bold uppercase tracking-widest text-mxOrange bg-orange-50 border border-orange-200 px-3 py-1.5 rounded hover:bg-orange-100 active:scale-95 transition-all flex items-center gap-1.5"><PenSquare size={12} /> Quick Log</button>
+            <button onClick={(e) => { e.stopPropagation(); openQuickLog(); }} className="text-[10px] font-bold uppercase tracking-widest text-info bg-blue-50 border border-blue-200 px-3 py-1.5 rounded hover:bg-blue-100 active:scale-95 transition-all flex items-center gap-1.5"><PenSquare size={12} /> Quick Log</button>
             <span className="text-[10px] font-bold uppercase tracking-widest bg-gray-100 px-2 py-1 rounded text-gray-600">{isTurbine ? 'TURBINE' : 'PISTON'}</span>
           </div>
         </div>
