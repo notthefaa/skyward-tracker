@@ -9,6 +9,7 @@ import { AlertTriangle, Plus, X, Upload, Mail, MailWarning, Edit2, ChevronLeft, 
 import { PrimaryButton } from "@/components/AppButtons";
 import SignatureCanvas from "react-signature-canvas";
 import { useSignedUrls, fetchSignedUrls } from "@/hooks/useSignedUrls";
+import { newIdempotencyKey, idempotencyHeader } from "@/lib/idempotencyClient";
 import imageCompression from "browser-image-compression";
 import { useToast } from "@/components/ToastProvider";
 import { useConfirm } from "@/components/ConfirmProvider";
@@ -254,8 +255,16 @@ export default function SquawksTab({
         const { squawk: newSquawk } = await res.json();
         if (newSquawk && notifyMx) {
           try {
+            // Idempotency key tied to this single submit attempt. A
+            // network-blip retry (or an offline-queue replay) hits the
+            // route with the same key and gets the cached 200 instead
+            // of re-sending the email — pilots used to see the
+            // "MX not notified" badge after a blip and click resend,
+            // duplicating notifications to every assigned pilot.
+            const notifyKey = newIdempotencyKey();
             const emailRes = await authFetch('/api/emails/squawk-notify', {
               method: 'POST',
+              headers: idempotencyHeader(notifyKey),
               body: JSON.stringify({ squawk: newSquawk, aircraft, notifyMx }),
             });
             if (!emailRes.ok) notifyMxFailed = true;
@@ -312,8 +321,13 @@ export default function SquawksTab({
     if (!aircraft || resendingId) return;
     setResendingId(sq.id);
     try {
+      // Fresh idempotency key per resend press — the user explicitly
+      // wants this to go out again. The key still dedupes within a
+      // single press if the network blips during retry.
+      const resendKey = newIdempotencyKey();
       const emailRes = await authFetch('/api/emails/squawk-notify', {
         method: 'POST',
+        headers: idempotencyHeader(resendKey),
         body: JSON.stringify({ squawk: sq, aircraft, notifyMx: true }),
       });
       if (!emailRes.ok) {

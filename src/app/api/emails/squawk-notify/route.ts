@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { Resend } from 'resend';
 import { requireAuth, requireAircraftAccess, handleApiError } from '@/lib/auth';
 import { checkEmailRateLimit } from '@/lib/submitRateLimit';
+import { idempotency } from '@/lib/idempotency';
 import { env } from '@/lib/env';
 import { escapeHtml } from '@/lib/sanitize';
 import { emailShell, heading, paragraph, callout, button, keyValueBlock } from '@/lib/email/layout';
@@ -12,6 +13,19 @@ const FROM_EMAIL = 'notifications@skywardsociety.com';
 export async function POST(req: Request) {
   try {
     const { user, supabaseAdmin } = await requireAuth(req);
+
+    // Idempotency before rate-limit so a network-blip retry doesn't
+    // burn the user's email budget on a request the server already
+    // serviced. The client sends the same X-Idempotency-Key for the
+    // initial send and any client-driven retry within 1 hour; a
+    // deliberate "Resend" press uses a fresh key so it really does
+    // re-send. Without this a dropped 200 made the pilot retry,
+    // every assigned pilot got the squawk email twice, and the
+    // mechanic too — exactly the duplicate-notification scenario the
+    // audit flagged.
+    const idem = idempotency(supabaseAdmin, user.id, req, 'emails/squawk-notify/POST');
+    const cached = await idem.check();
+    if (cached) return cached;
 
     const rl = await checkEmailRateLimit(supabaseAdmin, user.id);
     if (!rl.allowed) {
@@ -152,7 +166,9 @@ export async function POST(req: Request) {
       }
     }
 
-    return NextResponse.json({ success: true });
+    const responseBody = { success: true };
+    await idem.save(200, responseBody);
+    return NextResponse.json(responseBody);
   } catch (error) {
     return handleApiError(error);
   }
