@@ -438,7 +438,7 @@ export default function SummaryTab({
               </div>
               <div>
                 <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Purpose</label>
-                <input type="text" value={qlReason} onChange={e => setQlReason(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-info outline-none" placeholder="Training, $100 hamburger, charter…" />
+                <select value={qlReason} onChange={e => setQlReason(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-info outline-none"><option value="">Select...</option><option value="PE">PE — Personal</option><option value="BE">BE — Business</option><option value="MX">MX — Maintenance</option><option value="T">T — Training</option></select>
               </div>
               <div>
                 <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Initials *</label>
