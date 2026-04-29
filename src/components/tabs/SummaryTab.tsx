@@ -9,17 +9,18 @@ import { parseFiniteNumber } from "@/lib/validation";
 import { INPUT_WHITE_BG } from "@/lib/styles";
 import { swrKeys } from "@/lib/swrKeys";
 import type { AircraftWithMetrics, SystemSettings, AppTab, AppRole, AircraftRole, AircraftStatus } from "@/lib/types";
-import useSWR from "swr";
-import { PlaneTakeoff, MapPin, Droplet, Phone, Mail, Wrench, AlertTriangle, FileText, Clock, X, Trash2, Edit2, UserPlus, Loader2, Users, ChevronDown, Calendar, CheckCircle } from "lucide-react";
+import useSWR, { useSWRConfig } from "swr";
+import { PlaneTakeoff, MapPin, Droplet, Phone, Mail, Wrench, AlertTriangle, FileText, Clock, X, Trash2, Edit2, UserPlus, Loader2, Users, ChevronDown, Calendar, CheckCircle, PenSquare } from "lucide-react";
 import { PrimaryButton } from "@/components/AppButtons";
 import { useToast } from "@/components/ToastProvider";
 import { useModalScrollLock } from "@/hooks/useModalScrollLock";
 import { AircraftAvatarImg } from "@/components/AircraftAvatarImg";
 import { ModalPortal } from "@/components/ModalPortal";
 import { todayInZone } from "@/lib/pilotTime";
+import { newIdempotencyKey, idempotencyHeader } from "@/lib/idempotencyClient";
 
 export default function SummaryTab({
-  aircraft, setActiveTab, onNavigateToSquawks, role, aircraftRole, onDeleteAircraft, sysSettings, onEditAircraft, refreshData, session, aircraftStatus
+  aircraft, setActiveTab, onNavigateToSquawks, role, aircraftRole, onDeleteAircraft, sysSettings, onEditAircraft, refreshData, session, aircraftStatus, userInitials
 }: {
   aircraft: AircraftWithMetrics | null,
   setActiveTab: (tab: AppTab) => void,
@@ -31,7 +32,8 @@ export default function SummaryTab({
   onEditAircraft: () => void,
   refreshData: () => void,
   session: any,
-  aircraftStatus: AircraftStatus
+  aircraftStatus: AircraftStatus,
+  userInitials: string,
 }) {
   const canEdit = role === 'admin' || aircraftRole === 'admin';
 
@@ -172,8 +174,20 @@ export default function SummaryTab({
   const [changingRoleUserId, setChangingRoleUserId] = useState<string | null>(null);
   const [removingUserId, setRemovingUserId] = useState<string | null>(null);
   const [isCrewUpdating, setIsCrewUpdating] = useState(false);
+  // Quick Log — minimal flight entry from the Summary tab. Hours +
+  // landings + cycles + purpose only; the full Flight Times tab is
+  // for fuel, route, pax, etc.
+  const [showQuickLogModal, setShowQuickLogModal] = useState(false);
+  const [qlEngineHours, setQlEngineHours] = useState("");
+  const [qlAirframeHours, setQlAirframeHours] = useState("");
+  const [qlLandings, setQlLandings] = useState("1");
+  const [qlCycles, setQlCycles] = useState("1");
+  const [qlReason, setQlReason] = useState("");
+  const [qlInitials, setQlInitials] = useState("");
+  const [isSavingQuickLog, setIsSavingQuickLog] = useState(false);
   const { showSuccess, showError } = useToast();
-  useModalScrollLock(showDeleteModal || showFuelModal || showInviteModal || showNoteModal);
+  const { mutate: globalMutate } = useSWRConfig();
+  useModalScrollLock(showDeleteModal || showFuelModal || showInviteModal || showNoteModal || showQuickLogModal);
 
   const handleFuelUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -207,6 +221,91 @@ export default function SummaryTab({
       showError(err.message || 'Fuel update failed');
     }
     setIsSavingFuel(false);
+  };
+
+  const openQuickLog = () => {
+    if (!aircraft) return;
+    setQlEngineHours("");
+    setQlAirframeHours("");
+    setQlLandings("1");
+    setQlCycles("1");
+    setQlReason("");
+    setQlInitials(userInitials || "");
+    setShowQuickLogModal(true);
+  };
+
+  const handleQuickLog = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!aircraft) return;
+
+    const isTurb = aircraft.engine_type === 'Turbine';
+    const hasAirframe = isTurb ? (aircraft.setup_aftt != null) : (aircraft.setup_hobbs != null);
+    const initials = qlInitials.trim().toUpperCase();
+    if (!initials) return showError("Initials are required.");
+
+    const engineHours = parseFloat(qlEngineHours);
+    if (!Number.isFinite(engineHours) || engineHours < 0) {
+      return showError(isTurb ? "Enter a valid FTT." : "Enter a valid Tach.");
+    }
+    const prevEngine = aircraft.total_engine_time || 0;
+    if (engineHours < prevEngine) {
+      return showError(`New ${isTurb ? 'FTT' : 'Tach'} (${engineHours}) cannot be less than current (${prevEngine.toFixed(1)}).`);
+    }
+
+    let airframeHours: number | null = null;
+    if (hasAirframe && qlAirframeHours.trim() !== "") {
+      airframeHours = parseFloat(qlAirframeHours);
+      if (!Number.isFinite(airframeHours) || airframeHours < 0) {
+        return showError(isTurb ? "AFTT must be a finite non-negative number." : "Hobbs must be a finite non-negative number.");
+      }
+      const prevAirframe = aircraft.total_airframe_time;
+      if (prevAirframe != null && airframeHours < prevAirframe) {
+        return showError(`New ${isTurb ? 'AFTT' : 'Hobbs'} (${airframeHours}) cannot be less than current (${prevAirframe.toFixed(1)}).`);
+      }
+    }
+
+    const landingsNum = qlLandings.trim() === '' ? 0 : parseInt(qlLandings);
+    if (Number.isNaN(landingsNum) || landingsNum < 0) return showError("Landings must be zero or a positive whole number.");
+    const cyclesNum = !isTurb ? 0 : (qlCycles.trim() === '' ? 0 : parseInt(qlCycles));
+    if (isTurb && (Number.isNaN(cyclesNum) || cyclesNum < 0)) return showError("Engine cycles must be zero or a positive whole number.");
+
+    const logData: Record<string, any> = {
+      initials,
+      landings: landingsNum,
+      engine_cycles: isTurb ? cyclesNum : 0,
+      trip_reason: qlReason.trim() || null,
+    };
+    if (isTurb) {
+      logData.ftt = engineHours;
+      if (airframeHours != null) logData.aftt = airframeHours;
+    } else {
+      logData.tach = engineHours;
+      if (airframeHours != null) logData.hobbs = airframeHours;
+    }
+
+    setIsSavingQuickLog(true);
+    try {
+      const res = await authFetch('/api/flight-logs', {
+        method: 'POST',
+        headers: idempotencyHeader(newIdempotencyKey()),
+        body: JSON.stringify({ aircraftId: aircraft.id, logData, aircraftUpdate: {} }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || "Couldn't save the flight log.");
+      }
+      setShowQuickLogModal(false);
+      // Bust the summary cards' SWR keys so "Last Flown" + Next Mx Due
+      // reflect the new log without waiting for a tab switch.
+      globalMutate(swrKeys.summaryFlight(aircraft.id));
+      globalMutate(swrKeys.summaryMx(aircraft.id));
+      refreshData();
+      showSuccess("Flight logged");
+    } catch (err: any) {
+      showError(err?.message || "Couldn't save the flight log.");
+    } finally {
+      setIsSavingQuickLog(false);
+    }
   };
 
   const handleInvitePilot = async (e: React.FormEvent) => {
@@ -289,6 +388,55 @@ export default function SummaryTab({
               <button onClick={() => setShowDeleteModal(false)} className="flex-1 border border-gray-300 text-gray-600 font-bold uppercase tracking-widest text-[10px] py-3 rounded hover:bg-gray-50 transition-colors active:scale-95">Cancel</button>
               <button onClick={() => { setShowDeleteModal(false); onDeleteAircraft(aircraft.id); }} className="flex-1 bg-danger text-white font-bold uppercase tracking-widest text-[10px] py-3 rounded hover:bg-red-700 transition-colors shadow-md active:scale-95">Confirm Delete</button>
             </div>
+          </div>
+          </div>
+        </div>
+        </ModalPortal>
+      )}
+
+      {/* Quick Log modal */}
+      {showQuickLogModal && (
+        <ModalPortal>
+        <div className="fixed inset-0 z-[10000] overflow-y-auto bg-black/80 animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => setShowQuickLogModal(false)}>
+          <div className="flex min-h-full items-center justify-center p-4">
+          <div className="bg-white rounded shadow-2xl w-full max-w-sm p-6 border-t-4 border-mxOrange animate-slide-up" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-3"><h2 className="font-oswald text-xl font-bold uppercase text-navy flex items-center gap-2"><PenSquare size={20} className="text-mxOrange" /> Quick Log Flight</h2><button onClick={() => setShowQuickLogModal(false)} className="text-gray-400 hover:text-danger"><X size={24} /></button></div>
+            <p className="text-xs text-gray-500 font-roboto mb-4 leading-relaxed">Just hours, landings, and purpose. For fuel, route, and pax, head to the Flight Times tab.</p>
+            <form onSubmit={handleQuickLog} className="space-y-3">
+              <div className={`grid ${hasAirframeMeter ? 'grid-cols-2' : 'grid-cols-1'} gap-3`}>
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-navy">{isTurbine ? 'FTT' : 'Tach'} *</label>
+                  <input type="number" inputMode="decimal" step="0.1" required value={qlEngineHours} onChange={e => setQlEngineHours(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none" placeholder={(aircraft.total_engine_time || 0).toFixed(1)} />
+                </div>
+                {hasAirframeMeter && (
+                  <div>
+                    <label className="text-[10px] font-bold uppercase tracking-widest text-navy">{isTurbine ? 'AFTT' : 'Hobbs'}</label>
+                    <input type="number" inputMode="decimal" step="0.1" value={qlAirframeHours} onChange={e => setQlAirframeHours(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none" placeholder={(aircraft.total_airframe_time || 0).toFixed(1)} />
+                  </div>
+                )}
+              </div>
+              <div className={`grid ${isTurbine ? 'grid-cols-2' : 'grid-cols-1'} gap-3`}>
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Landings</label>
+                  <input type="number" inputMode="numeric" min="0" step="1" value={qlLandings} onChange={e => setQlLandings(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none" />
+                </div>
+                {isTurbine && (
+                  <div>
+                    <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Cycles</label>
+                    <input type="number" inputMode="numeric" min="0" step="1" value={qlCycles} onChange={e => setQlCycles(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none" />
+                  </div>
+                )}
+              </div>
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Purpose</label>
+                <input type="text" value={qlReason} onChange={e => setQlReason(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none" placeholder="Training, $100 hamburger, charter…" />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Initials *</label>
+                <input type="text" required value={qlInitials} onChange={e => setQlInitials(e.target.value.toUpperCase())} maxLength={4} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 uppercase focus:border-mxOrange outline-none" />
+              </div>
+              <div className="pt-2"><PrimaryButton disabled={isSavingQuickLog}>{isSavingQuickLog ? <><Loader2 size={16} className="animate-spin" /> Saving...</> : "Log Flight"}</PrimaryButton></div>
+            </form>
           </div>
           </div>
         </div>
@@ -421,7 +569,10 @@ export default function SummaryTab({
       <div onClick={() => setActiveTab('times')} className={`bg-white shadow-lg rounded-sm p-4 border-t-4 ${statusBorderColor} flex flex-col cursor-pointer hover:shadow-xl transition-all active:scale-[0.98]`}>
         <div className="flex justify-between items-start mb-3 border-b border-gray-100 pb-3">
           <div className="flex flex-col gap-1"><div className="flex items-center gap-2"><Clock size={20} className={statusIconColor} /><h3 className="font-oswald text-xl font-bold uppercase text-navy m-0 leading-none">Flight Times</h3></div>{lastFlownLabel && <span className="text-[9px] font-bold uppercase tracking-widest text-gray-400 mt-1">Last Flown: {lastFlownLabel}</span>}</div>
-          <span className="text-[10px] font-bold uppercase tracking-widest bg-gray-100 px-2 py-1 rounded text-gray-600">{isTurbine ? 'TURBINE' : 'PISTON'}</span>
+          <div className="flex items-center gap-2">
+            <button onClick={(e) => { e.stopPropagation(); openQuickLog(); }} className="text-[10px] font-bold uppercase tracking-widest text-mxOrange bg-orange-50 border border-orange-200 px-3 py-1.5 rounded hover:bg-orange-100 active:scale-95 transition-all flex items-center gap-1.5"><PenSquare size={12} /> Quick Log</button>
+            <span className="text-[10px] font-bold uppercase tracking-widest bg-gray-100 px-2 py-1 rounded text-gray-600">{isTurbine ? 'TURBINE' : 'PISTON'}</span>
+          </div>
         </div>
         <div className={`grid ${hasAirframeMeter ? 'grid-cols-2' : 'grid-cols-1'} gap-4`}>
           {hasAirframeMeter && (

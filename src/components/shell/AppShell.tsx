@@ -962,7 +962,7 @@ export default function AppShell({ session }: AppShellProps) {
                 navigateTab('calendar');
               }}
             />}
-            {activeTab === 'summary' && <SummaryTab aircraft={selectedAircraftData} setActiveTab={(t: AppTab) => navigateTab(t)} onNavigateToSquawks={() => { setMxSubTab('squawks'); navigateTab('mx'); }} role={role} aircraftRole={currentAircraftRole} onDeleteAircraft={handleDeleteAircraft} sysSettings={sysSettings} onEditAircraft={() => openAircraftForm(selectedAircraftData)} refreshData={() => fetchAircraftData(session.user.id)} session={session} aircraftStatus={aircraftStatus} />}
+            {activeTab === 'summary' && <SummaryTab aircraft={selectedAircraftData} setActiveTab={(t: AppTab) => navigateTab(t)} onNavigateToSquawks={() => { setMxSubTab('squawks'); navigateTab('mx'); }} role={role} aircraftRole={currentAircraftRole} onDeleteAircraft={handleDeleteAircraft} sysSettings={sysSettings} onEditAircraft={() => openAircraftForm(selectedAircraftData)} refreshData={() => fetchAircraftData(session.user.id)} session={session} aircraftStatus={aircraftStatus} userInitials={userInitials} />}
             {activeTab === 'times' && <LogRouter logSubTab={logSubTab} setLogSubTab={setLogSubTab} aircraft={selectedAircraftData} session={session} role={role} userInitials={userInitials} onUpdate={() => fetchAircraftData(session.user.id)} />}
             {activeTab === 'calendar' && <CalendarTab
               aircraft={selectedAircraftData}
