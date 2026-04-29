@@ -49,7 +49,7 @@ export async function POST(req: Request) {
     const mediaType = image.type as 'image/jpeg' | 'image/png' | 'image/webp';
 
     const response = await client.messages.create({
-      model: 'claude-sonnet-4-5-20250514',
+      model: 'claude-sonnet-4-6',
       max_tokens: 1024,
       messages: [
         {

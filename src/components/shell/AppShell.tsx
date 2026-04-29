@@ -868,7 +868,7 @@ export default function AppShell({ session }: AppShellProps) {
           <div className="flex flex-col">
             <span className="text-[9px] font-bold uppercase tracking-widest text-[#F5B05B] mb-[2px]">Active Aircraft</span>
             <div className="flex items-center gap-3">
-              <div className={`w-3.5 h-3.5 rounded-full shrink-0 shadow-inner ${aircraftStatus === 'grounded' ? 'bg-red-500' : aircraftStatus === 'issues' ? 'bg-mxOrange' : 'bg-success'}`} role="status" aria-label={`Aircraft status: ${aircraftStatus}`} />
+              <div className={`w-3.5 h-3.5 rounded-full shrink-0 shadow-inner ${aircraftStatus === 'grounded' ? 'bg-red-500' : aircraftStatus === 'issues' ? 'bg-mxOrange' : aircraftStatus === 'airworthy' ? 'bg-success' : 'bg-gray-400'}`} role="status" aria-label={`Aircraft status: ${aircraftStatus}`} />
               <div className="relative flex items-center">
                 <button onClick={() => navigateTab('summary')} aria-label={`View ${activeTail || 'aircraft'} summary`} className="text-xl font-oswald font-bold uppercase tracking-wide text-white hover:text-info transition-colors active:scale-95">
                   {activeTail || '—'}

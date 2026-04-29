@@ -358,7 +358,11 @@ export async function submitSquawk(
 ): Promise<{ id: string; row: any }> {
   await setAppUser(sb, userId);
   const { occurred_at, ...rest } = input;
-  const safeSquawk = stripProtectedFields(rest);
+  // 'squawks' table key blocks status / resolved_* / event linkage /
+  // access_token / mx_notify_failed at the same time as the universal
+  // strip — so a fresh squawk can't be born already-resolved or with
+  // a forged event linkage.
+  const safeSquawk = stripProtectedFields(rest, 'squawks');
   const payload: any = { ...safeSquawk, aircraft_id: aircraftId, reported_by: userId };
   if (occurred_at) payload.occurred_at = occurred_at;
   const { data, error } = await sb

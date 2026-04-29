@@ -48,7 +48,7 @@ export async function POST(req: Request) {
     // resolution. aircraft_id / created_by are also server-owned.
     const { data, error } = await supabaseAdmin
       .from('aft_airworthiness_directives')
-      .insert({ ...stripProtectedFields(adData), aircraft_id: aircraftId, source: 'manual', created_by: user.id })
+      .insert({ ...stripProtectedFields(adData, 'ads'), aircraft_id: aircraftId, source: 'manual', created_by: user.id })
       .select()
       .single();
 
@@ -71,7 +71,11 @@ export async function PUT(req: Request) {
     await requireAircraftAdmin(supabaseAdmin, user.id, aircraftId);
     await setAppUser(supabaseAdmin, user.id);
 
-    const safeUpdate = stripProtectedFields(adData);
+    // 'ads' table key locks down DRS-managed fields (source,
+    // is_superseded, sync_hash, applicability_*) so a PUT can't
+    // mark a manual record as DRS-synced or spoof the per-aircraft
+    // applicability verdict written by check-applicability/route.
+    const safeUpdate = stripProtectedFields(adData, 'ads');
     const { error } = await supabaseAdmin
       .from('aft_airworthiness_directives')
       .update(safeUpdate)

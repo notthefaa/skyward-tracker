@@ -39,8 +39,16 @@ export async function POST(req: Request) {
     await setAppUser(supabaseAdmin, user.id);
 
     if (Array.isArray(bulk)) {
+      // Bulk inserts skipped the per-row name/category validation that
+      // the single-item path enforces. A bulk client could ship
+      // half-populated rows. Apply the same minimum bar before insert.
+      for (const e of bulk) {
+        if (!e?.name || !e?.category) {
+          return NextResponse.json({ error: 'Every bulk row needs name and category.' }, { status: 400 });
+        }
+      }
       const rows = bulk.map((e: any) => ({
-        ...stripProtectedFields(e),
+        ...stripProtectedFields(e, 'equipment'),
         aircraft_id: aircraftId,
         created_by: user.id,
       }));
@@ -57,7 +65,7 @@ export async function POST(req: Request) {
     }
     const { data, error } = await supabaseAdmin
       .from('aft_aircraft_equipment')
-      .insert({ ...stripProtectedFields(equipmentData), aircraft_id: aircraftId, created_by: user.id })
+      .insert({ ...stripProtectedFields(equipmentData, 'equipment'), aircraft_id: aircraftId, created_by: user.id })
       .select()
       .single();
     if (error) throw error;
@@ -79,9 +87,12 @@ export async function PUT(req: Request) {
     // Strip server-owned fields — the aircraft_id filter on the
     // update query already prevents cross-aircraft escapes, but
     // without the strip a client could still blank `installed_at`,
-    // resurrect a soft-delete via `deleted_at: null`, or spoof
-    // `created_by`.
-    const safeUpdate = stripProtectedFields(equipmentData);
+    // resurrect a soft-delete via `deleted_at: null`, spoof
+    // `created_by`, or — most importantly — un-remove a piece of
+    // equipment by setting `removed_at: null`. The 'equipment' table
+    // key adds removed_at/removed_by to the strip set so reinstatement
+    // has to go through a dedicated path with its own audit trail.
+    const safeUpdate = stripProtectedFields(equipmentData, 'equipment');
     const { error } = await supabaseAdmin
       .from('aft_aircraft_equipment')
       .update(safeUpdate)

@@ -259,8 +259,11 @@ export default function SummaryTab({
   const lastFlight = flightData || null;
   const nextReservations = reservationData || [];
 
-  const statusBorderColor = aircraftStatus === 'grounded' ? 'border-danger' : aircraftStatus === 'issues' ? 'border-mxOrange' : 'border-success';
-  const statusIconColor = aircraftStatus === 'grounded' ? 'text-danger' : aircraftStatus === 'issues' ? 'text-mxOrange' : 'text-success';
+  // 'unknown' renders neutral while the first verdict is in flight or
+  // after a fetch failure (see useGroundedStatus). Don't claim
+  // airworthy when we haven't actually checked.
+  const statusBorderColor = aircraftStatus === 'grounded' ? 'border-danger' : aircraftStatus === 'issues' ? 'border-mxOrange' : aircraftStatus === 'airworthy' ? 'border-success' : 'border-gray-300';
+  const statusIconColor = aircraftStatus === 'grounded' ? 'text-danger' : aircraftStatus === 'issues' ? 'text-mxOrange' : aircraftStatus === 'airworthy' ? 'text-success' : 'text-gray-400';
   const mxTextColor = nextMx ? getMxTextColor(nextMx, sysSettings) : 'text-gray-500';
 
   const lastFlownLabel = (() => {

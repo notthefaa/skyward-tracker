@@ -81,8 +81,11 @@ export async function PUT(req: Request) {
     await setAppUser(supabaseAdmin, user.id);
     // Strip server-owned fields so a PUT can't migrate the squawk to
     // a different aircraft (bypassing the access check above), resurrect
-    // a soft-delete, or reassign reported_by.
-    const safeUpdate = stripProtectedFields(squawkData);
+    // a soft-delete, reassign reported_by, fake a resolve, link the
+    // squawk to an arbitrary event, or rotate the mechanic access
+    // token to bypass an emailed link. The 'squawks' table key in
+    // validation.ts pulls in those extras alongside the universal set.
+    const safeUpdate = stripProtectedFields(squawkData, 'squawks');
     const { error } = await supabaseAdmin.from('aft_squawks').update(safeUpdate).eq('id', squawkId);
     if (error) throw error;
 

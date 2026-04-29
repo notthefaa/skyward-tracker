@@ -315,7 +315,7 @@ export interface SystemSettings {
 
 export type AppRole = 'admin' | 'pilot';
 export type AircraftRole = 'admin' | 'pilot';
-export type AircraftStatus = 'airworthy' | 'issues' | 'grounded';
+export type AircraftStatus = 'unknown' | 'airworthy' | 'issues' | 'grounded';
 export type AppTab = 'fleet' | 'summary' | 'times' | 'calendar' | 'mx' | 'notes' | 'howard' | 'howard-usage' | 'documents' | 'equipment' | 'ads';
 export type MxSubTab = 'maintenance' | 'squawks' | 'service';
 export type LogSubTab = 'flights' | 'checks';

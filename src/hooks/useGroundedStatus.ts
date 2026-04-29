@@ -6,7 +6,12 @@ import { computeAirworthinessStatus, applyOpenSquawkOverride } from "@/lib/airwo
 import type { AircraftWithMetrics, AircraftStatus } from "@/lib/types";
 
 export function useGroundedStatus(allAircraftList: AircraftWithMetrics[]) {
-  const [aircraftStatus, setAircraftStatus] = useState<AircraftStatus>('airworthy');
+  // Start as 'unknown' so a first-fetch failure doesn't render the
+  // header dot green for an aircraft we haven't actually verified.
+  // The UI maps 'unknown' to a neutral gray dot + suppresses the
+  // grounded banner; once a fetch lands the verdict resolves to one
+  // of airworthy/issues/grounded.
+  const [aircraftStatus, setAircraftStatus] = useState<AircraftStatus>('unknown');
   const [groundedReason, setGroundedReason] = useState<string>("");
 
   const checkGroundedStatus = useCallback(async (tail: string) => {

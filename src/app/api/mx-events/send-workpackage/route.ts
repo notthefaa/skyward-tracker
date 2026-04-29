@@ -65,6 +65,20 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Aircraft not found.' }, { status: 404 });
     }
 
+    // Validate the mechanic email BEFORE any line-item inserts. The
+    // older order had the missing-email 400 firing after we'd already
+    // inserted the additional items into aft_event_line_items, with no
+    // rollback on that branch. The pilot would retry with the same
+    // selection, the additional items would re-insert, and duplicates
+    // accumulated on the draft event. The email-failure rollback below
+    // (line ~250) only handled the case where Resend itself errored.
+    if (!aircraft.mx_contact_email) {
+      return NextResponse.json(
+        { error: 'No mechanic email on file for this aircraft. Add one in Aircraft Settings before sending a work package.' },
+        { status: 400 },
+      );
+    }
+
     // Add additional items (only for initial send, not resend).
     // All three categories are accumulated into a single insert batch
     // so a mid-sequence failure (say, squawks insert after mx insert
@@ -171,12 +185,9 @@ export async function POST(req: Request) {
     // draft until the email actually succeeds — a failed Resend call
     // returns a 502 here so the pilot retries instead of seeing the
     // event flip to "scheduling" with no mechanic ever notified.
-    if (!aircraft.mx_contact_email) {
-      return NextResponse.json(
-        { error: 'No mechanic email on file for this aircraft. Add one in Aircraft Settings before sending a work package.' },
-        { status: 400 },
-      );
-    }
+    // (mx_contact_email presence was verified above — keeping the
+    // block guarded so a future refactor that loosens that pre-check
+    // doesn't quietly send into the void.)
     if (aircraft.mx_contact_email) {
       const portalUrl = `${new URL(req.url).origin}/service/${event.access_token}`;
       const mxCc = aircraft.main_contact_email ? [aircraft.main_contact_email] : [];

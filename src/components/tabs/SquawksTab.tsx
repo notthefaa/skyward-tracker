@@ -8,7 +8,7 @@ import useSWR from "swr";
 import { AlertTriangle, Plus, X, Upload, Mail, MailWarning, Edit2, ChevronLeft, ChevronRight, Download, CheckSquare, Trash2, CheckCircle, Link2, Clock, MapPin, User, Send } from "lucide-react";
 import { PrimaryButton } from "@/components/AppButtons";
 import SignatureCanvas from "react-signature-canvas";
-import { useSignedUrls } from "@/hooks/useSignedUrls";
+import { useSignedUrls, fetchSignedUrls } from "@/hooks/useSignedUrls";
 import imageCompression from "browser-image-compression";
 import { useToast } from "@/components/ToastProvider";
 import { useConfirm } from "@/components/ConfirmProvider";
@@ -403,16 +403,26 @@ export default function SquawksTab({
       const { jsPDF } = await import("jspdf");
       const doc = new jsPDF();
       const itemsToExport = squawks.filter(s => selectedForExport.includes(s.id));
-      let y = 20; 
-      doc.setFont("helvetica", "bold"); doc.setFontSize(18); 
-      doc.text(`Squawk Report - ${aircraft!.tail_number}`, 14, y); y += 8; 
-      doc.setFontSize(10); doc.setFont("helvetica", "normal"); 
+      // Pre-resolve every photo URL through the signing endpoint
+      // before we start drawing pages. The previous code did
+      // `img.src = picUrl` directly — fine while aft_squawk_images is
+      // public, but the moment that bucket is flipped private, every
+      // photo in the export 403s and the PDF lands with "[Image
+      // failed to load]" placeholders. fetchSignedUrls is a one-shot
+      // batched prefetch for non-React contexts; private buckets get
+      // a signed URL, public ones pass through.
+      const allPicUrls = itemsToExport.flatMap(sq => Array.isArray(sq.pictures) ? sq.pictures : []);
+      const signedMap = await fetchSignedUrls(allPicUrls);
+      let y = 20;
+      doc.setFont("helvetica", "bold"); doc.setFontSize(18);
+      doc.text(`Squawk Report - ${aircraft!.tail_number}`, 14, y); y += 8;
+      doc.setFontSize(10); doc.setFont("helvetica", "normal");
       doc.text(`Generated on ${new Date().toLocaleDateString()}`, 14, y); y += 15;
       for (const sq of itemsToExport) {
         if (y > 260) { doc.addPage(); y = 20; }
-        doc.setFontSize(12); doc.setFont("helvetica", "bold"); 
+        doc.setFontSize(12); doc.setFont("helvetica", "bold");
         doc.text(`Date: ${new Date(sq.occurred_at ?? sq.created_at).toLocaleDateString()} | Location: ${sq.location}`, 14, y); y += 6;
-        doc.setFontSize(10); doc.setFont("helvetica", "normal"); 
+        doc.setFontSize(10); doc.setFont("helvetica", "normal");
         doc.text(`Status: ${sq.status.toUpperCase()} | Airworthiness: ${sq.affects_airworthiness ? 'GROUNDED' : 'Monitor'}`, 14, y); y += 6;
         if (sq.is_deferred) { doc.text(`Deferred (${sq.deferral_category}): MEL/CDL/NEF: ${sq.mel_number||'-'} / ${sq.cdl_number||'-'} / ${sq.nef_number||'-'}`, 14, y); y += 6; }
         if (sq._resolving_event) {
@@ -423,17 +433,32 @@ export default function SquawksTab({
           const splitNote = doc.splitTextToSize(`Resolution Note: ${sq.resolved_note}`, 180);
           doc.text(splitNote, 14, y); y += (splitNote.length * 5) + 2;
         }
-        const splitDesc = doc.splitTextToSize(`Description: ${sq.description}`, 180); 
+        const splitDesc = doc.splitTextToSize(`Description: ${sq.description}`, 180);
         doc.text(splitDesc, 14, y); y += (splitDesc.length * 5) + 4;
         if (sq.pictures && sq.pictures.length > 0) {
           for (const picUrl of sq.pictures) {
             if (y > 200) { doc.addPage(); y = 20; }
-            try { const img = new Image(); img.crossOrigin = "Anonymous"; img.src = picUrl; await new Promise((resolve) => { img.onload = resolve; }); const maxW = 150; const maxH = 100; const ratio = Math.min(maxW / img.width, maxH / img.height); doc.addImage(img, 'JPEG', 14, y, img.width * ratio, img.height * ratio); y += (img.height * ratio) + 8; } catch (e) { doc.text("[Image failed to load]", 14, y); y += 6; }
+            try {
+              const renderUrl = signedMap.get(picUrl) || picUrl;
+              const img = new Image();
+              img.crossOrigin = "Anonymous";
+              img.src = renderUrl;
+              await new Promise((resolve, reject) => {
+                img.onload = resolve;
+                img.onerror = reject;
+              });
+              const maxW = 150; const maxH = 100;
+              const ratio = Math.min(maxW / img.width, maxH / img.height);
+              doc.addImage(img, 'JPEG', 14, y, img.width * ratio, img.height * ratio);
+              y += (img.height * ratio) + 8;
+            } catch {
+              doc.text("[Image failed to load]", 14, y); y += 6;
+            }
           }
         }
         y += 5; doc.setDrawColor(200); doc.line(14, y, 196, y); y += 10;
       }
-      doc.save(`${aircraft!.tail_number}_Squawk_Report.pdf`); 
+      doc.save(`${aircraft!.tail_number}_Squawk_Report.pdf`);
     } catch (error) { console.error("Error generating PDF:", error); showError("Couldn't build the PDF. Try again."); }
     setIsExportingPdf(false); setShowExportModal(false);
   };

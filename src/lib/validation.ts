@@ -94,18 +94,77 @@ export function pickAllowedFields<T extends Record<string, unknown>>(
  * the URL param, reported_by from the authenticated user) so the
  * explicit value wins over any residual client field.
  */
-export function stripProtectedFields<T extends Record<string, unknown>>(payload: unknown): Partial<T> {
+// Universal-protected fields (anything that would let the client
+// forge identity, ownership, or audit trail). Per-table extras live
+// in TABLE_PROTECTED below — when a route calls stripProtectedFields
+// it should pass the table key so the right extras are applied.
+const BASE_PROTECTED: ReadonlySet<string> = new Set([
+  'id', 'aircraft_id',
+  'reported_by', 'author_id', 'created_by',
+  'deleted_at', 'deleted_by',
+  'created_at', 'updated_at',
+]);
+
+// Per-table protected fields. Each entry adds to BASE_PROTECTED.
+// Extending this map is the *only* place a new server-managed
+// column needs to be locked down — every PUT route that goes
+// through stripProtectedFields(payload, 'tableKey') picks up the
+// new entry automatically.
+const TABLE_PROTECTED: Record<string, ReadonlySet<string>> = {
+  // Squawks: status / event linkage / token / notify-failed flag are
+  // all driven by server flows (work-package completion, the
+  // 047 token-rotate trigger, the squawk-notify route). A pilot
+  // PUTting them directly should not be able to fake a resolve, link
+  // their squawk to an arbitrary event, or rotate the mechanic
+  // access token to bypass an emailed link.
+  squawks: new Set([
+    'status',
+    'resolved_at', 'resolved_by',
+    'resolved_by_event_id',
+    'access_token',
+    'mx_notify_failed',
+  ]),
+  // Equipment: removed_at is the hide marker. Letting the client PUT
+  // removed_at = null silently un-removes (resurrects) gear without
+  // an audit-trail operation — whatever `removed_at` records about
+  // who/when is gone. Reinstatement should be its own endpoint.
+  equipment: new Set([
+    'removed_at', 'removed_by',
+  ]),
+  // ADs: source / supersession / sync metadata / applicability are
+  // all managed by the DRS sync + Haiku drill-down flows. Manually
+  // PUTting `source: 'drs_sync'` on a manual record would confuse
+  // the next sync's prune step; PUTting applicability_status
+  // bypasses the drill-down.
+  ads: new Set([
+    'source',
+    'is_superseded', 'superseded_by',
+    'synced_at', 'sync_hash',
+    'applicability_status', 'applicability_reason', 'applicability_checked_at',
+  ]),
+};
+
+/**
+ * Drop server-managed fields from a client payload before it's
+ * spread into an INSERT / UPDATE.
+ *
+ * @param payload - the raw client body
+ * @param table - optional table key for per-table extras (see
+ *                TABLE_PROTECTED). Omit only on routes that have
+ *                their own field discipline.
+ */
+export function stripProtectedFields<T extends Record<string, unknown>>(
+  payload: unknown,
+  table?: keyof typeof TABLE_PROTECTED,
+): Partial<T> {
   if (!payload || typeof payload !== 'object') return {};
   const src = payload as Record<string, unknown>;
-  const PROTECTED = new Set([
-    'id', 'aircraft_id',
-    'reported_by', 'author_id', 'created_by',
-    'deleted_at', 'deleted_by',
-    'created_at', 'updated_at',
-  ]);
+  const extra = table ? TABLE_PROTECTED[table] : undefined;
   const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(src)) {
-    if (!PROTECTED.has(k)) out[k] = v;
+    if (BASE_PROTECTED.has(k)) continue;
+    if (extra && extra.has(k)) continue;
+    out[k] = v;
   }
   return out as Partial<T>;
 }

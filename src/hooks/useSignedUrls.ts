@@ -96,6 +96,73 @@ function enqueue(url: string) {
 }
 
 /**
+ * One-shot signed-URL prefetch for non-React contexts (PDF export,
+ * email body builders, etc.). Calls /api/storage/sign once for the
+ * URLs that aren't already cached, then resolves to a Map keyed by
+ * the original public URL. Falls back to the public URL on miss so
+ * callers can render *something* even if signing failed.
+ *
+ * Use this anywhere `resolve()` from useSignedUrls() can't be —
+ * e.g. inside an async PDF builder that has no React render cycle
+ * to wait on the hook's listener callback.
+ */
+export async function fetchSignedUrls(
+  publicUrls: ReadonlyArray<string>,
+): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  const toRequest: string[] = [];
+  const now = Date.now();
+  for (const url of publicUrls) {
+    if (!url || !url.includes('/storage/v1/object/public/')) {
+      out.set(url, url);
+      continue;
+    }
+    const bucket = bucketFromPublicUrl(url);
+    if (!bucket || !PRIVATE_BUCKETS.has(bucket)) {
+      // Public bucket — pass through.
+      out.set(url, url);
+      continue;
+    }
+    const cached = cache.get(url);
+    if (cached && cached.expiresAt > now) {
+      out.set(url, cached.signed);
+      continue;
+    }
+    toRequest.push(url);
+  }
+  if (toRequest.length > 0) {
+    try {
+      const res = await authFetch('/api/storage/sign', {
+        method: 'POST',
+        body: JSON.stringify({ urls: toRequest }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const signed = (data?.signed || {}) as Record<string, string | null>;
+        for (const url of toRequest) {
+          const signedUrl = signed[url];
+          if (signedUrl) {
+            cache.set(url, { signed: signedUrl, expiresAt: Date.now() + CACHE_TTL });
+            out.set(url, signedUrl);
+          } else {
+            // Fallback: server returned null (URL not owned, or
+            // bucket allowlist mismatch). Keep the public URL so the
+            // caller renders *something* instead of breaking the
+            // export entirely.
+            out.set(url, url);
+          }
+        }
+      } else {
+        for (const url of toRequest) out.set(url, url);
+      }
+    } catch {
+      for (const url of toRequest) out.set(url, url);
+    }
+  }
+  return out;
+}
+
+/**
  * Returns a `resolve(publicUrl)` function that maps a public Storage
  * URL to a signed URL. If the signed URL isn't ready yet, returns the
  * original public URL (which still works while the bucket is public).
