@@ -363,6 +363,15 @@ export default function SummaryTab({
   // airworthy when we haven't actually checked.
   const statusBorderColor = aircraftStatus === 'grounded' ? 'border-danger' : aircraftStatus === 'issues' ? 'border-mxOrange' : aircraftStatus === 'airworthy' ? 'border-success' : 'border-gray-300';
   const statusIconColor = aircraftStatus === 'grounded' ? 'text-danger' : aircraftStatus === 'issues' ? 'text-mxOrange' : aircraftStatus === 'airworthy' ? 'text-success' : 'text-gray-400';
+  // Quick Log button picks up the same status hue as the card's
+  // top-border + icon so the chrome reads as a single status surface.
+  const statusButtonClasses = aircraftStatus === 'grounded'
+    ? 'text-danger bg-red-50 border-red-200 hover:bg-red-100'
+    : aircraftStatus === 'issues'
+    ? 'text-mxOrange bg-orange-50 border-orange-200 hover:bg-orange-100'
+    : aircraftStatus === 'airworthy'
+    ? 'text-success bg-green-50 border-green-200 hover:bg-green-100'
+    : 'text-gray-500 bg-gray-50 border-gray-200 hover:bg-gray-100';
   const mxTextColor = nextMx ? getMxTextColor(nextMx, sysSettings) : 'text-gray-500';
 
   const lastFlownLabel = (() => {
@@ -570,7 +579,7 @@ export default function SummaryTab({
         <div className="flex justify-between items-start mb-3 border-b border-gray-100 pb-3">
           <div className="flex flex-col gap-1"><div className="flex items-center gap-2"><Clock size={20} className={statusIconColor} /><h3 className="font-oswald text-xl font-bold uppercase text-navy m-0 leading-none">Flight Times</h3></div>{lastFlownLabel && <span className="text-[9px] font-bold uppercase tracking-widest text-gray-400 mt-1">Last Flown: {lastFlownLabel}</span>}</div>
           <div className="flex items-center gap-2">
-            <button onClick={(e) => { e.stopPropagation(); openQuickLog(); }} className="text-[10px] font-bold uppercase tracking-widest text-info bg-blue-50 border border-blue-200 px-3 py-1.5 rounded hover:bg-blue-100 active:scale-95 transition-all flex items-center gap-1.5"><PenSquare size={12} /> Quick Log</button>
+            <button onClick={(e) => { e.stopPropagation(); openQuickLog(); }} className={`text-[10px] font-bold uppercase tracking-widest border px-3 py-1.5 rounded active:scale-95 transition-all flex items-center gap-1.5 ${statusButtonClasses}`}><PenSquare size={12} /> Quick Log</button>
             <span className="text-[10px] font-bold uppercase tracking-widest bg-gray-100 px-2 py-1 rounded text-gray-600">{isTurbine ? 'TURBINE' : 'PISTON'}</span>
           </div>
         </div>
