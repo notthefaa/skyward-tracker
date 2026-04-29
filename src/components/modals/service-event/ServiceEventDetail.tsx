@@ -156,11 +156,9 @@ export default function ServiceEventDetail({
       {canManageService && selectedEvent.status === 'scheduling' && selectedEvent.proposed_by === 'mechanic' && (
         <div className="bg-orange-50 border border-orange-200 rounded p-4 space-y-3">
           <p className="text-sm font-bold text-navy">{selectedEvent.mx_contact_name || 'Mechanic'} proposed <strong>{selectedEvent.proposed_date}</strong>{selectedEvent.service_duration_days ? ` (${selectedEvent.service_duration_days} day${selectedEvent.service_duration_days > 1 ? 's' : ''})` : ''}</p>
-          <div className="flex gap-2">
-            <button onClick={handleOwnerConfirm} disabled={isSubmitting} className="flex-1 bg-[#56B94A] text-white font-oswald font-bold uppercase tracking-widest py-2 rounded text-xs active:scale-95 disabled:opacity-50">Confirm</button>
-            <button onClick={() => {}} className="flex-1 bg-mxOrange text-white font-oswald font-bold uppercase tracking-widest py-2 rounded text-xs active:scale-95">Counter</button>
-          </div>
-          <div className="space-y-2 pt-2">
+          <button onClick={handleOwnerConfirm} disabled={isSubmitting} className="w-full bg-[#56B94A] text-white font-oswald font-bold uppercase tracking-widest py-2 rounded text-xs active:scale-95 disabled:opacity-50">Confirm This Date</button>
+          <div className="space-y-2 pt-2 border-t border-orange-200">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-navy pt-2">Or Propose a Different Date</p>
             <input type="date" value={proposedDate} onChange={e => setProposedDate(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-2 text-sm focus:border-mxOrange outline-none" />
             <textarea value={ownerMessage} onChange={e => setOwnerMessage(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-2 text-sm focus:border-mxOrange outline-none min-h-[50px]" placeholder="Message (optional)" />
             <button onClick={handleOwnerCounter} disabled={isSubmitting || !proposedDate} className="w-full bg-mxOrange text-white font-oswald font-bold uppercase tracking-widest py-2 rounded text-xs active:scale-95 disabled:opacity-50">Send Counter Proposal</button>
