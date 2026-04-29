@@ -360,15 +360,17 @@ const handlers: Record<string, ToolHandler> = {
 
       // Consumption status — the same "hours since last add" signal the
       // Ops Checks dial uses. Howard MUST flag orange/red in his reply
-      // (see system prelude "Oil consumption" rule).
+      // (see system prelude "Oil consumption" rule). Engine type drives
+      // the threshold band (turbine and piston have different normals).
       const { data: ac } = await sb.from('aft_aircraft')
-        .select('total_engine_time')
+        .select('total_engine_time, engine_type')
         .eq('id', aircraftId)
         .maybeSingle();
       const currentHrs = (ac as any)?.total_engine_time ?? null;
+      const engineType = (ac as any)?.engine_type === 'Turbine' ? 'Turbine' : 'Piston';
       const lastAdd = (data || []).find((l: any) => (l.oil_added ?? 0) > 0) || null;
       const hrsSince = hoursSinceLastOilAdd(lastAdd?.engine_hours ?? null, currentHrs);
-      result.consumption_status = getOilConsumptionStatus(hrsSince);
+      result.consumption_status = getOilConsumptionStatus(hrsSince, engineType);
     }
 
     return result;

@@ -9,7 +9,7 @@ import dynamic from "next/dynamic";
 import { AlertTriangle, Droplets, Compass, Plus } from "lucide-react";
 import { TireIcon } from "@/components/shell/TrayIcons";
 import { TabSkeleton } from "@/components/Skeletons";
-import { getOilConsumptionStatus, hoursSinceLastOilAdd } from "@/lib/oilConsumption";
+import { getOilConsumptionStatus, hoursSinceLastOilAdd, OIL_THRESHOLDS, type EngineType } from "@/lib/oilConsumption";
 
 // Embed the individual tab surfaces inline. Each one keeps its own
 // form/modal/pagination — we're not re-implementing, we're orchestrating.
@@ -181,11 +181,14 @@ function tireDial(latest: TireCheck | null, now: Date): DialState {
 /** Oil dial — tracks engine HOURS since the most recent oil addition
  * (not just any oil-log entry, since a zero-add level-check shouldn't
  * reset the counter). Short interval between adds = high consumption.
- * Thresholds + colors live in @/lib/oilConsumption so Howard and the
- * dial read from the same source. */
-function oilDial(lastAdded: OilLog | null, currentEngineHours: number): DialState {
+ * Thresholds + colors + visual cap live in @/lib/oilConsumption so
+ * Howard, the dial, and the chart read from the same source. The
+ * visual cap shifts with engine type — turbine green starts at 30
+ * hrs, so the arc saturates at 60 to give visual headroom. */
+function oilDial(lastAdded: OilLog | null, currentEngineHours: number, engineType: EngineType): DialState {
   const hoursSince = hoursSinceLastOilAdd(lastAdded?.engine_hours ?? null, currentEngineHours);
-  const status = getOilConsumptionStatus(hoursSince);
+  const status = getOilConsumptionStatus(hoursSince, engineType);
+  const visualCap = OIL_THRESHOLDS[engineType].visualCapHrs;
 
   if (hoursSince === null) {
     return {
@@ -194,9 +197,7 @@ function oilDial(lastAdded: OilLog | null, currentEngineHours: number): DialStat
     };
   }
 
-  // Arc grows as hours accumulate, capped at 20 for visual consistency
-  // (10+ hrs = healthy; show headroom up to 20 before the arc saturates).
-  const progress = Math.min(hoursSince / 20, 1);
+  const progress = Math.min(hoursSince / visualCap, 1);
 
   return {
     value: hoursSince,
@@ -281,7 +282,7 @@ export default function ChecksTab({ aircraft, session, role, userInitials }: Pro
   const now = new Date();
   const vor = vorDial(vorLatest ?? null, now);
   const tire = tireDial(tirePage1?.checks?.[0] ?? null, now);
-  const oil = oilDial(oilLastAdded ?? null, aircraft.total_engine_time || 0);
+  const oil = oilDial(oilLastAdded ?? null, aircraft.total_engine_time || 0, (aircraft.engine_type === 'Turbine' ? 'Turbine' : 'Piston'));
 
   const scrollTo = (ref: React.RefObject<HTMLDivElement | null>) => {
     if (!ref.current) return;
