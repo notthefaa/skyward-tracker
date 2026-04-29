@@ -489,28 +489,23 @@ export default function AppShell({ session }: AppShellProps) {
     if (activeTail) localStorage.setItem('aft_active_tail', activeTail);
   }, [activeTail]);
 
-  // ─── Wipe + revalidate every SWR key for the newly-active aircraft ───
-  // Tabs cache per-aircraft data under aircraftId-suffixed keys. The
-  // earlier fix called `globalMutate(matcher, undefined, { revalidate: true })`,
-  // which only sets data → undefined on the in-memory map; it does NOT
-  // delete the State entry, and unmounted subscribers (every tab the user
-  // hasn't visited yet on the destination aircraft) don't fire a fetcher.
-  // The pilot-visible symptom: after switching aircraft, Summary loads
-  // (its useSWRs are mounted, so the broadcast reaches them), but Times /
-  // MX / Squawks render empty until the user pulls to refresh.
+  // ─── Hard-reset SWR for one aircraft ───
+  // `globalMutate(matcher, undefined, { revalidate: true })` only sets
+  // data → undefined on the in-memory map; it does NOT delete the State
+  // entry, and SWR's filter path runs the matcher against
+  // `cache.get(key)._k` which is undefined for entries hydrated from
+  // localStorage but not yet resubscribed in the current session. So
+  // unmounted tabs (every tab the user hasn't visited yet on the
+  // destination aircraft) never see the broadcast and keep returning
+  // their stale `[]`.
   //
-  // The fix here deletes the matched cache entries outright so the next
-  // mount of those tabs sees `cache.get(key) === undefined` and SWR
-  // unconditionally fires the fetcher. The follow-up globalMutate is
-  // still useful for currently-mounted subscribers that need an in-place
-  // revalidation (Summary on the new aircraft).
-  const lastRevalidatedTailRef = useRef<string>("");
-  useEffect(() => {
-    if (!activeTail || activeTail === lastRevalidatedTailRef.current) return;
-    const ac = allAircraftList.find(a => a.tail_number === activeTail);
-    if (!ac) return;
-    lastRevalidatedTailRef.current = activeTail;
-    const matcher = matchesAircraft(ac.id);
+  // Iterating cache.keys() and calling cache.delete(key) directly
+  // bypasses both quirks: next mount sees undefined and SWR
+  // unconditionally fires the fetcher. The follow-up globalMutate
+  // still kicks an in-place revalidation for any subscriber that's
+  // already mounted (Summary on the destination aircraft).
+  const wipeAircraftCache = useCallback((aircraftId: string) => {
+    const matcher = matchesAircraft(aircraftId);
     // Snapshot keys first — deleting while iterating the live iterator
     // is asking for trouble.
     const toDelete: string[] = [];
@@ -519,7 +514,56 @@ export default function AppShell({ session }: AppShellProps) {
     }
     for (const k of toDelete) swrCache.delete(k);
     globalMutate(matcher, undefined, { revalidate: true });
-  }, [activeTail, allAircraftList, globalMutate, swrCache]);
+  }, [globalMutate, swrCache]);
+
+  // ─── On tail switch, wipe + revalidate the destination aircraft ───
+  const lastRevalidatedTailRef = useRef<string>("");
+  useEffect(() => {
+    if (!activeTail || activeTail === lastRevalidatedTailRef.current) return;
+    const ac = allAircraftList.find(a => a.tail_number === activeTail);
+    if (!ac) return;
+    lastRevalidatedTailRef.current = activeTail;
+    wipeAircraftCache(ac.id);
+  }, [activeTail, allAircraftList, wipeAircraftCache]);
+
+  // ─── Resume-from-background recovery ───
+  // iOS PWAs / Safari suspend in-flight fetches when the app
+  // backgrounds and don't reliably finalize them on resume. Pilots
+  // see: tabs that were showing data when they put the phone down
+  // come back empty, and pull-to-refresh hangs until the supabase
+  // fetch timeout (15 s) trips. The fetch timeout is necessary but
+  // not sufficient — we still want fresh data fast on resume rather
+  // than waiting 15 s for SWR's natural retry path.
+  //
+  // On any visibility transition back to visible (after > 2 s
+  // hidden, to ignore quick app-switcher peeks), refresh the auth
+  // session — JWT may have expired during sleep — then wipe the
+  // active aircraft's cache so every mounted/about-to-mount tab
+  // refetches against the revived connection.
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    let hiddenAt = 0;
+    const RESUME_THRESHOLD_MS = 2_000;
+    const onVis = () => {
+      if (document.hidden) {
+        hiddenAt = Date.now();
+        return;
+      }
+      const wasHidden = hiddenAt;
+      hiddenAt = 0;
+      if (!wasHidden || Date.now() - wasHidden < RESUME_THRESHOLD_MS) return;
+      if (!activeTail) return;
+      const ac = allAircraftList.find(a => a.tail_number === activeTail);
+      if (!ac) return;
+      // Fire-and-forget — supabase auto-refreshes on the next call
+      // anyway, this just front-runs the JWT-expired round trip.
+      supabase.auth.refreshSession().catch(() => {});
+      wipeAircraftCache(ac.id);
+      checkGroundedStatus(activeTail);
+    };
+    document.addEventListener('visibilitychange', onVis);
+    return () => document.removeEventListener('visibilitychange', onVis);
+  }, [activeTail, allAircraftList, wipeAircraftCache, checkGroundedStatus]);
 
   // ─── Persist active tab ───
   useEffect(() => {
