@@ -140,16 +140,31 @@ export default function MaintenanceTab({
   useModalScrollLock(showMxModal || !!confirmResendId);
 
   // ─── Separate items into active tracking vs needs-setup ───
+  // 'both'-tracking items need BOTH a due_time AND a due_date to be
+  // fully tracked. Pre-fix the partition treated any 'both' item as
+  // active regardless of which sides were populated, so an item with
+  // both fields null silently rendered "Not yet configured" on the
+  // active list (and processMxItem's fall-through covered the crash
+  // path, but the user-visible state was still wrong).
   const needsSetupItems = mxItems.filter(item => {
     if (item.tracking_type === 'time') return item.due_time === null || item.due_time === undefined;
     if (item.tracking_type === 'date') return item.due_date === null || item.due_date === undefined;
+    if (item.tracking_type === 'both') {
+      const noTime = item.due_time === null || item.due_time === undefined;
+      const noDate = item.due_date === null || item.due_date === undefined;
+      return noTime || noDate;
+    }
     return false;
   });
 
   const activeItems = mxItems.filter(item => {
     if (item.tracking_type === 'time') return item.due_time !== null && item.due_time !== undefined;
     if (item.tracking_type === 'date') return item.due_date !== null && item.due_date !== undefined;
-    return true;
+    if (item.tracking_type === 'both') {
+      return item.due_time !== null && item.due_time !== undefined
+        && item.due_date !== null && item.due_date !== undefined;
+    }
+    return false;
   });
 
   const exportMxHistory = async () => {

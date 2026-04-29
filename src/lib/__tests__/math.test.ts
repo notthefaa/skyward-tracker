@@ -324,6 +324,54 @@ describe('processMxItem', () => {
     expect(result.dueText).toContain('~50 days');
     expect(result.dueText).not.toMatch(/\d+-\d+ days/);
   });
+
+  // ─── 'both' tracking-type driver selection ───
+  // Regression: stationary aircraft (burnRate = 0) makes
+  // `timeResult.projectedDays` Infinity. Pre-fix the min-projectedDays
+  // rule then picked the date side as driver even when the time side
+  // was already expired — burying a real grounding under a calendar
+  // countdown.
+  describe('processMxItem — both-tracking driver selection', () => {
+    const both = (overrides: Partial<any>) => ({
+      id: 'mx-1', aircraft_id: 'ac-1', item_name: 'Annual', is_required: true,
+      tracking_type: 'both' as const,
+      ...overrides,
+    });
+
+    const futureDate = (() => { const d = new Date(); d.setDate(d.getDate() + 30); return d.toISOString().slice(0, 10); })();
+    const pastDate = (() => { const d = new Date(); d.setDate(d.getDate() - 5); return d.toISOString().slice(0, 10); })();
+
+    it('expired time side drives when date side is not expired (zero burnRate)', () => {
+      const item = both({ due_time: 1900, due_date: futureDate });
+      // currentEngineTime past due_time → time side expired
+      const result = processMxItem(item, 2000, 0);
+      expect(result.isExpired).toBe(true);
+      expect(result.dueText.startsWith('Expired by')).toBe(true);
+    });
+
+    it('expired date side drives when time side is not expired', () => {
+      const item = both({ due_time: 5000, due_date: pastDate });
+      const result = processMxItem(item, 1000, 2);
+      expect(result.isExpired).toBe(true);
+      expect(result.dueText.startsWith('Expired')).toBe(true);
+      expect(result.dueText.toLowerCase()).toContain('days ago');
+    });
+
+    it('both expired: more-overdue side drives', () => {
+      const item = both({ due_time: 1900, due_date: pastDate });
+      const result = processMxItem(item, 2000, 2);
+      expect(result.isExpired).toBe(true);
+    });
+
+    it('neither expired: sooner-due side drives', () => {
+      // Date 30 days out, hours = 100 hrs at 5/day = 20 days → time wins
+      const item = both({ due_time: 1100, due_date: futureDate });
+      const result = processMxItem(item, 1000, 5);
+      expect(result.isExpired).toBe(false);
+      expect(result.dueText.startsWith('Due in')).toBe(true);
+      expect(result.dueText).toContain('hrs');
+    });
+  });
 });
 
 // ---------------------------------------------------------------

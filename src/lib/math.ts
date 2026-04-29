@@ -504,13 +504,31 @@ export function processMxItem(
   const sideDate = item.tracking_type === 'date' || (isDual && dateResult && !sideTime);
 
   if (isDual && timeResult && dateResult) {
-    // Compute which is sooner in days; combine text to show both, flagged.
-    const timeDays = Number.isFinite(timeResult.projectedDays) ? timeResult.projectedDays : Infinity;
-    const dateDays = dateResult.projectedDays;
-    const driver = timeDays <= dateDays ? timeResult : dateResult;
-    const otherLabel = timeDays <= dateDays
-      ? `; ${dateResult.isExpired ? 'expired' : 'then'} ${dateResult.dueText}`
-      : `; ${timeResult.isExpired ? 'expired' : 'then'} ${timeResult.dueText}`;
+    // Pick the side that drives the status display.
+    //
+    // Pre-fix this picked min(projectedDays). When burnRate = 0
+    // (stationary aircraft) `timeResult.projectedDays` becomes
+    // Infinity even when `timeResult.isExpired` is true — so an
+    // expired time-side got buried under a not-yet-due date side
+    // for any aircraft that hadn't flown recently. That's the
+    // opposite of the safe call: an already-overdue inspection
+    // should drive the verdict regardless of how many calendar days
+    // the date side has left.
+    //
+    // New rule:
+    //   - if exactly one side is expired → that side drives.
+    //   - if both expired → the more-overdue (lower projectedDays)
+    //     drives so the user sees the worst news first.
+    //   - else → the sooner-due side drives by min(projectedDays).
+    const driver = (() => {
+      if (timeResult.isExpired && !dateResult.isExpired) return timeResult;
+      if (dateResult.isExpired && !timeResult.isExpired) return dateResult;
+      const timeDays = Number.isFinite(timeResult.projectedDays) ? timeResult.projectedDays : Infinity;
+      const dateDays = Number.isFinite(dateResult.projectedDays) ? dateResult.projectedDays : Infinity;
+      return timeDays <= dateDays ? timeResult : dateResult;
+    })();
+    const other = driver === timeResult ? dateResult : timeResult;
+    const otherLabel = `; ${other.isExpired ? 'expired' : 'then'} ${other.dueText}`;
     return {
       ...item,
       remaining: driver.remaining,
