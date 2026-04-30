@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useBodyScrollOverride } from "@/hooks/useBodyScrollOverride";
+import { fetchSignedUrlsWithToken } from "@/hooks/useSignedUrls";
 import { validateFileSizes, MAX_UPLOAD_SIZE_LABEL, PORTAL_EXPIRY_DAYS } from "@/lib/constants";
 import {
   Wrench, AlertTriangle, CheckCircle, Clock, Send,
@@ -25,6 +26,12 @@ export default function ServicePortal() {
   const [lineItems, setLineItems] = useState<any[]>([]);
   const [messages, setMessages] = useState<any[]>([]);
   const [squawkPhotos, setSquawkPhotos] = useState<Record<string, string[]>>({});
+  // Map of public-URL → signed-URL for both attachments and squawk
+  // photos. The four buckets that back this page are now private,
+  // so rendering att.url / picture URL directly returns 400 + ORB.
+  // Populated after fetchEventData via /api/storage/sign in
+  // token-mode.
+  const [signedMap, setSignedMap] = useState<Map<string, string>>(new Map());
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isAppUser, setIsAppUser] = useState(false);
@@ -99,6 +106,11 @@ export default function ServicePortal() {
         .from('aft_aircraft').select('*').eq('id', evData.aircraft_id).single();
       if (acData) setAircraft(acData);
 
+      // Track URLs as we go so we can sign them all in one round-trip
+      // at the end of fetchEventData. The four backing buckets are
+      // private, so a missed URL renders as a broken image.
+      const urlSet = new Set<string>();
+
       const { data: liData } = await supabase
         .from('aft_event_line_items').select('*').eq('event_id', evData.id).order('created_at');
       if (liData) {
@@ -112,6 +124,7 @@ export default function ServicePortal() {
             for (const sq of squawksData) {
               if (sq.pictures && sq.pictures.length > 0) {
                 photoMap[sq.id] = sq.pictures;
+                for (const u of sq.pictures as string[]) urlSet.add(u);
               }
             }
             setSquawkPhotos(photoMap);
@@ -121,7 +134,19 @@ export default function ServicePortal() {
 
       const { data: msgData } = await supabase
         .from('aft_event_messages').select('*').eq('event_id', evData.id).order('created_at');
-      if (msgData) setMessages(msgData);
+      if (msgData) {
+        setMessages(msgData);
+        for (const m of msgData) {
+          for (const a of (m.attachments || []) as any[]) {
+            if (a?.url) urlSet.add(a.url);
+          }
+        }
+      }
+
+      if (urlSet.size > 0) {
+        const map = await fetchSignedUrlsWithToken(Array.from(urlSet), accessToken);
+        setSignedMap(map);
+      }
 
       setLastRefreshed(new Date());
     }
@@ -474,11 +499,14 @@ export default function ServicePortal() {
                             <div className="mt-3">
                               <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2 flex items-center gap-1"><Image size={12} /> {photos.length} Photo{photos.length > 1 ? 's' : ''} Attached</p>
                               <div className="flex gap-2 flex-wrap">
-                                {photos.map((url: string, idx: number) => (
-                                  <button key={idx} onClick={() => setViewingPhoto(url)} className="w-20 h-20 rounded border-2 border-gray-200 overflow-hidden hover:border-danger transition-colors active:scale-95">
-                                    <img src={url} alt={`Squawk photo ${idx + 1}`} className="w-full h-full object-cover" />
-                                  </button>
-                                ))}
+                                {photos.map((url: string, idx: number) => {
+                                  const signed = signedMap.get(url) || url;
+                                  return (
+                                    <button key={idx} onClick={() => setViewingPhoto(signed)} className="w-20 h-20 rounded border-2 border-gray-200 overflow-hidden hover:border-danger transition-colors active:scale-95">
+                                      <img src={signed} alt={`Squawk photo ${idx + 1}`} className="w-full h-full object-cover" />
+                                    </button>
+                                  );
+                                })}
                               </div>
                             </div>
                           )}
@@ -681,8 +709,9 @@ export default function ServicePortal() {
                         <div className="flex gap-2 flex-wrap">
                           {msg.attachments.map((att: any, idx: number) => {
                             const isImg = att.type && att.type.startsWith('image/');
-                            if (isImg) return (<button key={idx} onClick={() => setViewingPhoto(att.url)} className="w-20 h-20 rounded border-2 border-gray-200 overflow-hidden hover:border-info transition-colors active:scale-95"><img src={att.url} alt={att.filename} className="w-full h-full object-cover" /></button>);
-                            return (<a key={idx} href={att.url} target="_blank" rel="noreferrer" className="flex items-center gap-2 p-2 bg-white border border-gray-200 rounded hover:border-info transition-colors"><FileText size={16} className="text-gray-500 shrink-0" /><div className="min-w-0"><p className="text-xs font-bold text-navy truncate max-w-[120px]">{att.filename}</p>{att.size && <p className="text-[10px] text-gray-400">{att.size < 1024 * 1024 ? (att.size / 1024).toFixed(0) + ' KB' : (att.size / (1024 * 1024)).toFixed(1) + ' MB'}</p>}</div></a>);
+                            const signed = signedMap.get(att.url) || att.url;
+                            if (isImg) return (<button key={idx} onClick={() => setViewingPhoto(signed)} className="w-20 h-20 rounded border-2 border-gray-200 overflow-hidden hover:border-info transition-colors active:scale-95"><img src={signed} alt={att.filename} className="w-full h-full object-cover" /></button>);
+                            return (<a key={idx} href={signed} target="_blank" rel="noreferrer" className="flex items-center gap-2 p-2 bg-white border border-gray-200 rounded hover:border-info transition-colors"><FileText size={16} className="text-gray-500 shrink-0" /><div className="min-w-0"><p className="text-xs font-bold text-navy truncate max-w-[120px]">{att.filename}</p>{att.size && <p className="text-[10px] text-gray-400">{att.size < 1024 * 1024 ? (att.size / 1024).toFixed(0) + ' KB' : (att.size / (1024 * 1024)).toFixed(1) + ' MB'}</p>}</div></a>);
                           })}
                         </div>
                       </div>

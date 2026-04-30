@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { authFetch } from "@/lib/authFetch";
+import { useSignedUrls } from "@/hooks/useSignedUrls";
 import { 
   ChevronDown, ChevronRight, ExternalLink, Send, CheckCircle, 
   XCircle, Plane, Paperclip, FileText, Link2, X
@@ -28,6 +29,9 @@ export default function ServiceEventDetail({
   const [proposedDate, setProposedDate] = useState("");
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
+  // Sign attachment URLs — aft_event_attachments is now a private
+  // bucket so the stored public URL form 400s if rendered directly.
+  const resolveSigned = useSignedUrls();
 
   const hasCompletedItems = eventLineItems.some(li => li.line_status === 'complete');
   const hasPendingItems = eventLineItems.some(li => li.line_status !== 'complete' && li.line_status !== 'deferred');
@@ -119,8 +123,9 @@ export default function ServiceEventDetail({
         <div className="flex gap-2 flex-wrap">
           {attachments.map((att: any, idx: number) => {
             const isImg = att.type && att.type.startsWith('image/');
-            if (isImg) return (<button key={idx} onClick={() => setViewingAttachment(att.url)} className="w-16 h-16 rounded border-2 border-gray-200 overflow-hidden hover:border-info transition-colors active:scale-95"><img src={att.url} alt={att.filename} className="w-full h-full object-cover" /></button>);
-            return (<a key={idx} href={att.url} target="_blank" rel="noreferrer" className="flex items-center gap-2 p-2 bg-white border border-gray-200 rounded hover:border-info transition-colors"><FileText size={14} className="text-gray-500 shrink-0" /><div className="min-w-0"><p className="text-[10px] font-bold text-navy truncate max-w-[100px]">{att.filename}</p></div></a>);
+            const signed = resolveSigned(att.url) || att.url;
+            if (isImg) return (<button key={idx} onClick={() => setViewingAttachment(signed)} className="w-16 h-16 rounded border-2 border-gray-200 overflow-hidden hover:border-info transition-colors active:scale-95"><img src={signed} alt={att.filename} className="w-full h-full object-cover" /></button>);
+            return (<a key={idx} href={signed} target="_blank" rel="noreferrer" className="flex items-center gap-2 p-2 bg-white border border-gray-200 rounded hover:border-info transition-colors"><FileText size={14} className="text-gray-500 shrink-0" /><div className="min-w-0"><p className="text-[10px] font-bold text-navy truncate max-w-[100px]">{att.filename}</p></div></a>);
           })}
         </div>
       </div>

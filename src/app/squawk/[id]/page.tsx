@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useBodyScrollOverride } from "@/hooks/useBodyScrollOverride";
+import { fetchSignedUrlsWithToken } from "@/hooks/useSignedUrls";
 import { AlertTriangle, X, Image, MapPin } from "lucide-react";
 
 export default function SquawkViewer() {
@@ -19,6 +20,12 @@ export default function SquawkViewer() {
   const [aircraft, setAircraft] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [viewingPhoto, setViewingPhoto] = useState<string | null>(null);
+  // Map of public-URL → signed-URL for the squawk's photos.
+  // aft_squawk_images is a private bucket, so the stored public URL
+  // returns 400 + ORB unless we sign it. This page has no Supabase
+  // auth session — token-mode signing uses the squawk access_token
+  // as the auth boundary.
+  const [signedMap, setSignedMap] = useState<Map<string, string>>(new Map());
 
   // Replace dangerouslySetInnerHTML with hook-based style override
   useBodyScrollOverride();
@@ -36,6 +43,12 @@ export default function SquawkViewer() {
       const { data: acData } = await supabase
         .from('aft_aircraft').select('tail_number, aircraft_type, serial_number, mx_contact, mx_contact_email, main_contact, main_contact_email').eq('id', sqData.aircraft_id).single();
       if (acData) setAircraft(acData);
+
+      const pics: string[] = Array.isArray(sqData.pictures) ? sqData.pictures : [];
+      if (pics.length > 0) {
+        const map = await fetchSignedUrlsWithToken(pics, token);
+        setSignedMap(map);
+      }
     }
     setIsLoading(false);
   };
@@ -127,15 +140,18 @@ export default function SquawkViewer() {
             <div className="bg-white shadow-lg rounded-sm p-6 border-t-4 border-gray-400">
               <h3 className="font-oswald text-lg font-bold uppercase tracking-widest text-navy mb-4 flex items-center gap-2"><Image size={18} className="text-gray-500"/> Photos ({photos.length})</h3>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                {photos.map((url: string, idx: number) => (
-                  <button 
-                    key={idx} 
-                    onClick={() => setViewingPhoto(url)} 
-                    className="aspect-square rounded border-2 border-gray-200 overflow-hidden hover:border-danger transition-colors active:scale-95"
-                  >
-                    <img src={url} alt={`Squawk photo ${idx + 1}`} className="w-full h-full object-cover" />
-                  </button>
-                ))}
+                {photos.map((url: string, idx: number) => {
+                  const signed = signedMap.get(url) || url;
+                  return (
+                    <button
+                      key={idx}
+                      onClick={() => setViewingPhoto(signed)}
+                      className="aspect-square rounded border-2 border-gray-200 overflow-hidden hover:border-danger transition-colors active:scale-95"
+                    >
+                      <img src={signed} alt={`Squawk photo ${idx + 1}`} className="w-full h-full object-cover" />
+                    </button>
+                  );
+                })}
               </div>
             </div>
           )}

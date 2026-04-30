@@ -30,12 +30,17 @@ const CACHE_TTL = 50 * 60 * 1000; // 50 min
 // unchanged, skipping the /api/storage/sign round-trip entirely.
 // When a bucket is flipped to private, add its name here.
 //
-// aft_aircraft_avatars is private in production: the public URL path
-// returns 400 "Bucket not found" and Firefox's OpaqueResponseBlocking
-// turns that into an avatar-render failure, which would otherwise
-// drop into the AircraftAvatarImg onError rescue (1 POST per avatar
-// per page session). Routing through this hook batches them.
-const PRIVATE_BUCKETS = new Set<string>(['aft_aircraft_avatars']);
+// All five image / file buckets are now private. Anything stored as
+// `…/storage/v1/object/public/${bucket}/…` returns 400 + ORB unless
+// the renderer routes through this hook (or fetchSignedUrls below)
+// to swap in a signed URL.
+const PRIVATE_BUCKETS = new Set<string>([
+  'aft_aircraft_avatars',
+  'aft_aircraft_documents',
+  'aft_event_attachments',
+  'aft_squawk_images',
+  'aft_note_images',
+]);
 
 export function isPrivateBucketUrl(url: string | null | undefined): boolean {
   if (!url || !url.includes('/storage/v1/object/public/')) return false;
@@ -158,6 +163,60 @@ export async function fetchSignedUrls(
     } catch {
       for (const url of toRequest) out.set(url, url);
     }
+  }
+  return out;
+}
+
+/**
+ * Token-gated variant of fetchSignedUrls for the mechanic portal
+ * (/service/[id]) and public squawk page (/squawk/[id]). Those pages
+ * have no Supabase auth session, so authFetch can't sign their URLs;
+ * the token they were given is the auth boundary instead. The server
+ * scopes signing to URLs that live within the token's row.
+ *
+ * Uses plain fetch (no auth header) since the token replaces auth.
+ */
+export async function fetchSignedUrlsWithToken(
+  publicUrls: ReadonlyArray<string>,
+  accessToken: string,
+): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  if (!accessToken || publicUrls.length === 0) {
+    for (const u of publicUrls) out.set(u, u);
+    return out;
+  }
+  const toRequest: string[] = [];
+  for (const url of publicUrls) {
+    if (!url || !url.includes('/storage/v1/object/public/')) {
+      out.set(url, url);
+      continue;
+    }
+    const bucket = bucketFromPublicUrl(url);
+    if (!bucket || !PRIVATE_BUCKETS.has(bucket)) {
+      out.set(url, url);
+      continue;
+    }
+    toRequest.push(url);
+  }
+  if (toRequest.length === 0) return out;
+  try {
+    const res = await fetch('/api/storage/sign', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ urls: toRequest, accessToken }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const signed = (data?.signed || {}) as Record<string, string | null>;
+      for (const url of toRequest) {
+        const signedUrl = signed[url];
+        out.set(url, signedUrl || url);
+      }
+    } else {
+      for (const url of toRequest) out.set(url, url);
+    }
+  } catch {
+    for (const url of toRequest) out.set(url, url);
   }
   return out;
 }

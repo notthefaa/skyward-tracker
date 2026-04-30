@@ -1,17 +1,24 @@
 import { NextResponse } from 'next/server';
-import { requireAuth, handleApiError } from '@/lib/auth';
+import { requireAuth, createAdminClient, handleApiError } from '@/lib/auth';
 
 /**
  * POST /api/storage/sign
  *
  * Generate short-lived signed URLs for Supabase Storage objects.
- * Accepts an array of public URLs, resolves each to its owning row,
- * and signs only those whose row belongs to an aircraft the caller
- * can access. URLs that don't resolve, don't match a known bucket,
- * or whose row isn't accessible return `null` — the client falls
- * back to its public URL behavior in that case.
  *
- * Body: { urls: string[] }
+ * Two modes:
+ *   1. Authenticated user: requireAuth + scope to the caller's
+ *      accessible aircraft set (the original behaviour).
+ *   2. Token-gated portal: when the body carries an `accessToken`,
+ *      skip auth and scope signing to URLs that live within that
+ *      token's row. The mechanic portal (/service/[id]) and the
+ *      public squawk page (/squawk/[id]) have no Supabase auth
+ *      session, but the token they were given is the auth boundary.
+ *      Without this branch, every attachment + photo on those pages
+ *      403s the moment the buckets are flipped private.
+ *
+ * Body (auth mode):    { urls: string[] }
+ * Body (portal mode):  { urls: string[], accessToken: string }
  * Response: { signed: Record<string, string | null> }
  *
  * TTL: 1 hour (3600s). Long enough for a normal browsing session,
@@ -49,8 +56,9 @@ function parseBucketAndPath(url: string): { bucket: string; path: string } | nul
 
 export async function POST(req: Request) {
   try {
-    const { user, supabaseAdmin } = await requireAuth(req);
-    const { urls } = await req.json();
+    const body = await req.json().catch(() => ({}));
+    const urls: unknown = body?.urls;
+    const accessToken: unknown = body?.accessToken;
 
     if (!Array.isArray(urls) || urls.length === 0) {
       return NextResponse.json({ error: 'urls array is required.' }, { status: 400 });
@@ -58,6 +66,15 @@ export async function POST(req: Request) {
     if (urls.length > 50) {
       return NextResponse.json({ error: 'Max 50 URLs per request.' }, { status: 400 });
     }
+
+    // Portal mode: token instead of bearer auth. Validate the token
+    // up-front so we know which row's URLs are allowed, then short-
+    // circuit straight to the bucket loop with that allowlist.
+    if (typeof accessToken === 'string' && accessToken.length > 0) {
+      return await signWithToken(urls as string[], accessToken);
+    }
+
+    const { user, supabaseAdmin } = await requireAuth(req);
 
     // Resolve the caller's accessible aircraft set once. A global
     // admin sees everything; otherwise the user_aircraft_access table
@@ -204,4 +221,132 @@ export async function POST(req: Request) {
   } catch (error) {
     return handleApiError(error);
   }
+}
+
+// ─── Portal-mode signing ────────────────────────────────────
+// The token is the auth boundary for /service/[id] (mechanic
+// portal) and /squawk/[id] (public squawk page). Look up the
+// row, build an allowlist from the URLs that legitimately live
+// inside that row, and sign only those. Anything else returns
+// null so a leaked token can't be replayed to sign someone
+// else's bytes by passing arbitrary URLs.
+async function signWithToken(urls: string[], accessToken: string): Promise<NextResponse> {
+  const supabaseAdmin = createAdminClient();
+  const signed: Record<string, string | null> = {};
+  for (const u of urls) signed[u] = null;
+
+  // Bucket each URL the same way the auth-mode path does.
+  const byBucket = new Map<string, { url: string; path: string }[]>();
+  for (const url of urls) {
+    const parsed = parseBucketAndPath(url);
+    if (!parsed) continue;
+    const list = byBucket.get(parsed.bucket) ?? [];
+    list.push({ url, path: parsed.path });
+    byBucket.set(parsed.bucket, list);
+  }
+  if (byBucket.size === 0) return NextResponse.json({ signed });
+
+  // Resolve the token. Try event first, then squawk — the two are
+  // disjoint (each token is a fresh random string) so at most one
+  // matches. We only look up tables relevant to the buckets being
+  // requested, since a squawk token has no business signing event
+  // attachments and vice versa.
+  const wantsEventBucket = byBucket.has('aft_event_attachments');
+  const wantsSquawkBucket = byBucket.has('aft_squawk_images') || byBucket.has('aft_note_images');
+
+  const allowed = new Set<string>();
+
+  // Try event token first. Event tokens have a broader scope than
+  // squawk tokens — the mechanic portal renders attachments AND
+  // photos from squawks linked into the event's line items, so an
+  // event token must be able to sign both buckets.
+  let eventMatched = false;
+  if (wantsEventBucket || wantsSquawkBucket) {
+    const { data: event } = await supabaseAdmin
+      .from('aft_maintenance_events')
+      .select('id')
+      .eq('access_token', accessToken)
+      .is('deleted_at', null)
+      .maybeSingle();
+    if (event) {
+      eventMatched = true;
+      if (wantsEventBucket) {
+        const items = byBucket.get('aft_event_attachments') || [];
+        const urlList = items.map(i => i.url);
+        const { data: msgs } = await supabaseAdmin
+          .from('aft_event_messages')
+          .select('attachments')
+          .eq('event_id', event.id)
+          .not('attachments', 'is', null);
+        for (const m of msgs || []) {
+          for (const att of (m.attachments || []) as any[]) {
+            if (att?.url && urlList.includes(att.url)) allowed.add(att.url);
+          }
+        }
+      }
+      if (wantsSquawkBucket) {
+        // Pictures of every squawk that's linked into this event's
+        // line items. The mechanic legitimately needs to see these
+        // to know what they're working on.
+        const squawkUrls: string[] = [
+          ...(byBucket.get('aft_squawk_images') || []).map(i => i.url),
+          ...(byBucket.get('aft_note_images') || []).map(i => i.url),
+        ];
+        const { data: lineItems } = await supabaseAdmin
+          .from('aft_event_line_items')
+          .select('squawk_id')
+          .eq('event_id', event.id)
+          .not('squawk_id', 'is', null);
+        const squawkIds = (lineItems || []).map((l: any) => l.squawk_id);
+        if (squawkIds.length > 0) {
+          const { data: squawks } = await supabaseAdmin
+            .from('aft_squawks')
+            .select('pictures')
+            .in('id', squawkIds)
+            .is('deleted_at', null);
+          for (const sq of squawks || []) {
+            for (const u of (sq.pictures || []) as string[]) {
+              if (squawkUrls.includes(u)) allowed.add(u);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // Squawk-token fallback: a public squawk page request will have
+  // its access_token on aft_squawks, not aft_maintenance_events. Only
+  // try this branch if the event lookup didn't match — keeps the
+  // happy path one query per request.
+  if (!eventMatched && wantsSquawkBucket) {
+    const { data: squawk } = await supabaseAdmin
+      .from('aft_squawks')
+      .select('pictures')
+      .eq('access_token', accessToken)
+      .is('deleted_at', null)
+      .maybeSingle();
+    if (squawk) {
+      const allUrls: string[] = [
+        ...(byBucket.get('aft_squawk_images') || []).map(i => i.url),
+        ...(byBucket.get('aft_note_images') || []).map(i => i.url),
+      ];
+      for (const u of (squawk.pictures || []) as string[]) {
+        if (allUrls.includes(u)) allowed.add(u);
+      }
+    }
+  }
+
+  await Promise.all(
+    Array.from(byBucket.entries()).flatMap(([bucket, items]) =>
+      items.map(async ({ url, path }) => {
+        if (!allowed.has(url)) return;
+        const { data, error } = await supabaseAdmin.storage
+          .from(bucket)
+          .createSignedUrl(path, SIGNED_URL_TTL);
+        signed[url] = error ? null : data?.signedUrl || null;
+      })
+    )
+  );
+
+  return NextResponse.json({ signed });
 }
