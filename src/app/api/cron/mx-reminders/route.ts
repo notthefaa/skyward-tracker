@@ -163,17 +163,26 @@ export async function GET(req: Request) {
         // Headline `remaining` + `projectedDays` for downstream sort
         // and aggregation window. For 'time'-only it's hours; for
         // 'date' / 'both' it's the nearer deadline in days.
+        //
+        // When a dimension is already expired (hoursLeft <= 0 or
+        // daysLeft <= 0) `daysFromHours` may still be Infinity if
+        // the aircraft has been idle (burnRate = 0). Force
+        // projectedDays to 0 in that case so the aggregation
+        // window picks the item up — otherwise an expired-by-hours
+        // item on a hangared aircraft would silently fall out of
+        // the daily reminder digest.
+        const eitherExpired = state.isTimeExpired || state.isDateExpired;
         let remaining: number;
         let projectedDays: number;
         if (mx.tracking_type === 'time') {
           remaining = hoursLeft;
-          projectedDays = daysFromHours;
+          projectedDays = state.isTimeExpired ? 0 : daysFromHours;
         } else if (mx.tracking_type === 'date') {
           remaining = daysLeft;
           projectedDays = daysLeft;
         } else {
           // 'both' — pick whichever dimension is nearer in days.
-          projectedDays = Math.min(daysLeft, daysFromHours);
+          projectedDays = eitherExpired ? 0 : Math.min(daysLeft, daysFromHours);
           remaining = projectedDays;
         }
 
@@ -271,9 +280,12 @@ export async function GET(req: Request) {
           } as any);
 
           // Email the PRIMARY CONTACT to review and send. If the email
-          // fails we still keep the draft (it's the authoritative record
-          // the user acts on in-app) but we do NOT mark items as
-          // "schedule sent", so the next cron run can retry.
+          // fails we ROLL BACK the draft (line items + system message
+          // + event row) so the next cron tick recreates and re-emails
+          // it. The active-event filter at Phase 1 (mxIdsInActiveEvents)
+          // would otherwise skip these items every subsequent run, so
+          // a stuck-but-not-flagged draft is the same as silently
+          // dropping the alert.
           let emailOk = true;
           if (aircraft.main_contact_email) {
             const safeTail = escapeHtml(aircraft.tail_number);
@@ -322,6 +334,14 @@ export async function GET(req: Request) {
             for (const { mx } of lineItemDescriptions) {
               flagUpdates.push({ id: mx.id, flags: { mx_schedule_sent: true } });
             }
+          } else {
+            // Email failed and there IS a recipient — tear the draft
+            // back down so the next cron tick recreates + re-emails.
+            // Done in dependency order so the delete works whether or
+            // not the schema has ON DELETE CASCADE wired up.
+            await supabaseAdmin.from('aft_event_messages').delete().eq('event_id', draftEvent.id);
+            await supabaseAdmin.from('aft_event_line_items').delete().eq('event_id', draftEvent.id);
+            await supabaseAdmin.from('aft_maintenance_events').delete().eq('id', draftEvent.id);
           }
         }
       }
@@ -409,20 +429,29 @@ export async function GET(req: Request) {
         // 'both' items, the whichever dimension triggered the reminder
         // drives the phrasing so the pilot sees "100 HRS" vs. "30 DAYS"
         // as appropriate, not a lossy conversion to a single unit.
+        // Format helpers — when an item is past due (`remaining`/
+        // `hoursLeft`/`daysLeft` is negative) we show "OVERDUE BY X"
+        // instead of "DUE IN -X", which renders awkwardly in the
+        // alert email and was already confusing the in-app rendering
+        // until processMxItem learned the same trick.
+        const fmtHrs = (h: number): string =>
+          h < 0
+            ? `OVERDUE BY ${Math.abs(h).toFixed(1)} HRS`
+            : `DUE IN ${h.toFixed(1)} HRS (${projectedDaysText})`;
+        const fmtDays = (d: number): string =>
+          d < 0
+            ? `OVERDUE BY ${Math.abs(Math.round(d))} DAYS`
+            : `DUE IN ${Math.round(d)} DAYS`;
         const triggerTemplate = (): string => {
-          if (mx.tracking_type === 'time') {
-            return `DUE IN ${remaining.toFixed(1)} HRS (${projectedDaysText})`;
-          }
-          if (mx.tracking_type === 'date') {
-            return `DUE IN ${remaining} DAYS`;
-          }
+          if (mx.tracking_type === 'time') return fmtHrs(remaining);
+          if (mx.tracking_type === 'date') return fmtDays(remaining);
           // 'both' — lead with whichever dimension is actually closer.
           const timeIsTight = Number.isFinite(e.hoursLeft) && e.hoursLeft <= reminderHours1;
           const dateIsTight = Number.isFinite(e.daysLeft) && e.daysLeft <= reminder1;
           if (timeIsTight && (!dateIsTight || e.daysLeft > Math.ceil(e.hoursLeft / Math.max(burnRate, 0.01)))) {
-            return `DUE IN ${e.hoursLeft.toFixed(1)} HRS (${projectedDaysText})`;
+            return fmtHrs(e.hoursLeft);
           }
-          return `DUE IN ${Math.round(e.daysLeft)} DAYS`;
+          return fmtDays(e.daysLeft);
         };
         if (hitReminder3 && !mx.reminder_5_sent) {
           internalTriggerTemplate = triggerTemplate();
@@ -435,7 +464,16 @@ export async function GET(req: Request) {
           flagToUpdate.reminder_30_sent = true;
         }
 
-        let reminderEmailOk = true;
+        // `reminderEmailOk` defaults to true so the "no template fired"
+        // branch (nothing to send) skips the email block but still
+        // doesn't block flags — except there are no flags queued in
+        // that path either, so it's a no-op. The dangerous case is
+        // "template fired, no main_contact_email": Phase 3's heads-up
+        // gates the whole block on the email's presence; Phase 2 keeps
+        // the draft as a fallback notification channel; Phase 4 has
+        // no fallback, so a missing recipient must NOT mark the
+        // reminder as sent — we'd silently retire the alert forever.
+        let reminderEmailOk = !(internalTriggerTemplate && !aircraft.main_contact_email);
         if (internalTriggerTemplate && aircraft.main_contact_email) {
           const safeTail = escapeHtml(aircraft.tail_number);
           const safeItemName = escapeHtml(mx.item_name);
@@ -485,7 +523,8 @@ export async function GET(req: Request) {
       const { data: pickupEvents } = await supabaseAdmin
         .from('aft_maintenance_events')
         .select('id, aircraft_id, primary_contact_email')
-        .eq('status', 'ready_for_pickup');
+        .eq('status', 'ready_for_pickup')
+        .is('deleted_at', null);
 
       if (pickupEvents && pickupEvents.length > 0) {
         const eventIds = pickupEvents.map((e: any) => e.id);
@@ -502,10 +541,15 @@ export async function GET(req: Request) {
           if (!ev.primary_contact_email) continue;
 
           const eventMessages = (pickupMessages || []).filter((m: any) => m.event_id === ev.id);
-          // The most recent mechanic status_update is the mark_ready event.
-          const markReady = eventMessages.find(
+          // The mark_ready event is the FIRST mechanic status_update on
+          // the event — any later mechanic message is a follow-up that
+          // would slide the nudge timer forward. `pickupMessages` is
+          // ordered desc, so the original mark-ready is the last entry
+          // in this filtered list.
+          const mechanicStatusUpdates = eventMessages.filter(
             (m: any) => m.sender === 'mechanic' && m.message_type === 'status_update'
           );
+          const markReady = mechanicStatusUpdates[mechanicStatusUpdates.length - 1];
           if (!markReady) continue;
 
           const markReadyTime = new Date(markReady.created_at).getTime();

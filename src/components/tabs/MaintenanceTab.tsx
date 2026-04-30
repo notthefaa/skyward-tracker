@@ -330,21 +330,11 @@ export default function MaintenanceTab({
         return;
       }
       if (detected.length === 1) {
-        const f = detected[0];
-        if (f.item_name && !mxName) setMxName(f.item_name);
-        if (f.tracking_type && ['time', 'date', 'both'].includes(f.tracking_type)) {
-          setMxTrackingType(f.tracking_type);
-        }
-        if (typeof f.is_required === 'boolean') setMxIsRequired(f.is_required);
-        if (f.last_completed_time != null && !mxLastTime) setMxLastTime(String(f.last_completed_time));
-        if (f.last_completed_date && !mxLastDate) setMxLastDate(f.last_completed_date);
-        if (f.time_interval != null && !mxIntervalTime) setMxIntervalTime(String(f.time_interval));
-        if (f.date_interval_days != null && !mxIntervalDays) setMxIntervalDays(String(f.date_interval_days));
-        setScanPrefillHint(
-          f.work_description
-            ? `Prefilled from scan — ${f.work_description}`
-            : 'Prefilled from scan — review every field before saving.'
-        );
+        // Match the queue path's behaviour: scan is authoritative, the
+        // user reviews every field before saving. Pre-fix, this branch
+        // preserved user input on most fields but always overwrote
+        // tracking_type + is_required — same flow, two prefill rules.
+        prefillFormFromItem(detected[0]);
         showSuccess('Logbook entry scanned — review the fields before saving.');
       } else {
         setDetectedItems(detected);
@@ -432,17 +422,34 @@ export default function MaintenanceTab({
       const wantDate = mxTrackingType === 'date' || mxTrackingType === 'both';
 
       if (wantTime) {
-        payload.last_completed_time = parseFloat(mxLastTime) || 0;
-        payload.time_interval = mxIntervalTime ? parseFloat(mxIntervalTime) : null;
-        payload.due_time = mxDueTime ? parseFloat(mxDueTime) : (parseFloat(mxLastTime) + parseFloat(mxIntervalTime || '0'));
+        const lastTimeNum = parseFloat(mxLastTime) || 0;
+        const intervalNum = mxIntervalTime ? parseFloat(mxIntervalTime) : null;
+        const dueTimeNum  = mxDueTime ? parseFloat(mxDueTime) : null;
+        // The form's `required={!mxIntervalTime}` lets "0" through —
+        // "0" is a truthy string. Without an explicit due reading,
+        // interval=0 (or a stripped negative) collapses to
+        // due_time = last_completed_time, so the item lands as
+        // instantly overdue with zero feedback. Reject here.
+        if (dueTimeNum === null && (intervalNum === null || !(intervalNum > 0))) {
+          throw new Error('Enter a positive interval (Hrs) or an exact due reading.');
+        }
+        payload.last_completed_time = lastTimeNum;
+        payload.time_interval       = intervalNum;
+        payload.due_time            = dueTimeNum != null ? dueTimeNum : lastTimeNum + (intervalNum || 0);
       } else {
         payload.last_completed_time = null; payload.time_interval = null; payload.due_time = null;
       }
 
       if (wantDate) {
+        const intervalDaysNum = mxIntervalDays ? parseInt(mxIntervalDays, 10) : null;
+        if (!mxDueDate && (intervalDaysNum === null || !(intervalDaysNum > 0))) {
+          throw new Error('Enter a positive interval (Days) or an exact due date.');
+        }
         payload.last_completed_date = mxLastDate || null;
-        payload.date_interval_days = mxIntervalDays ? parseInt(mxIntervalDays) : null;
-        payload.due_date = mxDueDate || (mxLastDate && mxIntervalDays ? new Date(new Date(mxLastDate).getTime() + parseInt(mxIntervalDays) * 86400000).toISOString().split('T')[0] : null);
+        payload.date_interval_days  = intervalDaysNum;
+        payload.due_date            = mxDueDate || (mxLastDate && intervalDaysNum && intervalDaysNum > 0
+          ? new Date(new Date(mxLastDate).getTime() + intervalDaysNum * 86400000).toISOString().split('T')[0]
+          : null);
       } else {
         payload.last_completed_date = null; payload.date_interval_days = null; payload.due_date = null;
       }
@@ -865,8 +872,8 @@ export default function MaintenanceTab({
                       <p className="text-[9px] font-bold uppercase tracking-widest text-gray-500">Time Interval</p>
                       <div className="w-full min-w-0"><label className="text-[10px] font-bold uppercase tracking-widest text-navy block truncate">Last Completed ({isTurbine ? 'FTT' : 'Tach'}) *</label><input type="number" inputMode="decimal" step="0.1" required value={mxLastTime} onChange={e=>setMxLastTime(e.target.value)} style={INPUT_WHITE_BG} className="w-full min-w-0 border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none" /></div>
                       <div className="grid grid-cols-2 gap-3 w-full min-w-0">
-                        <div className="min-w-0"><label className="text-[10px] font-bold uppercase tracking-widest text-navy block truncate">Interval (Hrs)</label><input type="number" inputMode="decimal" step="0.1" value={mxIntervalTime} onChange={e=>setMxIntervalTime(e.target.value)} style={INPUT_WHITE_BG} className="w-full min-w-0 border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none" /></div>
-                        <div className="min-w-0"><label className="text-[10px] font-bold uppercase tracking-widest text-navy block truncate">OR Exact Due</label><input type="number" inputMode="decimal" step="0.1" required={!mxIntervalTime} value={mxDueTime} onChange={e=>setMxDueTime(e.target.value)} style={INPUT_WHITE_BG} className="w-full min-w-0 border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none" /></div>
+                        <div className="min-w-0"><label className="text-[10px] font-bold uppercase tracking-widest text-navy block truncate">Interval (Hrs)</label><input type="number" inputMode="decimal" step="0.1" min="0.1" value={mxIntervalTime} onChange={e=>setMxIntervalTime(e.target.value)} style={INPUT_WHITE_BG} className="w-full min-w-0 border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none" /></div>
+                        <div className="min-w-0"><label className="text-[10px] font-bold uppercase tracking-widest text-navy block truncate">OR Exact Due</label><input type="number" inputMode="decimal" step="0.1" required={!(parseFloat(mxIntervalTime) > 0)} value={mxDueTime} onChange={e=>setMxDueTime(e.target.value)} style={INPUT_WHITE_BG} className="w-full min-w-0 border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none" /></div>
                       </div>
                     </div>
                   )}
@@ -875,8 +882,8 @@ export default function MaintenanceTab({
                       <p className="text-[9px] font-bold uppercase tracking-widest text-gray-500">Date Interval</p>
                       <div className="w-full min-w-0"><label className="text-[10px] font-bold uppercase tracking-widest text-navy block truncate">Last Completed Date *</label><input type="date" required value={mxLastDate} onChange={e=>setMxLastDate(e.target.value)} style={INPUT_WHITE_BG} className="w-full min-w-0 border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none" /></div>
                       <div className="grid grid-cols-2 gap-3 w-full min-w-0">
-                        <div className="min-w-0"><label className="text-[10px] font-bold uppercase tracking-widest text-navy block truncate">Interval (Days)</label><input type="number" value={mxIntervalDays} onChange={e=>setMxIntervalDays(e.target.value)} style={INPUT_WHITE_BG} className="w-full min-w-0 border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none" /></div>
-                        <div className="min-w-0"><label className="text-[10px] font-bold uppercase tracking-widest text-navy block truncate">OR Exact Due</label><input type="date" required={!mxIntervalDays} value={mxDueDate} onChange={e=>setMxDueDate(e.target.value)} style={INPUT_WHITE_BG} className="w-full min-w-0 border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none" /></div>
+                        <div className="min-w-0"><label className="text-[10px] font-bold uppercase tracking-widest text-navy block truncate">Interval (Days)</label><input type="number" min="1" value={mxIntervalDays} onChange={e=>setMxIntervalDays(e.target.value)} style={INPUT_WHITE_BG} className="w-full min-w-0 border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none" /></div>
+                        <div className="min-w-0"><label className="text-[10px] font-bold uppercase tracking-widest text-navy block truncate">OR Exact Due</label><input type="date" required={!(parseInt(mxIntervalDays, 10) > 0)} value={mxDueDate} onChange={e=>setMxDueDate(e.target.value)} style={INPUT_WHITE_BG} className="w-full min-w-0 border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none" /></div>
                       </div>
                     </div>
                   )}

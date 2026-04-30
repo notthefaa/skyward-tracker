@@ -33,7 +33,6 @@ export default function ServiceEventComplete({
         completionDate: today,
         completionTime: currentTime,
         completedByName: "",
-        completedByCert: "",
         workDescription: "",
         // 43.11 fields
         certType: "A&P",
@@ -75,7 +74,11 @@ export default function ServiceEventComplete({
       const { fields, warning } = await res.json();
       if (warning) showWarning(warning);
 
-      // Pre-fill fields from the scan (don't overwrite fields user already filled)
+      // The scan is authoritative for completion data — the logbook
+       // entry is the ground truth, and the form's defaults (today's
+       // date, current engine time) are placeholders the user is
+       // expected to overwrite. Each field falls back to the prior
+       // value only when the scan didn't return it.
       setCompletionItems(prev => prev.map((item, i) => {
         if (i !== idx) return item;
         return {
@@ -116,10 +119,9 @@ export default function ServiceEventComplete({
         completionDate: c.completionDate || null,
         completionTime: c.completionTime || null,
         completedByName: c.completedByName || null,
-        completedByCert: c.completedByCert || null,
         workDescription: c.workDescription || null,
         certType: c.certType || null,
-        certNumber: c.certNumber || c.completedByCert || null,
+        certNumber: c.certNumber || null,
         certExpiry: c.certExpiry || null,
         tachAtCompletion: c.tachAtCompletion || null,
         hobbsAtCompletion: c.hobbsAtCompletion || null,

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireAuth, requireAircraftAdmin, handleApiError } from '@/lib/auth';
 import { setAppUser } from '@/lib/audit';
-import { pickAllowedFields } from '@/lib/validation';
+import { pickAllowedFields, parseFiniteNumber, isIsoDate } from '@/lib/validation';
 
 // Columns a client may set when creating / updating a maintenance item.
 // Schema-owned fields (reminder_*_sent, mx_schedule_sent, deleted_*,
@@ -20,6 +20,62 @@ const MX_ITEM_ALLOWED_FIELDS = [
 // 100 is generous headroom; anything larger signals abuse or a bug.
 const MAX_BULK_ITEMS = 100;
 
+// Coerce + validate the numeric/date columns on the way in. The form
+// already gates these client-side, but a devtools-fabricated payload
+// would otherwise let `due_time = NaN` (which JSON-serializes to null)
+// or a "2025-02-30" land in the row — and the column constraints
+// don't catch all of those. Returns either { ok: cleanedRow } or an
+// { error } string to bounce as a 400.
+function validateMxItemRow(
+  raw: Record<string, unknown>,
+): { ok: Record<string, unknown> } | { error: string } {
+  const out: Record<string, unknown> = { ...raw };
+
+  if ('tracking_type' in raw) {
+    const t = raw.tracking_type;
+    if (t !== 'time' && t !== 'date' && t !== 'both') {
+      return { error: 'tracking_type must be "time", "date", or "both".' };
+    }
+  }
+
+  for (const k of ['last_completed_time', 'time_interval', 'due_time'] as const) {
+    if (k in raw) {
+      const n = parseFiniteNumber(raw[k], { min: 0 });
+      if (n === undefined) return { error: `${k} must be a non-negative finite number.` };
+      out[k] = n;
+    }
+  }
+
+  if ('date_interval_days' in raw) {
+    const n = parseFiniteNumber(raw.date_interval_days, { min: 0 });
+    if (n === undefined) return { error: 'date_interval_days must be a non-negative finite number.' };
+    out.date_interval_days = n === null ? null : Math.trunc(n);
+  }
+
+  for (const k of ['last_completed_date', 'due_date'] as const) {
+    if (k in raw) {
+      const v = raw[k];
+      if (v === null || v === undefined || v === '') { out[k] = null; continue; }
+      if (!isIsoDate(v)) return { error: `${k} must be a valid YYYY-MM-DD date.` };
+    }
+  }
+
+  for (const k of ['is_required', 'automate_scheduling'] as const) {
+    if (k in raw && typeof raw[k] !== 'boolean') {
+      return { error: `${k} must be a boolean.` };
+    }
+  }
+
+  if ('item_name' in raw) {
+    const v = raw.item_name;
+    if (typeof v !== 'string' || v.trim() === '') {
+      return { error: 'item_name must be a non-empty string.' };
+    }
+  }
+
+  return { ok: out };
+}
+
 // POST — create maintenance item(s) (aircraft admin only)
 export async function POST(req: Request) {
   try {
@@ -37,15 +93,24 @@ export async function POST(req: Request) {
       if (items.length > MAX_BULK_ITEMS) {
         return NextResponse.json({ error: `Too many items; max ${MAX_BULK_ITEMS} per request.` }, { status: 400 });
       }
-      const rows = items.map((item: unknown) => ({
-        ...pickAllowedFields(item, MX_ITEM_ALLOWED_FIELDS),
-        aircraft_id: aircraftId,
-      }));
+      const rows: Record<string, unknown>[] = [];
+      for (const item of items) {
+        const safe = pickAllowedFields(item as Record<string, unknown>, MX_ITEM_ALLOWED_FIELDS);
+        const checked = validateMxItemRow(safe as Record<string, unknown>);
+        if ('error' in checked) {
+          return NextResponse.json({ error: checked.error }, { status: 400 });
+        }
+        rows.push({ ...checked.ok, aircraft_id: aircraftId });
+      }
       const { error } = await supabaseAdmin.from('aft_maintenance_items').insert(rows);
       if (error) throw error;
     } else {
       const safe = pickAllowedFields(itemData, MX_ITEM_ALLOWED_FIELDS);
-      const { error } = await supabaseAdmin.from('aft_maintenance_items').insert({ ...safe, aircraft_id: aircraftId });
+      const checked = validateMxItemRow(safe as Record<string, unknown>);
+      if ('error' in checked) {
+        return NextResponse.json({ error: checked.error }, { status: 400 });
+      }
+      const { error } = await supabaseAdmin.from('aft_maintenance_items').insert({ ...checked.ok, aircraft_id: aircraftId });
       if (error) throw error;
     }
 
@@ -75,7 +140,11 @@ export async function PUT(req: Request) {
 
     await setAppUser(supabaseAdmin, user.id);
     const safeUpdate = pickAllowedFields(itemData, MX_ITEM_ALLOWED_FIELDS);
-    const { error } = await supabaseAdmin.from('aft_maintenance_items').update(safeUpdate).eq('id', itemId);
+    const checked = validateMxItemRow(safeUpdate as Record<string, unknown>);
+    if ('error' in checked) {
+      return NextResponse.json({ error: checked.error }, { status: 400 });
+    }
+    const { error } = await supabaseAdmin.from('aft_maintenance_items').update(checked.ok).eq('id', itemId);
     if (error) throw error;
 
     return NextResponse.json({ success: true });

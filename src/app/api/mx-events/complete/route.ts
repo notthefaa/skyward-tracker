@@ -32,7 +32,7 @@ export async function POST(req: Request) {
     for (const completion of lineCompletions) {
       const {
         lineItemId, completionDate, completionTime,
-        completedByName, completedByCert, workDescription,
+        completedByName, workDescription,
         certType, certNumber, certExpiry,
         tachAtCompletion, hobbsAtCompletion, logbookRef,
       } = completion;
@@ -54,7 +54,6 @@ export async function POST(req: Request) {
         // lets the RPC's NULLIF(...)::numeric produce a SQL NULL cleanly.
         completionTime: completionTimeNum != null ? String(completionTimeNum) : null,
         completedByName: completedByName || null,
-        completedByCert: completedByCert || null,
         workDescription: workDescription || null,
         certType: certType || null,
         certNumber: certNumber || null,
