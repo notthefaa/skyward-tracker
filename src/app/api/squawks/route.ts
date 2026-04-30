@@ -2,7 +2,10 @@ import { NextResponse } from 'next/server';
 import { requireAuth, requireAircraftAccess, requireAircraftAdmin, handleApiError } from '@/lib/auth';
 import { setAppUser } from '@/lib/audit';
 import { idempotency } from '@/lib/idempotency';
-import { stripProtectedFields } from '@/lib/validation';
+import { stripProtectedFields, validatePicturesForBucket } from '@/lib/validation';
+// validatePicturesForBucket also runs inside submitSquawk so the
+// POST path doesn't need to re-call it; only the PUT path (which
+// bypasses submitSquawk) needs the explicit check below.
 import { apiErrorCoded, handleCodedError } from '@/lib/apiResponse';
 import { validateSquawkInput, submitSquawk } from '@/lib/submissions';
 import { requireAircraftAccessCoded } from '@/lib/submissionAuth';
@@ -85,6 +88,8 @@ export async function PUT(req: Request) {
     // squawk to an arbitrary event, or rotate the mechanic access
     // token to bypass an emailed link. The 'squawks' table key in
     // validation.ts pulls in those extras alongside the universal set.
+    const picErr = validatePicturesForBucket(squawkData, 'aft_squawk_images');
+    if (picErr) return apiErrorCoded('VALIDATION_ERROR', picErr, 400, req);
     const safeUpdate = stripProtectedFields(squawkData, 'squawks');
     const { error } = await supabaseAdmin.from('aft_squawks').update(safeUpdate).eq('id', squawkId);
     if (error) throw error;

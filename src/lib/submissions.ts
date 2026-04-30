@@ -20,7 +20,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { CodedError } from './apiResponse';
 import { setAppUser } from './audit';
-import { stripProtectedFields } from './validation';
+import { stripProtectedFields, validatePicturesForBucket } from './validation';
 import { isIsoDateTime } from './validation';
 
 type AdminClient = SupabaseClient<any, any, any>;
@@ -356,6 +356,15 @@ export async function submitSquawk(
   aircraftId: string,
   input: SquawkInput,
 ): Promise<{ id: string; row: any }> {
+  // Pictures are passed through the wide squawks allowlist. Without a
+  // positive whitelist a malicious client could smuggle external URLs
+  // into the array; the UI later renders them as `<img src=…>` and
+  // attacker.com gets a tracking-pixel hit on every viewer. Reject
+  // anything that isn't a squawk-bucket URL. Done inside submitSquawk
+  // so /api/squawks AND the companion-app /api/batch-submit path both
+  // inherit the check.
+  const picErr = validatePicturesForBucket(input, 'aft_squawk_images');
+  if (picErr) throw new CodedError('VALIDATION_ERROR', picErr, 400);
   await setAppUser(sb, userId);
   const { occurred_at, ...rest } = input;
   // 'squawks' table key blocks status / resolved_* / event linkage /

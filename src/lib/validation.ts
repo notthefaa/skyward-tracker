@@ -56,6 +56,45 @@ export function parseFiniteNumber(
 }
 
 /**
+ * Reject a `pictures: string[]` field unless every URL is a Supabase
+ * storage URL for the given bucket. The squawk + note insert routes
+ * pass `pictures` through `stripProtectedFields` (it's not server-
+ * owned), so without a positive whitelist a malicious client could
+ * smuggle `https://attacker.com/track.gif` into the array — when the
+ * UI later renders `<img src=…>`, that's a tracking-pixel injection
+ * (referrer + IP + viewer-IP leak) and the storage/sign route can't
+ * rescue it because external URLs aren't in any known bucket.
+ *
+ * Returns null on success; returns an error string for the caller
+ * to surface as a 400. Tolerates a missing / null pictures field
+ * (the row simply has no images).
+ */
+export function validatePicturesForBucket(
+  payload: unknown,
+  bucket: 'aft_squawk_images' | 'aft_note_images',
+): string | null {
+  if (!payload || typeof payload !== 'object') return null;
+  const pics = (payload as Record<string, unknown>).pictures;
+  if (pics === null || pics === undefined) return null;
+  if (!Array.isArray(pics)) return 'pictures must be an array.';
+  // Path matches `/storage/v1/object/public/{bucket}/...` (current
+  // public-bucket form) AND `/storage/v1/object/sign/{bucket}/...`
+  // (the form the storage/sign route returns). Both forms point at
+  // bytes the bucket owns, so either is legitimate input. Anything
+  // else — external URLs, other buckets, javascript: URIs — gets
+  // rejected.
+  const ok = new RegExp(
+    `^https?://[^/]+/storage/v1/object/(?:public|sign)/${bucket}/`,
+  );
+  for (const u of pics) {
+    if (typeof u !== 'string' || !ok.test(u)) {
+      return `pictures must be ${bucket} URLs.`;
+    }
+  }
+  return null;
+}
+
+/**
  * Build a clean row object by copying only the allow-listed keys from a
  * raw client payload. Blocks mass-assignment attacks — a client that
  * slips extra keys (`deleted_at`, `primary_heads_up_sent`, `created_by`,

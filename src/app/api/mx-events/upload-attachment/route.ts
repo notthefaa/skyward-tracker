@@ -74,25 +74,49 @@ export async function POST(req: Request) {
     // runaway accumulation. The 5-files-per-call limit + 10MB-per-
     // file limit upstream means the worst case here is 50 × 10MB =
     // 500MB per event (still bounded, no longer unbounded).
+    //
+    // Pre-fix this counted MESSAGES with attachments, not FILES —
+    // each message can carry up to 5 files, so the cap was 5×
+    // looser than the comment claimed. Sum the actual array
+    // lengths instead.
     const MAX_ATTACHMENTS_PER_EVENT = 50;
-    const { count: existingAttachments } = await supabaseAdmin
+    const { data: existingMessageAttachments } = await supabaseAdmin
       .from('aft_event_messages')
-      .select('id', { count: 'exact', head: true })
+      .select('attachments')
       .eq('event_id', event.id)
       .not('attachments', 'is', null);
-    if ((existingAttachments ?? 0) + files.length > MAX_ATTACHMENTS_PER_EVENT) {
+    const existingFileCount = (existingMessageAttachments || []).reduce(
+      (sum: number, m: any) => sum + (Array.isArray(m.attachments) ? m.attachments.length : 0),
+      0,
+    );
+    if (existingFileCount + files.length > MAX_ATTACHMENTS_PER_EVENT) {
       return NextResponse.json(
-        { error: `This event already has ${existingAttachments} uploads. Cap is ${MAX_ATTACHMENTS_PER_EVENT} per event — ask the owner to close it and create a follow-up.` },
+        { error: `This event already has ${existingFileCount} files attached. Cap is ${MAX_ATTACHMENTS_PER_EVENT} per event — ask the owner to close it and create a follow-up.` },
         { status: 413 },
       );
     }
 
     // Process and upload each file
     const attachments: { url: string; filename: string; size: number; type: string }[] = [];
+    // Track storage paths landed in this request so we can roll them
+    // back on a mid-loop failure. Pre-fix, file 1 succeeded, file 2's
+    // type-check failed, and file 1 stayed in the bucket forever with
+    // no message row referencing it — silent storage leak.
+    const uploadedPaths: string[] = [];
+    const cleanupOnFailure = async () => {
+      if (uploadedPaths.length === 0) return;
+      try {
+        await supabaseAdmin.storage.from('aft_event_attachments').remove(uploadedPaths);
+      } catch (e) {
+        console.error('[upload-attachment] cleanup failed:', e);
+      }
+    };
 
-    for (const file of files) {
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
       // Validate size
       if (file.size > MAX_FILE_SIZE) {
+        await cleanupOnFailure();
         return NextResponse.json(
           { error: `File "${file.name}" exceeds the 10MB limit.` },
           { status: 400 }
@@ -101,15 +125,20 @@ export async function POST(req: Request) {
 
       // Validate type
       if (!ALLOWED_TYPES.includes(file.type)) {
+        await cleanupOnFailure();
         return NextResponse.json(
           { error: `File type "${file.type}" is not supported. Accepted: images, PDF, Word documents.` },
           { status: 400 }
         );
       }
 
-      // Generate a unique filename: eventId_timestamp_originalName
+      // Generate a unique filename: eventId_timestamp_index_originalName.
+      // Index breaks ms-collisions when the same client uploads two
+      // files with the same name in a single multipart request — without
+      // it, file 2's `upload({ upsert: false })` would 409 on the same
+      // storage key.
       const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-      const fileName = `${event.id}_${Date.now()}_${safeName}`;
+      const fileName = `${event.id}_${Date.now()}_${i}_${safeName}`;
 
       const buffer = Buffer.from(await file.arrayBuffer());
 
@@ -117,6 +146,7 @@ export async function POST(req: Request) {
       // types are easy to spoof (e.g. an .exe renamed with a fake PDF header),
       // so a magic-byte check is the real gate.
       if (!fileBytesMatchType(buffer.subarray(0, 16), file.type, file.name)) {
+        await cleanupOnFailure();
         return NextResponse.json(
           { error: `File "${file.name}" doesn't match its declared type. Re-upload a valid ${file.type} file.` },
           { status: 400 }
@@ -132,11 +162,14 @@ export async function POST(req: Request) {
 
       if (uploadErr) {
         console.error('Upload error:', uploadErr);
+        await cleanupOnFailure();
         return NextResponse.json(
           { error: `Failed to upload "${file.name}".` },
           { status: 500 }
         );
       }
+
+      uploadedPaths.push(uploadData.path);
 
       const { data: urlData } = supabaseAdmin.storage
         .from('aft_event_attachments')

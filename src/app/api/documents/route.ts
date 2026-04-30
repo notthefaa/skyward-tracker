@@ -169,6 +169,26 @@ export async function POST(req: Request) {
         new Promise<T>((_, reject) => setTimeout(() => reject(new Error('pdf_timeout')), ms)),
       ]);
 
+    // Roll back a doc that failed somewhere after the storage upload +
+    // doc-row insert. Without this, every parse / embedding / chunk
+    // failure left the PDF orphaned in the bucket AND the doc row
+    // stuck at status='processing' (UI has no recovery affordance).
+    // Marks the row as 'error' for visibility, then deletes the
+    // storage object so we don't pay to host bytes nobody will read.
+    const failDocument = async (errorMessage: string, httpStatus: number) => {
+      try {
+        await supabaseAdmin.from('aft_documents').update({ status: 'error' }).eq('id', doc.id);
+      } catch (e) {
+        console.error('[documents] failed to set status=error:', e);
+      }
+      try {
+        await supabaseAdmin.storage.from('aft_aircraft_documents').remove([uploadData.path]);
+      } catch (e) {
+        console.error('[documents] failed to remove orphan storage object:', e);
+      }
+      return NextResponse.json({ error: errorMessage }, { status: httpStatus });
+    };
+
     try {
       const parser = new PDFParse({ data: new Uint8Array(buffer) });
       // First pass: get total page count from the full parse.
@@ -210,37 +230,44 @@ export async function POST(req: Request) {
 
       await parser.destroy();
     } catch (err: any) {
-      await supabaseAdmin.from('aft_documents').update({ status: 'error' }).eq('id', doc.id);
       if (err?.message === 'pdf_timeout') {
-        return NextResponse.json({ error: 'PDF took too long to parse. Try a smaller or simpler file.' }, { status: 400 });
+        return await failDocument('PDF took too long to parse. Try a smaller or simpler file.', 400);
       }
-      return NextResponse.json({ error: "Couldn't read the PDF — it might be a scan or image-based file that we can't extract text from." }, { status: 400 });
+      return await failDocument("Couldn't read the PDF — it might be a scan or image-based file that we can't extract text from.", 400);
     }
 
     if (taggedChunks.length === 0) {
-      await supabaseAdmin.from('aft_documents').update({ status: 'error' }).eq('id', doc.id);
-      return NextResponse.json({ error: 'No readable text found in PDF.' }, { status: 400 });
+      return await failDocument('No readable text found in PDF.', 400);
     }
 
-    // Generate embeddings
-    const embeddings = await generateEmbeddings(taggedChunks.map(c => c.content));
+    // Generate embeddings + insert chunks. Both can fail (OpenAI 5xx,
+    // DB transient error). On either failure roll the document back so
+    // the bucket doesn't keep an unreachable PDF and the UI doesn't
+    // see a permanent 'processing' row.
+    try {
+      const embeddings = await generateEmbeddings(taggedChunks.map(c => c.content));
 
-    // Store chunks with embeddings + page number
-    const chunkRows = taggedChunks.map((chunk, i) => ({
-      document_id: doc.id,
-      chunk_index: i,
-      content: chunk.content,
-      page_number: chunk.page_number,
-      embedding: JSON.stringify(embeddings[i]),
-    }));
+      const chunkRows = taggedChunks.map((chunk, i) => ({
+        document_id: doc.id,
+        chunk_index: i,
+        content: chunk.content,
+        page_number: chunk.page_number,
+        embedding: JSON.stringify(embeddings[i]),
+      }));
 
-    // Insert in batches of 50
-    for (let i = 0; i < chunkRows.length; i += 50) {
-      const batch = chunkRows.slice(i, i + 50);
-      const { error: chunkError } = await supabaseAdmin
-        .from('aft_document_chunks')
-        .insert(batch);
-      if (chunkError) throw chunkError;
+      for (let i = 0; i < chunkRows.length; i += 50) {
+        const batch = chunkRows.slice(i, i + 50);
+        const { error: chunkError } = await supabaseAdmin
+          .from('aft_document_chunks')
+          .insert(batch);
+        if (chunkError) throw chunkError;
+      }
+    } catch (err: any) {
+      // Leftover chunks from a partial insert would still be readable
+      // by Howard — wipe them before flipping the doc to 'error'.
+      await supabaseAdmin.from('aft_document_chunks').delete().eq('document_id', doc.id);
+      console.error('[documents] embedding/chunk insert failed:', err?.message || err);
+      return await failDocument("Couldn't index the document. Try again — if it keeps failing, the file may be too large or malformed.", 502);
     }
 
     // Update document status

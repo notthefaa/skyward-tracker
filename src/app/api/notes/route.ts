@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireAuth, requireAircraftAccess, requireAircraftAdmin, handleApiError } from '@/lib/auth';
 import { setAppUser } from '@/lib/audit';
 import { idempotency } from '@/lib/idempotency';
-import { stripProtectedFields } from '@/lib/validation';
+import { stripProtectedFields, validatePicturesForBucket } from '@/lib/validation';
 
 // POST — create note (any user with aircraft access)
 export async function POST(req: Request) {
@@ -14,6 +14,8 @@ export async function POST(req: Request) {
 
     const { aircraftId, noteData } = await req.json();
     if (!aircraftId) return NextResponse.json({ error: 'Aircraft ID required.' }, { status: 400 });
+    const picErr = validatePicturesForBucket(noteData, 'aft_note_images');
+    if (picErr) return NextResponse.json({ error: picErr }, { status: 400 });
     await requireAircraftAccess(supabaseAdmin, user.id, aircraftId);
 
     await setAppUser(supabaseAdmin, user.id);
@@ -60,6 +62,8 @@ export async function PUT(req: Request) {
     await setAppUser(supabaseAdmin, user.id);
     // Prevent a PUT from migrating the note across aircraft (bypassing
     // the access check) or resurrecting a soft-delete.
+    const picErr = validatePicturesForBucket(noteData, 'aft_note_images');
+    if (picErr) return NextResponse.json({ error: picErr }, { status: 400 });
     const safeUpdate = stripProtectedFields(noteData);
     const { error } = await supabaseAdmin.from('aft_notes').update(safeUpdate).eq('id', noteId);
     if (error) throw error;
