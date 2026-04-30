@@ -11,6 +11,12 @@ export async function POST(req: Request) {
     if (!aircraftId || !startDate) {
       return NextResponse.json({ error: 'Aircraft ID and start date are required.' }, { status: 400 });
     }
+    // Reject ranges where end is before start so we never store a block that
+    // would never block anything (and would still cancel reservations on the
+    // start day via `cancelConflictingReservations`).
+    if (endDate && endDate < startDate) {
+      return NextResponse.json({ error: 'End date must be on or after start date.' }, { status: 400 });
+    }
 
     // Verify the user has access to this aircraft
     await requireAircraftAccess(supabaseAdmin, user.id, aircraftId);

@@ -91,6 +91,7 @@ export default function FleetSchedule({
       supabase.from('aft_maintenance_events')
         .select('aircraft_id, confirmed_date, estimated_completion, status, mx_contact_name')
         .in('aircraft_id', ids)
+        .is('deleted_at', null)
         .in('status', ['confirmed', 'in_progress']),
     ]);
     if (resRes.error) throw resRes.error;

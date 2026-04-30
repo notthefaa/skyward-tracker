@@ -117,9 +117,11 @@ export async function POST(req: Request) {
       targetInitials = targetRole.initials || '';
     }
 
-    // Prefetch all existing reservations and MX events in the full date range for conflict checking
+    // Prefetch all existing reservations and MX events in the full date range for conflict checking.
+    // Occurrences are sorted by start; rangeEnd must be the maximum end across all occurrences
+    // (not the last one's end), since callers may submit mixed-duration occurrences.
     const rangeStart = occurrences[0].start;
-    const rangeEnd = occurrences[occurrences.length - 1].end;
+    const rangeEnd = occurrences.reduce((max, o) => (o.end > max ? o.end : max), occurrences[0].end);
 
     const [existingRes, mxEvents] = await Promise.all([
       supabaseAdmin
@@ -133,9 +135,14 @@ export async function POST(req: Request) {
         .from('aft_maintenance_events')
         .select('confirmed_date, estimated_completion, status')
         .eq('aircraft_id', aircraftId)
+        .is('deleted_at', null)
         .in('status', ['confirmed', 'in_progress']),
     ]);
 
+    // Throw on read errors so we never proceed with a false-empty conflict list,
+    // which would let MX-blocked or already-booked slots get inserted silently.
+    if (existingRes.error) throw existingRes.error;
+    if (mxEvents.error) throw mxEvents.error;
     const allReservations = existingRes.data || [];
     const allMxEvents = mxEvents.data || [];
 
@@ -397,7 +404,7 @@ export async function PUT(req: Request) {
     }
 
     // Check for conflicting reservations (exclude self)
-    const { data: conflicts } = await supabaseAdmin
+    const { data: conflicts, error: conflictsErr } = await supabaseAdmin
       .from('aft_reservations')
       .select('*, pilot_name')
       .eq('aircraft_id', existing.aircraft_id)
@@ -405,6 +412,7 @@ export async function PUT(req: Request) {
       .neq('id', reservationId)
       .lt('start_time', newEnd)
       .gt('end_time', newStart);
+    if (conflictsErr) throw conflictsErr;
 
     if (conflicts && conflicts.length > 0) {
       const conflict = conflicts[0];
@@ -416,11 +424,13 @@ export async function PUT(req: Request) {
     }
 
     // Check for conflicting maintenance events
-    const { data: mxEvents } = await supabaseAdmin
+    const { data: mxEvents, error: mxErr } = await supabaseAdmin
       .from('aft_maintenance_events')
       .select('confirmed_date, estimated_completion, status')
       .eq('aircraft_id', existing.aircraft_id)
+      .is('deleted_at', null)
       .in('status', ['confirmed', 'in_progress']);
+    if (mxErr) throw mxErr;
 
     if (mxEvents) {
       for (const ev of mxEvents) {
@@ -582,11 +592,15 @@ export async function DELETE(req: Request) {
       }
     }
 
-    // Cancel the reservation (soft delete)
-    await supabaseAdmin
+    // Cancel the reservation (soft delete). Throw on update error so the
+    // route never returns success while the row is still confirmed —
+    // otherwise the caller's mutate() refetches the same row and the user
+    // sees the "cancelled" booking reappear.
+    const { error: cancelErr } = await supabaseAdmin
       .from('aft_reservations')
       .update({ status: 'cancelled' })
       .eq('id', reservationId);
+    if (cancelErr) throw cancelErr;
 
     // Notify other assigned users
     const { data: aircraft } = await supabaseAdmin
