@@ -56,7 +56,7 @@ export async function DELETE(req: Request) {
     // by supplying aircraftId=A plus a foreign logId. Filtering the
     // update by both columns means a mismatched pair updates zero rows
     // and we return 404 instead of silently wiping someone else's data.
-    const { data: deleted } = await supabaseAdmin
+    const { data: deleted, error: deleteErr } = await supabaseAdmin
       .from('aft_vor_checks')
       .update({ deleted_at: new Date().toISOString(), deleted_by: user.id })
       .eq('id', logId)
@@ -64,6 +64,7 @@ export async function DELETE(req: Request) {
       .is('deleted_at', null)
       .select('id')
       .maybeSingle();
+    if (deleteErr) throw deleteErr;
     if (!deleted) return NextResponse.json({ error: 'VOR check not found for this aircraft.' }, { status: 404 });
     return NextResponse.json({ success: true });
   } catch (error) { return handleApiError(error); }

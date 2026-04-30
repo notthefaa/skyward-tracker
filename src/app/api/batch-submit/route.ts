@@ -241,10 +241,21 @@ export async function POST(req: Request) {
           }
         }
 
+        // Mark the result successful BEFORE the idempotency cache write —
+        // the actual submission already landed, so a transient failure
+        // writing the cache row must not flip this back to ok=false.
+        // Otherwise the companion app would see "failure", retry, and
+        // duplicate-insert the just-succeeded submission.
+        result.ok = true;
+        result.id = id;
+        result.status = 200;
+
         // Cache the success response for idempotent retries. Same
-        // per-route scoping as the check above.
+        // per-route scoping as the check above. Best-effort: log
+        // failures but do NOT let them propagate to the outer catch
+        // and overwrite the success status above.
         if (s.idempotencyKey) {
-          await supabaseAdmin
+          const { error: cacheErr } = await supabaseAdmin
             .from('aft_idempotency_keys')
             .upsert(
               {
@@ -256,11 +267,10 @@ export async function POST(req: Request) {
               },
               { onConflict: 'user_id,key,route' },
             );
+          if (cacheErr) {
+            console.warn(`[batch-submit] idempotency cache write failed for ${s.type}:`, cacheErr.message);
+          }
         }
-
-        result.ok = true;
-        result.id = id;
-        result.status = 200;
       } catch (err) {
         if (err instanceof CodedError) {
           result.code = err.code;
