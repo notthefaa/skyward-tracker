@@ -15,11 +15,17 @@ export async function GET(req: Request) {
 
   const supabaseAdmin = createAdminClient();
 
-  const { data: aircraft } = await supabaseAdmin
+  const { data: aircraft, error: fleetErr } = await supabaseAdmin
     .from('aft_aircraft')
-    .select('id, make, model, aircraft_type, engine_type')
+    .select('id, tail_number, make, model, aircraft_type, engine_type')
     .is('deleted_at', null);
 
+  if (fleetErr) {
+    // Don't return success when we never even loaded the fleet — the cron
+    // dashboard would otherwise show green while no aircraft was synced.
+    console.error('[cron/ads-sync] failed to load fleet', fleetErr);
+    return NextResponse.json({ error: 'Failed to load fleet', detail: fleetErr.message }, { status: 500 });
+  }
   if (!aircraft || aircraft.length === 0) {
     return NextResponse.json({ success: true, note: 'No aircraft to sync' });
   }

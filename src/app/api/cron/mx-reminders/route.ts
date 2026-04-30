@@ -35,8 +35,15 @@ export async function GET(req: Request) {
 
     const supabaseAdmin = createAdminClient();
 
-    const { data: aircraftList } = await supabaseAdmin.from('aft_aircraft').select('*').is('deleted_at', null);
-    const { data: mxItems } = await supabaseAdmin.from('aft_maintenance_items').select('*').eq('is_required', true).is('deleted_at', null);
+    // Throw on read failures rather than silently returning success — a
+    // transient supabase blip would otherwise let the cron report green
+    // while no reminders went out. The outer try/catch funnels the
+    // failure through handleApiError so Vercel sees a non-2xx and the
+    // alert routes through the normal cron-failure channel.
+    const { data: aircraftList, error: fleetErr } = await supabaseAdmin.from('aft_aircraft').select('*').is('deleted_at', null);
+    if (fleetErr) throw fleetErr;
+    const { data: mxItems, error: mxItemsErr } = await supabaseAdmin.from('aft_maintenance_items').select('*').eq('is_required', true).is('deleted_at', null);
+    if (mxItemsErr) throw mxItemsErr;
 
     if (!aircraftList || !mxItems) return NextResponse.json({ success: true, note: 'No data' });
 
@@ -69,21 +76,26 @@ export async function GET(req: Request) {
       .order('occurred_at', { ascending: true })
       .order('created_at', { ascending: true });
 
-    // Build set of MX items already in active events
-    const { data: activeEventLines } = await supabaseAdmin
+    // Build set of MX items already in active events. Throw on read
+    // errors here — a silent fallback to an empty set would let the
+    // cron create duplicate draft work packages for every item that's
+    // already in an active event, fanning out duplicate emails.
+    const { data: activeEventLines, error: linesErr } = await supabaseAdmin
       .from('aft_event_line_items')
       .select('maintenance_item_id, event_id')
       .not('maintenance_item_id', 'is', null);
+    if (linesErr) throw linesErr;
 
     const mxIdsInActiveEvents = new Set<string>();
     if (activeEventLines && activeEventLines.length > 0) {
       const eventIds = Array.from(new Set(activeEventLines.map((l: any) => l.event_id)));
       if (eventIds.length > 0) {
-        const { data: activeEvents } = await supabaseAdmin
+        const { data: activeEvents, error: activeErr } = await supabaseAdmin
           .from('aft_maintenance_events')
           .select('id')
           .in('id', eventIds)
           .in('status', ['draft', 'scheduling', 'confirmed', 'in_progress']);
+        if (activeErr) throw activeErr;
 
         if (activeEvents) {
           const activeEvIds = new Set(activeEvents.map((e: any) => e.id));
@@ -245,7 +257,7 @@ export async function GET(req: Request) {
         });
 
         // Create a single draft event
-        const { data: draftEvent } = await supabaseAdmin
+        const { data: draftEvent, error: draftErr } = await supabaseAdmin
           .from('aft_maintenance_events')
           .insert({
             aircraft_id: aircraft.id,
@@ -258,9 +270,16 @@ export async function GET(req: Request) {
           } as any)
           .select()
           .single();
+        if (draftErr) {
+          console.error(`[cron/mx-reminders] failed to create draft for ${aircraft.tail_number}:`, draftErr.message);
+        }
 
         if (draftEvent) {
-          // Insert all line items
+          // Insert all line items. If this fails we MUST tear the draft
+          // back down — otherwise the email below describes line items
+          // that don't exist, the customer clicks "Review & Send" and
+          // hits an empty work package, AND the active-event filter
+          // skips these items on every subsequent cron tick.
           const lineItems = lineItemDescriptions.map(({ mx, dueString }) => ({
             event_id: draftEvent.id,
             item_type: 'maintenance',
@@ -268,7 +287,11 @@ export async function GET(req: Request) {
             item_name: mx.item_name,
             item_description: `Due ${dueString}`,
           }));
-          await supabaseAdmin.from('aft_event_line_items').insert(lineItems);
+          const { error: linesInsertErr } = await supabaseAdmin.from('aft_event_line_items').insert(lineItems);
+          if (linesInsertErr) {
+            console.error(`[cron/mx-reminders] line-item insert failed for ${aircraft.tail_number}, rolling back draft:`, linesInsertErr.message);
+            await supabaseAdmin.from('aft_maintenance_events').delete().eq('id', draftEvent.id);
+          } else {
 
           // Build the system message
           const itemList = lineItemDescriptions.map(({ mx, dueString }) => `• ${mx.item_name}: ${dueString}`).join('\n');
@@ -343,6 +366,7 @@ export async function GET(req: Request) {
             await supabaseAdmin.from('aft_event_line_items').delete().eq('event_id', draftEvent.id);
             await supabaseAdmin.from('aft_maintenance_events').delete().eq('id', draftEvent.id);
           }
+          } // close: else (line-items insert succeeded)
         }
       }
 

@@ -6,11 +6,21 @@ export async function GET(req: Request) {
   try {
     const { supabaseAdmin } = await requireAuth(req, 'admin');
 
-    const [{ data: users }, { data: access }, { data: aircraft }] = await Promise.all([
+    const [
+      { data: users, error: usersErr },
+      { data: access, error: accessErr },
+      { data: aircraft, error: aircraftErr },
+    ] = await Promise.all([
       supabaseAdmin.from('aft_user_roles').select('user_id, role, email, initials, full_name').order('role').order('email'),
       supabaseAdmin.from('aft_user_aircraft_access').select('user_id, aircraft_id, aircraft_role'),
       supabaseAdmin.from('aft_aircraft').select('id, tail_number'),
     ]);
+    // Throw on any read failure so the admin UI never renders a partial
+    // user list (e.g. all users with empty aircraft assignments because
+    // the access read silently failed).
+    if (usersErr) throw usersErr;
+    if (accessErr) throw accessErr;
+    if (aircraftErr) throw aircraftErr;
 
     const aircraftMap: Record<string, string> = {};
     for (const ac of aircraft || []) aircraftMap[ac.id] = ac.tail_number;
