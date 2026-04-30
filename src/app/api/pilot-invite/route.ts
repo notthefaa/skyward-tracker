@@ -91,12 +91,17 @@ export async function POST(req: Request) {
       if (inviteData.user) {
         targetUserId = inviteData.user.id;
 
-        // Create role profile as pilot (not global admin)
-        await supabaseAdmin.from('aft_user_roles').upsert({
+        // Create role profile as pilot (not global admin). Throw on
+        // failure — without the role row, the user lands in the app
+        // with no role and no aircraft, and aft_user_aircraft_access
+        // would orphan since access rows depend on the user existing
+        // in aft_user_roles for downstream role-based gates.
+        const { error: roleErr } = await supabaseAdmin.from('aft_user_roles').upsert({
           user_id: targetUserId,
           role: 'pilot',
           email: email.toLowerCase(),
         });
+        if (roleErr) throw roleErr;
 
         // Upsert aircraft access — same reasoning as above.
         const { error: accessError } = await supabaseAdmin

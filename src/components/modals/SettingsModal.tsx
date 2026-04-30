@@ -194,15 +194,24 @@ export default function SettingsModal({
   };
 
   const togglePref = async (type: NotificationType) => {
-    const newValue = !prefs[type];
+    const previousValue = prefs[type];
+    const newValue = !previousValue;
     setPrefs(prev => ({ ...prev, [type]: newValue }));
     setSavingPref(type);
 
-    await supabase.from('aft_notification_preferences').upsert({
+    const { error } = await supabase.from('aft_notification_preferences').upsert({
       user_id: session.user.id,
       notification_type: type,
       enabled: newValue,
     }, { onConflict: 'user_id,notification_type' });
+
+    if (error) {
+      // Revert the optimistic flip so the toggle reflects what's
+      // actually persisted — otherwise the pilot keeps getting (or
+      // missing) emails despite the UI claiming the preference flipped.
+      setPrefs(prev => ({ ...prev, [type]: previousValue }));
+      showError("Couldn't save preference: " + friendlyPgError(error));
+    }
 
     setSavingPref(null);
   };

@@ -51,13 +51,18 @@ export async function DELETE(req: Request) {
       return NextResponse.json({ error: 'Deletion must be explicitly confirmed.' }, { status: 400 });
     }
 
-    // Cancel all future reservations by this user
-    await supabaseAdmin
+    // Cancel all future reservations by this user. Throw on failure so
+    // we don't proceed to deleteUser and leave dangling confirmed
+    // reservations attached to a user_id that's about to be SET NULL —
+    // those would otherwise render to other pilots as ghost bookings
+    // with no owner attached.
+    const { error: cancelErr } = await supabaseAdmin
       .from('aft_reservations')
       .update({ status: 'cancelled' })
       .eq('user_id', user.id)
       .eq('status', 'confirmed')
       .gt('start_time', new Date().toISOString());
+    if (cancelErr) throw cancelErr;
 
     // Revoke all refresh tokens before delete so a stolen device can't
     // continue using a cached token until natural expiry (~7 days).
