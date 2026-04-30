@@ -119,12 +119,16 @@ export async function POST(req: Request) {
       );
     }
 
-    // Get or create the user's single thread
-    let { data: thread } = await supabaseAdmin
+    // Get or create the user's single thread. Throw on read errors so
+    // a transient failure can't drop us into the "create new thread"
+    // branch and trigger a unique-constraint violation against the
+    // already-existing row.
+    let { data: thread, error: threadReadErr } = await supabaseAdmin
       .from('aft_howard_threads')
       .select('*')
       .eq('user_id', user.id)
       .maybeSingle();
+    if (threadReadErr) throw threadReadErr;
 
     if (!thread) {
       const { data: newThread, error } = await supabaseAdmin
@@ -136,12 +140,15 @@ export async function POST(req: Request) {
       thread = newThread;
     }
 
-    // Load conversation history
-    const { data: history } = await supabaseAdmin
+    // Load conversation history. Throw on error so we don't silently
+    // hand Claude an empty history (which makes the model lose context
+    // and start repeating earlier turns).
+    const { data: history, error: historyErr } = await supabaseAdmin
       .from('aft_howard_messages')
       .select('*')
       .eq('thread_id', thread.id)
       .order('created_at', { ascending: true });
+    if (historyErr) throw historyErr;
 
     // Load the user's full fleet for Howard's context
     const userAircraft = await loadUserFleet(supabaseAdmin, user.id);

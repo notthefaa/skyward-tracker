@@ -76,10 +76,18 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         record: result,
       });
     } catch (execErr: any) {
-      await supabaseAdmin
+      // Mark the row as failed so the UI can offer a retry. If even
+      // this update fails, surface a warning — leaving the action stuck
+      // in `pending` after a real execution failure is the worst state
+      // (the user can re-trigger executeAction without knowing it
+      // already partially ran).
+      const { error: failUpdateErr } = await supabaseAdmin
         .from('aft_proposed_actions')
         .update({ status: 'failed', error_message: execErr?.message || 'Execution failed' })
         .eq('id', id);
+      if (failUpdateErr) {
+        console.error('[howard/actions] failed to mark action as failed', failUpdateErr);
+      }
       return NextResponse.json({ error: execErr?.message || 'Execution failed' }, { status: 500 });
     }
   } catch (error) { return handleApiError(error); }
@@ -102,10 +110,11 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
       return NextResponse.json({ error: `Action already ${action.status}.` }, { status: 409 });
     }
 
-    await supabaseAdmin
+    const { error: cancelErr } = await supabaseAdmin
       .from('aft_proposed_actions')
       .update({ status: 'cancelled', cancelled_at: new Date().toISOString() })
       .eq('id', id);
+    if (cancelErr) throw cancelErr;
 
     return NextResponse.json({ success: true });
   } catch (error) { return handleApiError(error); }

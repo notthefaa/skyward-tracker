@@ -71,14 +71,19 @@ export async function DELETE(req: Request) {
     const now = new Date().toISOString();
 
     // Soft-delete child records first so historical queries scoped to the
-    // aircraft stop returning them once the parent is gone.
+    // aircraft stop returning them once the parent is gone. Throw on any
+    // cascade failure — leaving the aircraft alive is the right behavior
+    // for a partial cascade (the `is('deleted_at', null)` filter makes a
+    // retry idempotent), since orphaned children with a soft-deleted
+    // parent confuse cross-aircraft aggregates.
     for (const table of CASCADE_TABLES) {
       if (!SOFT_DELETE_TABLES.has(table)) continue;
-      await supabaseAdmin
+      const { error: cascadeErr } = await supabaseAdmin
         .from(table)
         .update({ deleted_at: now, deleted_by: user.id })
         .eq('aircraft_id', aircraftId)
         .is('deleted_at', null);
+      if (cascadeErr) throw cascadeErr;
     }
 
     // Soft-delete the aircraft itself.
@@ -91,11 +96,17 @@ export async function DELETE(req: Request) {
 
     // Hard-delete the access grants — users shouldn't still see a
     // soft-deleted aircraft in their list. History is captured in
-    // aft_record_history via trigger on aft_aircraft.
-    await supabaseAdmin
+    // aft_record_history via trigger on aft_aircraft. Best-effort: a
+    // failure here can't be retried via this route (the early-return
+    // on `deleted_at` blocks subsequent calls), so log the orphan and
+    // let the db-health orphan-access sweeper clean up.
+    const { error: accessErr } = await supabaseAdmin
       .from('aft_user_aircraft_access')
       .delete()
       .eq('aircraft_id', aircraftId);
+    if (accessErr) {
+      console.error(`[aircraft/delete] orphan access cleanup failed for ${aircraftId}:`, accessErr.message);
+    }
 
     return NextResponse.json({ success: true, tailNumber: aircraft.tail_number });
   } catch (error) {
