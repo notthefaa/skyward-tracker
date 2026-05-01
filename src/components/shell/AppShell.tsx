@@ -526,6 +526,26 @@ export default function AppShell({ session }: AppShellProps) {
     }
   }, [globalMutate, swrCache]);
 
+  // Resume-time revalidation. Same per-key path as wipeAircraftCache —
+  // single-arg `mutate(key)` still hits SWR's per-key code that runs
+  // `delete FETCH[key]; delete PRELOAD[key]` before re-firing the
+  // fetcher, so the iOS-suspended dead-promise trap clears the same
+  // way. The difference is we do NOT pass `undefined` as the data arg,
+  // so existing visible data stays put while the refetch is in flight.
+  // A flaky resume-time refetch (iOS still re-warming sockets) won't
+  // strand the user on a blank screen — they keep seeing the last-good
+  // values until the new fetch lands.
+  const revalidateAircraftCache = useCallback((aircraftId: string) => {
+    const matcher = matchesAircraft(aircraftId);
+    const keys: string[] = [];
+    for (const k of Array.from(swrCache.keys())) {
+      if (typeof k === 'string' && matcher(k)) keys.push(k);
+    }
+    for (const k of keys) {
+      globalMutate(k);
+    }
+  }, [globalMutate, swrCache]);
+
   // ─── On tail switch, wipe + revalidate the destination aircraft ───
   const lastRevalidatedTailRef = useRef<string>("");
   useEffect(() => {
@@ -542,21 +562,72 @@ export default function AppShell({ session }: AppShellProps) {
   // (a) old fetches may never finalize, and (b) the JWT in memory
   // can be hours past expiry. Without intervention the first round
   // of refetches goes out with a dead token, gets 401s, and SWR's
-  // 2 retries × 3 s + the 15 s fetch timeout we just installed
-  // burns 30+ seconds before any tab shows data again — which is
-  // exactly the "still timing out after sitting for a while" symptom
-  // pilots reported.
+  // 2 retries × 3 s + the 15 s fetch timeout burns 30+ seconds before
+  // any tab shows data again.
   //
-  // The refresh has to *complete* before we wipe the cache and let
-  // refetches run, otherwise they race the new JWT. Use a generation
-  // counter to make sure a slow refresh from one resume can't
-  // clobber a newer resume's wipe.
+  // Three resume signals, all coalesced through `triggerResume`:
+  //   • visibilitychange — primary on most platforms.
+  //   • pageshow — fires on iOS PWA bfcache restore and after long
+  //     backgrounds where visibilitychange skips. Without this listener
+  //     we missed a class of resumes entirely; the dead FETCH[key] map
+  //     stayed pinned and tabs sat blank until aircraft-switch.
+  //   • online — defensive depth. iOS sometimes lets us resume before
+  //     the radio is back; firing again on `online` guarantees we
+  //     revalidate once connectivity is real.
+  //
+  // We use the gentler `revalidateAircraftCache` (preserves visible
+  // data) instead of `wipeAircraftCache`. A flaky first refetch on
+  // a half-warm socket no longer strands the user on a blank screen
+  // — last-good values stay rendered while SWR replaces them. A
+  // safety revalidate fires at +10 s in case the immediate one
+  // failed; if it succeeded, the second one is a cache hit no-op.
+  //
+  // The session refresh has to complete before revalidation so the
+  // refetches don't race a stale JWT. Generation counter prevents a
+  // slow refresh from one resume from stomping a newer resume.
   const resumeGenerationRef = useRef(0);
+  const lastResumeAtRef = useRef(0);
   useEffect(() => {
     if (typeof document === 'undefined') return;
     let hiddenAt = 0;
     const RESUME_THRESHOLD_MS = 2_000;
     const REFRESH_TIMEOUT_MS = 8_000;
+    const RESUME_DEDUP_MS = 1_500;
+    const SAFETY_REVALIDATE_MS = 10_000;
+
+    const triggerResume = (forceRefresh: boolean) => {
+      const now = Date.now();
+      if (now - lastResumeAtRef.current < RESUME_DEDUP_MS) return;
+      lastResumeAtRef.current = now;
+      if (!activeTail) return;
+      const ac = allAircraftList.find(a => a.tail_number === activeTail);
+      if (!ac) return;
+      const gen = ++resumeGenerationRef.current;
+      (async () => {
+        if (forceRefresh) {
+          // Race the refresh against a tight timeout — we'd rather
+          // revalidate with a stale token (and let SWR retry on 401)
+          // than leave the user staring at stale data while a hung
+          // refresh call sits indefinitely.
+          await Promise.race([
+            supabase.auth.refreshSession().catch(() => {}),
+            new Promise<void>(resolve => setTimeout(resolve, REFRESH_TIMEOUT_MS)),
+          ]);
+        }
+        if (resumeGenerationRef.current !== gen) return;
+        revalidateAircraftCache(ac.id);
+        checkGroundedStatus(activeTail);
+        // Defensive second pass — covers the case where the immediate
+        // revalidate raced a half-warm socket and errored out. SWR's
+        // errorRetryCount is 2, so without this the user is stuck
+        // until they manually pull-to-refresh.
+        setTimeout(() => {
+          if (resumeGenerationRef.current !== gen) return;
+          revalidateAircraftCache(ac.id);
+        }, SAFETY_REVALIDATE_MS);
+      })();
+    };
+
     const onVis = () => {
       if (document.hidden) {
         hiddenAt = Date.now();
@@ -565,28 +636,26 @@ export default function AppShell({ session }: AppShellProps) {
       const wasHidden = hiddenAt;
       hiddenAt = 0;
       if (!wasHidden || Date.now() - wasHidden < RESUME_THRESHOLD_MS) return;
-      if (!activeTail) return;
-      const ac = allAircraftList.find(a => a.tail_number === activeTail);
-      if (!ac) return;
-      const gen = ++resumeGenerationRef.current;
-      (async () => {
-        // Race the refresh against a tight timeout — we'd rather
-        // wipe with a stale token (and let SWR retry on 401) than
-        // leave the user staring at stale data while a hung refresh
-        // call sits indefinitely.
-        await Promise.race([
-          supabase.auth.refreshSession().catch(() => {}),
-          new Promise<void>(resolve => setTimeout(resolve, REFRESH_TIMEOUT_MS)),
-        ]);
-        // A newer resume already ran — let it own the wipe.
-        if (resumeGenerationRef.current !== gen) return;
-        wipeAircraftCache(ac.id);
-        checkGroundedStatus(activeTail);
-      })();
+      triggerResume(true);
     };
+    // pageshow with persisted=true means bfcache restore — those skip
+    // visibilitychange entirely. Even when persisted=false, firing
+    // resume on pageshow is harmless: dedup guards against double-wipe
+    // when both events fire on a normal foregrounding.
+    const onPageShow = (e: PageTransitionEvent) => {
+      if (e.persisted) triggerResume(true);
+    };
+    const onOnline = () => triggerResume(false);
+
     document.addEventListener('visibilitychange', onVis);
-    return () => document.removeEventListener('visibilitychange', onVis);
-  }, [activeTail, allAircraftList, wipeAircraftCache, checkGroundedStatus]);
+    window.addEventListener('pageshow', onPageShow);
+    window.addEventListener('online', onOnline);
+    return () => {
+      document.removeEventListener('visibilitychange', onVis);
+      window.removeEventListener('pageshow', onPageShow);
+      window.removeEventListener('online', onOnline);
+    };
+  }, [activeTail, allAircraftList, revalidateAircraftCache, checkGroundedStatus]);
 
   // ─── Persist active tab ───
   useEffect(() => {
