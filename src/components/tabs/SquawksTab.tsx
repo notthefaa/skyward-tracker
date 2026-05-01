@@ -64,6 +64,10 @@ export default function SquawksTab({
 
   const [showModal, setShowModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // Sticky idempotency key for the squawk-create POST. Reset on form
+  // open. PUT (edit) is inherently idempotent (target by squawk_id),
+  // so only the create branch needs this. See OilTab for the pattern.
+  const submitIdemKeyRef = useRef<string | null>(null);
   const sigCanvas = useRef<SignatureCanvas>(null);
   const [previewImages, setPreviewImages] = useState<string[] | null>(null);
   const [previewIndex, setPreviewIndex] = useState<number>(0);
@@ -160,6 +164,7 @@ export default function SquawksTab({
       setProcCompleted(false); setFullName(""); setCertNum(""); setNotifyMx(false);
       if (sigCanvas.current) sigCanvas.current.clear();
     }
+    submitIdemKeyRef.current = null;
     closeDetailModal();
     setShowModal(true);
   };
@@ -248,8 +253,10 @@ export default function SquawksTab({
         });
         if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || "Couldn't update the squawk"); }
       } else {
+        if (!submitIdemKeyRef.current) submitIdemKeyRef.current = newIdempotencyKey();
         const res = await authFetch('/api/squawks', {
           method: 'POST',
+          headers: idempotencyHeader(submitIdemKeyRef.current),
           body: JSON.stringify({ aircraftId: aircraft!.id, squawkData })
         });
         if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || "Couldn't create the squawk"); }

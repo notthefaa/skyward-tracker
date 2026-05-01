@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import { authFetch } from "@/lib/authFetch";
+import { newIdempotencyKey, idempotencyHeader } from "@/lib/idempotencyClient";
 import { validateFileSizes, MAX_UPLOAD_SIZE_LABEL } from "@/lib/constants";
 import { swrKeys } from "@/lib/swrKeys";
 import type { AircraftRole } from "@/lib/types";
@@ -54,6 +55,10 @@ export default function NotesTab({ aircraft, session, role, aircraftRole, userIn
 
   const [showModal, setShowModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // Sticky idempotency key for the note-create POST. PUT (edit) is
+  // inherently idempotent (target by note_id), so only the create
+  // branch needs this. Reset on form open.
+  const submitIdemKeyRef = useRef<string | null>(null);
 
   const { showSuccess, showError } = useToast();
   const resolve = useSignedUrls();
@@ -82,6 +87,7 @@ export default function NotesTab({ aircraft, session, role, aircraftRole, userIn
       setExistingImages([]);
     }
     setSelectedImages([]);
+    submitIdemKeyRef.current = null;
     setShowModal(true);
   };
 
@@ -161,8 +167,10 @@ export default function NotesTab({ aircraft, session, role, aircraftRole, userIn
       } else {
         noteData.author_email = session.user.email;
         noteData.author_initials = userInitials;
+        if (!submitIdemKeyRef.current) submitIdemKeyRef.current = newIdempotencyKey();
         const res = await authFetch('/api/notes', {
           method: 'POST',
+          headers: idempotencyHeader(submitIdemKeyRef.current),
           body: JSON.stringify({ aircraftId: aircraft.id, noteData })
         });
         if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || "Couldn't create the note"); }

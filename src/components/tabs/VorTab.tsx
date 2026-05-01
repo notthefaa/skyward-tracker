@@ -1,7 +1,8 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import { ModalPortal } from "@/components/ModalPortal";
 import { authFetch } from "@/lib/authFetch";
+import { newIdempotencyKey, idempotencyHeader } from "@/lib/idempotencyClient";
 import { swrKeys } from "@/lib/swrKeys";
 import type { AircraftWithMetrics, VorCheck, VorCheckType } from "@/lib/types";
 import useSWR from "swr";
@@ -36,6 +37,8 @@ export default function VorTab({
   const [page, setPage] = useState(1);
   const [showModal, setShowModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // Sticky idempotency key — see OilTab for the rationale.
+  const submitIdemKeyRef = useRef<string | null>(null);
   useModalScrollLock(showModal);
 
   // Form fields
@@ -88,6 +91,7 @@ export default function VorTab({
     setStation('');
     setBearingError('');
     setInitials(userInitials);
+    submitIdemKeyRef.current = null;
     setShowModal(true);
   }, [userInitials]);
 
@@ -124,9 +128,11 @@ export default function VorTab({
     }
 
     setIsSubmitting(true);
+    if (!submitIdemKeyRef.current) submitIdemKeyRef.current = newIdempotencyKey();
     try {
       const res = await authFetch('/api/vor-checks', {
         method: 'POST',
+        headers: idempotencyHeader(submitIdemKeyRef.current),
         body: JSON.stringify({
           aircraftId: aircraft.id,
           logData: { check_type: checkType, station: station.trim(), bearing_error: error, initials: initials.trim() },

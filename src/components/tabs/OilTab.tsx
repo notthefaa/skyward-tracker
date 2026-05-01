@@ -1,7 +1,8 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import { ModalPortal } from "@/components/ModalPortal";
 import { authFetch } from "@/lib/authFetch";
+import { newIdempotencyKey, idempotencyHeader } from "@/lib/idempotencyClient";
 import { swrKeys } from "@/lib/swrKeys";
 import type { AircraftWithMetrics, OilLog } from "@/lib/types";
 import useSWR, { useSWRConfig } from "swr";
@@ -126,6 +127,11 @@ export default function OilTab({
   const [page, setPage] = useState(1);
   const [showModal, setShowModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // Sticky idempotency key for the open form. Generated lazily on
+  // first submit, reused across retries (so a timeout-then-retry
+  // whose original request actually wrote the row gets deduped
+  // server-side instead of double-writing). Reset on form open.
+  const submitIdemKeyRef = useRef<string | null>(null);
   useModalScrollLock(showModal);
 
   // Form fields
@@ -186,6 +192,7 @@ export default function OilTab({
     setEngineHours(aircraft?.total_engine_time?.toFixed(1) || '');
     setInitials(userInitials);
     setNotes('');
+    submitIdemKeyRef.current = null;
     setShowModal(true);
   }, [userInitials, aircraft]);
 
@@ -205,9 +212,11 @@ export default function OilTab({
     if (!initials.trim()) { showError('Initials are required.'); return; }
 
     setIsSubmitting(true);
+    if (!submitIdemKeyRef.current) submitIdemKeyRef.current = newIdempotencyKey();
     try {
       const res = await authFetch('/api/oil-logs', {
         method: 'POST',
+        headers: idempotencyHeader(submitIdemKeyRef.current),
         body: JSON.stringify({
           aircraftId: aircraft.id,
           logData: {

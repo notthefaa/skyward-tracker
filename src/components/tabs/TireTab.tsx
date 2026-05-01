@@ -1,7 +1,8 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import { ModalPortal } from "@/components/ModalPortal";
 import { authFetch } from "@/lib/authFetch";
+import { newIdempotencyKey, idempotencyHeader } from "@/lib/idempotencyClient";
 import { swrKeys } from "@/lib/swrKeys";
 import type { AircraftWithMetrics, TireCheck } from "@/lib/types";
 import useSWR from "swr";
@@ -71,6 +72,8 @@ export default function TireTab({
   const [page, setPage] = useState(1);
   const [showModal, setShowModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // Sticky idempotency key — see OilTab for the rationale.
+  const submitIdemKeyRef = useRef<string | null>(null);
   useModalScrollLock(showModal);
 
   // Form fields. Each tire has a "was low" checkbox; the PSI input
@@ -118,6 +121,7 @@ export default function TireTab({
     setInitials(userInitials);
     setNotes('');
     setAllGood(false);
+    submitIdemKeyRef.current = null;
     setShowModal(true);
   }, [userInitials]);
 
@@ -150,9 +154,11 @@ export default function TireTab({
     if (!initials.trim()) { showError('Initials are required.'); return; }
 
     setIsSubmitting(true);
+    if (!submitIdemKeyRef.current) submitIdemKeyRef.current = newIdempotencyKey();
     try {
       const res = await authFetch('/api/tire-checks', {
         method: 'POST',
+        headers: idempotencyHeader(submitIdemKeyRef.current),
         body: JSON.stringify({
           aircraftId: aircraft.id,
           logData: {

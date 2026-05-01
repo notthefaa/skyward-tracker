@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { authFetch } from "@/lib/authFetch";
+import { newIdempotencyKey, idempotencyHeader } from "@/lib/idempotencyClient";
 import { Wrench, AlertTriangle, Sparkles, ChevronDown, CheckSquare } from "lucide-react";
 import { PrimaryButton } from "@/components/AppButtons";
 import { ADDON_OPTIONS } from "./shared";
@@ -32,6 +33,16 @@ export default function ServiceEventCreate({
   const [wantsToPropose, setWantsToPropose] = useState<boolean | null>(null);
   const [showPreview, setShowPreview] = useState(false);
   const [isSavingDraft, setIsSavingDraft] = useState(false);
+  // Sticky idempotency key for /api/mx-events/create. The component
+  // remounts when the user navigates back into the create view, so
+  // initializing to null at mount is enough — no manual reset
+  // needed. Both the "Save as Draft" and "Create + Send" buttons
+  // POST to the same route; if the user retries either after a
+  // timeout, the same key dedups the create call server-side and
+  // the second attempt picks up where the first left off (event
+  // exists with the cached row → send-workpackage / confirm-list
+  // flow runs against it).
+  const submitIdemKeyRef = useRef<string | null>(null);
 
   // Filter out items that are already in a draft/active event
   const availableMx = mxItems.filter(mx => !draftedMxIds.includes(mx.id));
@@ -64,7 +75,8 @@ export default function ServiceEventCreate({
     // that the event exists (which looked like an orphan to them).
     let createdEventId: string | null = null;
     try {
-      const createRes = await authFetch('/api/mx-events/create', { method: 'POST', body: JSON.stringify({ aircraftId: aircraft.id, mxItemIds: selectedMxIds, squawkIds: selectedSquawkIds, addonServices: selectedAddons, proposedDate: (wantsToPropose && proposedDate) ? proposedDate : null }) });
+      if (!submitIdemKeyRef.current) submitIdemKeyRef.current = newIdempotencyKey();
+      const createRes = await authFetch('/api/mx-events/create', { method: 'POST', headers: idempotencyHeader(submitIdemKeyRef.current), body: JSON.stringify({ aircraftId: aircraft.id, mxItemIds: selectedMxIds, squawkIds: selectedSquawkIds, addonServices: selectedAddons, proposedDate: (wantsToPropose && proposedDate) ? proposedDate : null }) });
       if (!createRes.ok) {
         const d = await createRes.json().catch(() => ({}));
         throw new Error(d.error || "Couldn't create the event");
@@ -100,7 +112,8 @@ export default function ServiceEventCreate({
     if (selectedMxIds.length === 0 && selectedSquawkIds.length === 0 && selectedAddons.length === 0) return showWarning("Pick at least one item for the work package.");
     setIsSavingDraft(true);
     try {
-      const res = await authFetch('/api/mx-events/create', { method: 'POST', body: JSON.stringify({ aircraftId: aircraft.id, mxItemIds: selectedMxIds, squawkIds: selectedSquawkIds, addonServices: selectedAddons, proposedDate: (wantsToPropose && proposedDate) ? proposedDate : null }) });
+      if (!submitIdemKeyRef.current) submitIdemKeyRef.current = newIdempotencyKey();
+      const res = await authFetch('/api/mx-events/create', { method: 'POST', headers: idempotencyHeader(submitIdemKeyRef.current), body: JSON.stringify({ aircraftId: aircraft.id, mxItemIds: selectedMxIds, squawkIds: selectedSquawkIds, addonServices: selectedAddons, proposedDate: (wantsToPropose && proposedDate) ? proposedDate : null }) });
       if (!res.ok) throw new Error("Couldn't create the draft");
       onRefresh();
       showSuccess("Draft saved");

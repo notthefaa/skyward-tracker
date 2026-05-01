@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import { authFetch } from "@/lib/authFetch";
+import { newIdempotencyKey, idempotencyHeader } from "@/lib/idempotencyClient";
 import { swrKeys } from "@/lib/swrKeys";
 import type { AircraftWithMetrics, Reservation, AircraftRole, AppRole } from "@/lib/types";
 import useSWR from "swr";
@@ -132,6 +133,13 @@ export default function CalendarTab({
   const [pickerYear, setPickerYear] = useState<number>(() => (initialDate || new Date()).getFullYear());
   const [pickerMonth, setPickerMonth] = useState<number>(() => (initialDate || new Date()).getMonth());
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // Sticky idempotency key for the reservations POST. Reset on each
+  // form open. Editing flow uses PUT (inherently idempotent by id)
+  // followed optionally by an extras-POST in the same submission —
+  // that POST shares the key, so a timeout-then-retry doesn't create
+  // duplicate recurring extras. PUT is unprotected on purpose; it
+  // targets a specific reservation_id and is safe to repeat.
+  const submitIdemKeyRef = useRef<string | null>(null);
 
   const [bookingStartDate, setBookingStartDate] = useState("");
   const [bookingStartTime, setBookingStartTime] = useState("08:00");
@@ -287,6 +295,7 @@ export default function CalendarTab({
     setBookingStartDate(dateStr); setBookingEndDate(dateStr); setBookingStartTime("08:00"); setBookingEndTime("17:00"); setBookingTitle(""); setBookingRoute("");
     resetRecurrenceState();
     setBookingForOther(false); setBookingForUserId("");
+    submitIdemKeyRef.current = null;
     setShowBookingForm(true);
   };
 
@@ -302,6 +311,7 @@ export default function CalendarTab({
     setBookingRoute(r.route || "");
     resetRecurrenceState();
     setBookingForOther(false); setBookingForUserId("");
+    submitIdemKeyRef.current = null;
     setShowBookingForm(true);
   };
 
@@ -353,7 +363,8 @@ export default function CalendarTab({
           const inheritedTarget = editingRes && editingRes.user_id && editingRes.user_id !== session?.user?.id
             ? editingRes.user_id
             : undefined;
-          const postRes = await authFetch('/api/reservations', { method: 'POST', body: JSON.stringify({ aircraftId: aircraft!.id, occurrences: extras, title: bookingTitle || null, route: bookingRoute || null, timeZone, bookForUserId: inheritedTarget }) });
+          if (!submitIdemKeyRef.current) submitIdemKeyRef.current = newIdempotencyKey();
+          const postRes = await authFetch('/api/reservations', { method: 'POST', headers: idempotencyHeader(submitIdemKeyRef.current), body: JSON.stringify({ aircraftId: aircraft!.id, occurrences: extras, title: bookingTitle || null, route: bookingRoute || null, timeZone, bookForUserId: inheritedTarget }) });
           const postData = await postRes.json(); if (!postRes.ok) throw new Error(postData.error || 'Failed');
           await mutate(); setShowBookingForm(false);
           if (postData.skipped > 0) {
@@ -366,7 +377,8 @@ export default function CalendarTab({
         }
       } else {
         const bookForUserId = bookingForOther && bookingForUserId ? bookingForUserId : undefined;
-        const res = await authFetch('/api/reservations', { method: 'POST', body: JSON.stringify({ aircraftId: aircraft!.id, occurrences, title: bookingTitle || null, route: bookingRoute || null, timeZone, bookForUserId }) });
+        if (!submitIdemKeyRef.current) submitIdemKeyRef.current = newIdempotencyKey();
+        const res = await authFetch('/api/reservations', { method: 'POST', headers: idempotencyHeader(submitIdemKeyRef.current), body: JSON.stringify({ aircraftId: aircraft!.id, occurrences, title: bookingTitle || null, route: bookingRoute || null, timeZone, bookForUserId }) });
         const data = await res.json(); if (!res.ok) throw new Error(data.error || 'Failed');
         await mutate(); setShowBookingForm(false);
         const targetCrew = bookForUserId ? otherCrew.find(c => c.user_id === bookForUserId) : null;
