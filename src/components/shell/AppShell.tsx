@@ -917,9 +917,19 @@ export default function AppShell({ session }: AppShellProps) {
               // has an aircraft and the next reload's fetch will pick
               // that up via the row.
             }
+            // Await the fleet refetch BEFORE flipping local onboarding
+            // state, so the welcome → form → "no aircraft in your
+            // fleet" empty-state flicker doesn't happen mid-render. If
+            // the fetch fails, still flip onboarding so the user lands
+            // on the main shell instead of being stuck on the form.
+            try {
+              await handleInitialFetch(session.user.id);
+            } catch {
+              // handleInitialFetch already shows its own toast.
+            }
             setOnboardingPath(null);
             setCompletedOnboarding(true);
-            handleInitialFetch(session.user.id);
+            showSuccess('Aircraft added to your fleet.');
           }}
         />
       );
@@ -957,7 +967,26 @@ export default function AppShell({ session }: AppShellProps) {
         onGlobalFleetSelect={handleGlobalFleetSelect}
       />
       <SettingsModal show={showSettingsModal} onClose={() => setShowSettingsModal(false)} session={session} />
-      {showAircraftModal && <AircraftModal session={session} existingAircraft={editingAircraftId ? allAircraftList.find(a => a.id === editingAircraftId) || null : null} onClose={() => setShowAircraftModal(false)} onSuccess={(t: string) => { setShowAircraftModal(false); fetchAircraftData(session.user.id); setActiveTail(t); }} />}
+      {showAircraftModal && <AircraftModal session={session} existingAircraft={editingAircraftId ? allAircraftList.find(a => a.id === editingAircraftId) || null : null} onClose={() => setShowAircraftModal(false)} onSuccess={async (t: string) => {
+        // Close the modal first so the user gets immediate feedback
+        // that the form went through, then await the fleet refetch
+        // before flipping activeTail. Without the await, setActiveTail
+        // resolves to a tail that isn't in allAircraftList yet —
+        // selectedAircraftData briefly becomes null, the summary tab
+        // renders blank, and the user assumes nothing happened. The
+        // toast confirms success in case fleetRefetch is slow.
+        const wasEditing = !!editingAircraftId;
+        setShowAircraftModal(false);
+        try {
+          await fetchAircraftData(session.user.id);
+        } catch {
+          // fetchAircraftData already surfaces its own errors via the
+          // initial-fetch path. Swallow here so we still flip activeTail
+          // to the new aircraft — the user can pull-to-refresh later.
+        }
+        setActiveTail(t);
+        showSuccess(wasEditing ? `${t} updated.` : `${t} added to your fleet.`);
+      }} />}
 
       {showLogItModal && (
         <div className="fixed inset-0 bg-black/80 z-[10000] overflow-y-auto animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => setShowLogItModal(false)}>

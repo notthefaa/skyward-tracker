@@ -28,7 +28,7 @@ export default function AircraftModal({
   session: any, 
   existingAircraft: AircraftWithMetrics | null, 
   onClose: () => void, 
-  onSuccess: (newTail: string) => void
+  onSuccess: (newTail: string) => void | Promise<void>
 }) {
   useModalScrollLock();
   useEscapeKey(onClose);
@@ -387,7 +387,12 @@ export default function AircraftModal({
       }
     }
 
-    onSuccess(newTail.toUpperCase());
+    // Await onSuccess so the "Saving..." spinner stays through the
+    // parent's fleet refetch + activeTail flip. Without the await,
+    // the button un-disables and a quick second tap surfaces a
+    // duplicate-tail error against the user's own freshly-created
+    // aircraft.
+    await onSuccess(newTail.toUpperCase());
     setIsSubmitting(false);
   };
 

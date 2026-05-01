@@ -15,11 +15,11 @@ const AvatarCropper = dynamic(() => import("@/components/AvatarCropper"), { ssr:
 export default function PilotOnboarding({ 
   session, 
   handleLogout, 
-  onSuccess 
-}: { 
-  session: any, 
-  handleLogout: () => void, 
-  onSuccess: () => void 
+  onSuccess
+}: {
+  session: any,
+  handleLogout: () => void,
+  onSuccess: () => void | Promise<void>
 }) {
   const { showError } = useToast();
   const [newTail, setNewTail] = useState("");
@@ -142,7 +142,13 @@ export default function PilotOnboarding({
         const errData = await res.json();
         throw new Error(errData.error || "Couldn't create the aircraft.");
       }
-      onSuccess();
+      // Await onSuccess so the spinner stays on through the fleet
+      // refetch + onboarding-flag flip. If we returned immediately,
+      // the button un-disables and the user may tap "Save" again
+      // while the parent is still settling — which on a slow link
+      // surfaces "tail number already exists" against their own
+      // freshly-created aircraft.
+      await onSuccess();
     } catch (err: any) {
       showError(err.message);
     }
