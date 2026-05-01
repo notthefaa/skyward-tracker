@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { authFetch } from "@/lib/authFetch";
+import { newIdempotencyKey, idempotencyHeader } from "@/lib/idempotencyClient";
 import { swrKeys } from "@/lib/swrKeys";
 import type { AircraftWithMetrics } from "@/lib/types";
 import useSWR from "swr";
@@ -78,6 +79,12 @@ export default function TimesTab({
   const [logReason, setLogReason] = useState("");
   const [logFuel, setLogFuel] = useState("");
   const [logFuelUnit, setLogFuelUnit] = useState<'gallons' | 'lbs'>('gallons');
+  // Sticky idempotency key for the open submit attempt — survives a
+  // network timeout + manual retry so the server dedupes a request
+  // whose response was lost (iOS PWA backgrounding can drop the
+  // response while the row already wrote). Cleared on success and
+  // on modal open so a fresh form gets a fresh key.
+  const [submitIdemKey, setSubmitIdemKey] = useState<string | null>(null);
 
   // Reset everything tied to a single aircraft's context when the
   // pilot switches tails. Without this, an open "Edit Flight Log"
@@ -96,6 +103,7 @@ export default function TimesTab({
     setLogCycles(''); setLogLandings('');
     setLogPax(''); setLogReason('');
     setLogFuel('');
+    setSubmitIdemKey(null);
   }, [aircraft?.id]);
 
   // Lazily load the last fuel unit the pilot chose so they don't have to
@@ -139,6 +147,7 @@ export default function TimesTab({
       const storedUnit = typeof window !== 'undefined' ? window.localStorage.getItem('aft_fuel_unit') : null;
       setLogFuelUnit(storedUnit === 'lbs' ? 'lbs' : 'gallons');
     }
+    setSubmitIdemKey(newIdempotencyKey());
     setShowLogModal(true);
   };
 
@@ -405,6 +414,13 @@ export default function TimesTab({
     // leave the submit button stuck in "Saving..." forever. The
     // finally clears isSubmitting even on error; success path also
     // closes the modal inside try so the side-effects stay ordered.
+    // Sticky idempotency key bound to the modal session. If the
+    // network times out (iOS PWA fetch suspension is the common
+    // cause) and the user re-taps Submit, the server dedupes against
+    // this key so a request whose response was lost mid-flight can't
+    // re-write the row. Falls back to a fresh key if state is
+    // somehow missing (e.g. submit fired before openLogForm seeded).
+    const idemKey = submitIdemKey ?? newIdempotencyKey();
     try {
       if (editingId) {
         // Only overwrite aircraft totals if we're editing the most recent log.
@@ -413,19 +429,30 @@ export default function TimesTab({
         const editAircraftUpdate = isLatestLog ? aircraftUpdate : {};
         const res = await authFetch('/api/flight-logs', {
           method: 'PUT',
+          headers: idempotencyHeader(idemKey),
           body: JSON.stringify({ logId: editingId, aircraftId: aircraft!.id, logData: payload, aircraftUpdate: editAircraftUpdate })
         });
         if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || "Couldn't update the flight log"); }
       } else {
         const res = await authFetch('/api/flight-logs', {
           method: 'POST',
+          headers: idempotencyHeader(idemKey),
           body: JSON.stringify({ aircraftId: aircraft!.id, logData: payload, aircraftUpdate })
         });
         if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || "Couldn't save the flight log"); }
       }
       await mutate(); onUpdate(); setShowLogModal(false);
+      setSubmitIdemKey(null); // success: drop the key so the next open generates a fresh one
       showSuccess(editingId ? "Flight log updated" : "Flight logged");
     } catch (err: any) {
+      // Keep submitIdemKey set on failure so a retry inside the same
+      // modal session reuses it and the server dedupes if the row
+      // already wrote. Refresh the list anyway — on a timeout the
+      // request may have hit the server before the response was lost
+      // (iOS PWA backgrounding does this), and showing the new row
+      // lets the pilot decide whether to retry or close the modal.
+      mutate().catch(() => {});
+      onUpdate();
       showError(err?.message || "Couldn't save the flight log.");
     } finally {
       setIsSubmitting(false);

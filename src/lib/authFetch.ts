@@ -17,11 +17,27 @@
 // On a second 401 we dispatch the `authfetch:unauthorized` window
 // event so AppShell can route the user back to sign-in instead of
 // every caller having to invent its own re-auth UX.
+//
+// iOS PWA hang protection
+// -----------------------
+// iOS Safari suspends in-flight fetches when the PWA backgrounds and
+// doesn't always finalize them on resume — the supabase REST client
+// has its own 15s wrap (lib/supabase.ts) but `fetch()` to /api/*
+// routes is plain global fetch with no deadline, which previously
+// stranded "Saving…" forever after a quick app-switch. Every
+// authFetch now races against AUTH_FETCH_TIMEOUT_MS and aborts a
+// hung request so the caller's try/catch + `setIsSubmitting(false)`
+// path can run instead of the spinner sitting indefinitely. Callers
+// can pass `timeoutMs` to override (image-upload paths may want a
+// longer budget) or 0 to disable. Upstream signals are forwarded.
 // =============================================================
 
 import { supabase } from './supabase';
 
 const UNAUTHORIZED_EVENT = 'authfetch:unauthorized';
+const AUTH_FETCH_TIMEOUT_MS = 30_000;
+
+export type AuthFetchOptions = RequestInit & { timeoutMs?: number };
 
 async function buildHeaders(options: RequestInit): Promise<Headers> {
   const { data: { session } } = await supabase.auth.getSession();
@@ -35,12 +51,62 @@ async function buildHeaders(options: RequestInit): Promise<Headers> {
   return headers;
 }
 
+/**
+ * Wraps `fetch` in an AbortController that fires after `timeoutMs`.
+ * On expiry the underlying fetch is aborted and we throw a labelled
+ * Error so callers (and the toast layer) can distinguish a network
+ * timeout from other failures. Upstream `signal` is forwarded so
+ * SWR / explicit cancellation still works.
+ */
+async function fetchWithDeadline(
+  url: string,
+  init: RequestInit,
+  timeoutMs: number,
+): Promise<Response> {
+  if (timeoutMs <= 0) return fetch(url, init);
+  const controller = new AbortController();
+  const upstream = init.signal;
+  if (upstream) {
+    if (upstream.aborted) controller.abort(upstream.reason);
+    else upstream.addEventListener('abort', () => controller.abort(upstream.reason), { once: true });
+  }
+  const timer = setTimeout(() => {
+    controller.abort(new DOMException('authfetch_timeout', 'TimeoutError'));
+  }, timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } catch (err) {
+    // Translate AbortError-from-timeout into a stable Error the UI
+    // layer can match on. Upstream-cancelled aborts re-throw as is.
+    if (err instanceof DOMException && err.name === 'TimeoutError') {
+      const e = new Error("Network's slow — request timed out. Try again.");
+      (e as any).code = 'AUTHFETCH_TIMEOUT';
+      throw e;
+    }
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      // Could be timeout-routed-through-abort or upstream cancel.
+      // If our timer fired, controller.signal.reason is the
+      // TimeoutError DOMException we set above.
+      const reason: any = controller.signal.reason;
+      if (reason instanceof DOMException && reason.name === 'TimeoutError') {
+        const e = new Error("Network's slow — request timed out. Try again.");
+        (e as any).code = 'AUTHFETCH_TIMEOUT';
+        throw e;
+      }
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export async function authFetch(
   url: string,
-  options: RequestInit = {}
+  options: AuthFetchOptions = {}
 ): Promise<Response> {
-  const headers = await buildHeaders(options);
-  const res = await fetch(url, { ...options, headers });
+  const { timeoutMs = AUTH_FETCH_TIMEOUT_MS, ...init } = options;
+  const headers = await buildHeaders(init);
+  const res = await fetchWithDeadline(url, { ...init, headers }, timeoutMs);
 
   if (res.status !== 401) return res;
 
@@ -53,8 +119,11 @@ export async function authFetch(
     return res;
   }
 
-  const retryHeaders = await buildHeaders(options);
-  const retried = await fetch(url, { ...options, headers: retryHeaders });
+  const retryHeaders = await buildHeaders(init);
+  // Fresh deadline on the retry — the refresh leg can eat several
+  // seconds on a slow link and we don't want to penalize the retry
+  // for time spent in the refresh.
+  const retried = await fetchWithDeadline(url, { ...init, headers: retryHeaders }, timeoutMs);
   if (retried.status === 401) notifyUnauthorized();
   return retried;
 }
