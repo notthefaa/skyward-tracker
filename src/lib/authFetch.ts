@@ -30,12 +30,42 @@
 // path can run instead of the spinner sitting indefinitely. Callers
 // can pass `timeoutMs` to override (image-upload paths may want a
 // longer budget) or 0 to disable. Upstream signals are forwarded.
+//
+// In-flight registry for abort-on-resume
+// ---------------------------------------
+// Every authFetch's controller is registered in `inFlight` and
+// removed on settle. AppShell's resume handler calls
+// `abortAllInFlightAuthFetches()` so any request iOS suspended
+// mid-flight fails *immediately* on resume instead of waiting out
+// the 30 s timeout — the caller's catch path runs in ~1 s and the
+// pilot sees "Connection lost — try again" instead of a stuck
+// spinner. Surfaced as `code: 'AUTHFETCH_RESUMED'` so callers can
+// tell a user-facing toast apart from a hard timeout.
 // =============================================================
 
 import { supabase } from './supabase';
 
 const UNAUTHORIZED_EVENT = 'authfetch:unauthorized';
 const AUTH_FETCH_TIMEOUT_MS = 30_000;
+
+const inFlight = new Set<AbortController>();
+
+/**
+ * Abort every authFetch currently in-flight. Used by the resume
+ * handler so iOS-suspended promises fail fast on foregrounding
+ * instead of waiting out the 30 s timeout.
+ */
+export function abortAllInFlightAuthFetches(): void {
+  if (inFlight.size === 0) return;
+  const reason = new DOMException('authfetch_resumed', 'AbortError');
+  // Snapshot before iterating — the finally block in fetchWithDeadline
+  // mutates the Set as each aborted promise rejects. es5 target needs
+  // Array.from for Set iteration regardless.
+  for (const c of Array.from(inFlight)) {
+    try { c.abort(reason); } catch { /* already aborted */ }
+  }
+  inFlight.clear();
+}
 
 export type AuthFetchOptions = RequestInit & { timeoutMs?: number };
 
@@ -65,6 +95,7 @@ async function fetchWithDeadline(
 ): Promise<Response> {
   if (timeoutMs <= 0) return fetch(url, init);
   const controller = new AbortController();
+  inFlight.add(controller);
   const upstream = init.signal;
   if (upstream) {
     if (upstream.aborted) controller.abort(upstream.reason);
@@ -76,27 +107,34 @@ async function fetchWithDeadline(
   try {
     return await fetch(url, { ...init, signal: controller.signal });
   } catch (err) {
-    // Translate AbortError-from-timeout into a stable Error the UI
-    // layer can match on. Upstream-cancelled aborts re-throw as is.
+    // Translate AbortError-from-timeout / resume-broadcast into a
+    // stable Error the UI layer can match on. Upstream-cancelled
+    // aborts re-throw as is.
     if (err instanceof DOMException && err.name === 'TimeoutError') {
       const e = new Error("Network's slow — request timed out. Try again.");
       (e as any).code = 'AUTHFETCH_TIMEOUT';
       throw e;
     }
     if (err instanceof DOMException && err.name === 'AbortError') {
-      // Could be timeout-routed-through-abort or upstream cancel.
-      // If our timer fired, controller.signal.reason is the
-      // TimeoutError DOMException we set above.
+      // Could be timeout-routed-through-abort, resume-broadcast, or
+      // upstream cancel. Inspect controller.signal.reason — that's
+      // what we set when our timer fired or resume aborted.
       const reason: any = controller.signal.reason;
       if (reason instanceof DOMException && reason.name === 'TimeoutError') {
         const e = new Error("Network's slow — request timed out. Try again.");
         (e as any).code = 'AUTHFETCH_TIMEOUT';
         throw e;
       }
+      if (reason instanceof DOMException && reason.message === 'authfetch_resumed') {
+        const e = new Error('Connection was lost — try again.');
+        (e as any).code = 'AUTHFETCH_RESUMED';
+        throw e;
+      }
     }
     throw err;
   } finally {
     clearTimeout(timer);
+    inFlight.delete(controller);
   }
 }
 

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/lib/supabase";
-import { authFetch, onAuthFetchUnauthorized } from "@/lib/authFetch";
+import { authFetch, onAuthFetchUnauthorized, abortAllInFlightAuthFetches } from "@/lib/authFetch";
 import { useFleetData, useRealtimeSync, useGroundedStatus, useAircraftRole, usePullToRefresh } from "@/hooks";
 import { useModalScrollLock } from "@/hooks/useModalScrollLock";
 import { NETWORK_TIMEOUT_MS } from "@/lib/constants";
@@ -602,6 +602,13 @@ export default function AppShell({ session }: AppShellProps) {
       if (!activeTail) return;
       const ac = allAircraftList.find(a => a.tail_number === activeTail);
       if (!ac) return;
+      // Abort any iOS-suspended authFetch promises immediately so
+      // submit forms surface their catch-path within ~1 s instead
+      // of waiting out the 30 s timeout. Caller code maps the
+      // AUTHFETCH_RESUMED error to a "Connection was lost — try
+      // again" toast. Safe to call unconditionally — no-op when
+      // nothing is in-flight.
+      abortAllInFlightAuthFetches();
       const gen = ++resumeGenerationRef.current;
       (async () => {
         if (forceRefresh) {
