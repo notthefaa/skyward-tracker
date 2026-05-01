@@ -483,9 +483,12 @@ const handlers: Record<string, ToolHandler> = {
     const normalized = params.airports.map(normalizeIcao);
     const ids = normalized.join(',');
     try {
+      // Cap the upstream call at NETWORK_TIMEOUT_MS so a hung
+      // aviationweather.gov pull bails fast and the outer
+      // HOWARD_TOOL_TIMEOUT_MS race isn't burned waiting on it.
       const [metarRes, tafRes] = await Promise.all([
-        fetch(`https://aviationweather.gov/api/data/metar?ids=${ids}&format=json&hours=2`),
-        fetch(`https://aviationweather.gov/api/data/taf?ids=${ids}&format=json`),
+        fetch(`https://aviationweather.gov/api/data/metar?ids=${ids}&format=json&hours=2`, { signal: AbortSignal.timeout(NETWORK_TIMEOUT_MS) }),
+        fetch(`https://aviationweather.gov/api/data/taf?ids=${ids}&format=json`, { signal: AbortSignal.timeout(NETWORK_TIMEOUT_MS) }),
       ]);
       const metars = metarRes.ok ? await metarRes.json() : [];
       const tafs = tafRes.ok ? await tafRes.json() : [];
@@ -804,8 +807,8 @@ const handlers: Record<string, ToolHandler> = {
     const ids = normalized.join(',');
     try {
       const [pirepRes, sigmetRes] = await Promise.all([
-        fetch(`https://aviationweather.gov/api/data/pirep?id=${ids}&format=json&age=2`),
-        fetch(`https://aviationweather.gov/api/data/airsigmet?format=json`),
+        fetch(`https://aviationweather.gov/api/data/pirep?id=${ids}&format=json&age=2`, { signal: AbortSignal.timeout(NETWORK_TIMEOUT_MS) }),
+        fetch(`https://aviationweather.gov/api/data/airsigmet?format=json`, { signal: AbortSignal.timeout(NETWORK_TIMEOUT_MS) }),
       ]);
       const pireps = pirepRes.ok ? await pirepRes.json() : [];
       const sigmets = sigmetRes.ok ? await sigmetRes.json() : [];
@@ -846,6 +849,7 @@ const handlers: Record<string, ToolHandler> = {
             'client_secret': clientSecret,
             'Accept': 'application/json',
           },
+          signal: AbortSignal.timeout(NETWORK_TIMEOUT_MS),
         });
         if (!res.ok) {
           results[icao] = { error: `FAA NOTAM API returned ${res.status}` };

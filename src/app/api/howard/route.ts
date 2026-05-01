@@ -240,14 +240,17 @@ export async function POST(req: Request) {
         // these, Vercel's edge proxy and some browsers close an idle
         // connection even while the serverless function is still
         // running — the client then reports a premature disconnect.
-        // Client ignores lines that don't start with `data: `.
+        // Client ignores lines that don't start with `data: `. 8s
+        // beat keeps the client's 14s stall-watchdog comfortably
+        // under one-and-three-quarter heartbeats of slack so an
+        // iOS-suspended socket recovers in ≤14s instead of ≤20s.
         const heartbeat = setInterval(() => {
           try {
             controller.enqueue(encoder.encode(': hb\n\n'));
           } catch {
             // Controller may already be closed — nothing to do.
           }
-        }, 15000);
+        }, 8000);
 
         // Hoisted so the catch block can recover partial text from
         // events that already streamed before the failure.

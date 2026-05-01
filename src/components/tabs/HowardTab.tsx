@@ -259,13 +259,15 @@ export default function HowardTab({
     // - preStreamTimer: fires if fetch() never returns headers (10s).
     //   The classic failure mode is an ad blocker or tracking-
     //   protection extension silently dropping the POST.
-    // - stallTimer: fires if the reader receives no bytes for 20s
-    //   (server emits a heartbeat every 15s, so this gives a full
-    //   heartbeat-cycle of slack before we flag a stall).
+    // - stallTimer: fires if the reader receives no bytes for 14s
+    //   (server emits a heartbeat every 8s, so this gives roughly
+    //   one-and-three-quarter heartbeat-cycles of slack before we
+    //   flag a stall — tightened from 20s/15s on 2026-05-01 to cut
+    //   the iOS-suspension recovery window).
     // Both paths abort via abortController and stamp a reason on
     // stalledRef so the catch block surfaces the right message.
     const PRE_STREAM_TIMEOUT_MS = 10_000;
-    const STREAM_STALL_MS = 20_000;
+    const STREAM_STALL_MS = 14_000;
     const stalledRef = { current: null as null | 'preStream' | 'stall' };
     let preStreamTimer: ReturnType<typeof setTimeout> | null = null;
     let stallTimer: ReturnType<typeof setInterval> | null = null;
@@ -319,9 +321,10 @@ export default function HowardTab({
       let lastByteAt = Date.now();
 
       // Stall watchdog — runs for the life of the reader loop. Server
-      // SSE heartbeats land every 15s, so a 20s-silent reader is a real
+      // SSE heartbeats land every 8s, so a 14s-silent reader is a real
       // stall (dropped mid-stream, ad blocker filtering event-stream,
-      // upstream hang past Anthropic's own timeout).
+      // upstream hang past Anthropic's own timeout, or iOS suspending
+      // the socket on PWA backgrounding).
       stallTimer = setInterval(() => {
         if (Date.now() - lastByteAt > STREAM_STALL_MS) {
           stalledRef.current = 'stall';

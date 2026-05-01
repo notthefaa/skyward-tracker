@@ -458,9 +458,19 @@ export default function SquawksTab({
               const img = new Image();
               img.crossOrigin = "Anonymous";
               img.src = renderUrl;
+              // Race image load against a 10s deadline. iOS Safari can
+              // suspend an in-flight image fetch when the PWA backgrounds
+              // mid-export — without a timeout `img.onload` never fires
+              // and "Exporting…" hangs until force-quit. The catch path
+              // below renders a "[Image failed to load]" placeholder so
+              // the rest of the PDF still ships.
               await new Promise((resolve, reject) => {
-                img.onload = resolve;
-                img.onerror = reject;
+                const timer = setTimeout(
+                  () => reject(new Error('image_load_timeout')),
+                  10_000,
+                );
+                img.onload = (e) => { clearTimeout(timer); resolve(e); };
+                img.onerror = (e) => { clearTimeout(timer); reject(e); };
               });
               const maxW = 150; const maxH = 100;
               const ratio = Math.min(maxW / img.width, maxH / img.height);
