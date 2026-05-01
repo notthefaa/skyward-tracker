@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import { authFetch, onAuthFetchUnauthorized, abortAllInFlightAuthFetches } from "@/lib/authFetch";
+import { probeNetwork, recoveryReload } from "@/lib/iosRecovery";
 import { useFleetData, useRealtimeSync, useGroundedStatus, useAircraftRole, usePullToRefresh } from "@/hooks";
 import { useModalScrollLock } from "@/hooks/useModalScrollLock";
 import { NETWORK_TIMEOUT_MS } from "@/lib/constants";
@@ -411,7 +412,14 @@ export default function AppShell({ session }: AppShellProps) {
       await Promise.race([work, timeout]);
     } catch (err: any) {
       if (err?.message === REFRESH_TIMEOUT_SENTINEL) {
-        showError("Refresh timed out — check your connection and try again.");
+        // Pull-to-refresh hanging is the canonical signal that the
+        // iOS WKWebView's network stack has wedged after a long
+        // background. The user's manual workaround is to close +
+        // reopen the app — `recoveryReload` does the JS-process
+        // equivalent automatically (rate-limited so a genuinely
+        // offline user doesn't bounce in a reload loop).
+        showError("Refresh timed out — reloading…");
+        setTimeout(() => { recoveryReload(); }, 600);
       } else {
         showError("Refresh failed — try again.");
         console.error('[handlePullRefresh]', err);
@@ -594,8 +602,17 @@ export default function AppShell({ session }: AppShellProps) {
     const REFRESH_TIMEOUT_MS = 8_000;
     const RESUME_DEDUP_MS = 1_500;
     const SAFETY_REVALIDATE_MS = 10_000;
+    // Past this many minutes hidden, the iOS WKWebView's network
+    // stack often returns wedged — fresh fetches sit forever.
+    // Probe `/api/version` before doing anything else; if it
+    // doesn't respond in PROBE_TIMEOUT_MS, hard-reload the page so
+    // we get a fresh JS process (and the supabase client / SWR /
+    // in-flight promise state that comes with it). This automates
+    // the user's manual close-and-reopen workaround.
+    const PROBE_AFTER_HIDDEN_MS = 5 * 60_000;
+    const PROBE_TIMEOUT_MS = 5_000;
 
-    const triggerResume = (forceRefresh: boolean) => {
+    const triggerResume = (forceRefresh: boolean, hiddenForMs = 0) => {
       const now = Date.now();
       if (now - lastResumeAtRef.current < RESUME_DEDUP_MS) return;
       lastResumeAtRef.current = now;
@@ -611,6 +628,17 @@ export default function AppShell({ session }: AppShellProps) {
       abortAllInFlightAuthFetches();
       const gen = ++resumeGenerationRef.current;
       (async () => {
+        // Long-suspension probe: if the network is wedged, no amount
+        // of refreshSession + revalidate will recover — only a fresh
+        // process will. Reload eagerly so the user doesn't sit on
+        // stale data waiting out our 30 s authFetch timeouts.
+        if (hiddenForMs >= PROBE_AFTER_HIDDEN_MS) {
+          const ok = await probeNetwork(PROBE_TIMEOUT_MS);
+          if (!ok) {
+            if (recoveryReload()) return;
+          }
+          if (resumeGenerationRef.current !== gen) return;
+        }
         if (forceRefresh) {
           // Race the refresh against a tight timeout — we'd rather
           // revalidate with a stale token (and let SWR retry on 401)
@@ -642,15 +670,21 @@ export default function AppShell({ session }: AppShellProps) {
       }
       const wasHidden = hiddenAt;
       hiddenAt = 0;
-      if (!wasHidden || Date.now() - wasHidden < RESUME_THRESHOLD_MS) return;
-      triggerResume(true);
+      if (!wasHidden) return;
+      const gap = Date.now() - wasHidden;
+      if (gap < RESUME_THRESHOLD_MS) return;
+      triggerResume(true, gap);
     };
     // pageshow with persisted=true means bfcache restore — those skip
     // visibilitychange entirely. Even when persisted=false, firing
     // resume on pageshow is harmless: dedup guards against double-wipe
     // when both events fire on a normal foregrounding.
     const onPageShow = (e: PageTransitionEvent) => {
-      if (e.persisted) triggerResume(true);
+      if (e.persisted) {
+        // bfcache restores after a long background warrant the same
+        // probe — pass a synthetic gap so the probe path engages.
+        triggerResume(true, PROBE_AFTER_HIDDEN_MS);
+      }
     };
     const onOnline = () => triggerResume(false);
 
