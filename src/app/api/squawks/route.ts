@@ -60,11 +60,12 @@ export async function PUT(req: Request) {
       return apiErrorCoded('VALIDATION_ERROR', 'Squawk ID and Aircraft ID required.', 400, req);
     }
 
-    const { data: squawk } = await supabaseAdmin
+    const { data: squawk, error: readErr } = await supabaseAdmin
       .from('aft_squawks')
       .select('reported_by, aircraft_id, deleted_at')
       .eq('id', squawkId)
       .maybeSingle();
+    if (readErr) throw readErr;
     if (!squawk || squawk.deleted_at) {
       return apiErrorCoded('SQUAWK_NOT_FOUND', 'Squawk not found.', 404, req);
     }
@@ -91,7 +92,17 @@ export async function PUT(req: Request) {
     const picErr = validatePicturesForBucket(squawkData, 'aft_squawk_images');
     if (picErr) return apiErrorCoded('VALIDATION_ERROR', picErr, 400, req);
     const safeUpdate = stripProtectedFields(squawkData, 'squawks');
-    const { error } = await supabaseAdmin.from('aft_squawks').update(safeUpdate).eq('id', squawkId);
+    // Belt-and-suspenders: filter the UPDATE by aircraft_id and
+    // deleted_at so a race-window soft-delete between the read above
+    // and the write below can't be silently resurrected. The id-only
+    // WHERE was correct given the prior gates but became stale if the
+    // row's state changed mid-flight.
+    const { error } = await supabaseAdmin
+      .from('aft_squawks')
+      .update(safeUpdate)
+      .eq('id', squawkId)
+      .eq('aircraft_id', aircraftId)
+      .is('deleted_at', null);
     if (error) throw error;
 
     return NextResponse.json({ success: true });
@@ -106,11 +117,12 @@ export async function DELETE(req: Request) {
     const { squawkId, aircraftId } = await req.json();
     if (!squawkId || !aircraftId) return NextResponse.json({ error: 'Squawk ID and Aircraft ID required.' }, { status: 400 });
 
-    const { data: squawk } = await supabaseAdmin
+    const { data: squawk, error: readErr } = await supabaseAdmin
       .from('aft_squawks')
       .select('reported_by, aircraft_id, deleted_at')
       .eq('id', squawkId)
       .maybeSingle();
+    if (readErr) throw readErr;
     if (!squawk || squawk.deleted_at) return NextResponse.json({ error: 'Squawk not found.' }, { status: 404 });
     if (squawk.aircraft_id !== aircraftId) {
       return NextResponse.json({ error: 'Squawk does not belong to the given aircraft.' }, { status: 403 });

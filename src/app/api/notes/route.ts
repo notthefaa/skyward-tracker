@@ -42,11 +42,12 @@ export async function PUT(req: Request) {
     const { noteId, aircraftId, noteData } = await req.json();
     if (!noteId || !aircraftId) return NextResponse.json({ error: 'Note ID and Aircraft ID required.' }, { status: 400 });
 
-    const { data: note } = await supabaseAdmin
+    const { data: note, error: readErr } = await supabaseAdmin
       .from('aft_notes')
       .select('author_id, aircraft_id, deleted_at')
       .eq('id', noteId)
       .maybeSingle();
+    if (readErr) throw readErr;
     if (!note || note.deleted_at) return NextResponse.json({ error: 'Note not found.' }, { status: 404 });
     if (note.aircraft_id !== aircraftId) {
       return NextResponse.json({ error: 'Note does not belong to the given aircraft.' }, { status: 403 });
@@ -61,11 +62,18 @@ export async function PUT(req: Request) {
 
     await setAppUser(supabaseAdmin, user.id);
     // Prevent a PUT from migrating the note across aircraft (bypassing
-    // the access check) or resurrecting a soft-delete.
+    // the access check) or resurrecting a soft-delete. Filter the UPDATE
+    // by aircraft_id + deleted_at to close the read-then-update race
+    // window where a soft-delete could land between the two ops.
     const picErr = validatePicturesForBucket(noteData, 'aft_note_images');
     if (picErr) return NextResponse.json({ error: picErr }, { status: 400 });
     const safeUpdate = stripProtectedFields(noteData);
-    const { error } = await supabaseAdmin.from('aft_notes').update(safeUpdate).eq('id', noteId);
+    const { error } = await supabaseAdmin
+      .from('aft_notes')
+      .update(safeUpdate)
+      .eq('id', noteId)
+      .eq('aircraft_id', aircraftId)
+      .is('deleted_at', null);
     if (error) throw error;
 
     return NextResponse.json({ success: true });
@@ -79,11 +87,12 @@ export async function DELETE(req: Request) {
     const { noteId, aircraftId } = await req.json();
     if (!noteId || !aircraftId) return NextResponse.json({ error: 'Note ID and Aircraft ID required.' }, { status: 400 });
 
-    const { data: note } = await supabaseAdmin
+    const { data: note, error: readErr } = await supabaseAdmin
       .from('aft_notes')
       .select('author_id, aircraft_id, deleted_at')
       .eq('id', noteId)
       .maybeSingle();
+    if (readErr) throw readErr;
     if (!note || note.deleted_at) return NextResponse.json({ error: 'Note not found.' }, { status: 404 });
     if (note.aircraft_id !== aircraftId) {
       return NextResponse.json({ error: 'Note does not belong to the given aircraft.' }, { status: 403 });

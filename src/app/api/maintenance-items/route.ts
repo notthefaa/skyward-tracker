@@ -129,11 +129,12 @@ export async function PUT(req: Request) {
     // Verify the item actually belongs to the aircraft the caller is admin
     // on — otherwise an admin of aircraft A could update any item across
     // the whole fleet by supplying A's id + any itemId.
-    const { data: existing } = await supabaseAdmin
+    const { data: existing, error: readErr } = await supabaseAdmin
       .from('aft_maintenance_items')
       .select('aircraft_id, deleted_at')
       .eq('id', itemId)
       .maybeSingle();
+    if (readErr) throw readErr;
     if (!existing || existing.aircraft_id !== aircraftId || existing.deleted_at) {
       return NextResponse.json({ error: 'Maintenance item not found for this aircraft.' }, { status: 404 });
     }
@@ -144,7 +145,15 @@ export async function PUT(req: Request) {
     if ('error' in checked) {
       return NextResponse.json({ error: checked.error }, { status: 400 });
     }
-    const { error } = await supabaseAdmin.from('aft_maintenance_items').update(checked.ok).eq('id', itemId);
+    // Filter by aircraft_id + deleted_at to close the read-then-update
+    // race — without this, a concurrent admin DELETE could let a PUT
+    // resurrect the row through the soft-delete.
+    const { error } = await supabaseAdmin
+      .from('aft_maintenance_items')
+      .update(checked.ok)
+      .eq('id', itemId)
+      .eq('aircraft_id', aircraftId)
+      .is('deleted_at', null);
     if (error) throw error;
 
     return NextResponse.json({ success: true });
@@ -161,11 +170,12 @@ export async function DELETE(req: Request) {
 
     // Same cross-aircraft guard as PUT — fetch the row and require its
     // aircraft_id matches the aircraft the caller's admin on.
-    const { data: existing } = await supabaseAdmin
+    const { data: existing, error: readErr } = await supabaseAdmin
       .from('aft_maintenance_items')
       .select('aircraft_id, deleted_at')
       .eq('id', itemId)
       .maybeSingle();
+    if (readErr) throw readErr;
     if (!existing || existing.aircraft_id !== aircraftId || existing.deleted_at) {
       return NextResponse.json({ error: 'Maintenance item not found for this aircraft.' }, { status: 404 });
     }
@@ -174,7 +184,8 @@ export async function DELETE(req: Request) {
     const { error } = await supabaseAdmin
       .from('aft_maintenance_items')
       .update({ deleted_at: new Date().toISOString(), deleted_by: user.id })
-      .eq('id', itemId);
+      .eq('id', itemId)
+      .eq('aircraft_id', aircraftId);
     if (error) throw error;
 
     return NextResponse.json({ success: true });
