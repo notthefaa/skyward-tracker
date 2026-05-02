@@ -37,12 +37,16 @@ export function ReconnectingIndicator() {
     <div
       role="status"
       aria-live="polite"
-      className="fixed right-3 z-[10002] pointer-events-none"
-      style={{ top: 'calc(env(safe-area-inset-top, 0px) + 0.5rem)' }}
+      // Same position as ToastProvider so resume + slow-network land
+      // in the same "network messages" slot. Slightly smaller pill
+      // styling keeps it distinguishable as a transient indicator
+      // rather than a dismissible toast.
+      className="fixed left-1/2 -translate-x-1/2 z-[10002] pointer-events-none"
+      style={{ top: 'calc(env(safe-area-inset-top, 0px) + 5rem)' }}
     >
-      <div className="bg-[#091F3C]/90 backdrop-blur-sm text-white rounded-full shadow-md px-3 py-1.5 flex items-center gap-2 animate-fade-in">
-        <RefreshCw size={12} className="text-brandOrange animate-spin" />
-        <span className="font-roboto text-[11px] font-medium leading-none">Reconnecting…</span>
+      <div className="bg-[#091F3C] text-white rounded-lg shadow-[0_10px_25px_rgba(0,0,0,0.3)] border border-white/10 px-4 py-2 flex items-center gap-2.5 animate-fade-in">
+        <RefreshCw size={14} className="text-brandOrange animate-spin shrink-0" />
+        <span className="font-roboto text-sm font-medium leading-none">Reconnecting…</span>
       </div>
     </div>
   );
