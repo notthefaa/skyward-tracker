@@ -41,7 +41,18 @@ export default function AuthGate({ children }: AuthGateProps) {
       localStorage.setItem('aft_app_version', appVersion);
     }
 
-    supabase.auth.getSession().then(({ data: { session }, error }) => {
+    // Race getSession against a timeout so a stalled GoTrueClient
+    // mutex (background refresh suspended by iOS) can't strand the
+    // splash screen forever. On miss we treat it as no-session and
+    // let the 'aft:network-timeout' UI prompt the user.
+    const STARTUP_SESSION_TIMEOUT_MS = 8_000;
+    Promise.race([
+      supabase.auth.getSession().then(r => r as any).catch((e: any) => ({ data: { session: null }, error: e })),
+      new Promise<{ data: { session: null }; error: null; timedOut: true }>(resolve =>
+        setTimeout(() => resolve({ data: { session: null }, error: null, timedOut: true }), STARTUP_SESSION_TIMEOUT_MS),
+      ),
+    ]).then((res: any) => {
+      const { data: { session }, error } = res;
       if (error) {
         console.warn('[Auth] Session recovery failed:', error.message);
         supabase.auth.signOut();
@@ -78,7 +89,14 @@ export default function AuthGate({ children }: AuthGateProps) {
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        supabase.auth.getSession().then(({ data: { session: freshSession }, error }) => {
+        // Bounded resume getSession (same hazard as startup).
+        Promise.race([
+          supabase.auth.getSession().then(r => r as any).catch((e: any) => ({ data: { session: null }, error: e })),
+          new Promise<{ data: { session: null }; error: null }>(resolve =>
+            setTimeout(() => resolve({ data: { session: null }, error: null }), 8_000),
+          ),
+        ]).then((res: any) => {
+          const { data: { session: freshSession }, error } = res;
           if (error || !freshSession) {
             console.warn('[Auth] Background resume failed — signing out');
             supabase.auth.signOut();

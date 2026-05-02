@@ -77,9 +77,34 @@ export function abortAllInFlightAuthFetches(): void {
 
 export type AuthFetchOptions = RequestInit & { timeoutMs?: number };
 
-async function buildHeaders(options: RequestInit): Promise<Headers> {
-  const { data: { session } } = await supabase.auth.getSession();
+/**
+ * supabase.auth.getSession() is gated by GoTrueClient's internal
+ * session lock. If a concurrent refresh stalls (an iOS-suspended
+ * fetch the supabase client hasn't yet aborted), getSession waits on
+ * that lock indefinitely. Race against the deadline so a stuck lock
+ * can't outlast the caller's timeoutMs budget — on miss we send the
+ * request unauthenticated and let the 401-retry path recover.
+ */
+async function buildHeaders(options: RequestInit, timeoutMs: number): Promise<Headers> {
   const headers = new Headers(options.headers);
+  let session: { access_token?: string } | null = null;
+  if (timeoutMs > 0) {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const deadline = new Promise<null>(resolve => {
+      timer = setTimeout(() => resolve(null), timeoutMs);
+    });
+    const sessionPromise = supabase.auth.getSession()
+      .then(r => r.data.session as any)
+      .catch(() => null);
+    try {
+      session = await Promise.race([sessionPromise, deadline]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  } else {
+    const { data } = await supabase.auth.getSession();
+    session = data.session;
+  }
   if (session?.access_token) {
     headers.set('Authorization', `Bearer ${session.access_token}`);
   }
@@ -151,7 +176,7 @@ export async function authFetch(
   options: AuthFetchOptions = {}
 ): Promise<Response> {
   const { timeoutMs = AUTH_FETCH_TIMEOUT_MS, ...init } = options;
-  const headers = await buildHeaders(init);
+  const headers = await buildHeaders(init, timeoutMs);
   const res = await fetchWithDeadline(url, { ...init, headers }, timeoutMs);
 
   if (res.status !== 401) return res;
@@ -165,7 +190,7 @@ export async function authFetch(
     return res;
   }
 
-  const retryHeaders = await buildHeaders(init);
+  const retryHeaders = await buildHeaders(init, timeoutMs);
   // Fresh deadline on the retry — the refresh leg can eat several
   // seconds on a slow link and we don't want to penalize the retry
   // for time spent in the refresh.
