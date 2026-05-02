@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { authFetch } from "@/lib/authFetch";
+import { authFetch, UPLOAD_TIMEOUT_MS } from "@/lib/authFetch";
 import { newIdempotencyKey, idempotencyHeader } from "@/lib/idempotencyClient";
 import { Wrench, AlertTriangle, Sparkles, ChevronDown, CheckSquare } from "lucide-react";
 import { PrimaryButton } from "@/components/AppButtons";
@@ -84,7 +84,7 @@ export default function ServiceEventCreate({
       const createData = await createRes.json();
       createdEventId = createData.eventId;
 
-      const sendRes = await authFetch('/api/mx-events/send-workpackage', { method: 'POST', body: JSON.stringify({ eventId: createdEventId, proposedDate: (wantsToPropose && proposedDate) ? proposedDate : null }) });
+      const sendRes = await authFetch('/api/mx-events/send-workpackage', { method: 'POST', body: JSON.stringify({ eventId: createdEventId, proposedDate: (wantsToPropose && proposedDate) ? proposedDate : null }), timeoutMs: UPLOAD_TIMEOUT_MS });
       if (!sendRes.ok) {
         const d = await sendRes.json().catch(() => ({}));
         throw new Error(d.error || "Couldn't send the work package");

@@ -4,6 +4,7 @@ import { SWRConfig } from "swr";
 import { ToastProvider } from "@/components/ToastProvider";
 import { ConfirmProvider } from "@/components/ConfirmProvider";
 import { UpdateAvailableBanner } from "@/components/UpdateAvailableBanner";
+import { ReconnectingIndicator } from "@/components/ReconnectingIndicator";
 import { localStorageCacheProvider } from "@/lib/swrCache";
 
 // Slow-network watchdog. Without this, a Supabase RPC stuck on a slow
@@ -51,6 +52,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <ToastProvider>
         <ConfirmProvider>{children}</ConfirmProvider>
         <UpdateAvailableBanner />
+        <ReconnectingIndicator />
       </ToastProvider>
     </SWRConfig>
   );

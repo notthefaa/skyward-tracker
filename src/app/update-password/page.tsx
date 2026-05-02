@@ -112,7 +112,8 @@ export default function UpdatePassword() {
       const res = await fetch('/api/resend-invite', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: requestEmail })
+        body: JSON.stringify({ email: requestEmail }),
+        signal: AbortSignal.timeout(15_000),
       });
       
       if (!res.ok) {

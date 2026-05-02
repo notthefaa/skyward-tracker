@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { supabase } from "@/lib/supabase";
-import { authFetch } from "@/lib/authFetch";
+import { authFetch, UPLOAD_TIMEOUT_MS } from "@/lib/authFetch";
 import { useModalScrollLock } from "@/hooks/useModalScrollLock";
 import { useEscapeKey } from "@/hooks/useEscapeKey";
 import { Wrench, X, Trash2 } from "lucide-react";
@@ -213,6 +213,7 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
 
       const res = await authFetch('/api/mx-events/send-workpackage', {
         method: 'POST',
+        timeoutMs: UPLOAD_TIMEOUT_MS,
         body: JSON.stringify({
           eventId: selectedEvent.id,
           additionalMxItemIds: selectedMxIds,

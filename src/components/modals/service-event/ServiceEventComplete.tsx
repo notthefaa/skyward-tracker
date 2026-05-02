@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { authFetch } from "@/lib/authFetch";
+import { authFetch, UPLOAD_TIMEOUT_MS } from "@/lib/authFetch";
 import { supabase } from "@/lib/supabase";
 import { Wrench, AlertTriangle, ChevronDown, Camera, Loader2 } from "lucide-react";
 import { PrimaryButton } from "@/components/AppButtons";
@@ -66,6 +66,7 @@ export default function ServiceEventComplete({
       const res = await authFetch('/api/mx-events/scan-logentry', {
         method: 'POST',
         body: formData,
+        timeoutMs: UPLOAD_TIMEOUT_MS,
       });
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));

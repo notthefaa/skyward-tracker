@@ -3,7 +3,7 @@ import dynamic from "next/dynamic";
 import { useToast } from "@/components/ToastProvider";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { supabase } from "@/lib/supabase";
-import { authFetch } from "@/lib/authFetch";
+import { authFetch, UPLOAD_TIMEOUT_MS } from "@/lib/authFetch";
 import { processMxItem, getMxTextColor, isMxExpired } from "@/lib/math";
 import { INPUT_WHITE_BG } from "@/lib/styles";
 import { swrKeys } from "@/lib/swrKeys";
@@ -316,7 +316,7 @@ export default function MaintenanceTab({
       const formData = new FormData();
       formData.append('image', file);
       formData.append('aircraftId', aircraft.id);
-      const res = await authFetch('/api/maintenance-items/scan-logentry', { method: 'POST', body: formData });
+      const res = await authFetch('/api/maintenance-items/scan-logentry', { method: 'POST', body: formData, timeoutMs: UPLOAD_TIMEOUT_MS });
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
         throw new Error(d.error || 'Scan failed');
@@ -405,7 +405,7 @@ export default function MaintenanceTab({
   const handleResendWorkpackage = async (eventId: string) => {
     setResendingEventId(eventId); setConfirmResendId(null);
     try {
-      await authFetch('/api/mx-events/send-workpackage', { method: 'POST', body: JSON.stringify({ eventId, resend: true }) });
+      await authFetch('/api/mx-events/send-workpackage', { method: 'POST', body: JSON.stringify({ eventId, resend: true }), timeoutMs: UPLOAD_TIMEOUT_MS });
       mutateEvents();
     } catch (err) { console.error(err); showError("Failed to resend."); }
     setResendingEventId(null);

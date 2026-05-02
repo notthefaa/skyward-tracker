@@ -166,7 +166,11 @@ export default function ServicePortal() {
       const res = await fetch('/api/mx-events/respond', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ accessToken, action, timeZone, ...payload })
+        body: JSON.stringify({ accessToken, action, timeZone, ...payload }),
+        // 15s matches authFetch default — portal mechanic on iOS would
+        // otherwise see the same indefinite spinner pilots saw before
+        // the authFetch sweep.
+        signal: AbortSignal.timeout(15_000),
       });
       if (!res.ok) throw new Error('Request failed');
       await fetchEventData();
@@ -201,6 +205,9 @@ export default function ServicePortal() {
       const res = await fetch('/api/mx-events/upload-attachment', {
         method: 'POST',
         body: formData,
+        // 60s mirrors the upload-route override in the pilot app — file
+        // uploads on cellular legitimately need the longer budget.
+        signal: AbortSignal.timeout(60_000),
       });
       if (!res.ok) {
         const errData = await res.json();

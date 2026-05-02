@@ -204,6 +204,10 @@ export async function fetchSignedUrlsWithToken(
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ urls: toRequest, accessToken }),
+      // Portal-mode bare fetch — bound it so an iOS-suspended request
+      // doesn't hang the page; on miss we fall through to public URLs
+      // (handled in the catch below).
+      signal: AbortSignal.timeout(15_000),
     });
     if (res.ok) {
       const data = await res.json();

@@ -27,9 +27,14 @@
 // stranded "Saving…" forever after a quick app-switch. Every
 // authFetch now races against AUTH_FETCH_TIMEOUT_MS and aborts a
 // hung request so the caller's try/catch + `setIsSubmitting(false)`
-// path can run instead of the spinner sitting indefinitely. Callers
-// can pass `timeoutMs` to override (image-upload paths may want a
-// longer budget) or 0 to disable. Upstream signals are forwarded.
+// path can run instead of the spinner sitting indefinitely.
+//
+// 15s default matches the supabase REST budget — anything beyond
+// that on a non-upload route is almost always a wedged socket on
+// iOS resume, not a legitimately slow API. Upload paths (scan,
+// documents, send-workpackage) pass `timeoutMs: UPLOAD_TIMEOUT_MS`
+// to keep the longer budget cellular needs. Pass 0 to disable.
+// Upstream signals are forwarded.
 //
 // In-flight registry for abort-on-resume
 // ---------------------------------------
@@ -46,7 +51,10 @@
 import { supabase } from './supabase';
 
 const UNAUTHORIZED_EVENT = 'authfetch:unauthorized';
-const AUTH_FETCH_TIMEOUT_MS = 30_000;
+const AUTH_FETCH_TIMEOUT_MS = 15_000;
+/** Use as `timeoutMs: UPLOAD_TIMEOUT_MS` on FormData/PDF-gen routes
+ *  that legitimately need more than 15s on cellular. */
+export const UPLOAD_TIMEOUT_MS = 60_000;
 
 const inFlight = new Set<AbortController>();
 

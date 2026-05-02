@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { authFetch } from "@/lib/authFetch";
+import { authFetch, UPLOAD_TIMEOUT_MS } from "@/lib/authFetch";
 import { swrKeys } from "@/lib/swrKeys";
 import type { AircraftWithMetrics, AircraftDocument, DocType } from "@/lib/types";
 import useSWR from "swr";
@@ -78,6 +78,7 @@ export default function DocumentsTab({
         method: 'POST',
         body: formData,
         headers: {}, // Let browser set Content-Type for FormData
+        timeoutMs: UPLOAD_TIMEOUT_MS,
       });
 
       if (!res.ok) {

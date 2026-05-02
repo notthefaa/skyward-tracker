@@ -95,7 +95,7 @@ export default function AuthGate({ children }: AuthGateProps) {
         const now = Date.now();
         if (appVersion && now - lastVersionCheck > VERSION_CHECK_COOLDOWN) {
           lastVersionCheck = now;
-          fetch('/api/version', { cache: 'no-store' })
+          fetch('/api/version', { cache: 'no-store', signal: AbortSignal.timeout(8_000) })
             .then(r => r.ok ? r.json() : null)
             .then(data => {
               if (data?.version && data.version !== appVersion) {

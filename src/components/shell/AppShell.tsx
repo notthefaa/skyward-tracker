@@ -602,15 +602,22 @@ export default function AppShell({ session }: AppShellProps) {
     const REFRESH_TIMEOUT_MS = 8_000;
     const RESUME_DEDUP_MS = 1_500;
     const SAFETY_REVALIDATE_MS = 10_000;
-    // Past this many minutes hidden, the iOS WKWebView's network
+    // Past this much time hidden, the iOS WKWebView's network
     // stack often returns wedged — fresh fetches sit forever.
     // Probe `/api/version` before doing anything else; if it
     // doesn't respond in PROBE_TIMEOUT_MS, hard-reload the page so
     // we get a fresh JS process (and the supabase client / SWR /
     // in-flight promise state that comes with it). This automates
     // the user's manual close-and-reopen workaround.
-    const PROBE_AFTER_HIDDEN_MS = 5 * 60_000;
-    const PROBE_TIMEOUT_MS = 5_000;
+    //
+    // 90s is aggressive but cheap: probe is one ~30 byte GET on a
+    // healthy network and reads `navigator.onLine` first, so an
+    // offline user falls through. The reload is rate-limited to
+    // 30s in iosRecovery so a brief check-another-app foregrounding
+    // can't loop. Catching wedged sockets at 90s instead of 5min
+    // means the user never sees the long suspension hang.
+    const PROBE_AFTER_HIDDEN_MS = 90_000;
+    const PROBE_TIMEOUT_MS = 4_000;
 
     const triggerResume = (forceRefresh: boolean, hiddenForMs = 0) => {
       const now = Date.now();
@@ -619,9 +626,13 @@ export default function AppShell({ session }: AppShellProps) {
       if (!activeTail) return;
       const ac = allAircraftList.find(a => a.tail_number === activeTail);
       if (!ac) return;
+      // Surface a small "Reconnecting…" pill so the abort+revalidate
+      // cycle reads as intentional. Auto-clears in ~1.5s; the indicator
+      // listens for the event in ReconnectingIndicator.tsx.
+      window.dispatchEvent(new CustomEvent('aft:reconnecting'));
       // Abort any iOS-suspended authFetch promises immediately so
       // submit forms surface their catch-path within ~1 s instead
-      // of waiting out the 30 s timeout. Caller code maps the
+      // of waiting out the 15 s timeout. Caller code maps the
       // AUTHFETCH_RESUMED error to a "Connection was lost — try
       // again" toast. Safe to call unconditionally — no-op when
       // nothing is in-flight.
