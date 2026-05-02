@@ -44,12 +44,14 @@ export async function POST(req: Request) {
     const safeMessage = escapeHtml(message);
 
     if (action === 'confirm') {
-      // Owner confirms mechanic's proposed date
+      // Owner confirms mechanic's proposed date.
+      // Re-check deleted_at on the UPDATE so a concurrent cancel from
+      // another tab can't be silently resurrected by this confirm.
       await supabaseAdmin.from('aft_maintenance_events').update({
         status: 'confirmed',
         confirmed_date: event.proposed_date,
         confirmed_at: new Date().toISOString(),
-      }).eq('id', eventId);
+      }).eq('id', eventId).is('deleted_at', null);
 
       const durationLabel = event.service_duration_days 
         ? ` (${event.service_duration_days} day${event.service_duration_days > 1 ? 's' : ''})` 
@@ -111,7 +113,7 @@ export async function POST(req: Request) {
       await supabaseAdmin.from('aft_maintenance_events').update({
         proposed_date: proposedDate,
         proposed_by: 'owner',
-      }).eq('id', eventId);
+      }).eq('id', eventId).is('deleted_at', null);
 
       await supabaseAdmin.from('aft_event_messages').insert({
         event_id: eventId,
@@ -184,7 +186,7 @@ export async function POST(req: Request) {
       await supabaseAdmin.from('aft_maintenance_events').update({
         status: 'cancelled',
         access_token: freshToken,
-      }).eq('id', eventId);
+      }).eq('id', eventId).is('deleted_at', null);
 
       await supabaseAdmin.from('aft_event_messages').insert({
         event_id: eventId,

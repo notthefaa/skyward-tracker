@@ -97,12 +97,14 @@ export async function POST(req: Request) {
 
       const estCompletion = computeEstimatedCompletion(proposedDate, serviceDurationDays);
 
+      // Re-check deleted_at on the UPDATE so a concurrent owner cancel
+      // landing between our select and write can't be silently undone.
       await supabaseAdmin.from('aft_maintenance_events').update({
         proposed_date: proposedDate,
         proposed_by: 'mechanic',
         service_duration_days: serviceDurationDays,
         estimated_completion: estCompletion,
-      }).eq('id', event.id);
+      }).eq('id', event.id).is('deleted_at', null);
 
       const durationLabel = `${serviceDurationDays} day${serviceDurationDays > 1 ? 's' : ''}`;
 
@@ -150,7 +152,7 @@ export async function POST(req: Request) {
         confirmed_at: new Date().toISOString(),
         service_duration_days: serviceDurationDays,
         estimated_completion: estCompletion,
-      }).eq('id', event.id);
+      }).eq('id', event.id).is('deleted_at', null);
 
       await supabaseAdmin.from('aft_event_messages').insert({
         event_id: event.id,
@@ -279,7 +281,7 @@ export async function POST(req: Request) {
       if (message !== undefined) updatePayload.mechanic_notes = message;
       
       await supabaseAdmin.from('aft_maintenance_events')
-        .update(updatePayload).eq('id', event.id);
+        .update(updatePayload).eq('id', event.id).is('deleted_at', null);
 
       if (event.primary_contact_email && proposedDate) {
         if (rl.allowed) await resend.emails.send({
@@ -346,7 +348,7 @@ export async function POST(req: Request) {
       await supabaseAdmin.from('aft_maintenance_events').update({
         status: 'cancelled',
         mechanic_notes: message || 'Declined by maintenance provider.',
-      }).eq('id', event.id);
+      }).eq('id', event.id).is('deleted_at', null);
 
       await supabaseAdmin.from('aft_event_messages').insert({
         event_id: event.id,
@@ -377,7 +379,7 @@ export async function POST(req: Request) {
     } else if (action === 'mark_ready') {
       await supabaseAdmin.from('aft_maintenance_events').update({
         status: 'ready_for_pickup',
-      }).eq('id', event.id);
+      }).eq('id', event.id).is('deleted_at', null);
 
       await supabaseAdmin.from('aft_event_messages').insert({
         event_id: event.id,

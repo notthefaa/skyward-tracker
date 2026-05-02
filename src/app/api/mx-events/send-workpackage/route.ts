@@ -289,7 +289,8 @@ export async function POST(req: Request) {
         eventUpdate.proposed_by = 'owner';
         eventUpdate.proposed_date = null;
       }
-      await supabaseAdmin.from('aft_maintenance_events').update(eventUpdate).eq('id', eventId);
+      // Re-check deleted_at so a concurrent cancel can't be undone.
+      await supabaseAdmin.from('aft_maintenance_events').update(eventUpdate).eq('id', eventId).is('deleted_at', null);
 
       if (proposedDate) {
         await supabaseAdmin.from('aft_event_messages').insert({
