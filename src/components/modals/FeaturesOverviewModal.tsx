@@ -2,9 +2,9 @@
 
 import { useEffect } from "react";
 import {
-  X, Home, PenLine, Calendar, Wrench, FolderOpen, MessageSquare, Settings,
+  X, Home, PenLine, Calendar, CalendarDays, Wrench, FolderOpen, MessageSquare, Settings,
   ShieldCheck, ShieldAlert, Plane, Users, Bell, Smartphone, BookOpen, CheckSquare,
-  AlertTriangle, ClipboardList, Gauge, CloudSun, Send,
+  AlertTriangle, ClipboardList, Gauge, CloudSun, Send, Camera, BarChart3, Lock,
   type LucideIcon,
 } from "lucide-react";
 import { useModalScrollLock } from "@/hooks/useModalScrollLock";
@@ -57,6 +57,12 @@ const SECTIONS: Section[] = [
         name: "Fleet view",
         blurb: "Every tail side-by-side when you've got more than one airplane. Green, orange, red — pick the one you need.",
         where: "Home icon (double-tap with 2+ aircraft)",
+      },
+      {
+        icon: CalendarDays, accent: '#56B94A',
+        name: "Fleet Schedule",
+        blurb: "Every booking on every airplane on one calendar — month, week, or day. Filter to the tails you actually fly. Tap a date and you drop into that airplane's calendar.",
+        where: "Home → Schedule (with 2+ aircraft)",
       },
     ],
   },
@@ -118,6 +124,12 @@ const SECTIONS: Section[] = [
         blurb: "Every installed piece with make, model, serial, and the certification dates the FAA cares about. Transponder (§91.413), altimeter & pitot-static (§91.411), ELT (§91.207) — let one lapse and the airplane shows grounded.",
         where: "More → Equipment",
       },
+      {
+        icon: Camera, accent: '#0EA5E9',
+        name: "Logbook scan",
+        blurb: "Snap a photo of the mechanic's logbook entry and Skyward reads it — completion date, engine time, signoff, and which work it covers. Use it when you're closing out a service event, or when an old entry needs to become a tracked item. You confirm the details before anything saves.",
+        where: "MX → Maintenance (Track New Item or Complete Event)",
+      },
     ],
   },
   {
@@ -141,6 +153,12 @@ const SECTIONS: Section[] = [
         name: "Pilots & access",
         blurb: "Invite a pilot by email — they get a link, no app store. Grant access by aircraft. Promote to admin when they should own the numbers. Global admins see the whole fleet.",
         where: "Settings → cog → Users / Access",
+      },
+      {
+        icon: Plane, accent: '#525659',
+        name: "Aircraft profile",
+        blurb: "The airplane's vitals — make, model, serial, year, IFR-equipped, home airport, and the timezone the airplane lives in. Two emails matter: the primary contact who runs maintenance, and the mechanic. Howard reads the IFR flag and the timezone so briefings and date math match how you actually fly.",
+        where: "Summary → Edit (or tail dropdown → Edit)",
       },
     ],
   },
@@ -181,8 +199,20 @@ const SECTIONS: Section[] = [
       {
         icon: Bell, accent: '#F08B46',
         name: "Notifications",
-        blurb: "Emails as MX items come due — you pick the lead time (30, 15, 5 days or hours out). New squawks, new notes, and service-event updates also land in your inbox.",
+        blurb: "Emails as MX items come due — you pick the lead time (30, 15, 5 days or hours out). New squawks, new notes, and reservation alerts also land in your inbox. Each kind toggles on or off independently.",
         where: "Settings → cog → Notifications",
+      },
+      {
+        icon: BarChart3, accent: '#0EA5E9',
+        name: "Howard Usage",
+        blurb: "Howard runs on a real model with real cost. The Usage tab shows how many messages you've sent, the tokens in and out, and a running cost estimate. Daily activity bars so you can see when you've leaned on him.",
+        where: "Howard tab → Usage",
+      },
+      {
+        icon: Lock, accent: '#525659',
+        name: "Account",
+        blurb: "Change your password by email, or close the account. Deleting walks you through what's about to leave with you — aircraft you own, your access on shared aircraft, the rest of your data. You type DELETE before any of it happens.",
+        where: "Settings → cog",
       },
       {
         icon: Smartphone, accent: '#091F3C',
