@@ -112,28 +112,30 @@ export async function POST(req: Request) {
     }
 
     // 2. INTERNAL ALERT — All assigned pilots (operational awareness)
-    //    Excludes the reporter and respects notification preferences
+    //    Includes the reporter when they're an assigned pilot — they
+    //    asked for a confirmation copy on their own squawks via the
+    //    "New Squawks" preference, and a single-pilot owner testing
+    //    their setup needs to see the email actually went out.
+    //    Notification preferences still apply per-pilot.
     const { data: access } = await supabaseAdmin
       .from('aft_user_aircraft_access')
       .select('user_id')
       .eq('aircraft_id', aircraft.id);
 
     if (access && access.length > 0) {
-      const otherUserIds = access
-        .map(a => a.user_id)
-        .filter(uid => uid !== user.id);
+      const assignedUserIds = access.map(a => a.user_id);
 
-      if (otherUserIds.length > 0) {
+      if (assignedUserIds.length > 0) {
         // Check notification preferences — filter out users who disabled squawk_reported
         const { data: disabledPrefs } = await supabaseAdmin
           .from('aft_notification_preferences')
           .select('user_id')
-          .in('user_id', otherUserIds)
+          .in('user_id', assignedUserIds)
           .eq('notification_type', 'squawk_reported')
           .eq('enabled', false);
 
         const disabledUserIds = new Set((disabledPrefs || []).map(p => p.user_id));
-        const eligibleUserIds = otherUserIds.filter(uid => !disabledUserIds.has(uid));
+        const eligibleUserIds = assignedUserIds.filter(uid => !disabledUserIds.has(uid));
 
         if (eligibleUserIds.length > 0) {
           const { data: assignedUsers } = await supabaseAdmin
