@@ -194,6 +194,18 @@ export default function AircraftModal({
   const handleSaveAircraft = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    // Form is `noValidate` so iOS Safari can't silently block submit
+    // when autofill drops a malformed value into the email fields. Run
+    // the required-field checks in JS so the user gets a visible toast.
+    if (!newTail.trim()) {
+      showError('Tail number is required.');
+      return;
+    }
+    if (!newModel.trim()) {
+      showError('Model name is required.');
+      return;
+    }
+
     // Engine time is required: leaving it blank previously coerced to
     // 0 hours and the flight-log derive anchored against 0 forever
     // after. Reject blank/non-finite values up front.
@@ -457,7 +469,7 @@ export default function AircraftModal({
           </button>
         )}
         
-        <form onSubmit={handleSaveAircraft} className="space-y-4">
+        <form onSubmit={handleSaveAircraft} noValidate className="space-y-4">
           <div
             className={`border-2 border-dashed rounded p-4 text-center transition-colors ${isDragging ? 'border-mxOrange bg-orange-50' : 'border-gray-300 bg-gray-50'} ${!avatarSrc ? 'cursor-pointer' : ''}`}
             onDragOver={e => { e.preventDefault(); if (!avatarSrc) setIsDragging(true); }}

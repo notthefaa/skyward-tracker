@@ -93,7 +93,21 @@ export default function PilotOnboarding({
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault(); 
+    e.preventDefault();
+
+    // Form is `noValidate` so iOS Safari can't silently block submit
+    // when autofill drops a malformed value into the email fields. Run
+    // the required-field checks in JS so the user gets a visible toast.
+    if (!newTail.trim()) { showError('Tail number is required.'); return; }
+    if (!newModel.trim()) { showError('Model name is required.'); return; }
+    const parsedEngineTime = parseFloat(newEngineTime);
+    if (newEngineTime.trim() === '' || !Number.isFinite(parsedEngineTime) || parsedEngineTime < 0) {
+      showError(newType === 'Turbine'
+        ? 'Engine time (FTT) is required. Use 0 only if the aircraft is brand-new.'
+        : 'Tach time is required. Use 0 only if the engine is brand-new.');
+      return;
+    }
+
     setIsSubmitting(true);
     let avatarUrl = null;
 
@@ -171,7 +185,7 @@ export default function PilotOnboarding({
             <h2 className="font-oswald text-3xl font-bold uppercase tracking-widest text-navy mb-2">Set Up Your Aircraft</h2>
             <p className="text-sm text-gray-500 font-roboto">Start with the airplane&apos;s basics. Once it&apos;s set up, flight logs and maintenance tracking kick in.</p>
           </div>
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} noValidate className="space-y-4">
             <div
               className={`border-2 border-dashed rounded p-4 text-center transition-colors ${isDragging ? 'border-mxOrange bg-orange-50' : 'border-gray-300 bg-gray-50'} ${!avatarSrc ? 'cursor-pointer' : ''}`}
               onDragOver={e => { e.preventDefault(); if (!avatarSrc) setIsDragging(true); }}
