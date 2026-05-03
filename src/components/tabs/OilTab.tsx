@@ -146,24 +146,27 @@ export default function OilTab({
     aircraft ? swrKeys.oil(aircraft.id, page) : null,
     async () => {
       const from = (page - 1) * PAGE_SIZE;
-      const to = from + PAGE_SIZE;
+      const to = from + PAGE_SIZE; // inclusive → fetches PAGE_SIZE + 1 rows
       // Sort by occurred_at (when the reading was physically taken)
       // rather than created_at (when the server wrote the row). With
       // the offline-queue companion app, these diverge — an entry
       // dated 14:00 may not reach the DB until 16:30 if the phone was
       // out of signal. created_at kicks in as a tiebreaker for entries
-      // with identical occurred_at.
-      const { data: logs, count, error } = await supabase
+      // with identical occurred_at. Fetch one extra row instead of
+      // count:'exact' — see TimesTab for the iOS PWA socket-wedge
+      // rationale.
+      const { data: logs, error } = await supabase
         .from('aft_oil_logs')
-        .select('*', { count: 'exact' })
+        .select('*')
         .eq('aircraft_id', aircraft!.id)
         .is('deleted_at', null)
         .order('occurred_at', { ascending: false })
         .order('created_at', { ascending: false })
         .range(from, to);
       if (error) throw error;
-      const total = count ?? 0;
-      return { logs: (logs || []) as OilLog[], hasMore: total > from + PAGE_SIZE, totalPages: Math.max(1, Math.ceil(total / PAGE_SIZE)) };
+      const rows = (logs || []) as OilLog[];
+      const hasMore = rows.length > PAGE_SIZE;
+      return { logs: hasMore ? rows.slice(0, PAGE_SIZE) : rows, hasMore };
     }
   );
 
@@ -325,7 +328,7 @@ export default function OilTab({
         {(page > 1 || hasMore) && (
           <div className="flex justify-between items-center mt-4 border-t border-gray-200 pt-4">
             <button onClick={() => setPage(p => p - 1)} disabled={page <= 1} className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-navy disabled:opacity-30 disabled:cursor-not-allowed hover:text-danger transition-colors"><ChevronLeft size={14} /> Prev</button>
-            <span className="text-[10px] font-bold uppercase text-gray-400">Page {page} / {data?.totalPages ?? 1}</span>
+            <span className="text-[10px] font-bold uppercase text-gray-400">Page {page}</span>
             <button onClick={() => setPage(p => p + 1)} disabled={!hasMore} className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-navy disabled:opacity-30 disabled:cursor-not-allowed hover:text-danger transition-colors">Next <ChevronRight size={14} /></button>
           </div>
         )}

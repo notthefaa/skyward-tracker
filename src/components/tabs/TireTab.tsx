@@ -92,19 +92,22 @@ export default function TireTab({
   const { data, mutate } = useSWR(
     aircraft ? swrKeys.tire(aircraft.id, page) : null,
     async () => {
+      // Fetch one extra row instead of count:'exact' — see TimesTab
+      // for the iOS PWA socket-wedge rationale.
       const from = (page - 1) * PAGE_SIZE;
-      const to = from + PAGE_SIZE;
-      const { data: checks, count, error } = await supabase
+      const to = from + PAGE_SIZE; // inclusive → fetches PAGE_SIZE + 1 rows
+      const { data: checks, error } = await supabase
         .from('aft_tire_checks')
-        .select('*', { count: 'exact' })
+        .select('*')
         .eq('aircraft_id', aircraft!.id)
         .is('deleted_at', null)
         .order('occurred_at', { ascending: false })
         .order('created_at', { ascending: false })
         .range(from, to);
       if (error) throw error;
-      const total = count ?? 0;
-      return { checks: (checks || []) as TireCheck[], hasMore: total > from + PAGE_SIZE, totalPages: Math.max(1, Math.ceil(total / PAGE_SIZE)) };
+      const rows = (checks || []) as TireCheck[];
+      const hasMore = rows.length > PAGE_SIZE;
+      return { checks: hasMore ? rows.slice(0, PAGE_SIZE) : rows, hasMore };
     }
   );
 
@@ -243,7 +246,7 @@ export default function TireTab({
         {(page > 1 || hasMore) && (
           <div className="flex justify-between items-center mt-4 border-t border-gray-200 pt-4">
             <button onClick={() => setPage(p => p - 1)} disabled={page <= 1} className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-navy disabled:opacity-30 disabled:cursor-not-allowed hover:text-[#525659] transition-colors"><ChevronLeft size={14} /> Prev</button>
-            <span className="text-[10px] font-bold uppercase text-gray-400">Page {page} / {data?.totalPages ?? 1}</span>
+            <span className="text-[10px] font-bold uppercase text-gray-400">Page {page}</span>
             <button onClick={() => setPage(p => p + 1)} disabled={!hasMore} className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-navy disabled:opacity-30 disabled:cursor-not-allowed hover:text-[#525659] transition-colors">Next <ChevronRight size={14} /></button>
           </div>
         )}

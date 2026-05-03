@@ -28,23 +28,30 @@ export default function TimesTab({
   const { data, mutate } = useSWR(
     aircraft ? swrKeys.times(aircraft.id, logPage) : null,
     async () => {
+      // Pagination uses the "fetch one extra row" pattern instead of
+      // PostgREST `count: 'exact'`. The exact-count clause forces a
+      // server-side COUNT(*) on every page query, which on iOS PWA
+      // is one of the queries that wedges sockets and starves the
+      // rest of the tab. Asking for pageSize+1 rows tells us hasMore
+      // without a COUNT round-trip; we lose the exact totalPages but
+      // the UI just shows "Page N" instead of "Page N / M".
       const pageSize = 10;
       const from = (logPage - 1) * pageSize;
-      const to = from + pageSize;
-      const { data: fetchLogs, count, error } = await supabase
+      const to = from + pageSize; // inclusive end → fetches pageSize + 1 rows
+      const { data: fetchLogs, error } = await supabase
         .from('aft_flight_logs')
-        .select('*', { count: 'exact' })
+        .select('*')
         .eq('aircraft_id', aircraft!.id)
         .is('deleted_at', null)
         .order('occurred_at', { ascending: false })
         .order('created_at', { ascending: false })
         .range(from, to);
       if (error) throw error;
-      const total = count ?? 0;
+      const rows = fetchLogs || [];
+      const hasMore = rows.length > pageSize;
       return {
-        logs: fetchLogs || [],
-        hasMore: total > from + pageSize,
-        totalPages: Math.max(1, Math.ceil(total / pageSize)),
+        logs: hasMore ? rows.slice(0, pageSize) : rows,
+        hasMore,
       };
     }
   );
@@ -550,7 +557,7 @@ export default function TimesTab({
 
         <div className="flex justify-between items-center mt-4 border-t border-gray-200 pt-4">
           <button onClick={() => setLogPage(p => Math.max(1, p - 1))} disabled={logPage === 1} className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-navy disabled:opacity-30 disabled:cursor-not-allowed hover:text-info transition-colors"><ChevronLeft size={14} /> Prev</button>
-          <span className="text-[10px] font-bold uppercase text-gray-400">Page {logPage} / {data?.totalPages ?? 1}</span>
+          <span className="text-[10px] font-bold uppercase text-gray-400">Page {logPage}</span>
           <button onClick={() => setLogPage(p => p + 1)} disabled={!hasMoreLogs} className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-navy disabled:opacity-30 disabled:cursor-not-allowed hover:text-info transition-colors">Next <ChevronRight size={14} /></button>
         </div>
         {role === 'admin' && flightLogs.length > 0 && (

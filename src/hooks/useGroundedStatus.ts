@@ -1,49 +1,11 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useCallback, useRef, useState } from "react";
+import { useSWRConfig } from "swr";
 import { supabase } from "@/lib/supabase";
 import { computeAirworthinessStatus, applyOpenSquawkOverride } from "@/lib/airworthiness";
+import { swrKeys } from "@/lib/swrKeys";
 import type { AircraftWithMetrics, AircraftStatus } from "@/lib/types";
-
-// Each of the 4 supabase reads gets its own deadline. The supabase
-// client's global fetchWithTimeout is 15s — too long for a UI status
-// dot. If one of the four wedges, the others land first and the
-// verdict resolves rather than the whole check timing out as a unit.
-const PER_QUERY_TIMEOUT_MS = 6_000;
-
-// One automatic retry on failure. iOS PWA tail-switch can leave a
-// half-warm socket that fails the first request but succeeds on the
-// next — giving the verdict one quiet retry means a transient blip
-// resolves to 'airworthy/issues/grounded' instead of stranding the
-// header at gray until the user pulls to refresh.
-const RETRY_DELAY_MS = 2_500;
-
-const LABELS = ['mx', 'squawks', 'equipment', 'ads'] as const;
-
-function withDeadline<T>(p: PromiseLike<T>, ms: number, label: string): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    let settled = false;
-    const timer = setTimeout(() => {
-      if (settled) return;
-      settled = true;
-      reject(new Error(`grounded_status_timeout_${label}`));
-    }, ms);
-    Promise.resolve(p).then(
-      v => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timer);
-        resolve(v);
-      },
-      e => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timer);
-        reject(e);
-      },
-    );
-  });
-}
 
 export function useGroundedStatus(allAircraftList: AircraftWithMetrics[]) {
   // Start as 'unknown' so a first-fetch failure doesn't render the
@@ -54,15 +16,52 @@ export function useGroundedStatus(allAircraftList: AircraftWithMetrics[]) {
   const [aircraftStatus, setAircraftStatus] = useState<AircraftStatus>('unknown');
   const [groundedReason, setGroundedReason] = useState<string>("");
   const lastTailRef = useRef<string>("");
-  // Track the last in-flight tail so a retry that lost a race
-  // against a tail switch doesn't write the wrong aircraft's verdict.
-  const inflightTailRef = useRef<string>("");
-  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { cache: swrCache } = useSWRConfig();
 
-  const runOnce = useCallback(async (tail: string): Promise<boolean> => {
+  const checkGroundedStatus = useCallback(async (tail: string) => {
+    // Tail switch: reset to 'unknown' immediately so the previous
+    // aircraft's verdict can't bleed into this one. A fresh fetch
+    // (or fleet-cache read below) lands on top.
+    if (tail !== lastTailRef.current) {
+      lastTailRef.current = tail;
+      setAircraftStatus('unknown');
+      setGroundedReason("");
+    }
     const ac = allAircraftList.find(a => a.tail_number === tail);
-    if (!ac) return true;
-    const queries = [
+    if (!ac) return;
+
+    // ─── Primary path: fleet cache ───
+    // FleetSummary's fetcher already pulls all 4 airworthiness tables
+    // in one batch on app open and computes a verdict per aircraft.
+    // Reading that pre-computed verdict means the status dot resolves
+    // INSTANTLY on tail switch without firing 4 fresh queries that
+    // compete for iOS WKWebView's shallow socket pool. The fleet
+    // cache key shape is `fleet-${count}-${idsCsv}` — match by
+    // membership of the active aircraft id, since the count/idsCsv
+    // can drift if the list updates mid-session.
+    const ids = allAircraftList.map(a => a.id).join(',');
+    const fleetKey = swrKeys.fleet(allAircraftList.length, ids);
+    const fleetEntry = swrCache.get(fleetKey);
+    const fleetData = (fleetEntry as any)?.data;
+    if (Array.isArray(fleetData)) {
+      const cached = fleetData.find((entry: any) => entry?.id === ac.id);
+      if (cached?.status) {
+        setAircraftStatus(cached.status as AircraftStatus);
+        // Fleet cache holds the verdict but not the reason string.
+        // Empty string suppresses the banner; the next fresh fetch
+        // (below) populates it if grounded.
+        setGroundedReason("");
+      }
+    }
+
+    // ─── Authoritative fetch (also runs when cache hit) ───
+    // Pull everything needed for the explicit 91.205/.411/.413/.207/.417
+    // regulatory check in a single parallel round-trip. Stays on the
+    // supabase client's 15s per-request deadline; we don't wrap each
+    // query in our own shorter deadline because rejecting the JS
+    // promise early doesn't abort the underlying socket and a retry
+    // would just queue more work behind the still-running originals.
+    const [mxRes, sqRes, eqRes, adRes] = await Promise.all([
       supabase.from('aft_maintenance_items')
         .select('item_name, tracking_type, is_required, due_time, due_date')
         .eq('aircraft_id', ac.id).is('deleted_at', null),
@@ -75,33 +74,23 @@ export function useGroundedStatus(allAircraftList: AircraftWithMetrics[]) {
       supabase.from('aft_airworthiness_directives')
         .select('*')
         .eq('aircraft_id', ac.id).is('deleted_at', null).eq('is_superseded', false),
-    ] as const;
+    ]);
 
-    const results = await Promise.allSettled(
-      queries.map((q, i) => withDeadline(q, PER_QUERY_TIMEOUT_MS, LABELS[i]))
-    );
+    // If a tail switch happened mid-fetch, drop this run — the new
+    // tail's check will land on top and we don't want to write the
+    // wrong aircraft's verdict into the header.
+    if (lastTailRef.current !== tail) return;
 
-    // If a tail switch happened mid-query, drop this run — the new
-    // tail's run is in flight (or already landed) and we don't want
-    // to write stale results into the verdict for the wrong aircraft.
-    if (inflightTailRef.current !== tail || lastTailRef.current !== tail) {
-      return true;
+    if (mxRes.error || sqRes.error || eqRes.error || adRes.error) {
+      console.warn('[useGroundedStatus] fetch failed', {
+        mx: mxRes.error?.message, sq: sqRes.error?.message,
+        eq: eqRes.error?.message, ad: adRes.error?.message,
+      });
+      // Keep whatever the fleet-cache pass already wrote (or
+      // 'unknown' if the cache was empty). Don't clobber a good
+      // verdict with a transient blip.
+      return;
     }
-
-    const failures: Record<string, unknown> = {};
-    results.forEach((r, i) => {
-      if (r.status === 'rejected') failures[LABELS[i]] = (r.reason as Error)?.message || r.reason;
-      else if (r.value.error) failures[LABELS[i]] = r.value.error;
-    });
-
-    if (Object.keys(failures).length > 0) {
-      console.warn('[useGroundedStatus] partial failure', failures);
-      return false;
-    }
-
-    const [mxRes, sqRes, eqRes, adRes] = results.map(r =>
-      r.status === 'fulfilled' ? r.value : { data: null, error: null }
-    ) as any;
 
     const verdict = computeAirworthinessStatus({
       aircraft: {
@@ -120,43 +109,7 @@ export function useGroundedStatus(allAircraftList: AircraftWithMetrics[]) {
     const openSquawkCount = (sqRes.data || []).length;
     setGroundedReason(verdict.reason || "");
     setAircraftStatus(applyOpenSquawkOverride(verdict.status, openSquawkCount));
-    return true;
-  }, [allAircraftList]);
-
-  const checkGroundedStatus = useCallback(async (tail: string) => {
-    // Tail switch: reset to 'unknown' immediately so the previous
-    // aircraft's verdict can't bleed into this one. The fail-closed
-    // policy below preserves the current verdict on fetch error,
-    // which is correct for transient blips on the same tail (don't
-    // flip a grounded plane to green) but wrong on tail switch
-    // (would show A's red/orange/green next to B's tail number).
-    if (tail !== lastTailRef.current) {
-      lastTailRef.current = tail;
-      setAircraftStatus('unknown');
-      setGroundedReason("");
-      // Cancel any pending retry from the previous tail — its
-      // results would land on the wrong aircraft.
-      if (retryTimerRef.current) {
-        clearTimeout(retryTimerRef.current);
-        retryTimerRef.current = null;
-      }
-    }
-    inflightTailRef.current = tail;
-
-    const ok = await runOnce(tail);
-    if (ok) return;
-
-    // First attempt failed — schedule one quiet retry. The user
-    // doesn't see anything different (still gray dot during the
-    // retry window), but a successful retry resolves to a real
-    // verdict without requiring a manual pull-to-refresh.
-    if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
-    retryTimerRef.current = setTimeout(() => {
-      retryTimerRef.current = null;
-      if (lastTailRef.current !== tail) return;
-      void runOnce(tail);
-    }, RETRY_DELAY_MS);
-  }, [runOnce]);
+  }, [allAircraftList, swrCache]);
 
   return { aircraftStatus, groundedReason, checkGroundedStatus };
 }
