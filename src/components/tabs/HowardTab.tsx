@@ -271,6 +271,7 @@ export default function HowardTab({
     const stalledRef = { current: null as null | 'preStream' | 'stall' };
     let preStreamTimer: ReturnType<typeof setTimeout> | null = null;
     let stallTimer: ReturnType<typeof setInterval> | null = null;
+    let onVisResetByteClock: (() => void) | null = null;
 
     try {
       const { data: { session: s } } = await supabase.auth.getSession();
@@ -323,9 +324,26 @@ export default function HowardTab({
       // Stall watchdog — runs for the life of the reader loop. Server
       // SSE heartbeats land every 8s, so a 14s-silent reader is a real
       // stall (dropped mid-stream, ad blocker filtering event-stream,
-      // upstream hang past Anthropic's own timeout, or iOS suspending
-      // the socket on PWA backgrounding).
+      // upstream hang past Anthropic's own timeout, or a genuinely
+      // dead socket post-resume).
+      //
+      // iOS suspension trap: when the PWA backgrounds, JS pauses but
+      // wall-clock time keeps moving. If we naively check
+      // Date.now() - lastByteAt on resume, the watchdog trips on the
+      // first tick and kills a stream that was about to deliver. Fix:
+      // skip the check while the document is hidden, and reset
+      // lastByteAt the moment we come back so the socket gets a fresh
+      // STREAM_STALL_MS window to either deliver or genuinely stall.
+      onVisResetByteClock = () => {
+        if (typeof document !== 'undefined' && !document.hidden) {
+          lastByteAt = Date.now();
+        }
+      };
+      if (typeof document !== 'undefined') {
+        document.addEventListener('visibilitychange', onVisResetByteClock);
+      }
       stallTimer = setInterval(() => {
+        if (typeof document !== 'undefined' && document.hidden) return;
         if (Date.now() - lastByteAt > STREAM_STALL_MS) {
           stalledRef.current = 'stall';
           abortController.abort();
@@ -463,6 +481,9 @@ export default function HowardTab({
       // abort the NEXT send by accident.
       if (preStreamTimer) clearTimeout(preStreamTimer);
       if (stallTimer) clearInterval(stallTimer);
+      if (onVisResetByteClock && typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', onVisResetByteClock);
+      }
       // Only clear the ref if this is still the active controller — a
       // later send may have overwritten it already.
       if (streamAbortRef.current === abortController) {

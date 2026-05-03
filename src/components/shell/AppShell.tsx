@@ -627,8 +627,16 @@ export default function AppShell({ session }: AppShellProps) {
     // means the user never sees the long suspension hang.
     const PROBE_AFTER_HIDDEN_MS = 90_000;
     const PROBE_TIMEOUT_MS = 4_000;
+    // Pill threshold is separate from the resume threshold. Quick
+    // screen-flicks (lock for a few seconds, switch tabs) still
+    // trigger abort+revalidate so iOS can't wedge a fetch silently —
+    // but we don't show the "Reconnecting…" pill for those, because
+    // it makes the app feel unstable when nothing real happened. Only
+    // backgrounds long enough that the user themselves would notice
+    // the gap warrant the indicator.
+    const PILL_AFTER_HIDDEN_MS = 15_000;
 
-    const triggerResume = (forceRefresh: boolean, hiddenForMs = 0) => {
+    const triggerResume = (forceRefresh: boolean, hiddenForMs = 0, showPill = true) => {
       const now = Date.now();
       if (now - lastResumeAtRef.current < RESUME_DEDUP_MS) return;
       lastResumeAtRef.current = now;
@@ -637,8 +645,11 @@ export default function AppShell({ session }: AppShellProps) {
       if (!ac) return;
       // Surface a small "Reconnecting…" pill so the abort+revalidate
       // cycle reads as intentional. Auto-clears in ~1.5s; the indicator
-      // listens for the event in ReconnectingIndicator.tsx.
-      window.dispatchEvent(new CustomEvent('aft:reconnecting'));
+      // listens for the event in ReconnectingIndicator.tsx. Gated on
+      // PILL_AFTER_HIDDEN_MS so brief backgrounds don't spam it.
+      if (showPill && hiddenForMs >= PILL_AFTER_HIDDEN_MS) {
+        window.dispatchEvent(new CustomEvent('aft:reconnecting'));
+      }
       // Abort any iOS-suspended authFetch promises immediately so
       // submit forms surface their catch-path within ~1 s instead
       // of waiting out the 15 s timeout. Caller code maps the
@@ -706,7 +717,11 @@ export default function AppShell({ session }: AppShellProps) {
         triggerResume(true, PROBE_AFTER_HIDDEN_MS);
       }
     };
-    const onOnline = () => triggerResume(false);
+    // Network came back from offline — user wants to see the pill so
+    // they know the app is catching back up. Pass a synthetic gap
+    // past PILL_AFTER_HIDDEN_MS so the pill fires regardless of how
+    // long they were actually offline.
+    const onOnline = () => triggerResume(false, PILL_AFTER_HIDDEN_MS);
 
     document.addEventListener('visibilitychange', onVis);
     window.addEventListener('pageshow', onPageShow);
