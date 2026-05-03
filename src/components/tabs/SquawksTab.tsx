@@ -261,7 +261,16 @@ export default function SquawksTab({
         });
         if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || "Couldn't create the squawk"); }
         const { squawk: newSquawk } = await res.json();
-        if (newSquawk && notifyMx) {
+        if (newSquawk) {
+          // Always call the notify route, even when the reporter didn't
+          // tick "Notify MX?". The route serves two paths: (a) mechanic
+          // email, gated server-side on notifyMx; (b) "New Squawks"
+          // alert to every other assigned pilot whose preference is
+          // enabled. Gating the client call on notifyMx silently
+          // skipped (b), so pilots never got squawk emails unless the
+          // reporter also wanted to email the mechanic.
+          let routeOk = false;
+          let mxSendFailed = false;
           try {
             // Idempotency key tied to this single submit attempt. A
             // network-blip retry (or an offline-queue replay) hits the
@@ -275,11 +284,20 @@ export default function SquawksTab({
               headers: idempotencyHeader(notifyKey),
               body: JSON.stringify({ squawk: newSquawk, aircraft, notifyMx }),
             });
-            if (!emailRes.ok) notifyMxFailed = true;
+            routeOk = emailRes.ok;
+            if (routeOk) {
+              const body = await emailRes.json().catch(() => ({}));
+              mxSendFailed = !!body?.mxSendFailed;
+            }
           } catch (err) {
             console.error("Failed to send squawk email", err);
-            notifyMxFailed = true;
+            routeOk = false;
           }
+          // Only flag MX-notify-failed when the reporter actually
+          // requested it; otherwise a route failure is just a missed
+          // best-effort pilot alert (don't surface a misleading
+          // "MX didn't get the email" warning).
+          if (notifyMx && (!routeOk || mxSendFailed)) notifyMxFailed = true;
           // Persist the notify-failed state so the squawk card can show
           // a "MX not notified — resend?" badge until the pilot retries.
           // Await this: fire-and-forget lost the signal entirely when

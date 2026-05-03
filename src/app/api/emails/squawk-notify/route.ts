@@ -58,6 +58,10 @@ export async function POST(req: Request) {
     const safeInitials = escapeHtml(squawk.reporter_initials || 'a pilot');
 
     // 1. EMAIL TO MECHANIC (only if reporter checked "Notify MX?")
+    //    Wrapped in its own try/catch so a Resend hiccup or bad
+    //    mx_contact_email doesn't bubble up and prevent the assigned-
+    //    pilot alert below from going out.
+    let mxSendOk = true;
     if (notifyMx && aircraft.mx_contact_email) {
       const mxCc = aircraft.main_contact_email ? [aircraft.main_contact_email] : [];
       const squawkUrl = `${mainAppUrl}/squawk/${squawk.access_token}`;
@@ -74,32 +78,37 @@ export async function POST(req: Request) {
         </div>
       `;
 
-      await resend.emails.send({
-        from: `Skyward Operations <${FROM_EMAIL}>`,
-        to: [aircraft.mx_contact_email],
-        cc: mxCc,
-        replyTo: aircraft.main_contact_email || undefined,
-        subject: `Service Request: ${safeTail} Squawk`,
-        html: emailShell({
-          title: `Service Request: ${safeTail}`,
-          preheader: `New squawk on ${safeTail} — ${squawk.affects_airworthiness ? 'aircraft is grounded' : 'monitor and schedule when able'}.`,
-          body: `
-            ${heading('Service Request')}
-            ${paragraph(`Hello ${safeMxContact || 'there'},`)}
-            ${paragraph(`A new squawk was reported for <strong>${safeTail}</strong>. Let us know when you can accommodate this aircraft to address the issue.`)}
-            ${callout(
-              keyValueBlock([
-                { label: 'Location', value: safeLocation },
-                { label: 'Status', value: statusBadge },
-                { label: 'Description', value: safeDescription },
-              ]),
-              { variant: squawk.affects_airworthiness ? 'danger' : 'warning', label: 'Squawk Details' }
-            )}
-            ${button(squawkUrl, 'View Full Report')}
-            ${signature}
-          `,
-        }),
-      });
+      try {
+        await resend.emails.send({
+          from: `Skyward Operations <${FROM_EMAIL}>`,
+          to: [aircraft.mx_contact_email],
+          cc: mxCc,
+          replyTo: aircraft.main_contact_email || undefined,
+          subject: `Service Request: ${safeTail} Squawk`,
+          html: emailShell({
+            title: `Service Request: ${safeTail}`,
+            preheader: `New squawk on ${safeTail} — ${squawk.affects_airworthiness ? 'aircraft is grounded' : 'monitor and schedule when able'}.`,
+            body: `
+              ${heading('Service Request')}
+              ${paragraph(`Hello ${safeMxContact || 'there'},`)}
+              ${paragraph(`A new squawk was reported for <strong>${safeTail}</strong>. Let us know when you can accommodate this aircraft to address the issue.`)}
+              ${callout(
+                keyValueBlock([
+                  { label: 'Location', value: safeLocation },
+                  { label: 'Status', value: statusBadge },
+                  { label: 'Description', value: safeDescription },
+                ]),
+                { variant: squawk.affects_airworthiness ? 'danger' : 'warning', label: 'Squawk Details' }
+              )}
+              ${button(squawkUrl, 'View Full Report')}
+              ${signature}
+            `,
+          }),
+        });
+      } catch (mxErr) {
+        console.error('[squawk-notify] mechanic email failed', mxErr);
+        mxSendOk = false;
+      }
     }
 
     // 2. INTERNAL ALERT — All assigned pilots (operational awareness)
@@ -166,7 +175,12 @@ export async function POST(req: Request) {
       }
     }
 
-    const responseBody = { success: true };
+    // mxSendFailed lets the client flag mx_notify_failed independently
+    // of the pilot-alert path. Returning 200 even on a partial failure
+    // keeps the assigned-pilot alert a best-effort no-toast path while
+    // still letting the reporter see the "MX not notified — resend?"
+    // badge when they explicitly asked to email the mechanic.
+    const responseBody = { success: true, mxSendFailed: notifyMx && !mxSendOk };
     await idem.save(200, responseBody);
     return NextResponse.json(responseBody);
   } catch (error) {
