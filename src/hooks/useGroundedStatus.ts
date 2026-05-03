@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import { computeAirworthinessStatus, applyOpenSquawkOverride } from "@/lib/airworthiness";
 import type { AircraftWithMetrics, AircraftStatus } from "@/lib/types";
@@ -13,8 +13,23 @@ export function useGroundedStatus(allAircraftList: AircraftWithMetrics[]) {
   // of airworthy/issues/grounded.
   const [aircraftStatus, setAircraftStatus] = useState<AircraftStatus>('unknown');
   const [groundedReason, setGroundedReason] = useState<string>("");
+  const lastTailRef = useRef<string>("");
 
   const checkGroundedStatus = useCallback(async (tail: string) => {
+    // Tail switch: reset to 'unknown' immediately so the previous
+    // aircraft's verdict can't bleed into this one. The fail-closed
+    // policy below preserves the current verdict on fetch error,
+    // which is correct for transient blips on the same tail (don't
+    // flip a grounded plane to green) but wrong on tail switch
+    // (would show A's red/orange/green next to B's tail number).
+    // Resetting first means a failed B-fetch lands at 'unknown' (gray
+    // dot, no banner) — still safer than 'airworthy' from empty data,
+    // and unambiguously B-scoped.
+    if (tail !== lastTailRef.current) {
+      lastTailRef.current = tail;
+      setAircraftStatus('unknown');
+      setGroundedReason("");
+    }
     const ac = allAircraftList.find(a => a.tail_number === tail);
     if (!ac) return;
 

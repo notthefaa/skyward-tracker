@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { supabase } from "@/lib/supabase";
+import { supabase, abortInFlightSupabaseReads } from "@/lib/supabase";
 import { authFetch, onAuthFetchUnauthorized, abortAllInFlightAuthFetches } from "@/lib/authFetch";
 import { probeNetwork, recoveryReload } from "@/lib/iosRecovery";
 import { useFleetData, useRealtimeSync, useGroundedStatus, useAircraftRole, usePullToRefresh } from "@/hooks";
@@ -497,8 +497,8 @@ export default function AppShell({ session }: AppShellProps) {
     if (activeTail) localStorage.setItem('aft_active_tail', activeTail);
   }, [activeTail]);
 
-  // ─── Hard-reset SWR for one aircraft ───
-  // Two SWR-internal traps to navigate at the same time:
+  // ─── Per-aircraft SWR revalidation ───
+  // Two SWR-internal traps to navigate when invalidating one aircraft:
   //
   //   (a) The filter form `globalMutate(matcher, ...)` runs the matcher
   //       against `cache.get(key)._k`, which is undefined for entries
@@ -518,31 +518,14 @@ export default function AppShell({ session }: AppShellProps) {
   //       does, and only on its non-filter path.
   //
   // Walk `cache.keys()` directly (bypasses (a)) and call
-  // `globalMutate(key, undefined, { revalidate: true })` per matched
-  // key (bypasses (b) — that path explicitly does `delete FETCH[key];
-  // delete PRELOAD[key]` before triggering the revalidator). For
-  // unmounted subscribers the cache lands at `data: undefined`, so the
-  // next mount sees no cache and unconditionally fires the fetcher.
-  const wipeAircraftCache = useCallback((aircraftId: string) => {
-    const matcher = matchesAircraft(aircraftId);
-    const keys: string[] = [];
-    for (const k of Array.from(swrCache.keys())) {
-      if (typeof k === 'string' && matcher(k)) keys.push(k);
-    }
-    for (const k of keys) {
-      globalMutate(k, undefined, { revalidate: true });
-    }
-  }, [globalMutate, swrCache]);
-
-  // Resume-time revalidation. Same per-key path as wipeAircraftCache —
-  // single-arg `mutate(key)` still hits SWR's per-key code that runs
-  // `delete FETCH[key]; delete PRELOAD[key]` before re-firing the
-  // fetcher, so the iOS-suspended dead-promise trap clears the same
-  // way. The difference is we do NOT pass `undefined` as the data arg,
-  // so existing visible data stays put while the refetch is in flight.
-  // A flaky resume-time refetch (iOS still re-warming sockets) won't
-  // strand the user on a blank screen — they keep seeing the last-good
-  // values until the new fetch lands.
+  // single-arg `globalMutate(key)` per matched key (bypasses (b) —
+  // that path explicitly does `delete FETCH[key]; delete PRELOAD[key]`
+  // before triggering the revalidator). We do NOT pass `undefined` as
+  // the data arg, so existing visible data stays put while the refetch
+  // is in flight. A flaky refetch on a half-warm iOS socket won't
+  // strand the user on a blank screen — last-good values stay
+  // rendered until the new fetch lands. Used by both the resume-from-
+  // background recovery path and the in-app tail-switch effect.
   const revalidateAircraftCache = useCallback((aircraftId: string) => {
     const matcher = matchesAircraft(aircraftId);
     const keys: string[] = [];
@@ -554,15 +537,30 @@ export default function AppShell({ session }: AppShellProps) {
     }
   }, [globalMutate, swrCache]);
 
-  // ─── On tail switch, wipe + revalidate the destination aircraft ───
+  // ─── On tail switch, free outgoing connections + revalidate destination ───
+  // Two failure modes we're guarding against:
+  //   (1) Connection-pool starvation. iOS WKWebView's HTTP/1.1 pool is
+  //       shallow; if A's tab fetchers are still in flight (or wedged
+  //       on a half-warm socket) when the user switches to B, B's
+  //       first fetches queue behind them and appear to hang. Aborting
+  //       reads frees those sockets immediately. Mutations are never
+  //       aborted from outside (see lib/supabase.ts) — only GET/HEAD.
+  //   (2) "Empty B with stale A color" flash. The previous wipe path
+  //       set every B-key's data to undefined and triggered revalidation,
+  //       which made any cached B data (e.g., from a prior visit in
+  //       this session) momentarily disappear. The gentler revalidate
+  //       still clears SWR's FETCH[key] / PRELOAD[key] map per-key
+  //       (the iOS-suspended dead-promise trap that ad59485 fixed),
+  //       but keeps last-good visible while the refetch lands.
   const lastRevalidatedTailRef = useRef<string>("");
   useEffect(() => {
     if (!activeTail || activeTail === lastRevalidatedTailRef.current) return;
     const ac = allAircraftList.find(a => a.tail_number === activeTail);
     if (!ac) return;
     lastRevalidatedTailRef.current = activeTail;
-    wipeAircraftCache(ac.id);
-  }, [activeTail, allAircraftList, wipeAircraftCache]);
+    abortInFlightSupabaseReads();
+    revalidateAircraftCache(ac.id);
+  }, [activeTail, allAircraftList, revalidateAircraftCache]);
 
   // ─── Resume-from-background recovery ───
   // iOS PWAs / Safari suspend in-flight fetches AND pause the
@@ -583,12 +581,11 @@ export default function AppShell({ session }: AppShellProps) {
   //     the radio is back; firing again on `online` guarantees we
   //     revalidate once connectivity is real.
   //
-  // We use the gentler `revalidateAircraftCache` (preserves visible
-  // data) instead of `wipeAircraftCache`. A flaky first refetch on
-  // a half-warm socket no longer strands the user on a blank screen
-  // — last-good values stay rendered while SWR replaces them. A
-  // safety revalidate fires at +10 s in case the immediate one
-  // failed; if it succeeded, the second one is a cache hit no-op.
+  // We use `revalidateAircraftCache` so a flaky first refetch on a
+  // half-warm socket doesn't strand the user on a blank screen —
+  // last-good values stay rendered while SWR replaces them. A safety
+  // revalidate fires at +10 s in case the immediate one failed; if it
+  // succeeded, the second one is a cache hit no-op.
   //
   // The session refresh has to complete before revalidation so the
   // refetches don't race a stale JWT. Generation counter prevents a
