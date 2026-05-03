@@ -101,6 +101,46 @@ export default function AppShell({ session }: AppShellProps) {
   // `cache.delete(key)` so the next subscriber starts truly cold.
   const { cache: swrCache } = useSWRConfig();
 
+  // ─── Per-aircraft SWR revalidation ───
+  // Two SWR-internal traps to navigate when invalidating one aircraft:
+  //
+  //   (a) The filter form `globalMutate(matcher, ...)` runs the matcher
+  //       against `cache.get(key)._k`, which is undefined for entries
+  //       hydrated from localStorage but not yet resubscribed in this
+  //       session. Hydrated entries get skipped → tabs the user hasn't
+  //       visited yet on the destination aircraft keep their stale `[]`.
+  //
+  //   (b) SWR keeps an internal `FETCH[key]` map of in-flight requests.
+  //       When iOS suspends a fetch mid-flight (PWA backgrounded) the
+  //       promise hangs forever and `FETCH[key]` stays set. On resume
+  //       any `softRevalidate(WITH_DEDUPE)` sees the entry, decides a
+  //       request is "already in flight," and waits on the dead
+  //       promise instead of starting a fresh one. Pilots described
+  //       this exactly: data disappears, refresh hangs, switching
+  //       aircraft fixes it (because the new keys have no FETCH entry).
+  //       `cache.delete(key)` does NOT clear FETCH[key] — only mutate
+  //       does, and only on its non-filter path.
+  //
+  // Walk `cache.keys()` directly (bypasses (a)) and call single-arg
+  // `globalMutate(key)` per matched key (bypasses (b) — that path
+  // explicitly does `delete FETCH[key]; delete PRELOAD[key]` before
+  // triggering the revalidator). We do NOT pass `undefined` as the
+  // data arg, so existing visible data stays put while the refetch is
+  // in flight. A flaky refetch on a half-warm iOS socket won't strand
+  // the user on a blank screen — last-good values stay rendered until
+  // the new fetch lands. Used by the pull-refresh handler, the
+  // resume-from-background recovery path, and the tail-switch effect.
+  const revalidateAircraftCache = useCallback((aircraftId: string) => {
+    const matcher = matchesAircraft(aircraftId);
+    const keys: string[] = [];
+    for (const k of Array.from(swrCache.keys())) {
+      if (typeof k === 'string' && matcher(k)) keys.push(k);
+    }
+    for (const k of keys) {
+      globalMutate(k);
+    }
+  }, [globalMutate, swrCache]);
+
   // ─── Navigation State ───
   const companionUrl = process.env.NEXT_PUBLIC_COMPANION_URL || "https://skyward-logit.vercel.app/";
   const [activeTail, setActiveTail] = useState<string>("");
@@ -390,15 +430,27 @@ export default function AppShell({ session }: AppShellProps) {
   // bug report. The watchdog in the hook is still in place as a
   // defense-in-depth, but this is the primary guard: fail fast, tell the
   // pilot the refresh didn't complete, and let them try again.
+  //
+  // Footprint is intentionally narrow: only fleet metadata + the
+  // ACTIVE aircraft's keys are revalidated. The previous
+  // `globalMutate(() => true, undefined, { revalidate: true })` path
+  // re-fetched every cached aircraft and made the 10s refresh window
+  // a near-certain timeout on iOS (each cached aircraft = ~6 reads;
+  // a fleet of 3-4 cached aircraft = 20+ parallel fetches over a
+  // shallow socket pool, with the user staring at a spinner that
+  // resolves to a recoveryReload on miss).
   const handlePullRefresh = useCallback(async () => {
     if (!session?.user?.id) return;
     const PULL_REFRESH_TIMEOUT_MS = 10_000;
+    abortInFlightSupabaseReads();
     const work = (async () => {
       await fetchAircraftData(session.user.id);
-      globalMutate(() => true, undefined, { revalidate: true });
       if (activeTail) {
         const ac = allAircraftList.find(a => a.tail_number === activeTail);
-        if (ac) await enrichSingleAircraft(ac.id);
+        if (ac) {
+          revalidateAircraftCache(ac.id);
+          await enrichSingleAircraft(ac.id);
+        }
         checkGroundedStatus(activeTail);
         fetchUnreadNotes(activeTail, session.user.id);
       }
@@ -427,7 +479,7 @@ export default function AppShell({ session }: AppShellProps) {
     } finally {
       if (timer) clearTimeout(timer);
     }
-  }, [session, fetchAircraftData, globalMutate, activeTail, allAircraftList, enrichSingleAircraft, checkGroundedStatus, showError]);
+  }, [session, fetchAircraftData, activeTail, allAircraftList, enrichSingleAircraft, checkGroundedStatus, revalidateAircraftCache, showError]);
 
   const { pullHandlers, pullProgress, phase: pullPhase, setEnabled: setPullEnabled } = usePullToRefresh({
     onRefresh: handlePullRefresh,
@@ -496,46 +548,6 @@ export default function AppShell({ session }: AppShellProps) {
   useEffect(() => {
     if (activeTail) localStorage.setItem('aft_active_tail', activeTail);
   }, [activeTail]);
-
-  // ─── Per-aircraft SWR revalidation ───
-  // Two SWR-internal traps to navigate when invalidating one aircraft:
-  //
-  //   (a) The filter form `globalMutate(matcher, ...)` runs the matcher
-  //       against `cache.get(key)._k`, which is undefined for entries
-  //       hydrated from localStorage but not yet resubscribed in this
-  //       session. Hydrated entries get skipped → tabs the user hasn't
-  //       visited yet on the destination aircraft keep their stale `[]`.
-  //
-  //   (b) SWR keeps an internal `FETCH[key]` map of in-flight requests.
-  //       When iOS suspends a fetch mid-flight (PWA backgrounded) the
-  //       promise hangs forever and `FETCH[key]` stays set. On resume
-  //       any `softRevalidate(WITH_DEDUPE)` sees the entry, decides a
-  //       request is "already in flight," and waits on the dead
-  //       promise instead of starting a fresh one. Pilots described
-  //       this exactly: data disappears, refresh hangs, switching
-  //       aircraft fixes it (because the new keys have no FETCH entry).
-  //       `cache.delete(key)` does NOT clear FETCH[key] — only mutate
-  //       does, and only on its non-filter path.
-  //
-  // Walk `cache.keys()` directly (bypasses (a)) and call
-  // single-arg `globalMutate(key)` per matched key (bypasses (b) —
-  // that path explicitly does `delete FETCH[key]; delete PRELOAD[key]`
-  // before triggering the revalidator). We do NOT pass `undefined` as
-  // the data arg, so existing visible data stays put while the refetch
-  // is in flight. A flaky refetch on a half-warm iOS socket won't
-  // strand the user on a blank screen — last-good values stay
-  // rendered until the new fetch lands. Used by both the resume-from-
-  // background recovery path and the in-app tail-switch effect.
-  const revalidateAircraftCache = useCallback((aircraftId: string) => {
-    const matcher = matchesAircraft(aircraftId);
-    const keys: string[] = [];
-    for (const k of Array.from(swrCache.keys())) {
-      if (typeof k === 'string' && matcher(k)) keys.push(k);
-    }
-    for (const k of keys) {
-      globalMutate(k);
-    }
-  }, [globalMutate, swrCache]);
 
   // ─── On tail switch, free outgoing connections + revalidate destination ───
   // Two failure modes we're guarding against:
