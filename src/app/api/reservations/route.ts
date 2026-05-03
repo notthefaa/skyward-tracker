@@ -462,10 +462,15 @@ export async function PUT(req: Request) {
     if (title !== undefined) updateData.title = title || null;
     if (route !== undefined) updateData.route = route || null;
 
+    // Belt-and-suspenders: scope by the existing row's aircraft_id so a
+    // race-window aircraft-reassignment between the verification read
+    // and this write can't land the update on a row the caller no
+    // longer has admin/owner access to.
     const { error: updateErr } = await supabaseAdmin
       .from('aft_reservations')
       .update(updateData)
-      .eq('id', reservationId);
+      .eq('id', reservationId)
+      .eq('aircraft_id', existing.aircraft_id);
 
     if (updateErr) {
       if (updateErr.code === '23P01') {
@@ -595,11 +600,14 @@ export async function DELETE(req: Request) {
     // Cancel the reservation (soft delete). Throw on update error so the
     // route never returns success while the row is still confirmed —
     // otherwise the caller's mutate() refetches the same row and the user
-    // sees the "cancelled" booking reappear.
+    // sees the "cancelled" booking reappear. Belt-and-suspenders scoping
+    // by the existing row's aircraft_id so a race-window reassignment
+    // can't slip the cancel onto a row the caller no longer has access to.
     const { error: cancelErr } = await supabaseAdmin
       .from('aft_reservations')
       .update({ status: 'cancelled' })
-      .eq('id', reservationId);
+      .eq('id', reservationId)
+      .eq('aircraft_id', reservation.aircraft_id);
     if (cancelErr) throw cancelErr;
 
     // Notify other assigned users

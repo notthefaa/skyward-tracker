@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { Resend } from 'resend';
 import { requireAuth, requireAircraftAccess, handleApiError } from '@/lib/auth';
 import { checkEmailRateLimit } from '@/lib/submitRateLimit';
+import { idempotency } from '@/lib/idempotency';
 import { env } from '@/lib/env';
 import { escapeHtml } from '@/lib/sanitize';
 import { emailShell, heading, paragraph, callout, button } from '@/lib/email/layout';
@@ -12,6 +13,15 @@ const FROM_EMAIL = 'notifications@skywardsociety.com';
 export async function POST(req: Request) {
   try {
     const { user, supabaseAdmin } = await requireAuth(req);
+
+    // Idempotency before rate-limit so a network-blip retry doesn't
+    // burn the user's email budget on a request the server already
+    // serviced. Same pattern as squawk-notify — without this, a
+    // dropped 200 sends the same note email to every assigned pilot
+    // twice.
+    const idem = idempotency(supabaseAdmin, user.id, req, 'emails/note-notify/POST');
+    const cached = await idem.check();
+    if (cached) return cached;
 
     const rl = await checkEmailRateLimit(supabaseAdmin, user.id);
     if (!rl.allowed) {
@@ -94,25 +104,35 @@ export async function POST(req: Request) {
         ? `<div class="sw-callout-muted" style="margin-top:10px;font-size:12px;color:#091F3C;">${note.pictures.length} photo${note.pictures.length > 1 ? 's' : ''} attached</div>`
         : '';
 
-      await resend.emails.send({
-        from: `Skyward Alerts <${FROM_EMAIL}>`,
-        to: dedupedRecipients,
-        subject: `New Note: ${safeTail}`,
-        html: emailShell({
-          title: `New Note: ${safeTail}`,
-          preheader: `${safeAuthor} posted a note on ${safeTail}.`,
-          body: `
-            ${heading('New Note')}
-            ${paragraph(`<strong>${safeAuthor}</strong> posted a note on <strong>${safeTail}</strong>.`)}
-            ${callout(`${noteHtml}${photoNote}`, { variant: 'info' })}
-            ${button(mainAppUrl, 'Open Skyward')}
-          `,
-          preferencesUrl: `${mainAppUrl}#settings`,
-        }),
-      });
+      // Wrapped in its own try/catch so a Resend hiccup doesn't bubble
+      // to the route-level catch. The note row is already saved by the
+      // time this route runs, so a Resend failure shouldn't propagate
+      // a 500 the client interprets as "the note didn't save."
+      try {
+        await resend.emails.send({
+          from: `Skyward Alerts <${FROM_EMAIL}>`,
+          to: dedupedRecipients,
+          subject: `New Note: ${safeTail}`,
+          html: emailShell({
+            title: `New Note: ${safeTail}`,
+            preheader: `${safeAuthor} posted a note on ${safeTail}.`,
+            body: `
+              ${heading('New Note')}
+              ${paragraph(`<strong>${safeAuthor}</strong> posted a note on <strong>${safeTail}</strong>.`)}
+              ${callout(`${noteHtml}${photoNote}`, { variant: 'info' })}
+              ${button(mainAppUrl, 'Open Skyward')}
+            `,
+            preferencesUrl: `${mainAppUrl}#settings`,
+          }),
+        });
+      } catch (sendErr) {
+        console.error('[note-notify] resend send failed', sendErr);
+      }
     }
 
-    return NextResponse.json({ success: true });
+    const responseBody = { success: true };
+    await idem.save(200, responseBody);
+    return NextResponse.json(responseBody);
   } catch (error) {
     return handleApiError(error);
   }

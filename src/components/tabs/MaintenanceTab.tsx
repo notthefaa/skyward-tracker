@@ -422,7 +422,17 @@ export default function MaintenanceTab({
       const wantDate = mxTrackingType === 'date' || mxTrackingType === 'both';
 
       if (wantTime) {
-        const lastTimeNum = parseFloat(mxLastTime) || 0;
+        // Don't `|| 0` the parse — a blank or non-finite "Last completed
+        // time" silently anchored the item at hour 0, which makes
+        // due_time = 0 + interval and the item lands instantly overdue.
+        // The input has `required`, but if HTML5 validation is bypassed
+        // for any reason (autofill drift on a future noValidate switch,
+        // edits to existing items where last_completed_time is null,
+        // automation), we want a loud error here, not a silent zero.
+        const lastTimeNum = parseFloat(mxLastTime);
+        if (!Number.isFinite(lastTimeNum) || lastTimeNum < 0) {
+          throw new Error('Enter the time at which this item was last completed.');
+        }
         const intervalNum = mxIntervalTime ? parseFloat(mxIntervalTime) : null;
         const dueTimeNum  = mxDueTime ? parseFloat(mxDueTime) : null;
         // The form's `required={!mxIntervalTime}` lets "0" through —

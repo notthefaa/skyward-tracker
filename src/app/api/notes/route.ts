@@ -106,10 +106,16 @@ export async function DELETE(req: Request) {
     }
 
     await setAppUser(supabaseAdmin, user.id);
+    // Belt-and-suspenders scoping — re-pin the soft-delete to the same
+    // (aircraft_id, deleted_at IS NULL) the read-side gates verified,
+    // so a race-window mutation between verification and write can't
+    // slip a cross-aircraft delete or re-tombstone a deleted row.
     const { error } = await supabaseAdmin
       .from('aft_notes')
       .update({ deleted_at: new Date().toISOString(), deleted_by: user.id })
-      .eq('id', noteId);
+      .eq('id', noteId)
+      .eq('aircraft_id', aircraftId)
+      .is('deleted_at', null);
     if (error) throw error;
 
     return NextResponse.json({ success: true });

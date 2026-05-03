@@ -176,8 +176,13 @@ export default function NotesTab({ aircraft, session, role, aircraftRole, userIn
         if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || "Couldn't create the note"); }
 
         try {
+          // Fresh idempotency key per submit so a network-blip retry
+          // hits the cached 200 instead of resending the email to
+          // every assigned pilot. Matches the squawk-notify pattern.
+          const notifyKey = newIdempotencyKey();
           await authFetch('/api/emails/note-notify', {
             method: 'POST',
+            headers: idempotencyHeader(notifyKey),
             body: JSON.stringify({ note: { ...noteData, author_initials: userInitials }, aircraft })
           });
         } catch (err) {

@@ -310,10 +310,17 @@ export default function SummaryTab({
 
   const handleInvitePilot = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inviteEmail || !aircraft) return;
+    if (!aircraft) return;
+    // Guard against an iOS autofill-drift case where the visible field
+    // has a value but state is empty — without this the form silently
+    // returns and the user sees no feedback after tapping Send Invite.
+    const trimmedEmail = inviteEmail.trim();
+    if (!trimmedEmail) { showError('Enter an email address.'); return; }
+    const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!EMAIL_RE.test(trimmedEmail)) { showError("That email doesn't look right."); return; }
     setIsInviting(true);
     try {
-      const res = await authFetch('/api/pilot-invite', { method: 'POST', body: JSON.stringify({ email: inviteEmail, aircraftId: aircraft.id, aircraftRole: inviteRole }) });
+      const res = await authFetch('/api/pilot-invite', { method: 'POST', body: JSON.stringify({ email: trimmedEmail, aircraftId: aircraft.id, aircraftRole: inviteRole }) });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Couldn't send the invitation");
       showSuccess(data.message || 'Invitation sent'); setShowInviteModal(false); setInviteEmail(""); setInviteRole('pilot'); mutateCrew(); refreshData();

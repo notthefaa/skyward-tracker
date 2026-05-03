@@ -299,6 +299,16 @@ export default function TimesTab({
     if (logHobbs && parseFloat(logHobbs) < 0) return showError("Hobbs cannot be negative.");
     if (logFuel && parseFloat(logFuel) < 0) return showError("Fuel cannot be negative.");
 
+    // Required-meter guard. The bounds checks below compare
+    // `parseFloat(x) < prev` — and `NaN < N` is false, so a blank or
+    // non-numeric Tach/FTT silently skips every bounds check and lands
+    // a junk value. The form has `required`, but iOS autofill drift
+    // (controlled-input value diverging from React state, see
+    // feedback_form_novalidate_ios_autofill.md) can bypass HTML5
+    // validation on a future noValidate switch. Reject up-front.
+    if (isTurbine && !Number.isFinite(parseFloat(logFtt))) return showError("FTT is required.");
+    if (!isTurbine && !Number.isFinite(parseFloat(logTach))) return showError("Tach is required.");
+
     // Resolve the "previous" reference (what the new values must meet or exceed)
     // and, for edits, the "next" log (upper bound so we don't overtake a newer entry).
     let prevFtt = aircraft!.total_engine_time || 0;
