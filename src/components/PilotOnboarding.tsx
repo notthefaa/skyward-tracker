@@ -114,6 +114,19 @@ export default function PilotOnboarding({
       return;
     }
 
+    // noValidate disables the browser's `type="email"` format check, so
+    // an unguarded "not-an-email" string would land in the row and break
+    // MX-reminder sends downstream. Validate here.
+    const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (newMainContactEmail.trim() && !EMAIL_RE.test(newMainContactEmail.trim())) {
+      showError("Main contact email doesn't look right.");
+      return;
+    }
+    if (newMxContactEmail.trim() && !EMAIL_RE.test(newMxContactEmail.trim())) {
+      showError("MX contact email doesn't look right.");
+      return;
+    }
+
     if (tailValue !== newTail) setNewTail(tailValue);
     if (modelValue !== newModel) setNewModel(modelValue);
 
@@ -140,7 +153,9 @@ export default function PilotOnboarding({
     }
 
     const setupAirframe = newAirframeTime !== '' ? parseFloat(newAirframeTime) : null;
-    const setupEngine = parseFloat(newEngineTime) || 0;
+    // Validation above guarantees newEngineTime parses to a finite,
+    // non-negative number — no `|| 0` fallback (it would mask NaN).
+    const setupEngine = parseFloat(newEngineTime);
 
     const payload = {
       tail_number: tailValue.toUpperCase(), serial_number: newSerial, aircraft_type: modelValue, engine_type: newType,

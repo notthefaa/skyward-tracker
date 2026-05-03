@@ -228,6 +228,19 @@ export default function AircraftModal({
       return;
     }
 
+    // Contact emails: noValidate disables the browser's `type="email"`
+    // format check, so an unguarded "not-an-email" string would land in
+    // the row and break MX-reminder sends downstream. Validate here.
+    const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (newMainContactEmail.trim() && !EMAIL_RE.test(newMainContactEmail.trim())) {
+      showError("Main contact email doesn't look right.");
+      return;
+    }
+    if (newMxContactEmail.trim() && !EMAIL_RE.test(newMxContactEmail.trim())) {
+      showError("MX contact email doesn't look right.");
+      return;
+    }
+
     setIsSubmitting(true);
     let avatarUrl = existingAircraft?.avatar_url || null;
 
