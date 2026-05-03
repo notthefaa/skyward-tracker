@@ -191,20 +191,31 @@ export default function AircraftModal({
     });
   };
 
-  const handleSaveAircraft = async (e: React.FormEvent) => {
+  const handleSaveAircraft = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
-    // Form is `noValidate` so iOS Safari can't silently block submit
-    // when autofill drops a malformed value into the email fields. Run
-    // the required-field checks in JS so the user gets a visible toast.
-    if (!newTail.trim()) {
+    // Read straight from the form's DOM rather than React state. On iOS
+    // Safari, autofill / password-manager extensions can write into a
+    // controlled input without dispatching the React-recognized event,
+    // leaving newTail = "" while the user sees their tail in the field.
+    // FormData reflects what's actually in the DOM at submit time.
+    const fd = new FormData(e.currentTarget);
+    const tailValue = ((fd.get('tail_number') as string) || '').trim();
+    const modelValue = ((fd.get('aircraft_type') as string) || '').trim();
+
+    if (!tailValue) {
       showError('Tail number is required.');
       return;
     }
-    if (!newModel.trim()) {
+    if (!modelValue) {
       showError('Model name is required.');
       return;
     }
+
+    // Sync state so any subsequent render reflects the value we're
+    // actually saving (covers the autofill-drift case above).
+    if (tailValue !== newTail) setNewTail(tailValue);
+    if (modelValue !== newModel) setNewModel(modelValue);
 
     // Engine time is required: leaving it blank previously coerced to
     // 0 hours and the flight-log derive anchored against 0 forever
@@ -228,7 +239,7 @@ export default function AircraftModal({
           // Extension + explicit contentType: without these, Supabase
           // serves the object as application/octet-stream, and Firefox's
           // OpaqueResponseBlocking refuses to render it inside <img>.
-          const fileName = `${newTail.toUpperCase()}_${Date.now()}.jpg`;
+          const fileName = `${tailValue.toUpperCase()}_${Date.now()}.jpg`;
           const { data } = await supabase.storage.from('aft_aircraft_avatars').upload(fileName, compressed, { contentType: 'image/jpeg' });
           if (data) {
             const { data: urlData } = supabase.storage.from('aft_aircraft_avatars').getPublicUrl(data.path);
@@ -242,11 +253,11 @@ export default function AircraftModal({
     }
 
     const basePayload: Record<string, any> = {
-      tail_number: newTail.toUpperCase(),
+      tail_number: tailValue.toUpperCase(),
       serial_number: newSerial,
       make: newMake.trim() || null,
       type_certificate: newTypeCert.trim() || null,
-      aircraft_type: newModel,
+      aircraft_type: modelValue,
       engine_type: newType,
       home_airport: newHomeAirport,
       time_zone: newTimeZone || 'UTC',
@@ -404,7 +415,7 @@ export default function AircraftModal({
     // the button un-disables and a quick second tap surfaces a
     // duplicate-tail error against the user's own freshly-created
     // aircraft.
-    await onSuccess(newTail.toUpperCase());
+    await onSuccess(tailValue.toUpperCase());
     setIsSubmitting(false);
   };
 
@@ -521,7 +532,7 @@ export default function AircraftModal({
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Tail Number</label>
-              <input type="text" required value={newTail} onChange={e => setNewTail(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 uppercase focus:border-mxOrange outline-none" />
+              <input name="tail_number" type="text" required value={newTail} onChange={e => setNewTail(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 uppercase focus:border-mxOrange outline-none" />
             </div>
             <div>
               <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Serial Num</label>
@@ -543,7 +554,7 @@ export default function AircraftModal({
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Model Name</label>
-              <input type="text" required value={newModel} onChange={e => setNewModel(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none" />
+              <input name="aircraft_type" type="text" required value={newModel} onChange={e => setNewModel(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none" />
             </div>
             <div>
               <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Engine Type</label>

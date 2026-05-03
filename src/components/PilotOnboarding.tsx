@@ -92,14 +92,20 @@ export default function PilotOnboarding({
     });
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
-    // Form is `noValidate` so iOS Safari can't silently block submit
-    // when autofill drops a malformed value into the email fields. Run
-    // the required-field checks in JS so the user gets a visible toast.
-    if (!newTail.trim()) { showError('Tail number is required.'); return; }
-    if (!newModel.trim()) { showError('Model name is required.'); return; }
+    // Read straight from the form's DOM rather than React state. On iOS
+    // Safari, autofill / password-manager extensions can write into a
+    // controlled input without dispatching the React-recognized event,
+    // leaving newTail = "" while the user sees their tail in the field.
+    // FormData reflects what's actually in the DOM at submit time.
+    const fd = new FormData(e.currentTarget);
+    const tailValue = ((fd.get('tail_number') as string) || '').trim();
+    const modelValue = ((fd.get('aircraft_type') as string) || '').trim();
+
+    if (!tailValue) { showError('Tail number is required.'); return; }
+    if (!modelValue) { showError('Model name is required.'); return; }
     const parsedEngineTime = parseFloat(newEngineTime);
     if (newEngineTime.trim() === '' || !Number.isFinite(parsedEngineTime) || parsedEngineTime < 0) {
       showError(newType === 'Turbine'
@@ -107,6 +113,9 @@ export default function PilotOnboarding({
         : 'Tach time is required. Use 0 only if the engine is brand-new.');
       return;
     }
+
+    if (tailValue !== newTail) setNewTail(tailValue);
+    if (modelValue !== newModel) setNewModel(modelValue);
 
     setIsSubmitting(true);
     let avatarUrl = null;
@@ -120,7 +129,7 @@ export default function PilotOnboarding({
           // Extension + explicit contentType: without these, Supabase
           // serves the object as application/octet-stream, and Firefox's
           // OpaqueResponseBlocking refuses to render it inside <img>.
-          const fileName = `${newTail.toUpperCase()}_${Date.now()}.jpg`;
+          const fileName = `${tailValue.toUpperCase()}_${Date.now()}.jpg`;
           const { data } = await supabase.storage.from('aft_aircraft_avatars').upload(fileName, compressed, { contentType: 'image/jpeg' });
           if (data) {
             const { data: urlData } = supabase.storage.from('aft_aircraft_avatars').getPublicUrl(data.path);
@@ -134,7 +143,7 @@ export default function PilotOnboarding({
     const setupEngine = parseFloat(newEngineTime) || 0;
 
     const payload = {
-      tail_number: newTail.toUpperCase(), serial_number: newSerial, aircraft_type: newModel, engine_type: newType,
+      tail_number: tailValue.toUpperCase(), serial_number: newSerial, aircraft_type: modelValue, engine_type: newType,
       total_airframe_time: setupAirframe != null ? setupAirframe : setupEngine,
       total_engine_time: setupEngine,
       setup_aftt: newType === 'Turbine' ? setupAirframe : null,
@@ -218,11 +227,11 @@ export default function PilotOnboarding({
               {avatarSrc && <button type="button" onClick={() => setAvatarSrc("")} className="text-[10px] uppercase text-red-500 font-bold mt-2 hover:underline">Choose Different Photo</button>}
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Tail Number</label><input type="text" required value={newTail} onChange={e => setNewTail(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 uppercase focus:border-mxOrange outline-none bg-white" /></div>
+              <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Tail Number</label><input name="tail_number" type="text" required value={newTail} onChange={e => setNewTail(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 uppercase focus:border-mxOrange outline-none bg-white" /></div>
               <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Serial Num</label><input type="text" value={newSerial} onChange={e => setNewSerial(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 uppercase focus:border-mxOrange outline-none bg-white" /></div>
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Model Name</label><input type="text" required value={newModel} onChange={e => setNewModel(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none bg-white" /></div>
+              <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Model Name</label><input name="aircraft_type" type="text" required value={newModel} onChange={e => setNewModel(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none bg-white" /></div>
               <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Engine Type</label><select value={newType} onChange={e => setNewType(e.target.value as any)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none bg-white"><option value="Piston">Piston</option><option value="Turbine">Turbine</option></select></div>
             </div>
             <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Home Airport</label><input type="text" value={newHomeAirport} onChange={e => setNewHomeAirport(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 uppercase focus:border-mxOrange outline-none bg-white" placeholder="ICAO" /></div>
