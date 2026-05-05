@@ -150,15 +150,21 @@ const BASE_PROTECTED: ReadonlySet<string> = new Set([
 // through stripProtectedFields(payload, 'tableKey') picks up the
 // new entry automatically.
 const TABLE_PROTECTED: Record<string, ReadonlySet<string>> = {
-  // Squawks: status / event linkage / token / notify-failed flag are
-  // all driven by server flows (work-package completion, the
-  // 047 token-rotate trigger, the squawk-notify route). A pilot
-  // PUTting them directly should not be able to fake a resolve, link
-  // their squawk to an arbitrary event, or rotate the mechanic
-  // access token to bypass an emailed link.
+  // Squawks: event linkage / token / notify-failed flag are driven
+  // by server flows (work-package completion, the 047 token-rotate
+  // trigger, the squawk-notify route). A pilot PUTting them
+  // directly could link their squawk to someone else's event
+  // (forging the audit trail), rotate the mechanic access token
+  // to bypass an emailed link, or clear the notify-failed badge
+  // without actually resending.
+  //
+  // `status` is intentionally NOT in this set: the legitimate
+  // resolve / reopen UX writes status through PUT, and the auth
+  // gates (author OR aircraft admin) already enforce who can
+  // change a squawk. Stripping status broke the Resolve button
+  // and the edit-modal status dropdown — both quietly succeeded
+  // (toast + 200) while the row stayed open.
   squawks: new Set([
-    'status',
-    'resolved_at', 'resolved_by',
     'resolved_by_event_id',
     'access_token',
     'mx_notify_failed',

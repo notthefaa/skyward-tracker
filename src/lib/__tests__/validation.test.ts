@@ -28,23 +28,24 @@ describe('stripProtectedFields — base set', () => {
 });
 
 describe('stripProtectedFields — squawks table', () => {
-  it('blocks state / event linkage / token / notify-failed forgery', () => {
+  it('blocks event linkage / token / notify-failed forgery', () => {
     const payload = {
       // base set
       id: 'x', aircraft_id: 'y', reported_by: 'u', deleted_at: 'd', created_at: 'c', updated_at: 'u',
-      // squawks-specific
-      status: 'resolved',
-      resolved_at: '2026-01-01',
-      resolved_by: 'someone',
+      // squawks-specific (server-managed)
       resolved_by_event_id: 'event-id',
       access_token: 'leak',
       mx_notify_failed: false,
-      // pass-through
+      // pass-through (legitimate user fields)
+      status: 'resolved',
       location: 'left tire',
       description: 'flat',
     };
     const out = stripProtectedFields(payload, 'squawks');
-    expect(out).toEqual({ location: 'left tire', description: 'flat' });
+    // status is the user-facing state the resolve / reopen UX writes
+    // — it must pass through. Auth gates (author OR aircraft admin)
+    // enforce who can change it.
+    expect(out).toEqual({ status: 'resolved', location: 'left tire', description: 'flat' });
   });
 });
 
