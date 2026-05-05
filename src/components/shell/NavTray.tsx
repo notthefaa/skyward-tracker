@@ -120,6 +120,17 @@ function SortableItem({
     isDragging,
   } = useSortable({ id: item.key, disabled: !reordering });
 
+  // dnd-kit sets aria-disabled=true on the wrapper whenever the
+  // sortable is disabled (i.e. when we're not in reorder mode). The
+  // wrapper is still the clickable element for the tray entry though,
+  // so announcing it as disabled both lies to screen readers and trips
+  // Playwright's actionability check. Strip just that attribute when
+  // we're not reordering — keep role=button + tabIndex from the rest
+  // of the spread.
+  const safeAttributes = reordering
+    ? attributes
+    : { ...attributes, 'aria-disabled': undefined as unknown as boolean };
+
   // Only apply translate — no scale/transition-all that fights the drag
   const style: React.CSSProperties = {
     transform: transform ? `translate3d(${Math.round(transform.x)}px, ${Math.round(transform.y)}px, 0)` : undefined,
@@ -145,7 +156,7 @@ function SortableItem({
     <div
       ref={setNodeRef}
       style={style}
-      {...attributes}
+      {...safeAttributes}
       {...(reordering ? listeners : {})}
       className={`flex flex-col items-center justify-center gap-1 py-1 rounded-lg
         ${reordering ? 'shrink-0 w-16' : 'flex-1 min-w-[3.5rem]'}
