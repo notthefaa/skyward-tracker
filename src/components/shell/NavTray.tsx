@@ -306,7 +306,9 @@ export default function NavTray({
         <div className="fixed inset-0 z-[9997]" onClick={onClose} />
       )}
 
-      <div
+      <nav
+        aria-label="Secondary navigation"
+        aria-hidden={!visible}
         className={`fixed left-0 right-0 z-[9998] transition-all duration-200 ease-out ${visible ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0 pointer-events-none'}`}
         style={{ bottom: 'calc(3rem + env(safe-area-inset-bottom, 0px))' }}
       >
@@ -362,7 +364,7 @@ export default function NavTray({
             )}
           </div>
         </div>
-      </div>
+      </nav>
     </>
   );
 }
