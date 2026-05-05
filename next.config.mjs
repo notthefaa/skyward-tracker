@@ -7,6 +7,11 @@ const withBundleAnalyzer = bundleAnalyzer({
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Allow dev requests from loopback hosts. Codespace runs Playwright
+  // inside Docker with --network host; Next 16 otherwise blocks chunk
+  // fetches from non-whitelisted origins and the AuthScreen dynamic
+  // import 404s, leaving the splash stuck.
+  allowedDevOrigins: ['127.0.0.1', 'localhost', '*.app.github.dev'],
   // Keep these on the server — don't bundle their deps into client chunks.
   serverExternalPackages: [
     "jspdf",
