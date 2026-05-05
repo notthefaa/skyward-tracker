@@ -264,12 +264,12 @@ export default function NotesTab({ aircraft, session, role, aircraftRole, userIn
                   
                   <div className="flex gap-3 items-center">
                     {(isAdmin || note.author_id === session.user.id) && (
-                      <button onClick={() => openForm(note)} className="text-gray-400 hover:text-navy active:scale-95" title="Edit Note">
+                      <button onClick={() => openForm(note)} className="text-gray-400 hover:text-navy active:scale-95" aria-label="Edit note" title="Edit Note">
                         <Edit2 size={14}/>
                       </button>
                     )}
                     {(isAdmin || note.author_id === session.user.id) && (
-                      <button onClick={() => deleteNote(note.id)} className="text-gray-400 hover:text-danger active:scale-95" title="Delete Note">
+                      <button onClick={() => deleteNote(note.id)} className="text-gray-400 hover:text-danger active:scale-95" aria-label="Delete note" title="Delete Note">
                         <Trash2 size={14}/>
                       </button>
                     )}
