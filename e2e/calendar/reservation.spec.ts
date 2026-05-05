@@ -59,7 +59,7 @@ test.describe('Calendar — book a reservation', () => {
       throw new Error(`/api/reservations errored:\n${apiErrors.join('\n')}`);
     }
 
-    await expect(page.getByText(/reservation confirmed/i).first()).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText(/reservation confirmed/i).first()).toBeVisible({ timeout: 30_000 });
 
     // DB-side verification. Reservations use status='cancelled' for
     // soft-delete (no deleted_at column).

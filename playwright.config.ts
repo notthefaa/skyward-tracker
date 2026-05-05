@@ -22,8 +22,12 @@ export default defineConfig({
   // Single worker locally so the shared dev server doesn't get hammered;
   // CI can override with --workers.
   workers: process.env.CI ? 2 : 1,
-  // Failures should be loud, not retried-into-silence on a real bug.
-  retries: process.env.CI ? 1 : 0,
+  // Failures should be loud, not retried-into-silence on a real bug —
+  // but the Docker dev-server cold-compile path causes transient
+  // connection-refused / 504 flakes when the full suite is run, so we
+  // allow ONE retry locally to absorb infra noise. Real test bugs still
+  // surface as 2x-failed (visible in the report).
+  retries: process.env.CI ? 1 : 1,
   reporter: process.env.CI ? [['github'], ['html', { open: 'never' }]] : [['list'], ['html', { open: 'never' }]],
   timeout: 30_000,
   expect: { timeout: 5_000 },

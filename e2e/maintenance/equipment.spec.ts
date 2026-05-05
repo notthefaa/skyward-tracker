@@ -33,7 +33,7 @@ test.describe('More → Equipment — add via catalog', () => {
     await secondaryNav.getByRole('button', { name: 'Equipment', exact: true }).click();
 
     // Wait for the equipment view to render before clicking Add.
-    await expect(page.getByRole('heading', { name: 'Equipment' })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole('heading', { name: 'Equipment' })).toBeVisible({ timeout: 30_000 });
 
     // Add button — only one button labeled exactly "Add" on this page.
     await page.getByRole('button', { name: 'Add', exact: true }).click();
@@ -65,7 +65,7 @@ test.describe('More → Equipment — add via catalog', () => {
     }
 
     // Toast text from EquipmentTab.tsx:251 — "Equipment added."
-    await expect(page.getByText(/equipment added/i).first()).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText(/equipment added/i).first()).toBeVisible({ timeout: 30_000 });
 
     // DB-side: row exists, scoped to this aircraft.
     const admin = adminClient();

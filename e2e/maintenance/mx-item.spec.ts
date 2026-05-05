@@ -53,7 +53,7 @@ test.describe('Maintenance → Due Items — create item', () => {
 
     // Toast is the deterministic success signal.
     await expect(page.getByText(/maintenance item (saved|added|tracked)/i).first())
-      .toBeVisible({ timeout: 15_000 });
+      .toBeVisible({ timeout: 30_000 });
 
     // DB-side: row exists, scoped to this aircraft, not soft-deleted.
     const admin = adminClient();

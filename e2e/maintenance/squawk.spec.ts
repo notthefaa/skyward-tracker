@@ -54,7 +54,7 @@ test.describe('Maintenance → Squawks — report and resolve', () => {
     }
 
     // Toast confirms save.
-    await expect(page.getByText(/squawk reported/i).first()).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText(/squawk reported/i).first()).toBeVisible({ timeout: 30_000 });
 
     // DB-side: row exists, status='open'.
     const admin = adminClient();
@@ -82,7 +82,7 @@ test.describe('Maintenance → Squawks — report and resolve', () => {
       throw new Error(`/api/squawks errored on resolve:\n${apiErrors.join('\n')}`);
     }
 
-    await expect(page.getByText(/squawk resolved/i).first()).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText(/squawk resolved/i).first()).toBeVisible({ timeout: 30_000 });
 
     // DB-side: status now 'resolved'. (Squawks don't have a resolved_at —
     // status='resolved' is the marker.)

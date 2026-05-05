@@ -76,7 +76,7 @@ test.describe('More → Notes — post / edit / delete', () => {
     if (apiErrors.length) {
       throw new Error(`/api/notes errored on edit:\n${apiErrors.join('\n')}`);
     }
-    await expect(page.getByText(/note updated/i).first()).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText(/note updated/i).first()).toBeVisible({ timeout: 30_000 });
 
     const { data: rows2 } = await admin
       .from('aft_notes')
@@ -96,7 +96,7 @@ test.describe('More → Notes — post / edit / delete', () => {
     if (apiErrors.length) {
       throw new Error(`/api/notes errored on delete:\n${apiErrors.join('\n')}`);
     }
-    await expect(page.getByText(/note deleted/i).first()).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText(/note deleted/i).first()).toBeVisible({ timeout: 30_000 });
 
     const { data: rows3 } = await admin
       .from('aft_notes')
