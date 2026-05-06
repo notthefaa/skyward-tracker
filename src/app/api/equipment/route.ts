@@ -87,12 +87,38 @@ export async function PUT(req: Request) {
     // Strip server-owned fields — the aircraft_id filter on the
     // update query already prevents cross-aircraft escapes, but
     // without the strip a client could still blank `installed_at`,
-    // resurrect a soft-delete via `deleted_at: null`, spoof
-    // `created_by`, or — most importantly — un-remove a piece of
-    // equipment by setting `removed_at: null`. The 'equipment' table
-    // key adds removed_at/removed_by to the strip set so reinstatement
-    // has to go through a dedicated path with its own audit trail.
-    const safeUpdate = stripProtectedFields(equipmentData, 'equipment');
+    // resurrect a soft-delete via `deleted_at: null`, or spoof
+    // `created_by`. `removed_at` is intentionally NOT in the strip
+    // set: the "Mark Removed" UI sets it via PUT. Resurrect
+    // protection (preventing a client from clearing an already-set
+    // removed_at to bring gear back without an audit trail) is
+    // handled below; the acting user is captured via the history
+    // trigger that fires off `setAppUser`.
+    const safeUpdate: Record<string, unknown> = stripProtectedFields(equipmentData, 'equipment');
+
+    if (Object.prototype.hasOwnProperty.call(equipmentData, 'removed_at')) {
+      const incoming = equipmentData.removed_at;
+      if (incoming === null || incoming === '') {
+        // No-resurrect: only allow null when the row was already null.
+        // Fetching the existing value adds one round-trip per edit,
+        // but it's the simplest way to keep the audit trail intact
+        // without a dedicated reinstate endpoint.
+        const { data: existing } = await supabaseAdmin
+          .from('aft_aircraft_equipment')
+          .select('removed_at')
+          .eq('id', equipmentId)
+          .eq('aircraft_id', aircraftId)
+          .maybeSingle();
+        if (existing?.removed_at) {
+          delete safeUpdate.removed_at;
+        } else {
+          safeUpdate.removed_at = null;
+        }
+      } else {
+        safeUpdate.removed_at = incoming;
+      }
+    }
+
     const { error } = await supabaseAdmin
       .from('aft_aircraft_equipment')
       .update(safeUpdate)

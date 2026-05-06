@@ -50,14 +50,22 @@ describe('stripProtectedFields — squawks table', () => {
 });
 
 describe('stripProtectedFields — equipment table', () => {
-  it('blocks removed_at / removed_by so a PUT can\'t silently un-remove gear', () => {
+  it('blocks server-stamped removed_by but lets the route control removed_at', () => {
     const out = stripProtectedFields({
-      removed_at: null,
+      removed_at: '2026-05-06',
       removed_by: 'attacker',
       name: 'Garmin GTX-345',
       category: 'transponder',
     }, 'equipment');
-    expect(out).toEqual({ name: 'Garmin GTX-345', category: 'transponder' });
+    // removed_at must pass through — the "Mark Removed" PUT writes it.
+    // removed_by must be stripped — the route stamps it from the JWT.
+    // Resurrect protection (no-null-when-existing-non-null) lives in
+    // the route handler itself.
+    expect(out).toEqual({
+      removed_at: '2026-05-06',
+      name: 'Garmin GTX-345',
+      category: 'transponder',
+    });
   });
 });
 

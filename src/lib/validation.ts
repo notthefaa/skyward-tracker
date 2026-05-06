@@ -169,13 +169,12 @@ const TABLE_PROTECTED: Record<string, ReadonlySet<string>> = {
     'access_token',
     'mx_notify_failed',
   ]),
-  // Equipment: removed_at is the hide marker. Letting the client PUT
-  // removed_at = null silently un-removes (resurrects) gear without
-  // an audit-trail operation — whatever `removed_at` records about
-  // who/when is gone. Reinstatement should be its own endpoint.
-  equipment: new Set([
-    'removed_at', 'removed_by',
-  ]),
+  // Equipment: `removed_at` *date* must pass through this strip —
+  // the "Mark Removed" UI sets it via PUT. Resurrect protection
+  // (no-null-when-existing-non-null) lives in the route handler.
+  // Who-removed audit trail comes from the history trigger via
+  // setAppUser, not a dedicated column.
+  equipment: new Set([]),
   // ADs: source / supersession / sync metadata / applicability are
   // all managed by the DRS sync + Haiku drill-down flows. Manually
   // PUTting `source: 'drs_sync'` on a manual record would confuse
