@@ -13,19 +13,24 @@ export async function GET(req: Request) {
     if (!aircraftId) return NextResponse.json({ error: 'Aircraft ID required.' }, { status: 400 });
     await requireAircraftAccess(supabaseAdmin, user.id, aircraftId);
 
-    const { data: aircraft } = await supabaseAdmin
+    const { data: aircraft, error: acErr } = await supabaseAdmin
       .from('aft_aircraft')
       .select('tail_number, aircraft_type, serial_number, make, model')
       .eq('id', aircraftId)
       .maybeSingle();
+    if (acErr) throw acErr;
     if (!aircraft) return NextResponse.json({ error: 'Aircraft not found.' }, { status: 404 });
 
-    const { data: ads } = await supabaseAdmin
+    // 91.417(b) compliance reports MUST throw on read failure — silent
+    // fallthrough to `ads || []` would print an "all clean" report to a
+    // pilot whose actual AD list is just temporarily unreachable.
+    const { data: ads, error: adsErr } = await supabaseAdmin
       .from('aft_airworthiness_directives')
       .select('*')
       .eq('aircraft_id', aircraftId)
       .is('deleted_at', null)
       .order('ad_number', { ascending: true });
+    if (adsErr) throw adsErr;
 
     if (format === 'json') {
       return NextResponse.json({ aircraft, ads: ads || [] });

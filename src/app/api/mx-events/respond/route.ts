@@ -99,22 +99,33 @@ export async function POST(req: Request) {
 
       // Re-check deleted_at on the UPDATE so a concurrent owner cancel
       // landing between our select and write can't be silently undone.
-      await supabaseAdmin.from('aft_maintenance_events').update({
-        proposed_date: proposedDate,
-        proposed_by: 'mechanic',
-        service_duration_days: serviceDurationDays,
-        estimated_completion: estCompletion,
-      }).eq('id', event.id).is('deleted_at', null);
+      // count: 'exact' lets us detect 0-row updates from the concurrent
+      // cancel and stop before sending the schedule email.
+      const { error: propUpdErr, count: propUpdCount } = await supabaseAdmin
+        .from('aft_maintenance_events')
+        .update({
+          proposed_date: proposedDate,
+          proposed_by: 'mechanic',
+          service_duration_days: serviceDurationDays,
+          estimated_completion: estCompletion,
+        }, { count: 'exact' })
+        .eq('id', event.id)
+        .is('deleted_at', null);
+      if (propUpdErr) throw propUpdErr;
+      if (propUpdCount === 0) {
+        return NextResponse.json({ error: 'This event was cancelled by the owner.' }, { status: 409 });
+      }
 
       const durationLabel = `${serviceDurationDays} day${serviceDurationDays > 1 ? 's' : ''}`;
 
-      await supabaseAdmin.from('aft_event_messages').insert({
+      const { error: propMsgErr } = await supabaseAdmin.from('aft_event_messages').insert({
         event_id: event.id,
         sender: 'mechanic',
         message_type: 'propose_date',
         proposed_date: proposedDate,
         message: message || `Proposed service date: ${proposedDate} (estimated ${durationLabel})`,
       } as any);
+      if (propMsgErr) throw propMsgErr;
 
       if (event.primary_contact_email) {
         if (rl.allowed) await resend.emails.send({
@@ -146,21 +157,30 @@ export async function POST(req: Request) {
       const estCompletion = computeEstimatedCompletion(confirmedDate, serviceDurationDays);
       const durationLabel = `${serviceDurationDays} day${serviceDurationDays > 1 ? 's' : ''}`;
 
-      await supabaseAdmin.from('aft_maintenance_events').update({
-        status: 'confirmed',
-        confirmed_date: confirmedDate,
-        confirmed_at: new Date().toISOString(),
-        service_duration_days: serviceDurationDays,
-        estimated_completion: estCompletion,
-      }).eq('id', event.id).is('deleted_at', null);
+      const { error: confUpdErr, count: confUpdCount } = await supabaseAdmin
+        .from('aft_maintenance_events')
+        .update({
+          status: 'confirmed',
+          confirmed_date: confirmedDate,
+          confirmed_at: new Date().toISOString(),
+          service_duration_days: serviceDurationDays,
+          estimated_completion: estCompletion,
+        }, { count: 'exact' })
+        .eq('id', event.id)
+        .is('deleted_at', null);
+      if (confUpdErr) throw confUpdErr;
+      if (confUpdCount === 0) {
+        return NextResponse.json({ error: 'This event was cancelled by the owner.' }, { status: 409 });
+      }
 
-      await supabaseAdmin.from('aft_event_messages').insert({
+      const { error: confMsgErr } = await supabaseAdmin.from('aft_event_messages').insert({
         event_id: event.id,
         sender: 'mechanic',
         message_type: 'confirm',
         proposed_date: confirmedDate,
         message: message || `Confirmed for ${confirmedDate}. Estimated ${durationLabel}.`,
       } as any);
+      if (confMsgErr) throw confMsgErr;
 
       if (event.primary_contact_email) {
         if (rl.allowed) await resend.emails.send({
@@ -199,12 +219,13 @@ export async function POST(req: Request) {
       }
 
     } else if (action === 'comment') {
-      await supabaseAdmin.from('aft_event_messages').insert({
+      const { error: commentMsgErr } = await supabaseAdmin.from('aft_event_messages').insert({
         event_id: event.id,
         sender: 'mechanic',
         message_type: 'comment',
         message: message || '',
       } as any);
+      if (commentMsgErr) throw commentMsgErr;
 
       if (event.primary_contact_email) {
         if (rl.allowed) await resend.emails.send({
@@ -231,15 +252,17 @@ export async function POST(req: Request) {
           if (update.line_status) updatePayload.line_status = update.line_status;
           if (update.mechanic_comment !== undefined) updatePayload.mechanic_comment = update.mechanic_comment;
           if (Object.keys(updatePayload).length > 0) {
-            await supabaseAdmin.from('aft_event_line_items')
+            const { error: lineUpdErr } = await supabaseAdmin.from('aft_event_line_items')
               .update(updatePayload)
               .eq('id', update.id)
               .eq('event_id', event.id);
+            if (lineUpdErr) throw lineUpdErr;
           }
         }
 
-        const { data: allItems } = await supabaseAdmin
+        const { data: allItems, error: allItemsErr } = await supabaseAdmin
           .from('aft_event_line_items').select('item_name, line_status').eq('event_id', event.id);
+        if (allItemsErr) throw allItemsErr;
         
         if (allItems && event.primary_contact_email) {
           const totalItems = allItems.length;
@@ -279,9 +302,16 @@ export async function POST(req: Request) {
       const updatePayload: any = {};
       if (proposedDate) updatePayload.estimated_completion = proposedDate;
       if (message !== undefined) updatePayload.mechanic_notes = message;
-      
-      await supabaseAdmin.from('aft_maintenance_events')
-        .update(updatePayload).eq('id', event.id).is('deleted_at', null);
+
+      const { error: estUpdErr, count: estUpdCount } = await supabaseAdmin
+        .from('aft_maintenance_events')
+        .update(updatePayload, { count: 'exact' })
+        .eq('id', event.id)
+        .is('deleted_at', null);
+      if (estUpdErr) throw estUpdErr;
+      if (estUpdCount === 0) {
+        return NextResponse.json({ error: 'This event was cancelled by the owner.' }, { status: 409 });
+      }
 
       if (event.primary_contact_email && proposedDate) {
         if (rl.allowed) await resend.emails.send({
@@ -304,7 +334,7 @@ export async function POST(req: Request) {
     } else if (action === 'suggest_item') {
       const suggestedName = itemName || message || 'Additional Work';
 
-      await supabaseAdmin.from('aft_event_line_items').insert({
+      const { error: suggLineErr } = await supabaseAdmin.from('aft_event_line_items').insert({
         event_id: event.id,
         item_type: 'addon',
         item_name: suggestedName,
@@ -312,13 +342,15 @@ export async function POST(req: Request) {
         line_status: 'pending',
         mechanic_comment: 'Added by maintenance provider',
       } as any);
+      if (suggLineErr) throw suggLineErr;
 
-      await supabaseAdmin.from('aft_event_messages').insert({
+      const { error: suggMsgErr } = await supabaseAdmin.from('aft_event_messages').insert({
         event_id: event.id,
         sender: 'mechanic',
         message_type: 'status_update',
         message: `Added item: ${suggestedName}${itemDescription ? ' — ' + itemDescription : ''}`,
       } as any);
+      if (suggMsgErr) throw suggMsgErr;
 
       const safeSuggestedName = escapeHtml(suggestedName);
       const safeItemDescription = escapeHtml(itemDescription);
@@ -345,17 +377,26 @@ export async function POST(req: Request) {
       }
 
     } else if (action === 'decline') {
-      await supabaseAdmin.from('aft_maintenance_events').update({
-        status: 'cancelled',
-        mechanic_notes: message || 'Declined by maintenance provider.',
-      }).eq('id', event.id).is('deleted_at', null);
+      const { error: declUpdErr, count: declUpdCount } = await supabaseAdmin
+        .from('aft_maintenance_events')
+        .update({
+          status: 'cancelled',
+          mechanic_notes: message || 'Declined by maintenance provider.',
+        }, { count: 'exact' })
+        .eq('id', event.id)
+        .is('deleted_at', null);
+      if (declUpdErr) throw declUpdErr;
+      if (declUpdCount === 0) {
+        return NextResponse.json({ error: 'This event was already cancelled.' }, { status: 409 });
+      }
 
-      await supabaseAdmin.from('aft_event_messages').insert({
+      const { error: declMsgErr } = await supabaseAdmin.from('aft_event_messages').insert({
         event_id: event.id,
         sender: 'mechanic',
         message_type: 'status_update',
         message: message || 'Service declined by maintenance provider.',
       } as any);
+      if (declMsgErr) throw declMsgErr;
 
       if (event.primary_contact_email) {
         if (rl.allowed) await resend.emails.send({
@@ -377,16 +418,23 @@ export async function POST(req: Request) {
       }
 
     } else if (action === 'mark_ready') {
-      await supabaseAdmin.from('aft_maintenance_events').update({
-        status: 'ready_for_pickup',
-      }).eq('id', event.id).is('deleted_at', null);
+      const { error: rdyUpdErr, count: rdyUpdCount } = await supabaseAdmin
+        .from('aft_maintenance_events')
+        .update({ status: 'ready_for_pickup' }, { count: 'exact' })
+        .eq('id', event.id)
+        .is('deleted_at', null);
+      if (rdyUpdErr) throw rdyUpdErr;
+      if (rdyUpdCount === 0) {
+        return NextResponse.json({ error: 'This event was cancelled by the owner.' }, { status: 409 });
+      }
 
-      await supabaseAdmin.from('aft_event_messages').insert({
+      const { error: rdyMsgErr } = await supabaseAdmin.from('aft_event_messages').insert({
         event_id: event.id,
         sender: 'mechanic',
         message_type: 'status_update',
         message: message || 'All work complete. Aircraft is ready for pickup.',
       } as any);
+      if (rdyMsgErr) throw rdyMsgErr;
 
       if (event.primary_contact_email) {
         if (rl.allowed) await resend.emails.send({

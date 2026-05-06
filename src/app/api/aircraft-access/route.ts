@@ -68,25 +68,28 @@ export async function PUT(req: Request) {
       // small race window where both writes succeed and we then
       // restore both is acceptable — both callers receive the error
       // and the aircraft never settles in a 0-admin state.
-      await supabaseAdmin
+      const { error: demoteErr } = await supabaseAdmin
         .from('aft_user_aircraft_access')
         .update({ aircraft_role: 'pilot' })
         .eq('user_id', targetUserId)
         .eq('aircraft_id', aircraftId);
+      if (demoteErr) throw demoteErr;
 
-      const { count: remainingAdmins } = await supabaseAdmin
+      const { count: remainingAdmins, error: countErr } = await supabaseAdmin
         .from('aft_user_aircraft_access')
         .select('user_id', { count: 'exact', head: true })
         .eq('aircraft_id', aircraftId)
         .eq('aircraft_role', 'admin');
+      if (countErr) throw countErr;
 
       if ((remainingAdmins ?? 0) === 0) {
         // Restore — and tell the caller why.
-        await supabaseAdmin
+        const { error: restoreErr } = await supabaseAdmin
           .from('aft_user_aircraft_access')
           .update({ aircraft_role: 'admin' })
           .eq('user_id', targetUserId)
           .eq('aircraft_id', aircraftId);
+        if (restoreErr) throw restoreErr;
         const msg = targetUserId === user.id
           ? 'Cannot demote yourself — no other admins remain. Promote another pilot first.'
           : 'Cannot demote the only remaining admin. Promote another pilot first.';
@@ -97,11 +100,12 @@ export async function PUT(req: Request) {
     }
 
     // Promotion to admin — no admin-count concern.
-    await supabaseAdmin
+    const { error: promoteErr } = await supabaseAdmin
       .from('aft_user_aircraft_access')
       .update({ aircraft_role: newRole })
       .eq('user_id', targetUserId)
       .eq('aircraft_id', aircraftId);
+    if (promoteErr) throw promoteErr;
 
     return NextResponse.json({ success: true });
   } catch (error) {
@@ -156,20 +160,25 @@ export async function DELETE(req: Request) {
       return NextResponse.json({ success: true });
     }
 
-    // Cancel all future reservations for this user on this aircraft
-    await supabaseAdmin
+    // Cancel all future reservations for this user on this aircraft.
+    // Throw on failure: leaving the user's reservations on the calendar
+    // after access removal is a real foot-gun (calendar shows them as
+    // "the booked pilot" but they no longer have access to act on it).
+    const { error: rsvCancelErr } = await supabaseAdmin
       .from('aft_reservations')
       .update({ status: 'cancelled' })
       .eq('aircraft_id', aircraftId)
       .eq('user_id', targetUserId)
       .eq('status', 'confirmed')
       .gt('start_time', new Date().toISOString());
+    if (rsvCancelErr) throw rsvCancelErr;
 
-    await supabaseAdmin
+    const { error: accessDelErr } = await supabaseAdmin
       .from('aft_user_aircraft_access')
       .delete()
       .eq('user_id', targetUserId)
       .eq('aircraft_id', aircraftId);
+    if (accessDelErr) throw accessDelErr;
 
     // Only verify when removing an admin; pilot removal can never
     // strand the aircraft.

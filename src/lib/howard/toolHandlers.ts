@@ -589,6 +589,13 @@ const handlers: Record<string, ToolHandler> = {
         .eq('aircraft_id', aircraftId).is('deleted_at', null).eq('is_superseded', false),
     ]);
 
+    // Surface read errors instead of degrading silently. A swallowed
+    // error here makes Howard report an aircraft as airworthy with the
+    // missing-data input absent — pilots rely on this verdict for go/
+    // no-go decisions.
+    const readErr = acRes.error || eqRes.error || mxRes.error || sqRes.error || adRes.error;
+    if (readErr) return { error: `Couldn't load airworthiness inputs: ${readErr.message}` };
+
     if (!acRes.data) return { error: 'Aircraft not found.' };
 
     const equipment = (eqRes.data || []) as any[];

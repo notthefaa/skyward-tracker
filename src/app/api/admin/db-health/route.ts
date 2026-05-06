@@ -191,16 +191,23 @@ export async function POST(req: Request) {
     // ==========================================
 
     // Orphaned messages: messages whose event_id no longer exists
-    // We use a two-step approach: get event IDs, then find messages not in that set
-    const { data: allEventIds } = await supabaseAdmin
+    // We use a two-step approach: get event IDs, then find messages not in that set.
+    //
+    // SAFETY: throw on any read error before the destructive batch. A
+    // bare destructure here would let a transient supabase blip make
+    // `validEventIds` empty, and the next step would delete every
+    // message in the table because none of them would match.
+    const { data: allEventIds, error: allEventIdsErr } = await supabaseAdmin
       .from('aft_maintenance_events')
       .select('id');
+    if (allEventIdsErr) throw allEventIdsErr;
     const validEventIds = new Set((allEventIds || []).map((e: any) => e.id));
 
     // For orphan detection, only fetch IDs (not full rows)
-    const { data: messageEventIds } = await supabaseAdmin
+    const { data: messageEventIds, error: messageEventIdsErr } = await supabaseAdmin
       .from('aft_event_messages')
       .select('id, event_id');
+    if (messageEventIdsErr) throw messageEventIdsErr;
 
     const orphanedMessageIds = (messageEventIds || [])
       .filter((m: any) => !validEventIds.has(m.event_id))
@@ -214,9 +221,10 @@ export async function POST(req: Request) {
     }
     results.orphaned_messages_purged = orphanedMessageIds.length;
 
-    const { data: lineItemEventIds } = await supabaseAdmin
+    const { data: lineItemEventIds, error: lineItemEventIdsErr } = await supabaseAdmin
       .from('aft_event_line_items')
       .select('id, event_id');
+    if (lineItemEventIdsErr) throw lineItemEventIdsErr;
 
     const orphanedLineIds = (lineItemEventIds || [])
       .filter((li: any) => !validEventIds.has(li.event_id))
@@ -233,14 +241,16 @@ export async function POST(req: Request) {
     // ==========================================
     // 6. PURGE ORPHANED ACCESS RECORDS
     // ==========================================
-    const { data: allAircraft } = await supabaseAdmin
+    const { data: allAircraft, error: allAircraftErr } = await supabaseAdmin
       .from('aft_aircraft')
       .select('id');
+    if (allAircraftErr) throw allAircraftErr;
     const validAircraftIds = new Set((allAircraft || []).map((a: any) => a.id));
 
-    const { data: allAccess } = await supabaseAdmin
+    const { data: allAccess, error: allAccessErr } = await supabaseAdmin
       .from('aft_user_aircraft_access')
       .select('id, aircraft_id');
+    if (allAccessErr) throw allAccessErr;
 
     const orphanedAccessIds = (allAccess || [])
       .filter((a: any) => !validAircraftIds.has(a.aircraft_id))
@@ -269,8 +279,15 @@ export async function POST(req: Request) {
     // 8. ORPHANED IMAGE SWEEPER (with pagination)
     // ==========================================
 
+    // SAFETY for the four bucket sweepers below: throw on any read
+    // error before we hand the active-set into sweepBucket. A bare
+    // destructure that returned `null` on a transient supabase hit
+    // would let sweepBucket compute its diff against an empty set and
+    // delete every legitimate file in the bucket.
+
     // --- A. Squawk Images ---
-    const { data: squawks } = await supabaseAdmin.from('aft_squawks').select('pictures');
+    const { data: squawks, error: squawksErr } = await supabaseAdmin.from('aft_squawks').select('pictures');
+    if (squawksErr) throw squawksErr;
     const activeSquawkPics = new Set<string>();
     if (squawks) {
       for (const sq of squawks) {
@@ -282,7 +299,8 @@ export async function POST(req: Request) {
     results.squawk_image_orphans = await sweepBucket(supabaseAdmin, 'aft_squawk_images', activeSquawkPics);
 
     // --- B. Note Images ---
-    const { data: notesForImages } = await supabaseAdmin.from('aft_notes').select('pictures');
+    const { data: notesForImages, error: notesForImagesErr } = await supabaseAdmin.from('aft_notes').select('pictures');
+    if (notesForImagesErr) throw notesForImagesErr;
     const activeNotePics = new Set<string>();
     if (notesForImages) {
       for (const note of notesForImages) {
@@ -294,7 +312,8 @@ export async function POST(req: Request) {
     results.note_image_orphans = await sweepBucket(supabaseAdmin, 'aft_note_images', activeNotePics);
 
     // --- C. Aircraft Avatars ---
-    const { data: aircraftForAvatars } = await supabaseAdmin.from('aft_aircraft').select('avatar_url');
+    const { data: aircraftForAvatars, error: aircraftForAvatarsErr } = await supabaseAdmin.from('aft_aircraft').select('avatar_url');
+    if (aircraftForAvatarsErr) throw aircraftForAvatarsErr;
     const activeAvatars = new Set<string>();
     if (aircraftForAvatars) {
       for (const ac of aircraftForAvatars) {
@@ -304,10 +323,11 @@ export async function POST(req: Request) {
     results.avatar_orphans = await sweepBucket(supabaseAdmin, 'aft_aircraft_avatars', activeAvatars);
 
     // --- D. Event Attachments ---
-    const { data: messagesWithAttachments } = await supabaseAdmin
+    const { data: messagesWithAttachments, error: messagesWithAttachmentsErr } = await supabaseAdmin
       .from('aft_event_messages')
       .select('attachments')
       .not('attachments', 'is', null);
+    if (messagesWithAttachmentsErr) throw messagesWithAttachmentsErr;
     const activeAttachmentUrls = new Set<string>();
     if (messagesWithAttachments) {
       for (const msg of messagesWithAttachments) {

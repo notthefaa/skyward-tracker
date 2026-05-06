@@ -45,13 +45,19 @@ export function idempotency(
       // key across /api/oil-logs and /api/batch-submit (via different
       // code paths) would otherwise cross-cache-hit and return the
       // wrong response shape. See migration 043.
-      const { data } = await sb
+      //
+      // Throw on read error rather than silently treating a transient
+      // supabase blip as a cache miss — every POST route using this
+      // helper inherits the fail-open bypass otherwise, and a network
+      // hiccup turns one user submission into two committed writes.
+      const { data, error } = await sb
         .from('aft_idempotency_keys')
         .select('response_status, response_body')
         .eq('user_id', userId)
         .eq('key', key)
         .eq('route', route)
         .maybeSingle();
+      if (error) throw error;
 
       if (data) {
         return NextResponse.json(data.response_body, {
@@ -65,7 +71,9 @@ export function idempotency(
     /** Cache the response for this key so future repeats get it. */
     async save(status: number, body: any): Promise<void> {
       if (!key) return;
-      await sb
+      // Bubble cache-write failures so a silently-lost upsert can't
+      // produce a duplicate write on the next retry.
+      const { error } = await sb
         .from('aft_idempotency_keys')
         .upsert(
           {
@@ -76,8 +84,8 @@ export function idempotency(
             response_body: body,
           },
           { onConflict: 'user_id,key,route' },
-        )
-        .then(() => {});
+        );
+      if (error) throw error;
     },
   };
 }

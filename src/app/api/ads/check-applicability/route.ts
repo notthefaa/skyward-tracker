@@ -146,7 +146,11 @@ export async function POST(req: Request) {
     const verdict = computeVerdict(parsed, aircraft || {}, equipment);
 
     const now = new Date().toISOString();
-    await supabaseAdmin
+    // Persist the verdict — without surfacing this error, the Haiku
+    // call would return the verdict to the user but the DB row would
+    // not record it. Next refresh would show "not yet checked" and we'd
+    // pay for the same Haiku evaluation again.
+    const { error: persistErr } = await supabaseAdmin
       .from('aft_airworthiness_directives')
       .update({
         applicability_status: verdict.status,
@@ -154,6 +158,7 @@ export async function POST(req: Request) {
         applicability_checked_at: now,
       })
       .eq('id', ad.id);
+    if (persistErr) throw persistErr;
 
     return NextResponse.json({
       status: verdict.status,

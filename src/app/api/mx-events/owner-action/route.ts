@@ -47,23 +47,34 @@ export async function POST(req: Request) {
       // Owner confirms mechanic's proposed date.
       // Re-check deleted_at on the UPDATE so a concurrent cancel from
       // another tab can't be silently resurrected by this confirm.
-      await supabaseAdmin.from('aft_maintenance_events').update({
-        status: 'confirmed',
-        confirmed_date: event.proposed_date,
-        confirmed_at: new Date().toISOString(),
-      }).eq('id', eventId).is('deleted_at', null);
+      // count: 'exact' surfaces a 0-row update (concurrent cancel) so
+      // we don't email the mechanic about a confirm that didn't land.
+      const { error: confUpdErr, count: confUpdCount } = await supabaseAdmin
+        .from('aft_maintenance_events')
+        .update({
+          status: 'confirmed',
+          confirmed_date: event.proposed_date,
+          confirmed_at: new Date().toISOString(),
+        }, { count: 'exact' })
+        .eq('id', eventId)
+        .is('deleted_at', null);
+      if (confUpdErr) throw confUpdErr;
+      if (confUpdCount === 0) {
+        return NextResponse.json({ error: 'This event was already cancelled.' }, { status: 409 });
+      }
 
-      const durationLabel = event.service_duration_days 
-        ? ` (${event.service_duration_days} day${event.service_duration_days > 1 ? 's' : ''})` 
+      const durationLabel = event.service_duration_days
+        ? ` (${event.service_duration_days} day${event.service_duration_days > 1 ? 's' : ''})`
         : '';
 
-      await supabaseAdmin.from('aft_event_messages').insert({
+      const { error: confMsgErr } = await supabaseAdmin.from('aft_event_messages').insert({
         event_id: eventId,
         sender: 'owner',
         message_type: 'confirm',
         proposed_date: event.proposed_date,
         message: message || `Confirmed for ${event.proposed_date}${durationLabel}.`,
       } as any);
+      if (confMsgErr) throw confMsgErr;
 
       // Email mechanic
       if (mxEmail) {
@@ -110,18 +121,27 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: 'A valid YYYY-MM-DD date is required for counter.' }, { status: 400 });
       }
 
-      await supabaseAdmin.from('aft_maintenance_events').update({
-        proposed_date: proposedDate,
-        proposed_by: 'owner',
-      }).eq('id', eventId).is('deleted_at', null);
+      const { error: cntrUpdErr, count: cntrUpdCount } = await supabaseAdmin
+        .from('aft_maintenance_events')
+        .update({
+          proposed_date: proposedDate,
+          proposed_by: 'owner',
+        }, { count: 'exact' })
+        .eq('id', eventId)
+        .is('deleted_at', null);
+      if (cntrUpdErr) throw cntrUpdErr;
+      if (cntrUpdCount === 0) {
+        return NextResponse.json({ error: 'This event was already cancelled.' }, { status: 409 });
+      }
 
-      await supabaseAdmin.from('aft_event_messages').insert({
+      const { error: cntrMsgErr } = await supabaseAdmin.from('aft_event_messages').insert({
         event_id: eventId,
         sender: 'owner',
         message_type: 'counter',
         proposed_date: proposedDate,
         message: message || `How about ${proposedDate} instead?`,
       } as any);
+      if (cntrMsgErr) throw cntrMsgErr;
 
       // Email mechanic
       if (mxEmail) {
@@ -147,12 +167,13 @@ export async function POST(req: Request) {
 
     } else if (action === 'comment') {
       // General message from owner to mechanic
-      await supabaseAdmin.from('aft_event_messages').insert({
+      const { error: ownerCommentErr } = await supabaseAdmin.from('aft_event_messages').insert({
         event_id: eventId,
         sender: 'owner',
         message_type: 'comment',
         message: message || '',
       } as any);
+      if (ownerCommentErr) throw ownerCommentErr;
 
       // Email mechanic
       if (mxEmail && message) {
@@ -183,17 +204,26 @@ export async function POST(req: Request) {
       // event history / attached images / message thread would linger
       // otherwise. A fresh random token makes the old link a 404.
       const freshToken = randomBytes(32).toString('base64url');
-      await supabaseAdmin.from('aft_maintenance_events').update({
-        status: 'cancelled',
-        access_token: freshToken,
-      }).eq('id', eventId).is('deleted_at', null);
+      const { error: cancelUpdErr, count: cancelUpdCount } = await supabaseAdmin
+        .from('aft_maintenance_events')
+        .update({
+          status: 'cancelled',
+          access_token: freshToken,
+        }, { count: 'exact' })
+        .eq('id', eventId)
+        .is('deleted_at', null);
+      if (cancelUpdErr) throw cancelUpdErr;
+      if (cancelUpdCount === 0) {
+        return NextResponse.json({ error: 'This event was already cancelled.' }, { status: 409 });
+      }
 
-      await supabaseAdmin.from('aft_event_messages').insert({
+      const { error: cancelMsgErr } = await supabaseAdmin.from('aft_event_messages').insert({
         event_id: eventId,
         sender: 'owner',
         message_type: 'status_update',
         message: message || 'Service event cancelled by owner.',
       } as any);
+      if (cancelMsgErr) throw cancelMsgErr;
 
       // Email mechanic
       if (mxEmail) {

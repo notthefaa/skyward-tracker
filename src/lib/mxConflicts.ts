@@ -57,23 +57,28 @@ export async function cancelConflictingReservations({
     : new Date(mxStart.getTime() + 24 * 60 * 60 * 1000 - 1); // end of confirmed_date
 
   // Find confirmed reservations that overlap with the MX block.
-  // Overlap condition: reservation.start_time < mxEnd AND reservation.end_time > mxStart
-  const { data: overlapping } = await supabaseAdmin
+  // Overlap condition: reservation.start_time < mxEnd AND reservation.end_time > mxStart.
+  // Throw on read error: a swallowed failure here means the pilot
+  // shows up at the airport for a reservation that should have been
+  // cancelled because the plane went into maintenance.
+  const { data: overlapping, error: overlapErr } = await supabaseAdmin
     .from('aft_reservations')
     .select('*')
     .eq('aircraft_id', aircraftId)
     .eq('status', 'confirmed')
     .lt('start_time', mxEnd.toISOString())
     .gt('end_time', mxStart.toISOString());
+  if (overlapErr) throw overlapErr;
 
   if (!overlapping || overlapping.length === 0) return 0;
 
   // Cancel each overlapping reservation
   const reservationIds = overlapping.map((r: any) => r.id);
-  await supabaseAdmin
+  const { error: cancelErr } = await supabaseAdmin
     .from('aft_reservations')
     .update({ status: 'cancelled' })
     .in('id', reservationIds);
+  if (cancelErr) throw cancelErr;
 
   // Collect unique affected pilots (by user_id) and their reservation details
   const pilotMap: Record<string, { email?: string; reservations: any[] }> = {};

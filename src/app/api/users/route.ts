@@ -21,22 +21,28 @@ export async function DELETE(req: Request) {
     // admins — the remaining pilots can't edit it and nobody can
     // recover it without direct DB access. Force the deleter to
     // promote a replacement first.
-    const { data: targetAdminAircraft } = await supabaseAdmin
+    //
+    // Throw on any read error here — a swallowed `targetAdminAircraft`
+    // failure makes the loop skip silently and the deletion fires.
+    const { data: targetAdminAircraft, error: targetAdminErr } = await supabaseAdmin
       .from('aft_user_aircraft_access')
       .select('aircraft_id')
       .eq('user_id', userId)
       .eq('aircraft_role', 'admin');
+    if (targetAdminErr) throw targetAdminErr;
 
     for (const row of targetAdminAircraft || []) {
-      const { data: admins } = await supabaseAdmin
+      const { data: admins, error: adminsErr } = await supabaseAdmin
         .from('aft_user_aircraft_access')
         .select('user_id')
         .eq('aircraft_id', row.aircraft_id)
         .eq('aircraft_role', 'admin');
+      if (adminsErr) throw adminsErr;
       if ((admins?.length ?? 0) <= 1) {
         // Pull the tail for a more helpful error.
-        const { data: ac } = await supabaseAdmin
+        const { data: ac, error: acErr } = await supabaseAdmin
           .from('aft_aircraft').select('tail_number').eq('id', row.aircraft_id).maybeSingle();
+        if (acErr) throw acErr;
         return NextResponse.json(
           { error: `This user is the only admin on ${ac?.tail_number ?? 'an aircraft'}. Promote another pilot on that aircraft before deleting.` },
           { status: 400 },
