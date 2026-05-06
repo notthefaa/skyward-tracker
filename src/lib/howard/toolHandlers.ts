@@ -179,11 +179,12 @@ const handlers: Record<string, ToolHandler> = {
   get_event_line_items: async (params, sb, aircraftId) => {
     if (!params.event_id) return { error: 'event_id is required' };
 
-    const { data: ev } = await sb
+    const { data: ev, error: evErr } = await sb
       .from('aft_maintenance_events')
       .select('id, aircraft_id, deleted_at')
       .eq('id', params.event_id)
       .maybeSingle();
+    if (evErr) return { error: evErr.message };
     if (!ev || ev.aircraft_id !== aircraftId || ev.deleted_at) {
       return { error: 'Event not found for this aircraft.' };
     }
@@ -202,11 +203,12 @@ const handlers: Record<string, ToolHandler> = {
   get_event_messages: async (params, sb, aircraftId) => {
     if (!params.event_id) return { error: 'event_id is required' };
 
-    const { data: ev } = await sb
+    const { data: ev, error: evErr } = await sb
       .from('aft_maintenance_events')
       .select('id, aircraft_id, deleted_at')
       .eq('id', params.event_id)
       .maybeSingle();
+    if (evErr) return { error: evErr.message };
     if (!ev || ev.aircraft_id !== aircraftId || ev.deleted_at) {
       return { error: 'Event not found for this aircraft.' };
     }

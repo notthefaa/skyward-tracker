@@ -19,18 +19,23 @@ export const maxDuration = 60;
  * aircraft in the DB. Per-tool-call access (resolveAircraftFromTail)
  * still honors global admin so admins can query any aircraft by name. */
 async function loadUserFleet(supabaseAdmin: any, userId: string) {
-  const { data: access } = await supabaseAdmin
+  // Throw on either read failure: silent fallback to an empty fleet
+  // makes Howard prompt onboarding for an existing user, or quietly
+  // miss the aircraft they meant to ask about.
+  const { data: access, error: accessErr } = await supabaseAdmin
     .from('aft_user_aircraft_access')
     .select('aircraft_id')
     .eq('user_id', userId);
+  if (accessErr) throw accessErr;
   const ids = (access || []).map((a: any) => a.aircraft_id);
   if (ids.length === 0) return [];
-  const { data } = await supabaseAdmin
+  const { data, error: fleetErr } = await supabaseAdmin
     .from('aft_aircraft')
     .select('*')
     .in('id', ids)
     .is('deleted_at', null)
     .order('tail_number');
+  if (fleetErr) throw fleetErr;
   return data || [];
 }
 
@@ -77,21 +82,25 @@ export async function GET(req: Request) {
   try {
     const { user, supabaseAdmin } = await requireAuth(req);
 
-    const { data: thread } = await supabaseAdmin
+    // Throw on read errors so a transient failure doesn't render the
+    // chat as an empty thread (the user thinks their history vanished).
+    const { data: thread, error: threadErr } = await supabaseAdmin
       .from('aft_howard_threads')
       .select('*')
       .eq('user_id', user.id)
       .maybeSingle();
+    if (threadErr) throw threadErr;
 
     if (!thread) {
       return NextResponse.json({ thread: null, messages: [] });
     }
 
-    const { data: messages } = await supabaseAdmin
+    const { data: messages, error: messagesErr } = await supabaseAdmin
       .from('aft_howard_messages')
       .select('*')
       .eq('thread_id', thread.id)
       .order('created_at', { ascending: true });
+    if (messagesErr) throw messagesErr;
 
     return NextResponse.json({ thread, messages: messages || [] });
   } catch (error) { return handleApiError(error); }
