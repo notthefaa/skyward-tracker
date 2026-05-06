@@ -28,6 +28,9 @@
 // - Garmin G1000 System Maintenance Manual (190-00907-00)
 // - Williams International FJ33-5A Operator Manual
 // - P&WC PT6A Maintenance Manual
+// - Austro Engine AE 300 / AE 330 Maintenance Manual (E4.08.04 / E4.10.04)
+//   + Service Bulletin MSB-E4-027 (1,800 hr TBR extension, 2021)
+// - Diamond DA40 NG / DA42 NG / DA62 AMM (Sections 5/6 + Airworthiness Limits)
 // =============================================================
 
 export interface MxTemplateItem {
@@ -138,6 +141,7 @@ const CIRRUS_SR20: MxTemplate = {
     { item_name: 'Engine Oil & Filter Change', tracking_type: 'time', interval: 50, is_required: false, category: 'engine' },
     { item_name: 'Engine TBO (Overhaul) — 2,000 Hr', tracking_type: 'time', interval: 2000, is_required: true, category: 'engine' },
     { item_name: 'Spark Plug Inspection & Rotation', tracking_type: 'time', interval: 100, is_required: false, category: 'engine' },
+    { item_name: 'Magneto Inspection (500 Hr)', tracking_type: 'time', interval: 500, is_required: false, category: 'engine' },
     { item_name: 'Induction Air Filter Replacement', tracking_type: 'time', interval: 200, is_required: false, category: 'engine' },
     { item_name: 'Muffler & Heat Exchanger Replacement', tracking_type: 'time', interval: 1000, is_required: true, category: 'engine' },
     { item_name: 'Alternator 1 Overhaul', tracking_type: 'time', interval: 2000, is_required: false, category: 'engine' },
@@ -202,6 +206,7 @@ const CIRRUS_SR22: MxTemplate = {
     { item_name: 'Engine Oil & Filter Change', tracking_type: 'time', interval: 50, is_required: false, category: 'engine' },
     { item_name: 'Engine TBO (Overhaul) — IO-550-N, 2,000 Hr', tracking_type: 'time', interval: 2000, is_required: true, category: 'engine' },
     { item_name: 'Spark Plug Inspection & Rotation', tracking_type: 'time', interval: 100, is_required: false, category: 'engine' },
+    { item_name: 'Magneto Inspection (500 Hr)', tracking_type: 'time', interval: 500, is_required: false, category: 'engine' },
     { item_name: 'Induction Air Filter Replacement', tracking_type: 'time', interval: 200, is_required: false, category: 'engine' },
     { item_name: 'Muffler & Heat Exchanger Replacement', tracking_type: 'time', interval: 1000, is_required: true, category: 'engine' },
     { item_name: 'Alternator 1 Overhaul', tracking_type: 'time', interval: 2000, is_required: false, category: 'engine' },
@@ -266,6 +271,7 @@ const CIRRUS_SR22T: MxTemplate = {
     { item_name: 'Engine Oil & Filter Change', tracking_type: 'time', interval: 50, is_required: false, category: 'engine' },
     { item_name: 'Engine TBO (Overhaul) — TSIO-550-K, 2,000 Hr', tracking_type: 'time', interval: 2000, is_required: true, category: 'engine' },
     { item_name: 'Spark Plug Inspection & Rotation', tracking_type: 'time', interval: 100, is_required: false, category: 'engine' },
+    { item_name: 'Magneto Inspection (500 Hr)', tracking_type: 'time', interval: 500, is_required: false, category: 'engine' },
     { item_name: 'Induction Air Filter Replacement', tracking_type: 'time', interval: 200, is_required: false, category: 'engine' },
     { item_name: 'Muffler & Heat Exchanger Replacement', tracking_type: 'time', interval: 1000, is_required: true, category: 'engine' },
     { item_name: 'Alternator 1 Overhaul', tracking_type: 'time', interval: 2000, is_required: false, category: 'engine' },
@@ -586,6 +592,208 @@ const VISION_JET: MxTemplate = {
 
 
 // =============================================================
+// DIAMOND DA40 NG — Austro AE 300 (168 HP) Jet-A diesel, FADEC
+// =============================================================
+// AE 300 is a 2.0L compression-ignition turbo-diesel based on a
+// Mercedes engine block. FADEC + single-lever power control; no
+// magnetos, no spark plugs, no mixture knob. Fuels on Jet-A.
+// TBR raised from 1,500 hr to 1,800 hr (Austro MSB-E4-027, 2021).
+// US Part 91 owners may elect to operate on-condition past TBR.
+// =============================================================
+const DIAMOND_DA40_NG: MxTemplate = {
+  id: 'diamond-da40-ng',
+  name: 'Diamond DA40 NG',
+  description: 'Diamond DA40 NG with Austro AE 300 (168 HP, Jet-A turbo-diesel, FADEC). TBR 1,800 hr. Composite airframe. No CAPS. For pre-2010 DA40 with Lycoming IO-360 use the Piston Single template.',
+  engine_type: 'Piston',
+  models: ['Diamond DA40 NG', 'Diamond DA40 Tundra (NG)'],
+  items: [
+    // ── Inspections ──
+    { item_name: 'Annual Inspection', tracking_type: 'date', interval: DAYS_1_YEAR, is_required: true, category: 'inspection' },
+    { item_name: '100 Hour Inspection', tracking_type: 'time', interval: 100, is_required: false, category: 'inspection' },
+
+    // ── Engine — Austro AE 300 (per Austro MM E4.08.04) ──
+    // Diesel + FADEC = no magnetos, no plug rotation. Oil and fuel
+    // intervals replace the AVGAS-engine items found in the Lycoming
+    // / Continental templates.
+    { item_name: 'Engine Oil & Filter Change', tracking_type: 'time', interval: 100, is_required: true, category: 'engine' },
+    { item_name: 'Fuel Filter Replacement', tracking_type: 'time', interval: 100, is_required: true, category: 'engine' },
+    { item_name: 'Gearbox Oil Metal Check', tracking_type: 'time', interval: 100, is_required: true, category: 'engine' },
+    { item_name: 'Air Filter Replacement', tracking_type: 'time', interval: 200, is_required: true, category: 'engine' },
+    { item_name: 'Gearbox Oil & Filter Replacement', tracking_type: 'time', interval: 300, is_required: true, category: 'engine' },
+    { item_name: 'High-Pressure Fuel Pump Replacement', tracking_type: 'time', interval: 600, is_required: true, category: 'engine' },
+    { item_name: 'Fuel Injector Replacement', tracking_type: 'time', interval: 900, is_required: true, category: 'engine' },
+    { item_name: 'Engine TBR (Replacement) — AE 300, 1,800 Hr', tracking_type: 'time', interval: 1800, is_required: true, category: 'engine' },
+    { item_name: 'Timing Chain Replacement (at TBR)', tracking_type: 'time', interval: 1800, is_required: true, category: 'engine' },
+    { item_name: 'Cylinder Head Replacement (at TBR)', tracking_type: 'time', interval: 1800, is_required: true, category: 'engine' },
+    { item_name: 'Gearbox Replacement (at TBR)', tracking_type: 'time', interval: 1800, is_required: true, category: 'engine' },
+    { item_name: 'EECU (FADEC) Replacement (at TBR)', tracking_type: 'time', interval: 1800, is_required: true, category: 'engine' },
+    { item_name: 'Engine Hose Replacement', tracking_type: 'date', interval: DAYS_5_YEARS, is_required: false, category: 'engine' },
+
+    // ── Propeller (MT MTV-6 3-blade, hydraulic) ──
+    { item_name: 'Propeller Overhaul', tracking_type: 'time', interval: 1800, is_required: true, category: 'propeller' },
+    { item_name: 'Propeller Calendar Overhaul', tracking_type: 'date', interval: DAYS_6_YEARS, is_required: false, category: 'propeller' },
+
+    // ── Airframe (composite — check delamination, not corrosion) ──
+    { item_name: 'Landing Gear Inspection', tracking_type: 'time', interval: 100, is_required: false, category: 'airframe' },
+    { item_name: 'Brake Pad / Lining Inspection', tracking_type: 'time', interval: 100, is_required: false, category: 'airframe' },
+    { item_name: 'Tire Condition Check', tracking_type: 'time', interval: 100, is_required: false, category: 'airframe' },
+    { item_name: 'Composite Surface Inspection (Delamination / Damage)', tracking_type: 'date', interval: DAYS_1_YEAR, is_required: false, category: 'airframe' },
+    { item_name: 'Control Cable / Pushrod Inspection', tracking_type: 'date', interval: DAYS_1_YEAR, is_required: false, category: 'airframe' },
+
+    // ── Avionics (FAR 91.411 / 91.413 + Garmin G1000) ──
+    { item_name: 'Transponder / ADS-B Certification', tracking_type: 'date', interval: DAYS_2_YEARS, is_required: true, category: 'avionics' },
+    { item_name: 'Pitot-Static System Check', tracking_type: 'date', interval: DAYS_2_YEARS, is_required: true, category: 'avionics' },
+    { item_name: 'Altimeter Certification', tracking_type: 'date', interval: DAYS_2_YEARS, is_required: true, category: 'avionics' },
+    { item_name: 'Compass Swing / Calibration', tracking_type: 'date', interval: DAYS_2_YEARS, is_required: false, category: 'avionics' },
+    { item_name: 'Nav Database Update', tracking_type: 'date', interval: 28, is_required: false, category: 'avionics' },
+    { item_name: 'G1000 Standby Battery Check', tracking_type: 'date', interval: DAYS_6_MONTHS, is_required: false, category: 'avionics' },
+
+    // ── Safety ──
+    { item_name: 'ELT Battery Replacement', tracking_type: 'date', interval: DAYS_1_YEAR, is_required: true, category: 'safety' },
+    { item_name: 'ELT Inspection', tracking_type: 'date', interval: DAYS_1_YEAR, is_required: true, category: 'safety' },
+    { item_name: 'Fire Extinguisher Inspection', tracking_type: 'date', interval: DAYS_1_YEAR, is_required: false, category: 'safety' },
+
+    // ── Fluids & Consumables ──
+    { item_name: 'Battery Condition Check', tracking_type: 'date', interval: DAYS_3_MONTHS, is_required: false, category: 'fluid' },
+  ]
+};
+
+// =============================================================
+// DIAMOND DA42 NG / VI — twin Austro AE 300 (168 HP each)
+// =============================================================
+// Current production variant (DA42 NG, DA42-VI). Earlier DA42 TDI
+// shipped with Thielert TAE 125-01 / 02 — those have 300 hr TBRs
+// and a different schedule entirely; this template doesn't apply to
+// Thielert-engined airframes (which dominate the legacy fleet).
+// Most owners with a NG / VI badge are on the AE 300 schedule below.
+// =============================================================
+const DIAMOND_DA42_NG: MxTemplate = {
+  id: 'diamond-da42-ng',
+  name: 'Diamond DA42 NG / VI',
+  description: 'Diamond DA42 NG / DA42-VI with twin Austro AE 300 (168 HP each, Jet-A turbo-diesel, FADEC). TBR 1,800 hr per engine. Does NOT apply to legacy DA42 TDI with Thielert Centurion engines — those use a 300 hr TBR / replace-not-overhaul cycle.',
+  engine_type: 'Piston',
+  models: ['Diamond DA42 NG', 'Diamond DA42-VI'],
+  items: [
+    // ── Inspections ──
+    { item_name: 'Annual Inspection', tracking_type: 'date', interval: DAYS_1_YEAR, is_required: true, category: 'inspection' },
+    { item_name: '100 Hour Inspection', tracking_type: 'time', interval: 100, is_required: false, category: 'inspection' },
+
+    // ── Engines — twin Austro AE 300 (each tracked separately) ──
+    { item_name: 'Engine Oil & Filter Change (Both Engines)', tracking_type: 'time', interval: 100, is_required: true, category: 'engine' },
+    { item_name: 'Fuel Filter Replacement (Both Engines)', tracking_type: 'time', interval: 100, is_required: true, category: 'engine' },
+    { item_name: 'Gearbox Oil Metal Check (Both Engines)', tracking_type: 'time', interval: 100, is_required: true, category: 'engine' },
+    { item_name: 'Air Filter Replacement (Both Engines)', tracking_type: 'time', interval: 200, is_required: true, category: 'engine' },
+    { item_name: 'Gearbox Oil & Filter Replacement (Both Engines)', tracking_type: 'time', interval: 300, is_required: true, category: 'engine' },
+    { item_name: 'High-Pressure Fuel Pump Replacement (Both Engines)', tracking_type: 'time', interval: 600, is_required: true, category: 'engine' },
+    { item_name: 'Fuel Injector Replacement (Both Engines)', tracking_type: 'time', interval: 900, is_required: true, category: 'engine' },
+    { item_name: 'Left Engine TBR — AE 300, 1,800 Hr', tracking_type: 'time', interval: 1800, is_required: true, category: 'engine' },
+    { item_name: 'Right Engine TBR — AE 300, 1,800 Hr', tracking_type: 'time', interval: 1800, is_required: true, category: 'engine' },
+    { item_name: 'Timing Chain Replacement (Both Engines, at TBR)', tracking_type: 'time', interval: 1800, is_required: true, category: 'engine' },
+    { item_name: 'Cylinder Head Replacement (Both Engines, at TBR)', tracking_type: 'time', interval: 1800, is_required: true, category: 'engine' },
+    { item_name: 'Gearbox Replacement (Both Engines, at TBR)', tracking_type: 'time', interval: 1800, is_required: true, category: 'engine' },
+    { item_name: 'EECU (FADEC) Replacement (Both Engines, at TBR)', tracking_type: 'time', interval: 1800, is_required: true, category: 'engine' },
+    { item_name: 'Engine Hose Replacement (Both Engines)', tracking_type: 'date', interval: DAYS_5_YEARS, is_required: false, category: 'engine' },
+
+    // ── Propellers (twin MT 3-blade hydraulic) ──
+    { item_name: 'Propeller Overhaul (Both Props)', tracking_type: 'time', interval: 1800, is_required: true, category: 'propeller' },
+    { item_name: 'Propeller Calendar Overhaul', tracking_type: 'date', interval: DAYS_6_YEARS, is_required: false, category: 'propeller' },
+
+    // ── Airframe ──
+    { item_name: 'Landing Gear Inspection', tracking_type: 'time', interval: 100, is_required: false, category: 'airframe' },
+    { item_name: 'Retractable Gear Hydraulic System Check', tracking_type: 'time', interval: 100, is_required: false, category: 'airframe' },
+    { item_name: 'Brake Pad / Lining Inspection', tracking_type: 'time', interval: 100, is_required: false, category: 'airframe' },
+    { item_name: 'Tire Condition Check', tracking_type: 'time', interval: 100, is_required: false, category: 'airframe' },
+    { item_name: 'Composite Surface Inspection (Delamination / Damage)', tracking_type: 'date', interval: DAYS_1_YEAR, is_required: false, category: 'airframe' },
+    { item_name: 'Control Cable / Pushrod Inspection', tracking_type: 'date', interval: DAYS_1_YEAR, is_required: false, category: 'airframe' },
+
+    // ── Avionics ──
+    { item_name: 'Transponder / ADS-B Certification', tracking_type: 'date', interval: DAYS_2_YEARS, is_required: true, category: 'avionics' },
+    { item_name: 'Pitot-Static System Check', tracking_type: 'date', interval: DAYS_2_YEARS, is_required: true, category: 'avionics' },
+    { item_name: 'Altimeter Certification', tracking_type: 'date', interval: DAYS_2_YEARS, is_required: true, category: 'avionics' },
+    { item_name: 'Compass Swing / Calibration', tracking_type: 'date', interval: DAYS_2_YEARS, is_required: false, category: 'avionics' },
+    { item_name: 'Nav Database Update', tracking_type: 'date', interval: 28, is_required: false, category: 'avionics' },
+    { item_name: 'G1000 Standby Battery Check', tracking_type: 'date', interval: DAYS_6_MONTHS, is_required: false, category: 'avionics' },
+
+    // ── Safety ──
+    { item_name: 'ELT Battery Replacement', tracking_type: 'date', interval: DAYS_1_YEAR, is_required: true, category: 'safety' },
+    { item_name: 'ELT Inspection', tracking_type: 'date', interval: DAYS_1_YEAR, is_required: true, category: 'safety' },
+    { item_name: 'Fire Extinguisher Inspection', tracking_type: 'date', interval: DAYS_1_YEAR, is_required: false, category: 'safety' },
+
+    // ── Fluids ──
+    { item_name: 'Battery Condition Check', tracking_type: 'date', interval: DAYS_3_MONTHS, is_required: false, category: 'fluid' },
+  ]
+};
+
+// =============================================================
+// DIAMOND DA62 — twin Austro AE 330 (180 HP each)
+// =============================================================
+// AE 330 is a slightly more-powerful variant of the AE 300 (180 HP
+// vs 168 HP) developed for the heavier 7-seat DA62. TBR was originally
+// 1,000 hr at first delivery; raised to 1,800 hr in 2024 (Austro EASA
+// approval). Two-mass flywheel + hub on this engine is a 600 hr life-
+// limited part — distinct from the AE 300 schedule.
+// =============================================================
+const DIAMOND_DA62: MxTemplate = {
+  id: 'diamond-da62',
+  name: 'Diamond DA62',
+  description: 'Diamond DA62 with twin Austro AE 330 (180 HP each, Jet-A turbo-diesel, FADEC). TBR 1,800 hr per engine. Two-mass flywheel + hub is 600 hr life-limited (unique to the AE 330 vs AE 300).',
+  engine_type: 'Piston',
+  models: ['Diamond DA62'],
+  items: [
+    // ── Inspections ──
+    { item_name: 'Annual Inspection', tracking_type: 'date', interval: DAYS_1_YEAR, is_required: true, category: 'inspection' },
+    { item_name: '100 Hour Inspection', tracking_type: 'time', interval: 100, is_required: false, category: 'inspection' },
+
+    // ── Engines — twin Austro AE 330 ──
+    { item_name: 'Engine Oil & Filter Change (Both Engines)', tracking_type: 'time', interval: 100, is_required: true, category: 'engine' },
+    { item_name: 'Fuel Filter Replacement (Both Engines)', tracking_type: 'time', interval: 100, is_required: true, category: 'engine' },
+    { item_name: 'Gearbox Oil Metal Check (Both Engines)', tracking_type: 'time', interval: 100, is_required: true, category: 'engine' },
+    { item_name: 'Air Filter Replacement (Both Engines)', tracking_type: 'time', interval: 200, is_required: true, category: 'engine' },
+    { item_name: 'Gearbox Oil & Filter Replacement (Both Engines)', tracking_type: 'time', interval: 300, is_required: true, category: 'engine' },
+    { item_name: 'Two-Mass Flywheel & Hub Replacement (Both Engines)', tracking_type: 'time', interval: 600, is_required: true, category: 'engine' },
+    { item_name: 'High-Pressure Fuel Pump Replacement (Both Engines)', tracking_type: 'time', interval: 600, is_required: true, category: 'engine' },
+    { item_name: 'Fuel Injector Replacement (Both Engines)', tracking_type: 'time', interval: 900, is_required: true, category: 'engine' },
+    { item_name: 'Timing Chain Replacement (Both Engines)', tracking_type: 'time', interval: 900, is_required: true, category: 'engine' },
+    { item_name: 'Left Engine TBR — AE 330, 1,800 Hr', tracking_type: 'time', interval: 1800, is_required: true, category: 'engine' },
+    { item_name: 'Right Engine TBR — AE 330, 1,800 Hr', tracking_type: 'time', interval: 1800, is_required: true, category: 'engine' },
+    { item_name: 'Cylinder Head Replacement (Both Engines, at TBR)', tracking_type: 'time', interval: 1800, is_required: true, category: 'engine' },
+    { item_name: 'Gearbox Replacement (Both Engines, at TBR)', tracking_type: 'time', interval: 1800, is_required: true, category: 'engine' },
+    { item_name: 'EECU (FADEC) Replacement (Both Engines, at TBR)', tracking_type: 'time', interval: 1800, is_required: true, category: 'engine' },
+    { item_name: 'Engine Hose Replacement (Both Engines)', tracking_type: 'date', interval: DAYS_5_YEARS, is_required: false, category: 'engine' },
+
+    // ── Propellers (twin MT 3-blade hydraulic) ──
+    { item_name: 'Propeller Overhaul (Both Props)', tracking_type: 'time', interval: 1800, is_required: true, category: 'propeller' },
+    { item_name: 'Propeller Calendar Overhaul', tracking_type: 'date', interval: DAYS_6_YEARS, is_required: false, category: 'propeller' },
+
+    // ── Airframe ──
+    { item_name: 'Landing Gear Inspection', tracking_type: 'time', interval: 100, is_required: false, category: 'airframe' },
+    { item_name: 'Retractable Gear Hydraulic System Check', tracking_type: 'time', interval: 100, is_required: false, category: 'airframe' },
+    { item_name: 'Brake Pad / Lining Inspection', tracking_type: 'time', interval: 100, is_required: false, category: 'airframe' },
+    { item_name: 'Tire Condition Check', tracking_type: 'time', interval: 100, is_required: false, category: 'airframe' },
+    { item_name: 'Composite Surface Inspection (Delamination / Damage)', tracking_type: 'date', interval: DAYS_1_YEAR, is_required: false, category: 'airframe' },
+    { item_name: 'Control Cable / Pushrod Inspection', tracking_type: 'date', interval: DAYS_1_YEAR, is_required: false, category: 'airframe' },
+
+    // ── Avionics (Garmin G1000 NXi) ──
+    { item_name: 'Transponder / ADS-B Certification', tracking_type: 'date', interval: DAYS_2_YEARS, is_required: true, category: 'avionics' },
+    { item_name: 'Pitot-Static System Check', tracking_type: 'date', interval: DAYS_2_YEARS, is_required: true, category: 'avionics' },
+    { item_name: 'Altimeter Certification', tracking_type: 'date', interval: DAYS_2_YEARS, is_required: true, category: 'avionics' },
+    { item_name: 'Compass Swing / Calibration', tracking_type: 'date', interval: DAYS_2_YEARS, is_required: false, category: 'avionics' },
+    { item_name: 'Nav Database Update', tracking_type: 'date', interval: 28, is_required: false, category: 'avionics' },
+    { item_name: 'G1000 NXi Standby Battery Check', tracking_type: 'date', interval: DAYS_6_MONTHS, is_required: false, category: 'avionics' },
+
+    // ── Safety ──
+    { item_name: 'ELT Battery Replacement', tracking_type: 'date', interval: DAYS_1_YEAR, is_required: true, category: 'safety' },
+    { item_name: 'ELT Inspection', tracking_type: 'date', interval: DAYS_1_YEAR, is_required: true, category: 'safety' },
+    { item_name: 'Fire Extinguisher Inspection', tracking_type: 'date', interval: DAYS_1_YEAR, is_required: false, category: 'safety' },
+    { item_name: 'Built-in Oxygen System Service', tracking_type: 'date', interval: DAYS_1_YEAR, is_required: false, category: 'safety' },
+
+    // ── Fluids ──
+    { item_name: 'Battery Condition Check', tracking_type: 'date', interval: DAYS_3_MONTHS, is_required: false, category: 'fluid' },
+  ]
+};
+
+
+// =============================================================
 // EXPORT ALL TEMPLATES
 // =============================================================
 export const MX_TEMPLATES: MxTemplate[] = [
@@ -593,7 +801,10 @@ export const MX_TEMPLATES: MxTemplate[] = [
   CIRRUS_SR20,
   CIRRUS_SR22,
   CIRRUS_SR22T,
+  DIAMOND_DA40_NG,
   PISTON_TWIN,
+  DIAMOND_DA42_NG,
+  DIAMOND_DA62,
   TURBOPROP_SINGLE,
   LIGHT_JET,
   VISION_JET,
