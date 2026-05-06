@@ -443,10 +443,31 @@ export async function executeAction(
       if (evErr) throw evErr;
       const eventId = event.id;
 
-      // Attach MX items and squawks as line items (same shape as /api/mx-events/create).
+      // Attach MX items and squawks as line items (same shape as
+      // /api/mx-events/create). Three guards Howard's "I scheduled
+      // 5 items" reply needs in order to be truthful:
+      //   1. Throw on read error so a transient supabase blip doesn't
+      //      silently land an event with zero line items reported as 5.
+      //   2. Scope every lookup by aircraft_id — a malicious payload
+      //      could pass mx_item_ids / squawk_ids that belong to a
+      //      different aircraft the caller has access to, splicing
+      //      foreign items into this aircraft's work package.
+      //   3. Throw if any ID didn't resolve (deleted between propose
+      //      and confirm, or fabricated) — better to fail the action
+      //      than to land a partial event Howard says is complete.
       if (p.mx_item_ids && p.mx_item_ids.length > 0) {
-        const { data: mxItems } = await sb.from('aft_maintenance_items')
-          .select('*').in('id', p.mx_item_ids).is('deleted_at', null);
+        const { data: mxItems, error: mxErr } = await sb
+          .from('aft_maintenance_items')
+          .select('id, item_name, tracking_type, due_time, due_date')
+          .in('id', p.mx_item_ids)
+          .eq('aircraft_id', action.aircraft_id)
+          .is('deleted_at', null);
+        if (mxErr) throw mxErr;
+        if ((mxItems?.length ?? 0) !== p.mx_item_ids.length) {
+          const found = new Set((mxItems || []).map((m: any) => m.id));
+          const missing = p.mx_item_ids.filter(id => !found.has(id));
+          throw new Error(`Maintenance item${missing.length > 1 ? 's' : ''} no longer available: ${missing.join(', ')}. Re-propose the schedule.`);
+        }
         const lineItems = (mxItems || []).map((mx: any) => ({
           event_id: eventId,
           item_type: 'maintenance',
@@ -456,18 +477,34 @@ export async function executeAction(
             ? `Due at ${mx.due_time} hrs`
             : `Due on ${mx.due_date}`,
         }));
-        if (lineItems.length > 0) await sb.from('aft_event_line_items').insert(lineItems);
+        if (lineItems.length > 0) {
+          const { error: insErr } = await sb.from('aft_event_line_items').insert(lineItems);
+          if (insErr) throw insErr;
+        }
       }
       if (p.squawk_ids && p.squawk_ids.length > 0) {
-        const { data: squawks } = await sb.from('aft_squawks')
-          .select('*').in('id', p.squawk_ids).is('deleted_at', null);
+        const { data: squawks, error: sqErr } = await sb
+          .from('aft_squawks')
+          .select('id, description, location')
+          .in('id', p.squawk_ids)
+          .eq('aircraft_id', action.aircraft_id)
+          .is('deleted_at', null);
+        if (sqErr) throw sqErr;
+        if ((squawks?.length ?? 0) !== p.squawk_ids.length) {
+          const found = new Set((squawks || []).map((s: any) => s.id));
+          const missing = p.squawk_ids.filter(id => !found.has(id));
+          throw new Error(`Squawk${missing.length > 1 ? 's' : ''} no longer available: ${missing.join(', ')}. Re-propose the schedule.`);
+        }
         const lineItems = (squawks || []).map((sq: any) => ({
           event_id: eventId,
           item_type: 'squawk',
           squawk_id: sq.id,
           item_name: sq.description ? `Squawk: ${sq.description}` : `Squawk: ${sq.location || 'No description'}`,
         }));
-        if (lineItems.length > 0) await sb.from('aft_event_line_items').insert(lineItems);
+        if (lineItems.length > 0) {
+          const { error: insErr } = await sb.from('aft_event_line_items').insert(lineItems);
+          if (insErr) throw insErr;
+        }
       }
 
       return { recordId: eventId, recordTable: 'aft_maintenance_events' };

@@ -211,6 +211,103 @@ test.describe('howard/actions — execute flow', () => {
     expect(lines?.[0].maintenance_item_id).toBe(mxItem!.id);
   });
 
+  test('mx_schedule with cross-aircraft mx_item_id is rejected; no line items leak', async ({ seededUser, baseURL }) => {
+    const token = await getAccessToken(seededUser.email, seededUser.password);
+    const admin = adminClient();
+
+    // Seed a maintenance item on a DIFFERENT aircraft (foreign).
+    const { data: foreignAc } = await admin
+      .from('aft_aircraft')
+      .insert({
+        tail_number: `N${randomUUID().slice(0, 5).toUpperCase()}`,
+        aircraft_type: 'Foreign Cessna',
+        engine_type: 'Piston',
+      })
+      .select('id')
+      .single();
+    const { data: foreignMx } = await admin
+      .from('aft_maintenance_items')
+      .insert({
+        aircraft_id: foreignAc!.id,
+        item_name: 'Foreign annual',
+        tracking_type: 'date',
+        due_date: '2026-12-31',
+      })
+      .select('id')
+      .single();
+
+    try {
+      const threadId = await seedThread(seededUser.userId);
+      const actionId = await seedAction(
+        threadId, seededUser.userId, seededUser.aircraftId, 'mx_schedule',
+        { proposed_date: '2026-09-01', mx_item_ids: [foreignMx!.id], squawk_ids: [] },
+        'admin',
+      );
+
+      const res = await fetchAs(token, baseURL!, `/api/howard/actions/${actionId}`, { method: 'POST' });
+      expect(res.status).toBe(500);
+
+      const { data: action } = await admin
+        .from('aft_proposed_actions')
+        .select('status, error_message')
+        .eq('id', actionId)
+        .single();
+      expect(action?.status).toBe('failed');
+      expect(action?.error_message).toMatch(/no longer available/i);
+
+      // No line items should have been inserted for this attempt — the
+      // event itself may have landed in draft, but the cross-aircraft
+      // splice is what we're guarding against.
+      const { data: leakedLines } = await admin
+        .from('aft_event_line_items')
+        .select('id')
+        .eq('squawk_id', foreignMx!.id);
+      expect((leakedLines || []).length).toBe(0);
+    } finally {
+      await admin.from('aft_maintenance_items').delete().eq('id', foreignMx!.id);
+      await admin.from('aft_aircraft').delete().eq('id', foreignAc!.id);
+    }
+  });
+
+  test('mx_schedule with deleted mx_item_id surfaces a clear error', async ({ seededUser, baseURL }) => {
+    const token = await getAccessToken(seededUser.email, seededUser.password);
+    const admin = adminClient();
+
+    // Item exists at proposal time, soft-deleted before confirm.
+    const { data: mxItem } = await admin
+      .from('aft_maintenance_items')
+      .insert({
+        aircraft_id: seededUser.aircraftId,
+        item_name: 'Will be soft-deleted',
+        tracking_type: 'date',
+        due_date: '2026-12-31',
+      })
+      .select('id')
+      .single();
+    await admin
+      .from('aft_maintenance_items')
+      .update({ deleted_at: new Date().toISOString() })
+      .eq('id', mxItem!.id);
+
+    const threadId = await seedThread(seededUser.userId);
+    const actionId = await seedAction(
+      threadId, seededUser.userId, seededUser.aircraftId, 'mx_schedule',
+      { proposed_date: '2026-09-01', mx_item_ids: [mxItem!.id], squawk_ids: [] },
+      'admin',
+    );
+
+    const res = await fetchAs(token, baseURL!, `/api/howard/actions/${actionId}`, { method: 'POST' });
+    expect(res.status).toBe(500);
+
+    const { data: action } = await admin
+      .from('aft_proposed_actions')
+      .select('status, error_message')
+      .eq('id', actionId)
+      .single();
+    expect(action?.status).toBe('failed');
+    expect(action?.error_message).toMatch(/no longer available/i);
+  });
+
   test('replay (POST on already-executed action) returns 409', async ({ seededUser, baseURL }) => {
     const token = await getAccessToken(seededUser.email, seededUser.password);
     const threadId = await seedThread(seededUser.userId);

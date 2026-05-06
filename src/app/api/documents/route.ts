@@ -151,7 +151,12 @@ export async function POST(req: Request) {
       .from('aft_aircraft_documents')
       .getPublicUrl(uploadData.path);
 
-    // Create document record (status: processing)
+    // Create document record (status: processing). The maybeSingle()
+    // pre-check above is a defense-in-depth race: a concurrent upload
+    // of the same bytes could pass the SELECT before either row
+    // commits. Migration 056 makes (aircraft_id, sha256) WHERE
+    // deleted_at IS NULL a UNIQUE partial index — handle the 23505
+    // here so the late submitter sees a friendly 409 instead of 500.
     const { data: doc, error: docError } = await supabaseAdmin
       .from('aft_documents')
       .insert({
@@ -166,7 +171,26 @@ export async function POST(req: Request) {
       })
       .select()
       .single();
-    if (docError) throw docError;
+    if (docError) {
+      // 23505 = unique-violation; the partial index for live rows
+      // means the racing upload landed first.
+      if ((docError as any).code === '23505') {
+        // Best-effort cleanup of the freshly-uploaded storage object —
+        // we can't surface the existing filename here without a second
+        // SELECT, but the 409 message gives the user a clear retry
+        // path.
+        try {
+          await supabaseAdmin.storage.from('aft_aircraft_documents').remove([uploadData.path]);
+        } catch (e) {
+          console.error('[documents] cleanup after 23505 failed:', e);
+        }
+        return NextResponse.json(
+          { error: 'Another upload of this exact file just landed. Refresh the documents list.' },
+          { status: 409 },
+        );
+      }
+      throw docError;
+    }
 
     // Extract text from PDF — parse per-page so chunks carry their
     // source page number, enabling Howard to cite "POH page 47".
