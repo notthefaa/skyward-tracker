@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { Resend } from 'resend';
 import { createAdminClient, handleApiError } from '@/lib/auth';
 import { checkEmailRateLimit } from '@/lib/submitRateLimit';
+import { idempotency } from '@/lib/idempotency';
 import { env } from '@/lib/env';
 import { escapeHtml } from '@/lib/sanitize';
 import { PORTAL_EXPIRY_DAYS } from '@/lib/constants';
@@ -65,6 +66,19 @@ export async function POST(req: Request) {
 
     if (event.status === 'complete' || event.status === 'cancelled') {
       return NextResponse.json({ error: 'Cannot upload to a completed or cancelled event.' }, { status: 400 });
+    }
+
+    // Idempotency — same X-Idempotency-Key replays cached
+    // {success:true, attachments:[...]} without re-uploading the
+    // bytes / re-inserting the message row / re-emailing the owner.
+    // Skipped on legacy events with no created_by; the FK to
+    // auth.users is NOT NULL on the cache row.
+    const idem = event.created_by
+      ? idempotency(supabaseAdmin, event.created_by, req, 'mx-events/upload-attachment')
+      : null;
+    if (idem) {
+      const cached = await idem.check();
+      if (cached) return cached;
     }
 
     // Per-event attachment cap. A leaked mechanic token could
@@ -212,11 +226,13 @@ export async function POST(req: Request) {
         // mechanic upload itself is preserved. We just skip the email
         // to protect the owner's quota; the owner will see the message
         // next time they open the event.
-        return NextResponse.json({
+        const skippedBody = {
           success: true,
           attachments,
           email_skipped: 'Owner has reached today\'s email-notification limit. Files are saved.',
-        });
+        };
+        if (idem) await idem.save(200, skippedBody);
+        return NextResponse.json(skippedBody);
       }
       const appUrl = baseUrl;
       const safeMxName = escapeHtml(event.mx_contact_name || 'Your mechanic');
@@ -246,7 +262,9 @@ export async function POST(req: Request) {
       });
     }
 
-    return NextResponse.json({ success: true, attachments });
+    const responseBody = { success: true, attachments };
+    if (idem) await idem.save(200, responseBody);
+    return NextResponse.json(responseBody);
   } catch (error) {
     return handleApiError(error);
   }

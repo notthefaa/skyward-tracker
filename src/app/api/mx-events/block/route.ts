@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireAuth, requireAircraftAccess, handleApiError } from '@/lib/auth';
 import { setAppUser } from '@/lib/audit';
 import { cancelConflictingReservations } from '@/lib/mxConflicts';
+import { idempotency } from '@/lib/idempotency';
 
 export async function POST(req: Request) {
   try {
@@ -36,6 +37,13 @@ export async function POST(req: Request) {
     }
 
     await setAppUser(supabaseAdmin, user.id);
+
+    // Double-tap protection: same X-Idempotency-Key returns the cached
+    // result without re-creating the block + duplicating reservation
+    // cancel emails to affected pilots.
+    const idem = idempotency(supabaseAdmin, user.id, req, 'mx-events/block');
+    const cached = await idem.check();
+    if (cached) return cached;
 
     // Get the caller's name/email from aft_user_roles (the canonical table).
     const { data: profile } = await supabaseAdmin
@@ -90,7 +98,9 @@ export async function POST(req: Request) {
       timeZone,
     });
 
-    return NextResponse.json({ success: true, eventId: event.id, cancelledReservations: cancelledCount });
+    const responseBody = { success: true, eventId: event.id, cancelledReservations: cancelledCount };
+    await idem.save(200, responseBody);
+    return NextResponse.json(responseBody);
   } catch (error) {
     return handleApiError(error);
   }

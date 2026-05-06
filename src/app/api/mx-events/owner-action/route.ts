@@ -3,6 +3,7 @@ import { randomBytes } from 'crypto';
 import { Resend } from 'resend';
 import { requireAuth, requireAircraftAdmin, handleApiError } from '@/lib/auth';
 import { setAppUser } from '@/lib/audit';
+import { idempotency } from '@/lib/idempotency';
 import { env } from '@/lib/env';
 import { escapeHtml } from '@/lib/sanitize';
 import { cancelConflictingReservations } from '@/lib/mxConflicts';
@@ -33,6 +34,12 @@ export async function POST(req: Request) {
     // Verify the user has access to this aircraft
     await requireAircraftAdmin(supabaseAdmin, user.id, event.aircraft_id);
     await setAppUser(supabaseAdmin, user.id);
+
+    // Double-tap protection: same X-Idempotency-Key returns the cached
+    // {success:true} without re-running emails / state changes.
+    const idem = idempotency(supabaseAdmin, user.id, req, 'mx-events/owner-action');
+    const cached = await idem.check();
+    if (cached) return cached;
 
     const portalUrl = `${new URL(req.url).origin}/service/${event.access_token}`;
     const mxEmail = event.mx_contact_email;
@@ -251,7 +258,9 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Unknown action.' }, { status: 400 });
     }
 
-    return NextResponse.json({ success: true });
+    const responseBody = { success: true };
+    await idem.save(200, responseBody);
+    return NextResponse.json(responseBody);
   } catch (err) {
     return handleApiError(err);
   }

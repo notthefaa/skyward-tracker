@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { authFetch } from "@/lib/authFetch";
+import { idempotencyHeader } from "@/lib/idempotencyClient";
 import { useSignedUrls } from "@/hooks/useSignedUrls";
 import { 
   ChevronDown, ChevronRight, ExternalLink, Send, CheckCircle, 
@@ -41,7 +42,10 @@ export default function ServiceEventDetail({
     setIsSubmitting(true);
     try {
       const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-      await authFetch('/api/mx-events/owner-action', { method: 'POST', body: JSON.stringify({ eventId: selectedEvent.id, action: 'confirm', message: ownerMessage || `Confirmed for ${selectedEvent.proposed_date}.`, timeZone }) });
+      // Idempotency key per click — authFetch's resume-retry shares the
+      // same key so a network blip can't double-send the confirm email.
+      const idemKey = crypto.randomUUID();
+      await authFetch('/api/mx-events/owner-action', { method: 'POST', headers: idempotencyHeader(idemKey), body: JSON.stringify({ eventId: selectedEvent.id, action: 'confirm', message: ownerMessage || `Confirmed for ${selectedEvent.proposed_date}.`, timeZone }) });
       setOwnerMessage("");
       await fetchEventDetail(selectedEvent.id);
       showSuccess("Date confirmed");
@@ -57,7 +61,8 @@ export default function ServiceEventDetail({
     setIsSubmitting(true);
     try {
       const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-      await authFetch('/api/mx-events/owner-action', { method: 'POST', body: JSON.stringify({ eventId: selectedEvent.id, action: 'counter', proposedDate, message: ownerMessage || `How about ${proposedDate} instead?`, timeZone }) });
+      const idemKey = crypto.randomUUID();
+      await authFetch('/api/mx-events/owner-action', { method: 'POST', headers: idempotencyHeader(idemKey), body: JSON.stringify({ eventId: selectedEvent.id, action: 'counter', proposedDate, message: ownerMessage || `How about ${proposedDate} instead?`, timeZone }) });
       setOwnerMessage(""); setProposedDate("");
       await fetchEventDetail(selectedEvent.id);
       showSuccess("Counter proposal sent");
@@ -73,7 +78,8 @@ export default function ServiceEventDetail({
     setIsSubmitting(true);
     try {
       const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-      await authFetch('/api/mx-events/owner-action', { method: 'POST', body: JSON.stringify({ eventId: selectedEvent.id, action: 'comment', message: ownerMessage, timeZone }) });
+      const idemKey = crypto.randomUUID();
+      await authFetch('/api/mx-events/owner-action', { method: 'POST', headers: idempotencyHeader(idemKey), body: JSON.stringify({ eventId: selectedEvent.id, action: 'comment', message: ownerMessage, timeZone }) });
       setOwnerMessage("");
       await fetchEventDetail(selectedEvent.id);
       showSuccess("Message sent");
@@ -88,7 +94,8 @@ export default function ServiceEventDetail({
     setIsSubmitting(true);
     try {
       const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-      await authFetch('/api/mx-events/owner-action', { method: 'POST', body: JSON.stringify({ eventId: selectedEvent.id, action: 'cancel', message: cancelReason || 'Service event cancelled.', timeZone }) });
+      const idemKey = crypto.randomUUID();
+      await authFetch('/api/mx-events/owner-action', { method: 'POST', headers: idempotencyHeader(idemKey), body: JSON.stringify({ eventId: selectedEvent.id, action: 'cancel', message: cancelReason || 'Service event cancelled.', timeZone }) });
       setShowCancelConfirm(false); setCancelReason("");
       onRefresh();
       showSuccess("Service event cancelled");

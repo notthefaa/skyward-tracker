@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { supabase } from "@/lib/supabase";
 import { authFetch, UPLOAD_TIMEOUT_MS } from "@/lib/authFetch";
+import { idempotencyHeader } from "@/lib/idempotencyClient";
 import { useModalScrollLock } from "@/hooks/useModalScrollLock";
 import { useEscapeKey } from "@/hooks/useEscapeKey";
 import { Wrench, X, Trash2 } from "lucide-react";
@@ -211,9 +212,11 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
         await supabase.from('aft_event_line_items').delete().in('id', removedLineItemIds);
       }
 
+      const idemKey = crypto.randomUUID();
       const res = await authFetch('/api/mx-events/send-workpackage', {
         method: 'POST',
         timeoutMs: UPLOAD_TIMEOUT_MS,
+        headers: idempotencyHeader(idemKey),
         body: JSON.stringify({
           eventId: selectedEvent.id,
           additionalMxItemIds: selectedMxIds,

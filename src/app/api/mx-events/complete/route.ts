@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireAuth, requireAircraftAccess, requireAircraftAdmin, handleApiError } from '@/lib/auth';
 import { setAppUser } from '@/lib/audit';
 import { parseFiniteNumber } from '@/lib/validation';
+import { idempotency } from '@/lib/idempotency';
 
 export async function POST(req: Request) {
   try {
@@ -23,6 +24,15 @@ export async function POST(req: Request) {
     // Verify the user is an admin for this aircraft
     await requireAircraftAdmin(supabaseAdmin, user.id, event.aircraft_id);
     await setAppUser(supabaseAdmin, user.id);
+
+    // Idempotency — a slow-network double-tap on "Complete Event"
+    // would otherwise re-run the atomic RPC and double-advance MX
+    // intervals + duplicate squawk-resolves. The cleaned-completions
+    // payload below is deterministic, so a same-key replay returns
+    // the cached {allResolved, unmatchedIds} without re-applying.
+    const idem = idempotency(supabaseAdmin, user.id, req, 'mx-events/complete');
+    const cached = await idem.check();
+    if (cached) return cached;
 
     // Pre-validate finite numeric fields in every completion so the
     // API returns a clean 400 with a pointer to the bad item instead
@@ -85,7 +95,9 @@ export async function POST(req: Request) {
     const unmatchedIds = Array.isArray((rpcData as any)?.unmatched_ids)
       ? (rpcData as any).unmatched_ids as string[]
       : [];
-    return NextResponse.json({ success: true, allResolved, unmatchedIds });
+    const responseBody = { success: true, allResolved, unmatchedIds };
+    await idem.save(200, responseBody);
+    return NextResponse.json(responseBody);
   } catch (error) {
     return handleApiError(error);
   }

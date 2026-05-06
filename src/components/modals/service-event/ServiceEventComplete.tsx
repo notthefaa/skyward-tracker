@@ -2,6 +2,7 @@
 
 import { useState, useRef } from "react";
 import { authFetch, UPLOAD_TIMEOUT_MS } from "@/lib/authFetch";
+import { idempotencyHeader } from "@/lib/idempotencyClient";
 import { supabase } from "@/lib/supabase";
 import { Wrench, AlertTriangle, ChevronDown, Camera, Loader2 } from "lucide-react";
 import { PrimaryButton } from "@/components/AppButtons";
@@ -129,8 +130,10 @@ export default function ServiceEventComplete({
         logbookRef: c.logbookRef || null,
       }));
 
+      const idemKey = crypto.randomUUID();
       const res = await authFetch('/api/mx-events/complete', {
         method: 'POST',
+        headers: idempotencyHeader(idemKey),
         body: JSON.stringify({ eventId: selectedEvent.id, lineCompletions, partial: true })
       });
       if (!res.ok) throw new Error("Couldn't complete the items");

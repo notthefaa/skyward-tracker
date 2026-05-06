@@ -84,7 +84,11 @@ export default function ServiceEventCreate({
       const createData = await createRes.json();
       createdEventId = createData.eventId;
 
-      const sendRes = await authFetch('/api/mx-events/send-workpackage', { method: 'POST', body: JSON.stringify({ eventId: createdEventId, proposedDate: (wantsToPropose && proposedDate) ? proposedDate : null }), timeoutMs: UPLOAD_TIMEOUT_MS });
+      // Independent idempotency key per send — same flow may retry the
+      // send-workpackage step after the create succeeded; the server
+      // dedupes the second send so the mechanic doesn't get two copies.
+      const sendIdemKey = crypto.randomUUID();
+      const sendRes = await authFetch('/api/mx-events/send-workpackage', { method: 'POST', headers: idempotencyHeader(sendIdemKey), body: JSON.stringify({ eventId: createdEventId, proposedDate: (wantsToPropose && proposedDate) ? proposedDate : null }), timeoutMs: UPLOAD_TIMEOUT_MS });
       if (!sendRes.ok) {
         const d = await sendRes.json().catch(() => ({}));
         throw new Error(d.error || "Couldn't send the work package");

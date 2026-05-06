@@ -4,6 +4,7 @@ import { useToast } from "@/components/ToastProvider";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { supabase } from "@/lib/supabase";
 import { authFetch, UPLOAD_TIMEOUT_MS } from "@/lib/authFetch";
+import { idempotencyHeader } from "@/lib/idempotencyClient";
 import { processMxItem, getMxTextColor, isMxExpired } from "@/lib/math";
 import { INPUT_WHITE_BG } from "@/lib/styles";
 import { swrKeys } from "@/lib/swrKeys";
@@ -407,7 +408,8 @@ export default function MaintenanceTab({
   const handleResendWorkpackage = async (eventId: string) => {
     setResendingEventId(eventId); setConfirmResendId(null);
     try {
-      await authFetch('/api/mx-events/send-workpackage', { method: 'POST', body: JSON.stringify({ eventId, resend: true }), timeoutMs: UPLOAD_TIMEOUT_MS });
+      const idemKey = crypto.randomUUID();
+      await authFetch('/api/mx-events/send-workpackage', { method: 'POST', headers: idempotencyHeader(idemKey), body: JSON.stringify({ eventId, resend: true }), timeoutMs: UPLOAD_TIMEOUT_MS });
       mutateEvents();
     } catch (err) { console.error(err); showError("Failed to resend."); }
     setResendingEventId(null);

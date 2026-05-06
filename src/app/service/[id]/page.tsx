@@ -163,9 +163,12 @@ export default function ServicePortal() {
     setIsSubmitting(true);
     try {
       const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      // Idempotency — same key per click, so a network blip retry won't
+      // double-email the owner with a confirm/decline/comment.
+      const idemKey = crypto.randomUUID();
       const res = await fetch('/api/mx-events/respond', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-Idempotency-Key': idemKey },
         body: JSON.stringify({ accessToken, action, timeZone, ...payload }),
         // 15s matches authFetch default — portal mechanic on iOS would
         // otherwise see the same indefinite spinner pilots saw before
@@ -202,8 +205,12 @@ export default function ServicePortal() {
       for (const file of uploadFiles) {
         formData.append('files', file);
       }
+      // Idempotency — a slow upload retry would otherwise re-upload the
+      // same files + duplicate the message row + re-email the owner.
+      const idemKey = crypto.randomUUID();
       const res = await fetch('/api/mx-events/upload-attachment', {
         method: 'POST',
+        headers: { 'X-Idempotency-Key': idemKey },
         body: formData,
         // 60s mirrors the upload-route override in the pilot app — file
         // uploads on cellular legitimately need the longer budget.

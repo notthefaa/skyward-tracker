@@ -3,6 +3,7 @@ import { Resend } from 'resend';
 import { requireAuth, requireAircraftAdmin, handleApiError } from '@/lib/auth';
 import { checkEmailRateLimit } from '@/lib/submitRateLimit';
 import { setAppUser } from '@/lib/audit';
+import { idempotency } from '@/lib/idempotency';
 import { env } from '@/lib/env';
 import { escapeHtml } from '@/lib/sanitize';
 import { emailShell, heading, paragraph, callout, sectionHeading, bulletList, button } from '@/lib/email/layout';
@@ -56,6 +57,14 @@ export async function POST(req: Request) {
     }
 
     await setAppUser(supabaseAdmin, user.id);
+
+    // Idempotency — a slow-network double-tap on "Send Work Package"
+    // would otherwise email the mechanic twice + flip the draft to
+    // scheduling twice. Cached replay returns the same {success: true}
+    // without re-sending the email or re-inserting line items.
+    const idem = idempotency(supabaseAdmin, user.id, req, 'mx-events/send-workpackage');
+    const cached = await idem.check();
+    if (cached) return cached;
 
     // Fetch aircraft for email content
     const { data: aircraft } = await supabaseAdmin
@@ -315,7 +324,9 @@ export async function POST(req: Request) {
       }
     }
 
-    return NextResponse.json({ success: true });
+    const responseBody = { success: true };
+    await idem.save(200, responseBody);
+    return NextResponse.json(responseBody);
   } catch (error) {
     return handleApiError(error);
   }

@@ -413,7 +413,8 @@ export default function CalendarTab({
     setIsSubmitting(true);
     try {
       const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-      const res = await authFetch('/api/mx-events/block', { method: 'POST', body: JSON.stringify({ aircraftId: aircraft!.id, startDate: mxBlockStartDate, endDate: mxBlockEndDate || mxBlockStartDate, notes: mxBlockNotes || null, timeZone }) });
+      const idemKey = newIdempotencyKey();
+      const res = await authFetch('/api/mx-events/block', { method: 'POST', headers: idempotencyHeader(idemKey), body: JSON.stringify({ aircraftId: aircraft!.id, startDate: mxBlockStartDate, endDate: mxBlockEndDate || mxBlockStartDate, notes: mxBlockNotes || null, timeZone }) });
       const data = await res.json(); if (!res.ok) throw new Error(data.error || 'Failed');
       await mutateWithDeadline(mutate()); setShowMxBlockForm(false); showSuccess("Maintenance block created");
     } catch (err: any) { showError(err.message); }

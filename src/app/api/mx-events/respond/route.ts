@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { Resend } from 'resend';
 import { createAdminClient, handleApiError } from '@/lib/auth';
 import { checkEmailRateLimit } from '@/lib/submitRateLimit';
+import { idempotency } from '@/lib/idempotency';
 import { env } from '@/lib/env';
 import { escapeHtml } from '@/lib/sanitize';
 import { cancelConflictingReservations } from '@/lib/mxConflicts';
@@ -80,6 +81,20 @@ export async function POST(req: Request) {
     const rl = event.created_by
       ? await checkEmailRateLimit(supabaseAdmin, event.created_by)
       : { allowed: true, retryAfterMs: 0 };
+
+    // Idempotency — same X-Idempotency-Key replays the cached
+    // {success:true} without re-running the action branch (no
+    // duplicate emails to the owner, no double status flip on a
+    // confirm/decline race). Skipped on legacy events with no
+    // created_by (the FK to auth.users is NOT NULL, so the cache
+    // upsert would fail — return uncached and proceed).
+    const idem = event.created_by
+      ? idempotency(supabaseAdmin, event.created_by, req, 'mx-events/respond')
+      : null;
+    if (idem) {
+      const cached = await idem.check();
+      if (cached) return cached;
+    }
 
     const appUrl = baseUrl;
 
@@ -456,7 +471,9 @@ export async function POST(req: Request) {
       }
     }
 
-    return NextResponse.json({ success: true });
+    const responseBody = { success: true };
+    if (idem) await idem.save(200, responseBody);
+    return NextResponse.json(responseBody);
   } catch (error) {
     return handleApiError(error);
   }
