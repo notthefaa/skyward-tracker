@@ -771,7 +771,7 @@ export default function HowardTab({
               const showChips = isLatest && msg.role === 'assistant' && !isSending && msgChips.length > 0;
 
               return (
-                <div key={msg.id} className={`flex flex-col gap-2 ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
+                <div key={msg.id} data-role={msg.role} className={`flex flex-col gap-2 ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
                   <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 ${
                     msg.role === 'user'
                       ? 'bg-brandOrange text-white'

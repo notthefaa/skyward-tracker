@@ -6,7 +6,6 @@
     "dev": "next dev",
     "build": "vitest run && next build",
     "start": "next start",
-    "lint": "next lint",
     "test": "vitest run",
     "e2e": "docker run --rm --network host -v $PWD:/work -w /work --env-file .env.local -e CI=$CI mcr.microsoft.com/playwright:v1.59.1-noble npx playwright test",
     "e2e:ui": "docker run --rm --network host -v $PWD:/work -w /work --env-file .env.local -p 9323:9323 mcr.microsoft.com/playwright:v1.59.1-noble npx playwright test --ui-port=9323 --ui-host=0.0.0.0",

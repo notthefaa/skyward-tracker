@@ -16,7 +16,7 @@ test.describe('Howard — chat smoke', () => {
 
     const apiErrors: string[] = [];
     page.on('response', async (res) => {
-      if (res.url().includes('/api/howard') && res.url().includes('/chat') && !res.ok()) {
+      if (res.url().includes('/api/howard') && !res.ok()) {
         apiErrors.push(`${res.status()} ${res.url()}`);
       }
     });
@@ -43,18 +43,15 @@ test.describe('Howard — chat smoke', () => {
     await input.fill('Just respond with the single word "ack" and nothing else.');
     await page.getByRole('button', { name: 'Send message' }).click();
 
+    // Wait for an assistant bubble to render with non-empty content.
+    // data-role="assistant" is set on the bubble wrapper so we don't
+    // accidentally match the user's own prompt (which contains "ack").
+    const assistantBubble = page.locator('[data-role="assistant"]').last();
+    await expect(assistantBubble).toBeVisible({ timeout: 60_000 });
+    await expect(assistantBubble).not.toBeEmpty({ timeout: 60_000 });
+
     if (apiErrors.length) {
       throw new Error(`Howard API errored:\n${apiErrors.join('\n')}`);
     }
-
-    // Howard streams the reply token-by-token via SSE. Wait for the
-    // final answer text to land. The streamed text gets accumulated
-    // into a chat bubble; the user's prompt also lives in a bubble,
-    // so we check for new content distinct from the prompt.
-    // The model's output is non-deterministic; we just want SOMETHING
-    // back. The chat container renders responses as text — wait for
-    // the page to contain "ack" (model should comply on the easy
-    // single-word ask, but if it elaborates we still pass).
-    await expect(page.getByText(/ack/i).first()).toBeVisible({ timeout: 60_000 });
   });
 });

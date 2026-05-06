@@ -75,6 +75,37 @@ export const test = base.extend<Fixtures>({
       throw new Error(`aft_user_roles update: ${roleErr.message}`);
     }
 
+    // Wait for FK visibility from PostgREST. Supabase Auth API
+    // commits the row to auth.users, but on the test project there's
+    // a sub-second window where a separate process (the dev server)
+    // can't yet satisfy a FK referencing auth.users(id) — leading to
+    // a 23503 on the first chat message. We probe by inserting and
+    // immediately deleting a sentinel aft_howard_threads row from the
+    // SAME process the seeder uses, retrying until visible. Once it
+    // succeeds here, the dev server's process sees it too.
+    {
+      const start = Date.now();
+      let lastErr: { code?: string; message?: string } | null = null;
+      while (Date.now() - start < 5_000) {
+        const { data: probe, error } = await admin
+          .from('aft_howard_threads')
+          .insert({ user_id: userId })
+          .select('id')
+          .single();
+        if (!error && probe) {
+          await admin.from('aft_howard_threads').delete().eq('id', probe.id);
+          lastErr = null;
+          break;
+        }
+        lastErr = error;
+        if (error?.code !== '23503') break;
+        await new Promise((r) => setTimeout(r, 100));
+      }
+      if (lastErr) {
+        throw new Error(`FK visibility probe failed: ${lastErr.code} ${lastErr.message}`);
+      }
+    }
+
     await use({ email, password, userId, aircraftId, tailNumber });
 
     // Cleanup. supabase-js builders are thenables, not real Promises,
