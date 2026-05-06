@@ -99,11 +99,15 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
     const { id } = await params;
     const { user, supabaseAdmin } = await requireAuth(req);
 
-    const { data: action } = await supabaseAdmin
+    // Read errors must surface as 500, not 404 — masking a transient DB
+    // hit as "not found" would cause the UI to drop the action card on
+    // a flake, leaving the user with no way to confirm or cancel.
+    const { data: action, error: readErr } = await supabaseAdmin
       .from('aft_proposed_actions')
       .select('id, user_id, status')
       .eq('id', id)
       .maybeSingle();
+    if (readErr) throw readErr;
     if (!action) return NextResponse.json({ error: 'Not found.' }, { status: 404 });
     if (action.user_id !== user.id) return NextResponse.json({ error: 'Not your action.' }, { status: 403 });
     if (action.status !== 'pending') {
@@ -126,11 +130,12 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     const { id } = await params;
     const { user, supabaseAdmin } = await requireAuth(req);
 
-    const { data: action } = await supabaseAdmin
+    const { data: action, error: readErr } = await supabaseAdmin
       .from('aft_proposed_actions')
       .select('*')
       .eq('id', id)
       .maybeSingle();
+    if (readErr) throw readErr;
     if (!action) return NextResponse.json({ error: 'Not found.' }, { status: 404 });
     if (action.user_id !== user.id) return NextResponse.json({ error: 'Not your action.' }, { status: 403 });
 

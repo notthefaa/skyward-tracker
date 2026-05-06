@@ -164,11 +164,15 @@ export async function POST(req: Request) {
     // User role + FAA ratings + initials — global first, else fall back
     // to per-aircraft role for the currently-selected aircraft (or
     // 'pilot' if none). Ratings + initials come straight from the profile.
-    const { data: profile } = await supabaseAdmin
+    // Throw on read error so a transient DB hiccup doesn't quietly downgrade
+    // the user to 'pilot' with empty ratings — Howard would then mis-tailor
+    // its tone for an admin or a CFI without us noticing.
+    const { data: profile, error: profileErr } = await supabaseAdmin
       .from('aft_user_roles')
       .select('role, faa_ratings, initials, full_name')
       .eq('user_id', user.id)
       .maybeSingle();
+    if (profileErr) throw profileErr;
     let userRole: string = (profile as any)?.role || 'pilot';
     const faaRatings: string[] = ((profile as any)?.faa_ratings as string[] | null) || [];
     const pilotInitials: string = (profile as any)?.initials || '';
@@ -176,12 +180,13 @@ export async function POST(req: Request) {
     let aircraftRole: string | null = null;
     let oilConsumption: OilConsumptionStatus | null = null;
     if (currentAircraft) {
-      const { data: acAccess } = await supabaseAdmin
+      const { data: acAccess, error: acAccessErr } = await supabaseAdmin
         .from('aft_user_aircraft_access')
         .select('aircraft_role')
         .eq('user_id', user.id)
         .eq('aircraft_id', currentAircraft.id)
         .maybeSingle();
+      if (acAccessErr) throw acAccessErr;
       aircraftRole = (acAccess as any)?.aircraft_role || null;
       if (userRole !== 'admin' && aircraftRole) {
         userRole = aircraftRole;

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { Resend } from 'resend';
 import { createAdminClient, handleApiError } from '@/lib/auth';
+import { logError } from '@/lib/requestId';
 import { env } from '@/lib/env';
 import { escapeHtml } from '@/lib/sanitize';
 import { computeMetrics, computeMxDueState } from '@/lib/math';
@@ -122,8 +123,13 @@ export async function GET(req: Request) {
 
     // =====================================================
     // PROCESS EACH AIRCRAFT
+    // Wrapped in per-aircraft try/catch so one bad fleet entry
+    // (corrupt mx-item, missing tail, etc.) doesn't bury the
+    // remaining fleet's reminders on this tick. Errors get logged;
+    // the next tick retries the failed aircraft.
     // =====================================================
     for (const aircraft of (aircraftList as any[])) {
+      try {
       const acMxItems = itemsByAircraft[aircraft.id];
       if (!acMxItems || acMxItems.length === 0) continue;
 
@@ -533,6 +539,10 @@ export async function GET(req: Request) {
           flagUpdates.push({ id: mx.id, flags: flagToUpdate });
         }
       }
+      } catch (acErr: any) {
+        console.error(`[cron/mx-reminders] aircraft ${aircraft?.tail_number ?? aircraft?.id ?? '?'} failed:`, acErr?.message || acErr);
+        logError('[cron/mx-reminders] aircraft failed', acErr, { route: 'cron/mx-reminders', extra: { tail: aircraft?.tail_number ?? '?', aircraftId: aircraft?.id ?? '?' } });
+      }
     }
 
     // =====================================================
@@ -544,19 +554,21 @@ export async function GET(req: Request) {
     // =====================================================
     {
       const appUrl = new URL(req.url).origin;
-      const { data: pickupEvents } = await supabaseAdmin
+      const { data: pickupEvents, error: pickupErr } = await supabaseAdmin
         .from('aft_maintenance_events')
         .select('id, aircraft_id, primary_contact_email')
         .eq('status', 'ready_for_pickup')
         .is('deleted_at', null);
+      if (pickupErr) throw pickupErr;
 
       if (pickupEvents && pickupEvents.length > 0) {
         const eventIds = pickupEvents.map((e: any) => e.id);
-        const { data: pickupMessages } = await supabaseAdmin
+        const { data: pickupMessages, error: pickupMsgErr } = await supabaseAdmin
           .from('aft_event_messages')
           .select('event_id, sender, message_type, message, created_at')
           .in('event_id', eventIds)
           .order('created_at', { ascending: false });
+        if (pickupMsgErr) throw pickupMsgErr;
 
         const now = Date.now();
         const nudgeWindowMs = READY_PICKUP_NUDGE_DAYS * 24 * 60 * 60 * 1000;

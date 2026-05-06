@@ -172,13 +172,18 @@ export async function POST(req: Request) {
         // entry points doesn't cross-pollute (see migration 043).
         if (s.idempotencyKey) {
           const itemRoute = `batch-submit/${s.type}`;
-          const { data: cached } = await supabaseAdmin
+          // Surface read errors instead of silently falling through to a
+          // re-submit. A transient lookup failure on the cache table
+          // would have caused the same request to execute twice (once
+          // here, once on the next retry) and produced duplicate writes.
+          const { data: cached, error: cacheReadErr } = await supabaseAdmin
             .from('aft_idempotency_keys')
             .select('response_status, response_body')
             .eq('user_id', user.id)
             .eq('key', s.idempotencyKey)
             .eq('route', itemRoute)
             .maybeSingle();
+          if (cacheReadErr) throw cacheReadErr;
           if (cached) {
             const body = cached.response_body as any;
             results.push({
