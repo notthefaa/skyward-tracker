@@ -72,19 +72,14 @@ test.describe('flight-logs API — delete + total re-derivation', () => {
     expect(deletedRow?.deleted_at).not.toBeNull();
   });
 
-  test('delete the only log → totals stay at deleted-log value (documented edge case)', async ({ seededUser, baseURL }) => {
-    // KNOWN behavior of `delete_flight_log_atomic`: when no logs remain
-    // the RPC's `coalesce(v_latest_*, total_*)` keeps the totals at
-    // their pre-delete value (which is the deleted log's reading).
-    // The setup_* baseline is NOT used as a fallback — once any log
-    // has ever been written, totals are derived from "latest non-
-    // deleted log" with the previous total as the only fallback.
-    //
-    // BACKLOG (filed in project_qa_checklist): for UX symmetry, a
-    // delete-the-only-log path arguably should fall back to setup_*
-    // — a user who creates a single log by mistake currently can't
-    // get the aircraft back to its original-known state without
-    // editing the totals manually. Tracking, not blocking.
+  test('delete the only log → totals fall back to setup_* (piston seededUser)', async ({ seededUser, baseURL }) => {
+    // Migration 057: when no logs remain after a delete, the RPC
+    // falls back to GREATEST(setup_aftt, setup_hobbs) /
+    // GREATEST(setup_ftt, setup_tach). The seededUser fixture is a
+    // piston aircraft with setup_hobbs / setup_tach = 1000.
+    // Pre-fix the totals stayed at the deleted log's value (1200),
+    // so a user who created a single off-by-200 log was stuck unless
+    // they manually edited the aircraft.
     const token = await getAccessToken(seededUser.email, seededUser.password);
     const admin = adminClient();
 
@@ -98,6 +93,61 @@ test.describe('flight-logs API — delete + total re-derivation', () => {
     });
     const { logId } = await create.json();
 
+    // Confirm the log raised the totals first.
+    let { data: ac } = await admin
+      .from('aft_aircraft')
+      .select('total_airframe_time, total_engine_time')
+      .eq('id', seededUser.aircraftId)
+      .single();
+    expect(Number(ac?.total_airframe_time)).toBe(1200);
+    expect(Number(ac?.total_engine_time)).toBe(1200);
+
+    const del = await fetchAs(token, baseURL!, '/api/flight-logs', {
+      method: 'DELETE',
+      body: JSON.stringify({ logId, aircraftId: seededUser.aircraftId }),
+    });
+    expect(del.status).toBe(200);
+
+    ({ data: ac } = await admin
+      .from('aft_aircraft')
+      .select('total_airframe_time, total_engine_time')
+      .eq('id', seededUser.aircraftId)
+      .single());
+    // Falls back to setup_hobbs / setup_tach (both 1000), not the
+    // 1200 the deleted log had set.
+    expect(Number(ac?.total_airframe_time)).toBe(1000);
+    expect(Number(ac?.total_engine_time)).toBe(1000);
+  });
+
+  test('delete the only log → turbine fall-back uses setup_aftt / setup_ftt', async ({ seededUser, baseURL }) => {
+    // Different code path of the GREATEST fallback: when setup_aftt
+    // and setup_ftt are populated (turbine convention) and
+    // setup_hobbs/setup_tach are 0, the no-log fall-back picks
+    // up the turbine setup values.
+    const admin = adminClient();
+    await admin
+      .from('aft_aircraft')
+      .update({
+        setup_aftt: 750,
+        setup_ftt: 800,
+        setup_hobbs: 0,
+        setup_tach: 0,
+        total_airframe_time: 750,
+        total_engine_time: 800,
+      })
+      .eq('id', seededUser.aircraftId);
+
+    const token = await getAccessToken(seededUser.email, seededUser.password);
+    const create = await fetchAs(token, baseURL!, '/api/flight-logs', {
+      method: 'POST',
+      headers: { 'X-Idempotency-Key': randomUUID() },
+      body: JSON.stringify({
+        aircraftId: seededUser.aircraftId,
+        logData: { aftt: 850, ftt: 900, landings: 1, engine_cycles: 0, initials: 'TST', occurred_at: new Date().toISOString() },
+      }),
+    });
+    const { logId } = await create.json();
+
     const del = await fetchAs(token, baseURL!, '/api/flight-logs', {
       method: 'DELETE',
       body: JSON.stringify({ logId, aircraftId: seededUser.aircraftId }),
@@ -106,10 +156,11 @@ test.describe('flight-logs API — delete + total re-derivation', () => {
 
     const { data: ac } = await admin
       .from('aft_aircraft')
-      .select('total_engine_time')
+      .select('total_airframe_time, total_engine_time')
       .eq('id', seededUser.aircraftId)
       .single();
-    expect(Number(ac?.total_engine_time)).toBe(1200);
+    expect(Number(ac?.total_airframe_time)).toBe(750);
+    expect(Number(ac?.total_engine_time)).toBe(800);
   });
 
   test('out-of-order replay — late-arriving older log does not stomp newer totals', async ({ seededUser, baseURL }) => {
