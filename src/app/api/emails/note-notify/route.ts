@@ -41,11 +41,15 @@ export async function POST(req: Request) {
       await requireAircraftAccess(supabaseAdmin, user.id, aircraft.id);
     }
 
-    // Get all assigned pilots except the author
-    const { data: access } = await supabaseAdmin
+    // Get all assigned pilots except the author. Throw on read errors
+    // so a transient supabase blip can't silently turn into "no other
+    // users to notify" — which returns a 200 success and skips every
+    // pilot's note alert.
+    const { data: access, error: accessErr } = await supabaseAdmin
       .from('aft_user_aircraft_access')
       .select('user_id')
       .eq('aircraft_id', aircraft.id);
+    if (accessErr) throw accessErr;
 
     if (!access || access.length === 0) {
       return NextResponse.json({ success: true, note: 'No other users to notify' });
@@ -60,12 +64,13 @@ export async function POST(req: Request) {
     }
 
     // Check notification preferences — filter out users who disabled note_posted
-    const { data: disabledPrefs } = await supabaseAdmin
+    const { data: disabledPrefs, error: disabledErr } = await supabaseAdmin
       .from('aft_notification_preferences')
       .select('user_id')
       .in('user_id', otherUserIds)
       .eq('notification_type', 'note_posted')
       .eq('enabled', false);
+    if (disabledErr) throw disabledErr;
 
     const disabledUserIds = new Set((disabledPrefs || []).map(p => p.user_id));
     const eligibleUserIds = otherUserIds.filter(uid => !disabledUserIds.has(uid));
@@ -74,10 +79,11 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: true, note: 'All recipients have disabled note notifications' });
     }
 
-    const { data: assignedUsers } = await supabaseAdmin
+    const { data: assignedUsers, error: assignedErr } = await supabaseAdmin
       .from('aft_user_roles')
       .select('email')
       .in('user_id', eligibleUserIds);
+    if (assignedErr) throw assignedErr;
 
     const recipients = assignedUsers
       ?.map(u => u.email)

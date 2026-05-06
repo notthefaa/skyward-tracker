@@ -34,6 +34,16 @@ function makeSb(handlers: Record<string, (op: string, ctx: any) => any>) {
         ctx.payload = payload;
         return chain;
       },
+      upsert: (payload: any, opts?: any) => {
+        ctx.op = 'upsert';
+        ctx.payload = payload;
+        ctx.upsertOpts = opts;
+        return chain;
+      },
+      delete: () => {
+        ctx.op = 'delete';
+        return chain;
+      },
       eq: (col: string, val: any) => {
         (ctx.filters.eq ||= []).push([col, val]);
         return chain;
@@ -359,10 +369,7 @@ describe('executeAction — onboarding_setup', () => {
   it('updates profile, inserts aircraft, grants admin access, and flips onboarding flag', async () => {
     let insertedAircraftId: string | null = null;
     const { sb, calls } = makeSb({
-      aft_user_roles: (op) => {
-        if (op === 'update') return { data: null, error: null };
-        return { data: null, error: null };
-      },
+      aft_user_roles: () => ({ data: null, error: null }),
       aft_aircraft: (op, ctx) => {
         if (op === 'insert') {
           insertedAircraftId = 'ac-new';
@@ -400,9 +407,12 @@ describe('executeAction — onboarding_setup', () => {
     expect(result.recordId).toBe('ac-new');
     expect(insertedAircraftId).toBe('ac-new');
 
-    // Profile update flipped the onboarding flag and normalized initials.
-    const profileUpdate = calls.find(c => c.table === 'aft_user_roles' && c.op === 'update');
-    expect(profileUpdate!.payload).toMatchObject({
+    // Profile upsert flipped the onboarding flag and normalized initials.
+    // Upsert (not update) so a missing role row gets created instead of
+    // silently no-oping for invited users whose row hasn't landed yet.
+    const profileUpsert = calls.find(c => c.table === 'aft_user_roles' && c.op === 'upsert');
+    expect(profileUpsert!.payload).toMatchObject({
+      user_id: 'user-new',
       full_name: 'Jane Smith',
       initials: 'JS',
       completed_onboarding: true,

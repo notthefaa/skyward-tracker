@@ -117,31 +117,36 @@ export async function POST(req: Request) {
     //    "New Squawks" preference, and a single-pilot owner testing
     //    their setup needs to see the email actually went out.
     //    Notification preferences still apply per-pilot.
-    const { data: access } = await supabaseAdmin
+    // Throw on each lookup error — a silent fallthrough turns the
+    // assigned-pilot alert path into a no-op with a 200 response.
+    const { data: access, error: accessErr } = await supabaseAdmin
       .from('aft_user_aircraft_access')
       .select('user_id')
       .eq('aircraft_id', aircraft.id);
+    if (accessErr) throw accessErr;
 
     if (access && access.length > 0) {
       const assignedUserIds = access.map(a => a.user_id);
 
       if (assignedUserIds.length > 0) {
         // Check notification preferences — filter out users who disabled squawk_reported
-        const { data: disabledPrefs } = await supabaseAdmin
+        const { data: disabledPrefs, error: disabledErr } = await supabaseAdmin
           .from('aft_notification_preferences')
           .select('user_id')
           .in('user_id', assignedUserIds)
           .eq('notification_type', 'squawk_reported')
           .eq('enabled', false);
+        if (disabledErr) throw disabledErr;
 
         const disabledUserIds = new Set((disabledPrefs || []).map(p => p.user_id));
         const eligibleUserIds = assignedUserIds.filter(uid => !disabledUserIds.has(uid));
 
         if (eligibleUserIds.length > 0) {
-          const { data: assignedUsers } = await supabaseAdmin
+          const { data: assignedUsers, error: assignedErr } = await supabaseAdmin
             .from('aft_user_roles')
             .select('email')
             .in('user_id', eligibleUserIds);
+          if (assignedErr) throw assignedErr;
 
           const recipients = assignedUsers
             ?.map(u => u.email)
