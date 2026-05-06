@@ -123,13 +123,18 @@ export default function UpdatePassword() {
 
   const handleRequestNewLink = async (e: React.FormEvent) => {
     e.preventDefault();
+    const email = requestEmail.trim().toLowerCase();
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      showError('Enter a valid email address.');
+      return;
+    }
     setIsRequesting(true);
-    
+
     try {
       const res = await fetch('/api/resend-invite', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: requestEmail }),
+        body: JSON.stringify({ email }),
         signal: AbortSignal.timeout(15_000),
       });
       
@@ -169,17 +174,19 @@ export default function UpdatePassword() {
                 Invite links expire for security. Enter your email below and we&apos;ll send you a fresh one.
               </p>
               
-              <form onSubmit={handleRequestNewLink} className="space-y-4 text-left">
+              <form onSubmit={handleRequestNewLink} noValidate className="space-y-4 text-left">
                 <div>
                   <label className="text-[10px] font-bold uppercase tracking-widest text-navy">
                     Email Address
                   </label>
-                  <input 
-                    type="email" 
-                    required 
-                    value={requestEmail} 
-                    onChange={(e) => setRequestEmail(e.target.value)} 
-                    className="w-full border border-gray-300 rounded p-3 text-sm mt-1 bg-white focus:border-navy outline-none" 
+                  <input
+                    type="email"
+                    name="email"
+                    autoComplete="username"
+                    inputMode="email"
+                    value={requestEmail}
+                    onChange={(e) => setRequestEmail(e.target.value)}
+                    className="w-full border border-gray-300 rounded p-3 text-sm mt-1 bg-white focus:border-navy outline-none"
                   />
                 </div>
                 <PrimaryButton disabled={isRequesting}>
@@ -226,7 +233,7 @@ export default function UpdatePassword() {
           </p>
         </div>
 
-        <form onSubmit={handleUpdate} className="space-y-4">
+        <form onSubmit={handleUpdate} noValidate className="space-y-4">
 
           {flowType === 'invite' && (
             <>

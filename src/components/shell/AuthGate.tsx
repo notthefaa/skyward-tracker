@@ -79,6 +79,17 @@ export default function AuthGate({ children }: AuthGateProps) {
         setIsAuthChecking(false);
         return;
       }
+      // PASSWORD_RECOVERY fires when a user clicks a recovery link.
+      // Send them to /update-password instead of dropping into the
+      // main app — otherwise a logged-in user clicking the link in
+      // another tab would see a brief flash of the dashboard before
+      // realising they need to be on the recovery page.
+      if (event === 'PASSWORD_RECOVERY') {
+        if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/update-password')) {
+          window.location.href = '/update-password?type=recovery';
+        }
+        return;
+      }
       setSession(session);
       setIsAuthChecking(false);
     });
