@@ -346,14 +346,25 @@ export async function executeAction(
       // 2. Insert the aircraft. Tail normalized to uppercase to match
       // the rest of the app's lookup convention.
       const tailNorm = p.aircraft.tail_number.toUpperCase().trim();
+      const make = p.aircraft.make?.trim() || '';
+      const model = p.aircraft.model?.trim() || '';
+      // aircraft_type is the legacy "Model" string (NOT NULL on the
+      // table, predates the make/model split). The manual form takes
+      // it as a single field; Howard collects make + model separately
+      // and we synthesize it here. Fall back to engine_type so the
+      // INSERT never violates the NOT NULL — leaving this empty before
+      // the fix bounced every Howard-onboarded user with a 500.
+      const aircraftType = [make, model].filter(Boolean).join(' ').trim()
+        || `${p.aircraft.engine_type} aircraft`;
       const aircraftRow: Record<string, any> = {
         tail_number: tailNorm,
+        aircraft_type: aircraftType,
         created_by: userId,
         engine_type: p.aircraft.engine_type,
         is_ifr_equipped: !!p.aircraft.is_ifr_equipped,
       };
-      if (p.aircraft.make) aircraftRow.make = p.aircraft.make.trim();
-      if (p.aircraft.model) aircraftRow.model = p.aircraft.model.trim();
+      if (make) aircraftRow.make = make;
+      if (model) aircraftRow.model = model;
       if (p.aircraft.home_airport) aircraftRow.home_airport = p.aircraft.home_airport.toUpperCase().trim();
       // Setup meters — match AircraftModal's "setup_*" convention.
       // total_* columns seed from setup_* so live totals start accurate
