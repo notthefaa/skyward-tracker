@@ -19,6 +19,7 @@ import SectionSelector from "@/components/shell/SectionSelector";
 import { MORE_SELECTOR_ITEMS, emitMoreNavigate } from "@/components/shell/moreNav";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { mutateWithDeadline } from "@/lib/mutateWithDeadline";
 
 /**
  * Tight markdown preset — Howard writes conversationally, so we want
@@ -536,7 +537,7 @@ export default function HowardTab({
       // Force a fresh GET instead of optimistically setting empty —
       // that way, if the server delete ever misbehaves (silent RLS
       // failure, etc.), the UI reflects reality instead of lying.
-      await mutate();
+      await mutateWithDeadline(mutate());
       showSuccess('Conversation cleared.');
     } catch (err: any) {
       showError(err.message);

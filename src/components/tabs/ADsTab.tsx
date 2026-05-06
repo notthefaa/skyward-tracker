@@ -14,6 +14,7 @@ import type { AircraftWithMetrics, AirworthinessDirective, AircraftRole } from "
 import SectionSelector from "@/components/shell/SectionSelector";
 import { MX_ADS_SELECTOR_ITEMS, emitMxAdsNavigate } from "@/components/shell/mxAdsNav";
 import { ModalPortal } from "@/components/ModalPortal";
+import { mutateWithDeadline } from "@/lib/mutateWithDeadline";
 
 interface Props {
   aircraft: AircraftWithMetrics | null;
@@ -156,7 +157,7 @@ export default function ADsTab({ aircraft, role, aircraftRole }: Props) {
       if (!res.ok) { const d = await res.json(); throw new Error(d.error || "Couldn't save the AD"); }
       showSuccess(editingId ? 'AD updated.' : 'AD added.');
       setShowForm(false);
-      await mutate();
+      await mutateWithDeadline(mutate());
     } catch (err: any) { showError(err.message); }
     finally { setIsSubmitting(false); }
   };
@@ -177,7 +178,7 @@ export default function ADsTab({ aircraft, role, aircraftRole }: Props) {
       });
       if (!res.ok) throw new Error("Couldn't remove the AD");
       showSuccess('Removed.');
-      await mutate();
+      await mutateWithDeadline(mutate());
     } catch (err: any) { showError(err.message); }
   };
 
@@ -192,7 +193,7 @@ export default function ADsTab({ aircraft, role, aircraftRole }: Props) {
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error || 'Sync failed');
-      await mutate();
+      await mutateWithDeadline(mutate());
       const { inserted = 0, updated = 0, pruned = 0, reviewRequired = 0 } = body;
       if (inserted === 0 && updated === 0 && pruned === 0) {
         showSuccess('Up to date — no new ADs found.');
@@ -217,7 +218,7 @@ export default function ADsTab({ aircraft, role, aircraftRole }: Props) {
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error || "Couldn't check applicability.");
-      await mutate();
+      await mutateWithDeadline(mutate());
       const label =
         body.status === 'applies' ? 'Applies to this aircraft' :
         body.status === 'does_not_apply' ? 'Does not apply' :

@@ -16,6 +16,7 @@ import SectionSelector from "@/components/shell/SectionSelector";
 import { MORE_SELECTOR_ITEMS, emitMoreNavigate } from "@/components/shell/moreNav";
 import { useSignedUrls } from "@/hooks/useSignedUrls";
 import { ModalPortal } from "@/components/ModalPortal";
+import { mutateWithDeadline } from "@/lib/mutateWithDeadline";
 
 const whiteBg = { backgroundColor: '#ffffff' } as const;
 
@@ -193,7 +194,7 @@ export default function NotesTab({ aircraft, session, role, aircraftRole, userIn
         }
       }
 
-      await mutate();
+      await mutateWithDeadline(mutate());
       setShowModal(false);
       showSuccess(editingId ? "Note updated" : "Note posted");
     } catch (err: any) {
@@ -220,7 +221,7 @@ export default function NotesTab({ aircraft, session, role, aircraftRole, userIn
         body: JSON.stringify({ noteId: id, aircraftId: aircraft.id })
       });
       if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || "Couldn't delete the note"); }
-      await mutate();
+      await mutateWithDeadline(mutate());
       showSuccess('Note deleted.');
     } catch (err: any) {
       showError(err?.message || "Couldn't delete the note.");

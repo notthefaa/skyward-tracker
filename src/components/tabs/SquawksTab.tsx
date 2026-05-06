@@ -17,6 +17,7 @@ import { useConfirm } from "@/components/ConfirmProvider";
 import { useModalScrollLock } from "@/hooks/useModalScrollLock";
 import { ModalPortal } from "@/components/ModalPortal";
 import { toLocalYmd } from "@/lib/dateFormat";
+import { mutateWithDeadline } from "@/lib/mutateWithDeadline";
 
 const whiteBg = { backgroundColor: '#ffffff' } as const;
 
@@ -323,7 +324,7 @@ export default function SquawksTab({
         }
       }
 
-      await mutate(); onGroundedStatusChange(); setShowModal(false);
+      await mutateWithDeadline(mutate()); onGroundedStatusChange(); setShowModal(false);
       if (notifyMxFailed) {
         // Squawk saved but the mechanic notification didn't go out —
         // tell the pilot so they can follow up manually.
@@ -365,7 +366,7 @@ export default function SquawksTab({
         method: 'PUT',
         body: JSON.stringify({ squawkId: sq.id, aircraftId: aircraft.id, squawkData: { mx_notify_failed: false } }),
       });
-      await mutate();
+      await mutateWithDeadline(mutate());
       showSuccess('Email sent to MX.');
     } catch (err: any) {
       showError(err?.message || 'Still couldn\u2019t reach MX. Contact them directly.');
@@ -388,7 +389,7 @@ export default function SquawksTab({
         body: JSON.stringify({ squawkId: id, aircraftId: aircraft!.id })
       });
       if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || "Couldn't delete the squawk"); }
-      await mutate(); onGroundedStatusChange();
+      await mutateWithDeadline(mutate()); onGroundedStatusChange();
       closeDetailModal();
       showSuccess("Squawk deleted");
     } catch (err: any) {
@@ -416,7 +417,12 @@ export default function SquawksTab({
         })
       });
       if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || "Couldn't resolve the squawk"); }
-      await mutate(); onGroundedStatusChange();
+      // Bound the revalidation wait. iOS-suspended fetches can leave
+      // SWR's FETCH[key] pinned on a dead promise; without this the
+      // function never reaches `finally` and "Resolving..." stays
+      // disabled forever (real field report 2026-05-06).
+      await mutateWithDeadline(mutate());
+      onGroundedStatusChange();
       closeDetailModal();
       showSuccess("Squawk resolved");
     } catch (err: any) {

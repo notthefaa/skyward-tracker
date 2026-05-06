@@ -145,12 +145,29 @@ export async function PUT(req: Request) {
     if ('error' in checked) {
       return NextResponse.json({ error: checked.error }, { status: 400 });
     }
+
+    // If this update records a completion (last_completed_* was set),
+    // reset the email-sent flags so the next approaching-due cycle
+    // triggers fresh heads-up + schedule reminders. Without this, an
+    // item that ever fired its heads-up email never fires it again
+    // for the rest of its lifetime. Mirrors the flag-reset block in
+    // complete_mx_event_atomic (e2e/sql/01_public_schema.sql:269-273)
+    // so the manual PUT path stays in sync with the service-event path.
+    const finalUpdate: Record<string, unknown> = { ...checked.ok };
+    if ('last_completed_time' in checked.ok || 'last_completed_date' in checked.ok) {
+      finalUpdate.primary_heads_up_sent = false;
+      finalUpdate.mx_schedule_sent = false;
+      finalUpdate.reminder_5_sent = false;
+      finalUpdate.reminder_15_sent = false;
+      finalUpdate.reminder_30_sent = false;
+    }
+
     // Filter by aircraft_id + deleted_at to close the read-then-update
     // race — without this, a concurrent admin DELETE could let a PUT
     // resurrect the row through the soft-delete.
     const { error } = await supabaseAdmin
       .from('aft_maintenance_items')
-      .update(checked.ok)
+      .update(finalUpdate)
       .eq('id', itemId)
       .eq('aircraft_id', aircraftId)
       .is('deleted_at', null);

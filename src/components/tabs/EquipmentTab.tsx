@@ -16,6 +16,7 @@ import SectionSelector from "@/components/shell/SectionSelector";
 import { MORE_SELECTOR_ITEMS, emitMoreNavigate } from "@/components/shell/moreNav";
 import { ModalPortal } from "@/components/ModalPortal";
 import { EQUIPMENT_MAKES, findCatalogEntry, searchCatalog, type EquipmentCatalogEntry } from "@/lib/equipmentCatalog";
+import { mutateWithDeadline } from "@/lib/mutateWithDeadline";
 
 const CATEGORIES: Array<{ value: EquipmentCategory; label: string }> = [
   { value: 'engine', label: 'Engine' },
@@ -250,7 +251,7 @@ export default function EquipmentTab({ aircraft, role, aircraftRole }: Props) {
       if (!res.ok) { const d = await res.json(); throw new Error(d.error || "Couldn't save equipment"); }
       showSuccess(editingId ? 'Equipment updated.' : 'Equipment added.');
       setShowForm(false);
-      await mutate();
+      await mutateWithDeadline(mutate());
     } catch (err: any) { showError(err.message); }
     finally { setIsSubmitting(false); }
   };
@@ -275,7 +276,7 @@ export default function EquipmentTab({ aircraft, role, aircraftRole }: Props) {
       });
       if (!res.ok) throw new Error("Couldn't mark it removed");
       showSuccess('Marked as removed.');
-      await mutate();
+      await mutateWithDeadline(mutate());
     } catch (err: any) { showError(err.message); }
   };
 
@@ -295,7 +296,7 @@ export default function EquipmentTab({ aircraft, role, aircraftRole }: Props) {
       });
       if (!res.ok) throw new Error("Couldn't delete the equipment record");
       showSuccess('Deleted.');
-      await mutate();
+      await mutateWithDeadline(mutate());
     } catch (err: any) { showError(err.message); }
   };
 

@@ -9,7 +9,8 @@ import { INPUT_WHITE_BG } from "@/lib/styles";
 import { swrKeys } from "@/lib/swrKeys";
 import type { AircraftWithMetrics, SystemSettings, AircraftRole, MxSubTab } from "@/lib/types";
 import useSWR from "swr";
-import { Wrench, Trash2, Plus, X, Edit2, Calendar, Send, ExternalLink, ChevronRight, HelpCircle, AlertTriangle, Download, Layers, Settings, ClipboardList, ShieldAlert, Camera, Loader2 } from "lucide-react";
+import { Wrench, Trash2, Plus, X, Edit2, Calendar, Send, ExternalLink, ChevronRight, HelpCircle, AlertTriangle, Download, Layers, Settings, ClipboardList, ShieldAlert, Camera, Loader2, CheckCircle } from "lucide-react";
+import { toLocalYmd } from "@/lib/dateFormat";
 import { PrimaryButton } from "@/components/AppButtons";
 import { useModalScrollLock } from "@/hooks/useModalScrollLock";
 import SquawksTab from "@/components/tabs/SquawksTab";
@@ -22,6 +23,7 @@ const MxTemplatePickerModal = dynamic(() => import("@/components/modals/MxTempla
 import SectionSelector from "@/components/shell/SectionSelector";
 import { MX_ADS_SELECTOR_ITEMS, emitMxAdsNavigate } from "@/components/shell/mxAdsNav";
 import { ModalPortal } from "@/components/ModalPortal";
+import { mutateWithDeadline } from "@/lib/mutateWithDeadline";
 
 /** Shared labels so the Maintenance-tab banner and the Service-subtab
  *  cards describe the same underlying service event with the same
@@ -470,7 +472,7 @@ export default function MaintenanceTab({
         const res = await authFetch('/api/maintenance-items', { method: 'POST', body: JSON.stringify({ aircraftId: aircraft!.id, itemData: payload }) });
         if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || "Couldn't create the maintenance item"); }
       }
-      await mutate(); onGroundedStatusChange();
+      await mutateWithDeadline(mutate()); onGroundedStatusChange();
       if (!editingId && editQueue.length > 0) {
         const next = queueCursor + 1;
         if (next < editQueue.length) {
@@ -504,10 +506,65 @@ export default function MaintenanceTab({
     try {
       const res = await authFetch('/api/maintenance-items', { method: 'DELETE', body: JSON.stringify({ itemId: id, aircraftId: aircraft!.id }) });
       if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || "Couldn't delete the maintenance item"); }
-      await mutate(); onGroundedStatusChange();
+      await mutateWithDeadline(mutate()); onGroundedStatusChange();
       showSuccess('Maintenance item deleted.');
     } catch (err: any) {
       showError(err?.message || "Couldn't delete the maintenance item.");
+    }
+  };
+
+  // One-tap "I just did this" — pre-fills last_completed_* + slides
+  // due_* forward by the configured interval. Without this, marking
+  // an annual done required opening the edit modal and manually
+  // retyping today's date / current Hobbs (the field report from
+  // 2026-05-06 was a pilot giving up after 15 minutes of digging).
+  const markItemComplete = async (item: any) => {
+    if (!aircraft || !canEditMx) return;
+    const t = currentEngineTime;
+    const today = toLocalYmd(new Date());
+    const tracksTime = item.tracking_type === 'time' || item.tracking_type === 'both';
+    const tracksDate = item.tracking_type === 'date' || item.tracking_type === 'both';
+
+    const summaryBits: string[] = [];
+    if (tracksTime) summaryBits.push(`${t.toFixed(1)} hrs`);
+    if (tracksDate) summaryBits.push(today);
+
+    const ok = await confirm({
+      title: 'Mark complete?',
+      message: `Record "${item.item_name}" as completed at ${summaryBits.join(' / ')}. We'll slide the next-due forward by the configured interval.`,
+      confirmText: 'Mark complete',
+    });
+    if (!ok) return;
+
+    setIsSubmitting(true);
+    try {
+      const update: Record<string, any> = {};
+      if (tracksTime) {
+        update.last_completed_time = t;
+        if (item.time_interval != null && Number.isFinite(Number(item.time_interval))) {
+          update.due_time = t + Number(item.time_interval);
+        }
+      }
+      if (tracksDate) {
+        update.last_completed_date = today;
+        if (item.date_interval_days != null && Number.isFinite(Number(item.date_interval_days))) {
+          const next = new Date(today + 'T12:00:00');
+          next.setDate(next.getDate() + Number(item.date_interval_days));
+          update.due_date = toLocalYmd(next);
+        }
+      }
+      const res = await authFetch('/api/maintenance-items', {
+        method: 'PUT',
+        body: JSON.stringify({ itemId: item.id, aircraftId: aircraft.id, itemData: update })
+      });
+      if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || "Couldn't mark complete"); }
+      await mutateWithDeadline(mutate());
+      onGroundedStatusChange();
+      showSuccess(`${item.item_name} marked complete.`);
+    } catch (err: any) {
+      showError(err?.message || "Couldn't mark complete.");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -688,6 +745,12 @@ export default function MaintenanceTab({
                   <div className="flex items-center gap-3 pl-4 shrink-0">
                     {canEditMx && (
                       <>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); markItemComplete(item); }}
+                          disabled={isSubmitting}
+                          title="Mark complete (records today + current Hobbs and slides the next-due forward)"
+                          className="text-gray-400 hover:text-[#56B94A] transition-colors active:scale-95 disabled:opacity-40"
+                        ><CheckCircle size={18}/></button>
                         <button onClick={(e) => { e.stopPropagation(); openMxForm(item); }} className="text-gray-400 hover:text-mxOrange transition-colors active:scale-95"><Edit2 size={16}/></button>
                         <button onClick={(e) => { e.stopPropagation(); deleteMxItem(item.id); }} className="text-gray-400 hover:text-danger transition-colors active:scale-95"><Trash2 size={16}/></button>
                       </>

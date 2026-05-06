@@ -11,6 +11,7 @@ import { useToast } from "@/components/ToastProvider";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { useModalScrollLock } from "@/hooks/useModalScrollLock";
 import { ModalPortal } from "@/components/ModalPortal";
+import { mutateWithDeadline } from "@/lib/mutateWithDeadline";
 
 const whiteBg = { backgroundColor: '#ffffff' } as const;
 
@@ -216,7 +217,7 @@ export default function TimesTab({
     if (!res.ok) { const d = await res.json(); throw new Error(d.error || "Couldn't delete the flight log"); }
 
     setLogPage(1);
-    await mutate(); 
+    await mutateWithDeadline(mutate()); 
     onUpdate();
     showSuccess("Flight log deleted — times rolled back");
     setIsSubmitting(false);
@@ -458,7 +459,7 @@ export default function TimesTab({
         });
         if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || "Couldn't save the flight log"); }
       }
-      await mutate(); onUpdate(); setShowLogModal(false);
+      await mutateWithDeadline(mutate()); onUpdate(); setShowLogModal(false);
       setSubmitIdemKey(null); // success: drop the key so the next open generates a fresh one
       showSuccess(editingId ? "Flight log updated" : "Flight logged");
     } catch (err: any) {

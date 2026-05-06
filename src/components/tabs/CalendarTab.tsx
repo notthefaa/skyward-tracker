@@ -14,6 +14,7 @@ import { useToast } from "@/components/ToastProvider";
 import { useModalScrollLock } from "@/hooks/useModalScrollLock";
 import { ModalPortal } from "@/components/ModalPortal";
 import { toLocalYmd } from "@/lib/dateFormat";
+import { mutateWithDeadline } from "@/lib/mutateWithDeadline";
 
 type CalendarView = 'month' | 'week' | 'day';
 
@@ -366,21 +367,21 @@ export default function CalendarTab({
           if (!submitIdemKeyRef.current) submitIdemKeyRef.current = newIdempotencyKey();
           const postRes = await authFetch('/api/reservations', { method: 'POST', headers: idempotencyHeader(submitIdemKeyRef.current), body: JSON.stringify({ aircraftId: aircraft!.id, occurrences: extras, title: bookingTitle || null, route: bookingRoute || null, timeZone, bookForUserId: inheritedTarget }) });
           const postData = await postRes.json(); if (!postRes.ok) throw new Error(postData.error || 'Failed');
-          await mutate(); setShowBookingForm(false);
+          await mutateWithDeadline(mutate()); setShowBookingForm(false);
           if (postData.skipped > 0) {
             showWarning(`Reservation updated. ${postData.created} of ${extras.length} additional bookings created (${postData.skipped} skipped).`);
           } else {
             showSuccess(`Reservation updated and ${postData.created} additional booking${postData.created === 1 ? '' : 's'} added`);
           }
         } else {
-          await mutate(); setShowBookingForm(false); showSuccess("Reservation updated");
+          await mutateWithDeadline(mutate()); setShowBookingForm(false); showSuccess("Reservation updated");
         }
       } else {
         const bookForUserId = bookingForOther && bookingForUserId ? bookingForUserId : undefined;
         if (!submitIdemKeyRef.current) submitIdemKeyRef.current = newIdempotencyKey();
         const res = await authFetch('/api/reservations', { method: 'POST', headers: idempotencyHeader(submitIdemKeyRef.current), body: JSON.stringify({ aircraftId: aircraft!.id, occurrences, title: bookingTitle || null, route: bookingRoute || null, timeZone, bookForUserId }) });
         const data = await res.json(); if (!res.ok) throw new Error(data.error || 'Failed');
-        await mutate(); setShowBookingForm(false);
+        await mutateWithDeadline(mutate()); setShowBookingForm(false);
         const targetCrew = bookForUserId ? otherCrew.find(c => c.user_id === bookForUserId) : null;
         const targetLabel = targetCrew ? (targetCrew.full_name || targetCrew.email || targetCrew.initials || 'pilot') : null;
         if (data.skipped > 0) {
@@ -397,7 +398,7 @@ export default function CalendarTab({
 
   const handleCancelReservation = async (id: string) => {
     setIsSubmitting(true);
-    try { const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone; const res = await authFetch('/api/reservations', { method: 'DELETE', body: JSON.stringify({ reservationId: id, timeZone }) }); if (!res.ok) { const d = await res.json(); throw new Error(d.error); } await mutate(); setCancellingId(null); showSuccess("Reservation cancelled"); } catch (err: any) { showError(err.message); } setIsSubmitting(false);
+    try { const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone; const res = await authFetch('/api/reservations', { method: 'DELETE', body: JSON.stringify({ reservationId: id, timeZone }) }); if (!res.ok) { const d = await res.json(); throw new Error(d.error); } await mutateWithDeadline(mutate()); setCancellingId(null); showSuccess("Reservation cancelled"); } catch (err: any) { showError(err.message); } setIsSubmitting(false);
   };
 
   const canAdmin = role === 'admin' || aircraftRole === 'admin';
@@ -414,7 +415,7 @@ export default function CalendarTab({
       const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
       const res = await authFetch('/api/mx-events/block', { method: 'POST', body: JSON.stringify({ aircraftId: aircraft!.id, startDate: mxBlockStartDate, endDate: mxBlockEndDate || mxBlockStartDate, notes: mxBlockNotes || null, timeZone }) });
       const data = await res.json(); if (!res.ok) throw new Error(data.error || 'Failed');
-      await mutate(); setShowMxBlockForm(false); showSuccess("Maintenance block created");
+      await mutateWithDeadline(mutate()); setShowMxBlockForm(false); showSuccess("Maintenance block created");
     } catch (err: any) { showError(err.message); }
     setIsSubmitting(false);
   };
