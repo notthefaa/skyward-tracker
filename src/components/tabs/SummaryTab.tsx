@@ -320,7 +320,8 @@ export default function SummaryTab({
     if (!EMAIL_RE.test(trimmedEmail)) { showError("That email doesn't look right."); return; }
     setIsInviting(true);
     try {
-      const res = await authFetch('/api/pilot-invite', { method: 'POST', body: JSON.stringify({ email: trimmedEmail, aircraftId: aircraft.id, aircraftRole: inviteRole }) });
+      const idemKey = newIdempotencyKey();
+      const res = await authFetch('/api/pilot-invite', { method: 'POST', headers: idempotencyHeader(idemKey), body: JSON.stringify({ email: trimmedEmail, aircraftId: aircraft.id, aircraftRole: inviteRole }) });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Couldn't send the invitation");
       showSuccess(data.message || 'Invitation sent'); setShowInviteModal(false); setInviteEmail(""); setInviteRole('pilot'); mutateCrew(); refreshData();

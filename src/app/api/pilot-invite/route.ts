@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireAuth, handleApiError } from '@/lib/auth';
+import { idempotency } from '@/lib/idempotency';
 
 export async function POST(req: Request) {
   try {
@@ -13,6 +14,15 @@ export async function POST(req: Request) {
     if (!aircraftRole || !['admin', 'pilot'].includes(aircraftRole)) {
       return NextResponse.json({ error: 'Aircraft role must be "admin" or "pilot".' }, { status: 400 });
     }
+
+    // Idempotency — admin double-tap on Invite Pilot would otherwise
+    // fire two Supabase Auth invites (the second hits the project-wide
+    // 429) and the admin sees a confusing "rate limit" toast even
+    // though the first invite landed cleanly. Cached replay returns
+    // the first call's body.
+    const idem = idempotency(supabaseAdmin, user.id, req, 'pilot-invite');
+    const cached = await idem.check();
+    if (cached) return cached;
 
     // Verify the caller has tailnumber admin rights OR is a global admin
     const { data: callerRole } = await supabaseAdmin
@@ -79,10 +89,12 @@ export async function POST(req: Request) {
         );
       if (upsertError) throw upsertError;
 
-      return NextResponse.json({
+      const existingBody = {
         success: true,
         message: existingAccess ? 'User role updated.' : 'User added to aircraft.',
-      });
+      };
+      await idem.save(200, existingBody);
+      return NextResponse.json(existingBody);
 
     } else {
       // User doesn't exist — invite via Supabase Auth
@@ -138,7 +150,9 @@ export async function POST(req: Request) {
         if (accessError) throw accessError;
       }
 
-      return NextResponse.json({ success: true, message: 'Invitation sent.' });
+      const inviteBody = { success: true, message: 'Invitation sent.' };
+      await idem.save(200, inviteBody);
+      return NextResponse.json(inviteBody);
     }
   } catch (error) {
     return handleApiError(error);

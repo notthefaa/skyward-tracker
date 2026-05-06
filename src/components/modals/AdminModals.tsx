@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { authFetch } from "@/lib/authFetch";
+import { idempotencyHeader } from "@/lib/idempotencyClient";
 import { useToast } from "@/components/ToastProvider";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { useModalScrollLock } from "@/hooks/useModalScrollLock";
@@ -175,8 +176,10 @@ export default function AdminModals({
 
     setIsSubmitting(true);
     try {
+      const idemKey = crypto.randomUUID();
       const res = await authFetch('/api/admin/flight-logs', {
         method: 'POST',
+        headers: idempotencyHeader(idemKey),
         body: JSON.stringify({ aircraftId: insertAircraftId, logData }),
       });
       if (!res.ok) {
@@ -381,7 +384,8 @@ export default function AdminModals({
   const handleInviteUser = async (e: React.FormEvent) => {
     e.preventDefault(); setIsSubmitting(true);
     try {
-      const res = await authFetch('/api/invite', { method: 'POST', body: JSON.stringify({ email: inviteEmail, role: inviteRole, aircraftIds: inviteAircraftIds }) });
+      const idemKey = crypto.randomUUID();
+      const res = await authFetch('/api/invite', { method: 'POST', headers: idempotencyHeader(idemKey), body: JSON.stringify({ email: inviteEmail, role: inviteRole, aircraftIds: inviteAircraftIds }) });
       if (!res.ok) { const errData = await res.json(); throw new Error(errData.error || "Couldn't send invitation"); }
       showSuccess(`Invitation sent to ${inviteEmail}.`);
       setShowInviteModal(false); setInviteEmail(""); setInviteAircraftIds([]);

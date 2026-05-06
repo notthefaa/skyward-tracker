@@ -1,15 +1,25 @@
 import { NextResponse } from 'next/server';
 import { requireAuth, handleApiError } from '@/lib/auth';
+import { idempotency } from '@/lib/idempotency';
 
 export async function POST(req: Request) {
   try {
     // SECURITY: Only admins can invite users
-    const { supabaseAdmin } = await requireAuth(req, 'admin');
+    const { user, supabaseAdmin } = await requireAuth(req, 'admin');
     const { email, role, aircraftIds } = await req.json();
 
     if (!email || !role) {
       return NextResponse.json({ error: 'Email and role are required.' }, { status: 400 });
     }
+
+    // Idempotency — admin double-tap on Invite would otherwise fire
+    // two Supabase Auth invite calls (the second hits the project-wide
+    // 429 throttle and surfaces as a "rate limit" error to the admin
+    // even though the first invite landed). Cached replay returns the
+    // same {success:true}.
+    const idem = idempotency(supabaseAdmin, user.id, req, 'invite');
+    const cached = await idem.check();
+    if (cached) return cached;
     // Reject anything other than the two roles downstream gates know
     // about — without this an arbitrary string would land in
     // aft_user_roles.role and silently fail every role-based check.
@@ -76,7 +86,9 @@ export async function POST(req: Request) {
       }
     }
 
-    return NextResponse.json({ success: true });
+    const responseBody = { success: true };
+    await idem.save(200, responseBody);
+    return NextResponse.json(responseBody);
   } catch (error) {
     return handleApiError(error);
   }
