@@ -324,11 +324,58 @@ export async function executeAction(
     case 'onboarding_setup': {
       const p = action.payload as OnboardingSetupPayload;
 
-      // 1. Update user profile. The row always exists at this point —
-      // the signup flow creates it — but we fail loud if it's missing
-      // instead of silently orphaning the aircraft we're about to
-      // create.
+      // 1. Atomically: insert aircraft, grant the user admin access,
+      // and upsert the role row with completed_onboarding=true. Single
+      // RPC call — no partial-state hazard. (The previous client-side
+      // 3-step flow could leave a profile updated + aircraft created
+      // + access missing if the 3rd write failed.)
+      const tailNorm = p.aircraft.tail_number.toUpperCase().trim();
+      const aircraftPayload: Record<string, any> = {
+        tail_number: tailNorm,
+        engine_type: p.aircraft.engine_type,
+        is_ifr_equipped: !!p.aircraft.is_ifr_equipped,
+      };
+      if (p.aircraft.make) aircraftPayload.make = p.aircraft.make.trim();
+      if (p.aircraft.model) aircraftPayload.model = p.aircraft.model.trim();
+      if (p.aircraft.home_airport) aircraftPayload.home_airport = p.aircraft.home_airport.toUpperCase().trim();
+      // Setup meters — match AircraftModal's "setup_*" convention.
+      // total_* columns seed from setup_* so live totals start accurate
+      // before the first flight log lands.
+      if (p.aircraft.setup_aftt != null) {
+        aircraftPayload.setup_aftt = p.aircraft.setup_aftt;
+        aircraftPayload.total_airframe_time = p.aircraft.setup_aftt;
+      }
+      if (p.aircraft.setup_ftt != null) {
+        aircraftPayload.setup_ftt = p.aircraft.setup_ftt;
+        aircraftPayload.total_engine_time = p.aircraft.setup_ftt;
+      }
+      if (p.aircraft.setup_hobbs != null) {
+        aircraftPayload.setup_hobbs = p.aircraft.setup_hobbs;
+        if (aircraftPayload.total_airframe_time == null) aircraftPayload.total_airframe_time = p.aircraft.setup_hobbs;
+      }
+      if (p.aircraft.setup_tach != null) {
+        aircraftPayload.setup_tach = p.aircraft.setup_tach;
+        if (aircraftPayload.total_engine_time == null) aircraftPayload.total_engine_time = p.aircraft.setup_tach;
+      }
+
+      const { data: created, error: rpcErr } = await sb.rpc('create_aircraft_atomic', {
+        p_user_id: userId,
+        p_payload: aircraftPayload,
+      });
+      if (rpcErr) {
+        if ((rpcErr as any).code === '23505') {
+          throw new Error(`An aircraft with tail number ${tailNorm} already exists.`);
+        }
+        throw rpcErr;
+      }
+      const createdAircraft = created as { id: string; tail_number: string };
+
+      // 2. Personal profile fields. Upsert (not update) so a missing
+      // role row — defended-in-depth even though the RPC just created
+      // one — gets created instead of silently no-oping. completed_onboarding
+      // was already set by the RPC; we keep it true here.
       const profileFields: Record<string, any> = {
+        user_id: userId,
         full_name: p.profile.full_name.trim(),
         initials: p.profile.initials.toUpperCase().slice(0, 3),
         completed_onboarding: true,
@@ -338,69 +385,10 @@ export async function executeAction(
       }
       const { error: profErr } = await sb
         .from('aft_user_roles')
-        .update(profileFields)
-        .eq('user_id', userId);
+        .upsert(profileFields, { onConflict: 'user_id' });
       if (profErr) throw profErr;
 
-      // 2. Insert the aircraft. Tail normalized to uppercase to match
-      // the rest of the app's lookup convention.
-      const tailNorm = p.aircraft.tail_number.toUpperCase().trim();
-      const aircraftRow: Record<string, any> = {
-        tail_number: tailNorm,
-        created_by: userId,
-        engine_type: p.aircraft.engine_type,
-        is_ifr_equipped: !!p.aircraft.is_ifr_equipped,
-      };
-      if (p.aircraft.make) aircraftRow.make = p.aircraft.make.trim();
-      if (p.aircraft.model) aircraftRow.model = p.aircraft.model.trim();
-      if (p.aircraft.home_airport) aircraftRow.home_airport = p.aircraft.home_airport.toUpperCase().trim();
-      // Setup meters — match AircraftModal's "setup_*" convention.
-      // total_* columns seed from setup_* so live totals start accurate
-      // before the first flight log lands.
-      if (p.aircraft.setup_aftt != null) {
-        aircraftRow.setup_aftt = p.aircraft.setup_aftt;
-        aircraftRow.total_airframe_time = p.aircraft.setup_aftt;
-      }
-      if (p.aircraft.setup_ftt != null) {
-        aircraftRow.setup_ftt = p.aircraft.setup_ftt;
-        aircraftRow.total_engine_time = p.aircraft.setup_ftt;
-      }
-      if (p.aircraft.setup_hobbs != null) {
-        aircraftRow.setup_hobbs = p.aircraft.setup_hobbs;
-        if (aircraftRow.total_airframe_time == null) aircraftRow.total_airframe_time = p.aircraft.setup_hobbs;
-      }
-      if (p.aircraft.setup_tach != null) {
-        aircraftRow.setup_tach = p.aircraft.setup_tach;
-        if (aircraftRow.total_engine_time == null) aircraftRow.total_engine_time = p.aircraft.setup_tach;
-      }
-
-      const { data: created, error: acErr } = await sb
-        .from('aft_aircraft')
-        .insert(aircraftRow)
-        .select('id, tail_number')
-        .single();
-      if (acErr) {
-        if ((acErr as any).code === '23505') {
-          throw new Error(`An aircraft with tail number ${tailNorm} already exists.`);
-        }
-        throw acErr;
-      }
-
-      // 3. Grant the user admin on the aircraft they just registered.
-      const { error: accessErr } = await sb
-        .from('aft_user_aircraft_access')
-        .insert({
-          user_id: userId,
-          aircraft_id: created.id,
-          aircraft_role: 'admin',
-        });
-      if (accessErr) {
-        // Roll back the aircraft insert so we don't leave an orphan.
-        await sb.from('aft_aircraft').delete().eq('id', created.id);
-        throw accessErr;
-      }
-
-      return { recordId: created.id, recordTable: 'aft_aircraft' };
+      return { recordId: createdAircraft.id, recordTable: 'aft_aircraft' };
     }
 
     case 'mx_schedule': {

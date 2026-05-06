@@ -188,13 +188,17 @@ export async function POST(req: Request) {
       ? `Attached ${attachments.length} file${attachments.length > 1 ? 's' : ''}: ${description}`
       : `Attached ${attachments.length} file${attachments.length > 1 ? 's' : ''}.`;
 
-    await supabaseAdmin.from('aft_event_messages').insert({
+    // Throw on insert failure: storage already has the bytes and the
+    // owner email is about to go out — without the message row the
+    // owner opens the event and sees nothing referencing the files.
+    const { error: msgInsertErr } = await supabaseAdmin.from('aft_event_messages').insert({
       event_id: event.id,
       sender: 'mechanic',
       message_type: 'comment',
       message: messageText,
       attachments: attachments,
     } as any);
+    if (msgInsertErr) throw msgInsertErr;
 
     // Notify the owner — rate-limited against the owner's email budget
     // so a leaked mechanic token can't be replayed to flood the owner.

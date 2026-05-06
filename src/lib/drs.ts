@@ -356,12 +356,17 @@ export async function syncAdsForAircraft(
   }
 
   // Pull equipment once — used for engine/prop match needles.
-  const { data: equipmentData } = await sb
+  // Throw on read failure: a silent fallback to `equipment = []`
+  // would make `applies()` miss every engine + prop AD on this
+  // aircraft, leading to a "does_not_apply" verdict that could put
+  // the aircraft out of 91.417(b) compliance.
+  const { data: equipmentData, error: equipmentErr } = await sb
     .from('aft_aircraft_equipment')
     .select('category, make, model, serial')
     .eq('aircraft_id', aircraft.id)
     .is('deleted_at', null)
     .is('removed_at', null);
+  if (equipmentErr) throw equipmentErr;
   const equipment = (equipmentData || []) as EquipmentItem[];
 
   const feedHealthy = rawAds.length >= 50;

@@ -63,13 +63,15 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Couldn't create the maintenance block." }, { status: 500 });
     }
 
-    // Log a system message
-    await supabaseAdmin.from('aft_event_messages').insert({
+    // Log a system message — throw on failure so an MX block can't
+    // exist without an audit-trail entry of who created it and why.
+    const { error: blockMsgErr } = await supabaseAdmin.from('aft_event_messages').insert({
       event_id: event.id,
       sender: 'system',
       message_type: 'status_update',
       message: `Maintenance block created by ${profile?.full_name || 'admin'} for ${startDate}${endDate && endDate !== startDate ? ` – ${endDate}` : ''}.${notes ? ` Notes: ${notes}` : ''}`,
     } as any);
+    if (blockMsgErr) throw blockMsgErr;
 
     // Cancel any overlapping reservations and notify affected pilots
     const { data: aircraft } = await supabaseAdmin

@@ -290,23 +290,28 @@ export async function POST(req: Request) {
         eventUpdate.proposed_date = null;
       }
       // Re-check deleted_at so a concurrent cancel can't be undone.
-      await supabaseAdmin.from('aft_maintenance_events').update(eventUpdate).eq('id', eventId).is('deleted_at', null);
+      // Throw on error so the event-status / propose-date fields don't
+      // silently drift away from what the work-package email said.
+      const { error: wpUpdErr } = await supabaseAdmin.from('aft_maintenance_events').update(eventUpdate).eq('id', eventId).is('deleted_at', null);
+      if (wpUpdErr) throw wpUpdErr;
 
       if (proposedDate) {
-        await supabaseAdmin.from('aft_event_messages').insert({
+        const { error: wpMsgErr } = await supabaseAdmin.from('aft_event_messages').insert({
           event_id: eventId,
           sender: 'owner',
           message_type: 'propose_date',
           proposed_date: proposedDate,
           message: `Requesting service on ${proposedDate}.`,
         } as any);
+        if (wpMsgErr) throw wpMsgErr;
       } else {
-        await supabaseAdmin.from('aft_event_messages').insert({
+        const { error: wpMsgErr2 } = await supabaseAdmin.from('aft_event_messages').insert({
           event_id: eventId,
           sender: 'owner',
           message_type: 'status_update',
           message: 'Work package sent. Requesting mechanic availability — no preferred date specified.',
         } as any);
+        if (wpMsgErr2) throw wpMsgErr2;
       }
     }
 

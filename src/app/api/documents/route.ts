@@ -110,14 +110,18 @@ export async function POST(req: Request) {
     // detect post-upload mutation of the storage object.
     const sha256 = createHash('sha256').update(buffer).digest('hex');
 
-    // Reject duplicate uploads (same aircraft, same bytes).
-    const { data: dup } = await supabaseAdmin
+    // Reject duplicate uploads (same aircraft, same bytes). Throw on
+    // read error so a transient failure isn't treated as "no
+    // duplicate found" and cause us to land a second copy of the
+    // identical PDF (and pay for embedding it again).
+    const { data: dup, error: dupErr } = await supabaseAdmin
       .from('aft_documents')
       .select('id, filename')
       .eq('aircraft_id', aircraftId)
       .eq('sha256', sha256)
       .is('deleted_at', null)
       .maybeSingle();
+    if (dupErr) throw dupErr;
     if (dup) {
       return NextResponse.json(
         { error: `This exact file is already uploaded as "${dup.filename}".` },
@@ -270,10 +274,13 @@ export async function POST(req: Request) {
       return await failDocument("Couldn't index the document. Try again — if it keeps failing, the file may be too large or malformed.", 502);
     }
 
-    // Update document status
-    await supabaseAdmin.from('aft_documents')
+    // Update document status. Throw on failure: embeddings + chunks
+    // already landed; the user retries thinking it failed and we'd
+    // double-embed.
+    const { error: readyErr } = await supabaseAdmin.from('aft_documents')
       .update({ status: 'ready', page_count: pageCount })
       .eq('id', doc.id);
+    if (readyErr) throw readyErr;
 
     return NextResponse.json({ success: true, document: { ...doc, status: 'ready', page_count: pageCount }, chunks: taggedChunks.length });
   } catch (error) { return handleApiError(error); }
@@ -292,22 +299,28 @@ export async function DELETE(req: Request) {
     // Verify the document actually belongs to this aircraft — without
     // this, an admin on Aircraft A could delete B's docs by sending
     // A's id + B's documentId. Matches the VOR/Tire/Oil DELETE pattern.
-    const { data: existing } = await supabaseAdmin
+    const { data: existing, error: existingErr } = await supabaseAdmin
       .from('aft_documents')
       .select('aircraft_id, deleted_at')
       .eq('id', documentId)
       .maybeSingle();
+    if (existingErr) throw existingErr;
     if (!existing || existing.aircraft_id !== aircraftId || existing.deleted_at) {
       return NextResponse.json({ error: 'Document not found for this aircraft.' }, { status: 404 });
     }
 
     await setAppUser(supabaseAdmin, user.id);
-    await supabaseAdmin.from('aft_document_chunks').delete().eq('document_id', documentId);
-    await supabaseAdmin
+    // Both writes throw on failure — without this, the route returns
+    // success while chunks remain (Howard's RAG keeps citing the
+    // deleted doc) or the parent row never gets soft-deleted.
+    const { error: chunkDelErr } = await supabaseAdmin.from('aft_document_chunks').delete().eq('document_id', documentId);
+    if (chunkDelErr) throw chunkDelErr;
+    const { error: docDelErr } = await supabaseAdmin
       .from('aft_documents')
       .update({ deleted_at: new Date().toISOString(), deleted_by: user.id })
       .eq('id', documentId)
       .eq('aircraft_id', aircraftId);
+    if (docDelErr) throw docDelErr;
     return NextResponse.json({ success: true });
   } catch (error) { return handleApiError(error); }
 }
