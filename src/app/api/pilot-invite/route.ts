@@ -40,11 +40,15 @@ export async function POST(req: Request) {
       }
     }
 
-    // Check if the user already exists in the system
-    const { data: existingUsers } = await supabaseAdmin
+    // Check if the user already exists in the system. Throw on read
+    // error: a swallowed failure here falls through to the "user
+    // doesn't exist" branch and re-mints the auth account, sending a
+    // duplicate invite or stomping a real existing user.
+    const { data: existingUsers, error: existingErr } = await supabaseAdmin
       .from('aft_user_roles')
       .select('user_id, email')
       .eq('email', email.toLowerCase());
+    if (existingErr) throw existingErr;
 
     let targetUserId: string;
 
@@ -96,10 +100,17 @@ export async function POST(req: Request) {
         // with no role and no aircraft, and aft_user_aircraft_access
         // would orphan since access rows depend on the user existing
         // in aft_user_roles for downstream role-based gates.
+        //
+        // Mark completed_onboarding=true: invited pilots already have
+        // an aircraft assignment — they shouldn't be forced through the
+        // welcome modal that asks them to create a new aircraft from
+        // scratch. Tour stays false so they still get the spotlight
+        // orientation on first sign-in.
         const { error: roleErr } = await supabaseAdmin.from('aft_user_roles').upsert({
           user_id: targetUserId,
           role: 'pilot',
           email: email.toLowerCase(),
+          completed_onboarding: true,
         });
         if (roleErr) throw roleErr;
 

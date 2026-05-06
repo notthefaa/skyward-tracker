@@ -17,6 +17,11 @@ export default function UpdatePassword() {
   // Security Verification State
   const [session, setSession] = useState<any>(null);
   const[isVerifying, setIsVerifying] = useState(true);
+  // 'invite' uses the full Complete-Setup form (name + initials + password).
+  // 'recovery' is a returning user who already has a profile and only
+  // needs to change their password — collecting fullName/initials again
+  // would overwrite their saved profile with whatever they retype.
+  const [flowType, setFlowType] = useState<'invite' | 'recovery'>('invite');
 
   // New Link Request State
   const[requestEmail, setRequestEmail] = useState("");
@@ -28,14 +33,21 @@ export default function UpdatePassword() {
       // 1. OUTLOOK/SAFELINKS FIX: Look for the raw token hash in the URL
       const params = new URLSearchParams(window.location.search);
       const token_hash = params.get('token_hash');
-      const type = params.get('type') as any; // 'invite' or 'recovery'
+      const type = params.get('type') as 'invite' | 'recovery' | null;
 
       if (token_hash && type) {
+        if (type === 'recovery') setFlowType('recovery');
         const { data, error } = await supabase.auth.verifyOtp({
           token_hash,
           type,
         });
-        
+        if (error) {
+          // Surface verifyOtp errors so the user knows why they're seeing
+          // the "Link Expired" screen — silent failure made it impossible
+          // to distinguish "token expired" from "token format wrong".
+          showError(`Couldn't verify the link: ${error.message}`);
+        }
+
         if (data?.session) {
           setSession(data.session);
           // Clean the URL so the token doesn't linger in the address bar
@@ -83,16 +95,21 @@ export default function UpdatePassword() {
         return;
       }
 
-      // 2. Save their profile fields to aft_user_roles. Bubble errors to
-      // the user instead of silently redirecting with half-saved state.
-      const { error: profileError } = await supabase.from('aft_user_roles').update({
-        initials: initials.toUpperCase(),
-        email: session.user.email,
-        full_name: fullName.trim(),
-      }).eq('user_id', session.user.id);
-      if (profileError) {
-        showError("Couldn't save your profile: " + profileError.message);
-        return;
+      // 2. Save profile fields ONLY for invites — recovery users already
+      // have a saved profile, and writing the form values back would
+      // overwrite their full_name/initials with whatever they retype.
+      // Bubble errors to the user instead of redirecting with half-saved
+      // state.
+      if (flowType === 'invite') {
+        const { error: profileError } = await supabase.from('aft_user_roles').update({
+          initials: initials.toUpperCase(),
+          email: (session.user.email || '').toLowerCase(),
+          full_name: fullName.trim(),
+        }).eq('user_id', session.user.id);
+        if (profileError) {
+          showError("Couldn't save your profile: " + profileError.message);
+          return;
+        }
       }
 
       // 3. Send them to the main dashboard!
@@ -200,15 +217,19 @@ export default function UpdatePassword() {
         
         <div className="text-center mb-8">
           <h2 className="font-oswald text-3xl font-bold uppercase tracking-widest text-navy">
-            Complete Setup
+            {flowType === 'recovery' ? 'Reset Password' : 'Complete Setup'}
           </h2>
           <p className="text-sm text-gray-500 font-roboto mt-2">
-            Set your name, initials, and a password to finish creating your account.
+            {flowType === 'recovery'
+              ? 'Enter a new password to get back into your account.'
+              : 'Set your name, initials, and a password to finish creating your account.'}
           </p>
         </div>
-        
+
         <form onSubmit={handleUpdate} className="space-y-4">
 
+          {flowType === 'invite' && (
+            <>
           <div>
             <label className="text-[10px] font-bold uppercase tracking-widest text-navy">
               Full Name
@@ -238,6 +259,8 @@ export default function UpdatePassword() {
               placeholder="e.g. ABC"
             />
           </div>
+            </>
+          )}
 
           <div>
             <label className="text-[10px] font-bold uppercase tracking-widest text-navy">
@@ -265,7 +288,11 @@ export default function UpdatePassword() {
 
           <div className="pt-4">
             <PrimaryButton disabled={isSubmitting}>
-              {isSubmitting ? "Saving..." : "Save and enter Skyward"}
+              {isSubmitting
+                ? "Saving..."
+                : flowType === 'recovery'
+                  ? "Save new password"
+                  : "Save and enter Skyward"}
             </PrimaryButton>
           </div>
 

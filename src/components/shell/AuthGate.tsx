@@ -99,7 +99,11 @@ export default function AuthGate({ children }: AuthGateProps) {
           const { data: { session: freshSession }, error } = res;
           if (error || !freshSession) {
             console.warn('[Auth] Background resume failed — signing out');
-            supabase.auth.signOut();
+            // scope: 'local' so we don't revoke refresh tokens for OTHER
+            // devices when the resume probe simply timed out on a slow
+            // network. Without this, iOS users on cellular get kicked
+            // out of every device every time the PWA resumes slowly.
+            supabase.auth.signOut({ scope: 'local' });
           } else {
             setSession(freshSession);
           }

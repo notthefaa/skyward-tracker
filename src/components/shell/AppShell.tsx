@@ -865,6 +865,15 @@ export default function AppShell({ session }: AppShellProps) {
     dataFetchTriggeredRef.current = false;
     setActiveTab('fleet');
     try {
+      // Clear cross-user keys before signOut so the next account on this
+      // device doesn't inherit the previous user's active aircraft or
+      // welcome-modal selection.
+      try {
+        if (typeof window !== 'undefined') {
+          window.localStorage.removeItem('aft_active_tail');
+          window.localStorage.removeItem('aft_onboarding_path');
+        }
+      } catch { /* private mode / quota — ignore */ }
       // scope: 'local' clears the local session synchronously without
       // waiting on a server round-trip. The default 'global' scope
       // revokes every session server-side, which can hang on flaky

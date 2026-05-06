@@ -15,10 +15,29 @@ export default function AuthScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [resetSentTo, setResetSentTo] = useState<string | null>(null);
 
-  const handleLogin = async (e: React.FormEvent) => {
+  // iOS Safari + autofill: when a password manager fills the input,
+  // it doesn't always fire React's onChange \u2014 controlled state stays
+  // empty while the DOM holds the credential. Read from FormData at
+  // submit time so we get whatever's actually in the form. Pair with
+  // <form noValidate> + JS regex so type="email" doesn't silently
+  // block submit on a value the browser dislikes.
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+  const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    const fd = new FormData(e.currentTarget);
+    const email = String(fd.get('email') || authEmail).trim();
+    const password = String(fd.get('password') || authPassword);
+    if (!email || !password) {
+      showError('Email and password are required.');
+      return;
+    }
+    if (!EMAIL_RE.test(email)) {
+      showError('Enter a valid email address.');
+      return;
+    }
     setIsSubmitting(true);
-    const { error } = await supabase.auth.signInWithPassword({ email: authEmail, password: authPassword });
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
     setIsSubmitting(false);
     if (error) {
       // Supabase returns a single opaque "Invalid login credentials"
@@ -31,10 +50,15 @@ export default function AuthScreen() {
     }
   };
 
-  const handleForgotPassword = async (e: React.FormEvent) => {
+  const handleForgotPassword = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    const fd = new FormData(e.currentTarget);
+    const targetEmail = String(fd.get('email') || authEmail).trim().toLowerCase();
+    if (!targetEmail || !EMAIL_RE.test(targetEmail)) {
+      showError('Enter a valid email address.');
+      return;
+    }
     setIsSubmitting(true);
-    const targetEmail = authEmail;
     const { error } = await supabase.auth.resetPasswordForEmail(targetEmail, {
       redirectTo: `${window.location.origin}/update-password`
     });
@@ -60,15 +84,15 @@ export default function AuthScreen() {
         </div>
         
         {!showForgotPassword ? (
-          <form onSubmit={handleLogin} className="space-y-4 animate-fade-in">
+          <form onSubmit={handleLogin} noValidate className="space-y-4 animate-fade-in">
             <div>
               <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Email</label>
-              <input type="email" required value={authEmail} onChange={(e) => setAuthEmail(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 bg-white focus:border-navy outline-none" />
+              <input type="email" name="email" autoComplete="username" inputMode="email" value={authEmail} onChange={(e) => setAuthEmail(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 bg-white focus:border-navy outline-none" />
             </div>
             <div>
               <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Password</label>
               <div className="relative mt-1">
-                <input type={showPassword ? "text" : "password"} required value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm bg-white focus:border-navy outline-none pr-10" />
+                <input type={showPassword ? "text" : "password"} name="password" autoComplete="current-password" value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm bg-white focus:border-navy outline-none pr-10" />
                 <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-navy transition-colors">
                   {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
@@ -98,11 +122,11 @@ export default function AuthScreen() {
             </button>
           </div>
         ) : (
-          <form onSubmit={handleForgotPassword} className="space-y-4 animate-fade-in">
+          <form onSubmit={handleForgotPassword} noValidate className="space-y-4 animate-fade-in">
             <p className="text-xs text-gray-500 text-center mb-4">Enter your email and we&apos;ll send a link to set a new password.</p>
             <div>
               <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Email Address</label>
-              <input type="email" required value={authEmail} onChange={(e) => setAuthEmail(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 bg-white focus:border-navy outline-none" />
+              <input type="email" name="email" autoComplete="username" inputMode="email" value={authEmail} onChange={(e) => setAuthEmail(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 bg-white focus:border-navy outline-none" />
             </div>
             <div className="pt-4">
               <PrimaryButton disabled={isSubmitting}>{isSubmitting ? "Sending..." : "Send Reset Link"}</PrimaryButton>

@@ -320,8 +320,10 @@ export default function AdminModals({
       }
     } else {
       setUserAccessList(prev => [...prev, aircraftId]);
+      // aircraft_role is NOT NULL (migration 033). Default to 'pilot';
+      // promoting to admin happens through the dedicated checkbox path.
       const { error } = await supabase.from('aft_user_aircraft_access')
-        .insert({ user_id: selectedAccessUserId, aircraft_id: aircraftId });
+        .insert({ user_id: selectedAccessUserId, aircraft_id: aircraftId, aircraft_role: 'pilot' });
       if (error) {
         setUserAccessList(prev => prev.filter(id => id !== aircraftId));
         showError("Couldn't grant access: " + friendlyPgError(error));
@@ -473,8 +475,9 @@ export default function AdminModals({
         const res = await authFetch('/api/aircraft-access', { method: 'DELETE', body: JSON.stringify({ targetUserId: userId, aircraftId }) });
         if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Failed'); }
       } else {
+        // aircraft_role NOT NULL since migration 033 — default to pilot.
         const { error } = await supabase.from('aft_user_aircraft_access')
-          .insert({ user_id: userId, aircraft_id: aircraftId });
+          .insert({ user_id: userId, aircraft_id: aircraftId, aircraft_role: 'pilot' });
         if (error) throw error;
       }
       await refreshUsers();

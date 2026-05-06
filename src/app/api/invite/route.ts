@@ -30,11 +30,19 @@ export async function POST(req: Request) {
     if (error) throw error;
 
     if (data.user) {
-      // 1. Create the Role Profile
+      // 1. Create the Role Profile.
+      //
+      // Mark completed_onboarding=true: invited users were brought into
+      // an existing fleet; they don't need to create their own aircraft
+      // first. Without this they'd land in the welcome modal and be
+      // pushed into Howard's onboarding chat or the manual form, both of
+      // which CREATE a new aircraft they didn't ask for. Tour stays
+      // false so they still get the 30-second app orientation.
       const { error: roleErr } = await supabaseAdmin.from('aft_user_roles').upsert({
         user_id: data.user.id,
         role: role,
         email: normalizedEmail,
+        completed_onboarding: true,
       });
       if (roleErr) throw roleErr;
 
