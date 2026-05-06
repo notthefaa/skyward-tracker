@@ -90,7 +90,21 @@ export async function POST(req: Request) {
         redirectTo: `${new URL(req.url).origin}/update-password`
       });
 
-      if (inviteError) throw inviteError;
+      if (inviteError) {
+        // Translate Supabase Auth's project-wide invite throttle into a
+        // friendlier admin-facing message. Status 429 / "rate limit"
+        // would otherwise surface as a generic 500 the admin can't act
+        // on. Wait window resets after a few minutes.
+        const msg = (inviteError as any).message || '';
+        const status = (inviteError as any).status;
+        if (status === 429 || /rate limit/i.test(msg)) {
+          return NextResponse.json(
+            { error: 'Too many invites sent in a short window. Wait a few minutes and try again — Supabase Auth caps invite throughput per project.' },
+            { status: 429 }
+          );
+        }
+        throw inviteError;
+      }
 
       if (inviteData.user) {
         targetUserId = inviteData.user.id;

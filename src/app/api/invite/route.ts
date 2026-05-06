@@ -27,7 +27,20 @@ export async function POST(req: Request) {
       redirectTo: `${new URL(req.url).origin}/update-password`
     });
 
-    if (error) throw error;
+    if (error) {
+      // Surface Supabase Auth's project-wide invite throttle as a
+      // friendlier 429 instead of a generic 500. The cap resets after
+      // a few minutes; admins benefit from knowing why the click failed.
+      const msg = (error as any).message || '';
+      const status = (error as any).status;
+      if (status === 429 || /rate limit/i.test(msg)) {
+        return NextResponse.json(
+          { error: 'Too many invites sent in a short window. Wait a few minutes and try again — Supabase Auth caps invite throughput per project.' },
+          { status: 429 }
+        );
+      }
+      throw error;
+    }
 
     if (data.user) {
       // 1. Create the Role Profile.
