@@ -75,15 +75,73 @@ test.describe('aircraft create — payload + dup', () => {
     expect(res.status).toBe(400);
   });
 
-  test('POST /api/aircraft/create rejects duplicate tail (23505 → friendly 400)', async ({ seededUser, baseURL }) => {
+  test('dup tail owned by the caller — 409 with switch-not-create message', async ({ seededUser, baseURL }) => {
     const token = await getAccessToken(seededUser.email, seededUser.password);
     const res = await fetchAs(token, baseURL!, '/api/aircraft/create', {
       method: 'POST',
       body: JSON.stringify({ payload: { tail_number: seededUser.tailNumber, aircraft_type: 'Cessna 172S' } }),
     });
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(409);
     const body = await res.json();
-    expect(body.error).toMatch(/already exists/i);
+    expect(body.owned_by_caller).toBe(true);
+    expect(body.existing_aircraft_id).toBe(seededUser.aircraftId);
+    expect(body.error).toMatch(/already on your fleet/i);
+  });
+
+  test('dup tail soft-deleted by the caller — 409 with restore-from-archive message', async ({ seededUser, baseURL }) => {
+    const admin = adminClient();
+    await admin
+      .from('aft_aircraft')
+      .update({ deleted_at: new Date().toISOString() })
+      .eq('id', seededUser.aircraftId);
+
+    const token = await getAccessToken(seededUser.email, seededUser.password);
+    const res = await fetchAs(token, baseURL!, '/api/aircraft/create', {
+      method: 'POST',
+      body: JSON.stringify({ payload: { tail_number: seededUser.tailNumber, aircraft_type: 'Cessna 172S' } }),
+    });
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body.owned_by_caller).toBe(true);
+    expect(body.error).toMatch(/archive/i);
+  });
+});
+
+test.describe('aircraft create — dup tail owned by another fleet', () => {
+  test('cross-user dup tail — 409 with another-fleet message', async ({ seededUser, baseURL }) => {
+    // Seed a foreign aircraft owned by a different user with the
+    // same tail. We can't share the seededUser tail, so create a
+    // new tail and a separate user, then try to register the same
+    // tail on the seededUser's account.
+    const admin = adminClient();
+    const stranger = `e2e-stranger-${randomUUID()}@skyward-test.local`;
+    const { data: u } = await admin.auth.admin.createUser({
+      email: stranger,
+      password: `pw-${randomUUID().slice(0, 12)}`,
+      email_confirm: true,
+    });
+    const strangerId = u!.user!.id;
+    const conflictTail = `N${randomUUID().slice(0, 5).toUpperCase()}`;
+
+    try {
+      await admin.rpc('create_aircraft_atomic', {
+        p_user_id: strangerId,
+        p_payload: { tail_number: conflictTail, aircraft_type: 'Foreign' },
+      });
+
+      const token = await getAccessToken(seededUser.email, seededUser.password);
+      const res = await fetchAs(token, baseURL!, '/api/aircraft/create', {
+        method: 'POST',
+        body: JSON.stringify({ payload: { tail_number: conflictTail, aircraft_type: 'Whatever' } }),
+      });
+      expect(res.status).toBe(409);
+      const body = await res.json();
+      expect(body.owned_by_caller).toBe(false);
+      expect(body.error).toMatch(/another fleet/i);
+    } finally {
+      await admin.from('aft_aircraft').delete().eq('tail_number', conflictTail);
+      await admin.auth.admin.deleteUser(strangerId).catch(() => {});
+    }
   });
 });
 

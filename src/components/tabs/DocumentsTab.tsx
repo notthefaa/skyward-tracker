@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from "react";
 import { authFetch, UPLOAD_TIMEOUT_MS } from "@/lib/authFetch";
+import { idempotencyHeader } from "@/lib/idempotencyClient";
 import { swrKeys } from "@/lib/swrKeys";
 import type { AircraftWithMetrics, AircraftDocument, DocType } from "@/lib/types";
 import useSWR from "swr";
@@ -74,10 +75,16 @@ export default function DocumentsTab({
 
       setUploadProgress('Extracting text & generating embeddings...');
 
+      // Idempotency — long PDF uploads on cellular regularly retry on
+      // iOS resume; a fresh key per click means a successful upload's
+      // retry returns the cached {document, chunks} body without
+      // re-charging OpenAI for embeddings.
+      const idemKey = crypto.randomUUID();
       const res = await authFetch('/api/documents', {
         method: 'POST',
         body: formData,
-        headers: {}, // Let browser set Content-Type for FormData
+        // Browser sets Content-Type for FormData; only send our idem header.
+        headers: idempotencyHeader(idemKey),
         timeoutMs: UPLOAD_TIMEOUT_MS,
       });
 

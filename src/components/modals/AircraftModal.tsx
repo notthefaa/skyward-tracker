@@ -6,6 +6,7 @@ import { useModalScrollLock } from "@/hooks/useModalScrollLock";
 import { useEscapeKey } from "@/hooks/useEscapeKey";
 import { supabase } from "@/lib/supabase";
 import { authFetch, UPLOAD_TIMEOUT_MS } from "@/lib/authFetch";
+import { idempotencyHeader } from "@/lib/idempotencyClient";
 import { useToast } from "@/components/ToastProvider";
 import { validateFileSize, MAX_UPLOAD_SIZE_LABEL } from "@/lib/constants";
 import { friendlyPgError } from "@/lib/pgErrors";
@@ -412,7 +413,11 @@ export default function AircraftModal({
             formData.append('file', df.file);
             formData.append('aircraftId', newAircraftId);
             formData.append('docType', df.docType);
-            const res = await authFetch('/api/documents', { method: 'POST', body: formData, timeoutMs: UPLOAD_TIMEOUT_MS });
+            // Per-file idempotency key — a retry of the same upload
+            // returns the cached document row without re-charging
+            // OpenAI embeddings.
+            const idemKey = crypto.randomUUID();
+            const res = await authFetch('/api/documents', { method: 'POST', body: formData, headers: idempotencyHeader(idemKey), timeoutMs: UPLOAD_TIMEOUT_MS });
             if (!res.ok) uploadFailed++;
           } catch {
             uploadFailed++;

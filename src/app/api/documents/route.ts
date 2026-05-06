@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createHash } from 'crypto';
 import { requireAuth, requireAircraftAccess, requireAircraftAdmin, handleApiError } from '@/lib/auth';
 import { setAppUser } from '@/lib/audit';
+import { idempotency } from '@/lib/idempotency';
 import { PDFParse } from 'pdf-parse';
 import OpenAI from 'openai';
 
@@ -93,6 +94,18 @@ export async function POST(req: Request) {
 
     await requireAircraftAccess(supabaseAdmin, user.id, aircraftId);
     await setAppUser(supabaseAdmin, user.id);
+
+    // Idempotency — same X-Idempotency-Key replays the cached
+    // {document, chunks} body without re-uploading bytes, re-running
+    // pdf-parse, or re-charging OpenAI for embeddings. iOS PWA
+    // resume-retry on a slow upload would otherwise double-charge
+    // the embedding budget AND leave duplicate chunks pointing at
+    // the same physical document. The SHA-256 dup-check below
+    // handles "same file content, different submission"; this
+    // handles "same submission, retried."
+    const idem = idempotency(supabaseAdmin, user.id, req, 'documents/POST');
+    const cached = await idem.check();
+    if (cached) return cached;
 
     // Upload PDF to Supabase Storage
     const fileName = `${aircraftId}_${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
@@ -282,7 +295,9 @@ export async function POST(req: Request) {
       .eq('id', doc.id);
     if (readyErr) throw readyErr;
 
-    return NextResponse.json({ success: true, document: { ...doc, status: 'ready', page_count: pageCount }, chunks: taggedChunks.length });
+    const responseBody = { success: true, document: { ...doc, status: 'ready', page_count: pageCount }, chunks: taggedChunks.length };
+    await idem.save(200, responseBody);
+    return NextResponse.json(responseBody);
   } catch (error) { return handleApiError(error); }
 }
 

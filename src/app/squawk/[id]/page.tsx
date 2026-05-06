@@ -31,26 +31,45 @@ export default function SquawkViewer() {
   useBodyScrollOverride();
 
   useEffect(() => {
-    if (token) fetchSquawk();
+    if (!token) return;
+    const ac = new AbortController();
+    fetchSquawk(ac.signal);
+    return () => ac.abort();
   }, [token]);
 
-  const fetchSquawk = async () => {
-    const { data: sqData } = await supabase
-      .from('aft_squawks').select('*').eq('access_token', token).is('deleted_at', null).maybeSingle();
+  const fetchSquawk = async (signal: AbortSignal) => {
+    // Defensive 12s ceiling on each query — the project-wide supabase
+    // client wraps fetches with a deadline, but the public squawk page
+    // is rendered without an authenticated session and a future
+    // refactor that drops the wrapper would leave this fetch hanging
+    // forever on iOS suspension. Token-gated routes are exactly the
+    // ones a mechanic opens and walks away from.
+    const PUBLIC_FETCH_DEADLINE_MS = 12_000;
+    const deadlineSignal = AbortSignal.any([signal, AbortSignal.timeout(PUBLIC_FETCH_DEADLINE_MS)]);
 
-    if (sqData) {
-      setSquawk(sqData);
-      const { data: acData } = await supabase
-        .from('aft_aircraft').select('tail_number, aircraft_type, serial_number, mx_contact, mx_contact_email, main_contact, main_contact_email').eq('id', sqData.aircraft_id).single();
-      if (acData) setAircraft(acData);
+    try {
+      const { data: sqData } = await supabase
+        .from('aft_squawks').select('*').eq('access_token', token).is('deleted_at', null).abortSignal(deadlineSignal).maybeSingle();
 
-      const pics: string[] = Array.isArray(sqData.pictures) ? sqData.pictures : [];
-      if (pics.length > 0) {
-        const map = await fetchSignedUrlsWithToken(pics, token);
-        setSignedMap(map);
+      if (sqData) {
+        setSquawk(sqData);
+        const { data: acData } = await supabase
+          .from('aft_aircraft').select('tail_number, aircraft_type, serial_number, mx_contact, mx_contact_email, main_contact, main_contact_email').eq('id', sqData.aircraft_id).abortSignal(deadlineSignal).single();
+        if (acData) setAircraft(acData);
+
+        const pics: string[] = Array.isArray(sqData.pictures) ? sqData.pictures : [];
+        if (pics.length > 0) {
+          const map = await fetchSignedUrlsWithToken(pics, token);
+          setSignedMap(map);
+        }
       }
+    } catch {
+      // Either the user navigated away (signal aborted) or the
+      // 12s ceiling elapsed. Either way we render the not-found
+      // shell — the loading spinner clearing is the important part.
+    } finally {
+      setIsLoading(false);
     }
-    setIsLoading(false);
   };
 
   if (isLoading) {

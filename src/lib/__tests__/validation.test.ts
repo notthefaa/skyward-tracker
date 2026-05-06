@@ -50,17 +50,19 @@ describe('stripProtectedFields — squawks table', () => {
 });
 
 describe('stripProtectedFields — equipment table', () => {
-  it('blocks server-stamped removed_by but lets the route control removed_at', () => {
+  it('lets removed_at pass through (the "Mark Removed" PUT writes it)', () => {
+    // The equipment strip set is intentionally empty — only the
+    // BASE_PROTECTED set applies (deleted_at, deleted_by, etc.).
+    // Resurrect protection (no-null-when-existing-non-null) lives in
+    // the equipment PUT route handler itself, since stripping
+    // unconditionally broke the legitimate "Mark Removed" path.
     const out = stripProtectedFields({
       removed_at: '2026-05-06',
-      removed_by: 'attacker',
       name: 'Garmin GTX-345',
       category: 'transponder',
+      // BASE_PROTECTED still strips deleted_at across all tables.
+      deleted_at: '2024-01-01',
     }, 'equipment');
-    // removed_at must pass through — the "Mark Removed" PUT writes it.
-    // removed_by must be stripped — the route stamps it from the JWT.
-    // Resurrect protection (no-null-when-existing-non-null) lives in
-    // the route handler itself.
     expect(out).toEqual({
       removed_at: '2026-05-06',
       name: 'Garmin GTX-345',

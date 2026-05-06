@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { useSWRConfig } from "swr";
 import { supabase } from "@/lib/supabase";
 
 /**
@@ -10,8 +11,15 @@ import { supabase } from "@/lib/supabase";
 export function useRealtimeSync(
   session: any,
   refreshForAircraft: (aircraftId: string, userId: string) => void,
-  globalMutate: (matcher: any, data: any, opts: any) => void
 ) {
+  // Pull cache + per-key mutate from context. Filter-form mutate
+  // (`globalMutate(() => true, ...)`) hits two SWR-internal traps that
+  // leave hydrated-but-not-yet-resubscribed entries stuck (the `_k`
+  // matcher) and stranded FETCH[key] promises pinned forever (the
+  // FETCH map clear is per-key only). Walking cache.keys() + per-key
+  // mutate sidesteps both. See `feedback_swr_filter_mutate_gotcha`.
+  const { cache: swrCache, mutate: keyedMutate } = useSWRConfig();
+
   useEffect(() => {
     if (!session) return;
 
@@ -40,10 +48,23 @@ export function useRealtimeSync(
           delete timers[aid];
         }, 1500);
       } else {
-        // Global SWR revalidation for events without aircraft_id
+        // Global SWR revalidation for events without aircraft_id.
+        // Walk cache.keys() and call single-arg keyedMutate per key —
+        // `globalMutate(() => true, undefined, { revalidate: true })`
+        // skips entries with `_k === undefined` (hydrated from
+        // localStorage but not yet resubscribed) AND can't clear
+        // stranded FETCH[key] promises from iOS-suspended fetches.
         if (timers['__g']) clearTimeout(timers['__g']);
         timers['__g'] = setTimeout(() => {
-          globalMutate(() => true, undefined, { revalidate: true });
+          // Snapshot keys before mutating — iterating a Map while
+          // changing it is undefined behavior.
+          const keys: string[] = [];
+          for (const k of Array.from(swrCache.keys())) {
+            if (typeof k === 'string') keys.push(k);
+          }
+          for (const k of keys) {
+            keyedMutate(k);
+          }
           delete timers['__g'];
         }, 1500);
       }
@@ -67,5 +88,5 @@ export function useRealtimeSync(
       Object.values(timers).forEach(t => clearTimeout(t));
       supabase.removeChannel(ch);
     };
-  }, [session, refreshForAircraft, globalMutate]);
+  }, [session, refreshForAircraft, swrCache, keyedMutate]);
 }

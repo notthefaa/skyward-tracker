@@ -309,7 +309,7 @@ export default function AppShell({ session }: AppShellProps) {
     },
     [session, refreshForAircraft]
   );
-  useRealtimeSync(session, boundRefresh, globalMutate);
+  useRealtimeSync(session, boundRefresh);
 
   // ─── Slow-network watchdog ───
   // Providers fires `aft:slow-network` when SWR's loadingTimeout
