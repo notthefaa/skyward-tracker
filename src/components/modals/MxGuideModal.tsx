@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useModalScrollLock } from "@/hooks/useModalScrollLock";
 import { useEscapeKey } from "@/hooks/useEscapeKey";
+import { ModalPortal } from "@/components/ModalPortal";
 import { 
   X, Wrench, Clock, Calendar, Send, CheckCircle, Bell, TrendingUp, 
   ExternalLink, MessageSquare, Sparkles, Plane, XCircle, ChevronRight, 
@@ -386,6 +387,7 @@ export default function MxGuideModal({ show, onClose }: MxGuideModalProps) {
   };
 
   return (
+    <ModalPortal>
     <div className="fixed inset-0 bg-black/60 z-[10001] overflow-y-auto animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={onClose}>
       <div className="flex min-h-full items-center justify-center p-4">
       <div className="bg-white rounded shadow-2xl w-full max-w-lg p-6 border-t-4 border-mxOrange animate-slide-up" onClick={e => e.stopPropagation()}>
@@ -426,5 +428,6 @@ export default function MxGuideModal({ show, onClose }: MxGuideModalProps) {
       </div>
       </div>
     </div>
+    </ModalPortal>
   );
 }

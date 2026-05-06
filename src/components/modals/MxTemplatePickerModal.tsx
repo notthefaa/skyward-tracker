@@ -12,6 +12,7 @@ import {
   AlertTriangle, Loader2, Plane, Shield, Layers, ArrowLeft, Info
 } from "lucide-react";
 import { PrimaryButton } from "@/components/AppButtons";
+import { ModalPortal } from "@/components/ModalPortal";
 
 interface MxTemplatePickerModalProps {
   aircraft: any;
@@ -275,6 +276,7 @@ export default function MxTemplatePickerModal({ aircraft, show, onClose, onRefre
   const totalItems = selectedTemplate?.items.length || 0;
 
   return (
+    <ModalPortal>
     <div
       className="fixed inset-0 bg-black/60 z-[10000] overflow-y-auto animate-fade-in"
       style={{ overscrollBehavior: 'contain' }}
@@ -514,5 +516,6 @@ export default function MxTemplatePickerModal({ aircraft, show, onClose, onRefre
       </div>
       </div>
     </div>
+    </ModalPortal>
   );
 }

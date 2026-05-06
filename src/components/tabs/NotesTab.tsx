@@ -308,7 +308,7 @@ export default function NotesTab({ aircraft, session, role, aircraftRole, userIn
           )}
 
           <div className="max-w-full max-h-full p-4 flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
-            <img src={previewImages[previewIndex]} className="max-h-[85vh] max-w-full object-contain rounded shadow-2xl" />
+            <img src={resolve(previewImages[previewIndex]) || previewImages[previewIndex]} className="max-h-[85vh] max-w-full object-contain rounded shadow-2xl" />
           </div>
 
           {previewImages.length > 1 && (
