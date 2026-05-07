@@ -55,17 +55,20 @@ export async function POST(req: Request) {
     if (data.user) {
       // 1. Create the Role Profile.
       //
-      // Mark completed_onboarding=true: invited users were brought into
-      // an existing fleet; they don't need to create their own aircraft
-      // first. Without this they'd land in the welcome modal and be
-      // pushed into Howard's onboarding chat or the manual form, both of
-      // which CREATE a new aircraft they didn't ask for. Tour stays
-      // false so they still get the 30-second app orientation.
+      // completed_onboarding is TRUE only when the invitee is being added
+      // to an existing fleet (aircraftIds non-empty) — they shouldn't
+      // land in Howard's onboarding chat / manual form, both of which
+      // create a NEW aircraft they didn't ask for. With no aircraft
+      // pre-assigned the invitee is starting fresh, so leave the flag
+      // false: they'll land in the welcome modal and pick guided chat
+      // or form to create their own first aircraft. Tour stays false
+      // either way so the 30-second orientation still plays.
+      const fleetMembershipPreassigned = Array.isArray(aircraftIds) && aircraftIds.length > 0;
       const { error: roleErr } = await supabaseAdmin.from('aft_user_roles').upsert({
         user_id: data.user.id,
         role: role,
         email: normalizedEmail,
-        completed_onboarding: true,
+        completed_onboarding: fleetMembershipPreassigned,
       });
       if (roleErr) throw roleErr;
 

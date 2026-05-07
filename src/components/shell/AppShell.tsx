@@ -940,14 +940,13 @@ export default function AppShell({ session }: AppShellProps) {
   //     onboardingPath='form'    → classic PilotOnboarding form
   //   completedOnboarding=true && tourCompleted=false → spotlight tour
   //   both true → normal app
-  // Global admins are pre-flagged in migration 024 so they never land
-  // here. While flags are still loading (null), render nothing to
-  // avoid a welcome flash.
-  // Admins skip the Howard-guided chat (they often set up aircraft via
-  // the admin modals or for other users), but they DO see the spotlight
-  // tour — it's a 30-second app orientation, not a pilot onboarding,
-  // and admins benefit from it just as much as pilots.
-  const needsOnboarding = role !== 'admin' && completedOnboarding === false;
+  // Migration 024 backfilled existing global admins to TRUE, so the
+  // gate is the flag itself — a freshly-invited admin without a
+  // pre-assigned aircraft (aircraftIds empty in /api/invite) lands
+  // here and can pick guided chat or form to set up their first
+  // aircraft. While flags are still loading (null), render nothing
+  // to avoid a welcome flash.
+  const needsOnboarding = completedOnboarding === false;
   const needsTour = completedOnboarding === true && tourCompleted === false;
 
   if (isDataLoaded && needsOnboarding) {
