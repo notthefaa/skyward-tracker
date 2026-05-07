@@ -1,23 +1,14 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback, type ReactNode } from "react";
-import {
-  DndContext,
-  closestCenter,
-  PointerSensor,
-  TouchSensor,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-} from "@dnd-kit/core";
-import {
-  SortableContext,
-  horizontalListSortingStrategy,
-  useSortable,
-  arrayMove,
-} from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
+import { useState, useEffect, useRef, useCallback, lazy, Suspense, type ReactNode } from "react";
 import { supabase } from "@/lib/supabase";
+import { renderTrayItemContent } from "./NavTrayItemContent";
+
+// Lazy-loaded reorder shell. dnd-kit (~50 KB minified) only ships
+// once the user long-presses to enter reorder mode. The Suspense
+// fallback re-renders the static items so the tray doesn't flash
+// empty during the brief import window.
+const NavTraySortable = lazy(() => import("./NavTraySortable"));
 
 // ─── Types ───
 
@@ -94,99 +85,6 @@ function saveOrder(storageKey: string, userId: string | null, keys: string[]) {
   }
 }
 
-// ─── Sortable Item ───
-
-function SortableItem({
-  item,
-  reordering,
-  unreadBadgeKey,
-  unreadCount,
-  isSelected,
-  onSelect,
-}: {
-  item: TrayItem;
-  reordering: boolean;
-  unreadBadgeKey?: string;
-  unreadCount?: number;
-  isSelected: boolean;
-  onSelect: (key: string) => void;
-}) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: item.key, disabled: !reordering });
-
-  // dnd-kit sets aria-disabled=true on the wrapper whenever the
-  // sortable is disabled (i.e. when we're not in reorder mode). The
-  // wrapper is still the clickable element for the tray entry though,
-  // so announcing it as disabled both lies to screen readers and trips
-  // Playwright's actionability check. Strip just that attribute when
-  // we're not reordering — keep role=button + tabIndex from the rest
-  // of the spread.
-  const safeAttributes = reordering
-    ? attributes
-    : { ...attributes, 'aria-disabled': undefined as unknown as boolean };
-
-  // Only apply translate — no scale/transition-all that fights the drag
-  const style: React.CSSProperties = {
-    transform: transform ? `translate3d(${Math.round(transform.x)}px, ${Math.round(transform.y)}px, 0)` : undefined,
-    transition: isDragging ? 'none' : transition,
-    zIndex: isDragging ? 50 : undefined,
-  };
-
-  const Icon = item.icon;
-
-  // Active item renders in navy; inactive items in gray-400. Matches
-  // the main bottom nav's "highlight where you are" pattern. The tray
-  // is distinguished from the main nav only by its background shade
-  // (bg-[#F0EDE8]) — no per-item color accents. Disabled ("soon") items
-  // always render in gray regardless of selection.
-  const iconColor = item.soon && !reordering
-    ? '#9CA3AF'
-    : isSelected ? '#091F3C' : '#9CA3AF';
-  const labelTextClass = item.soon && !reordering
-    ? 'text-gray-400'
-    : isSelected ? 'text-navy' : 'text-gray-400';
-
-  return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      {...safeAttributes}
-      {...(reordering ? listeners : {})}
-      className={`flex flex-col items-center justify-center gap-1 py-1 rounded-lg
-        ${reordering ? 'shrink-0 w-16' : 'flex-1 min-w-[3.5rem]'}
-        ${isDragging ? 'opacity-90 shadow-lg bg-white/90 rounded-xl scale-105' : ''}
-        ${reordering && !isDragging ? 'bg-white/40 ring-1 ring-gray-300/50' : ''}
-        ${!reordering && item.soon ? 'opacity-40 cursor-default' : ''}
-        ${!reordering && !item.soon ? 'active:scale-95 active:bg-white/60 cursor-pointer transition-transform' : ''}
-        ${reordering ? 'cursor-grab active:cursor-grabbing touch-none' : ''}
-      `}
-      onClick={() => {
-        if (reordering || item.soon) return;
-        onSelect(item.key);
-      }}
-    >
-      <div className="relative mb-1">
-        <Icon size={20} style={{ color: iconColor }} />
-        {!reordering && item.key === unreadBadgeKey && (unreadCount ?? 0) > 0 && (
-          <span className="absolute -top-1 -right-2 flex h-3 w-3">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-danger opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-3 w-3 bg-danger text-[8px] text-white font-bold items-center justify-center border border-white"></span>
-          </span>
-        )}
-      </div>
-      <span className={`text-[10px] font-bold uppercase tracking-widest leading-tight text-center whitespace-nowrap ${labelTextClass}`}>
-        {item.label}
-      </span>
-    </div>
-  );
-}
-
 // ─── Main NavTray Component ───
 
 export default function NavTray({
@@ -250,36 +148,22 @@ export default function NavTray({
 
   const handlePointerDown = useCallback(() => {
     clearLongPress();
+    // Warm the dnd-kit chunk so it's likely already in memory by
+    // the time the 500ms timer fires and reordering flips on. The
+    // import is fire-and-forget; webpack treats it as the same
+    // chunk as the dynamic() above, so the second resolve is free.
+    void import("./NavTraySortable");
     longPressTimer.current = setTimeout(() => {
       longPressTimer.current = null;
       setReordering(true);
     }, 500);
   }, [clearLongPress]);
 
-  // ─── DnD sensors ───
-  const pointerSensor = useSensor(PointerSensor, {
-    activationConstraint: { distance: 8 },
-  });
-  const touchSensor = useSensor(TouchSensor, {
-    activationConstraint: { delay: 0, tolerance: 8 },
-  });
-  const sensors = useSensors(pointerSensor, touchSensor);
-
-  const handleDragEnd = useCallback(
-    (event: DragEndEvent) => {
-      const { active, over } = event;
-      if (over && active.id !== over.id) {
-        setOrderedItems(prev => {
-          const oldIndex = prev.findIndex(i => i.key === active.id);
-          const newIndex = prev.findIndex(i => i.key === over.id);
-          const next = arrayMove(prev, oldIndex, newIndex);
-          saveOrder(storageKey, userId, next.map(i => i.key));
-          return next;
-        });
-      }
-    },
-    [storageKey, userId]
-  );
+  // ─── Reorder result handler (used by lazy sortable) ───
+  const handleReorder = useCallback((next: TrayItem[]) => {
+    setOrderedItems(next);
+    saveOrder(storageKey, userId, next.map(i => i.key));
+  }, [storageKey, userId]);
 
   // ─── Scroll fade ───
   const [showFade, setShowFade] = useState(false);
@@ -335,28 +219,36 @@ export default function NavTray({
               onPointerLeave={!reordering ? clearLongPress : undefined}
               onPointerCancel={!reordering ? clearLongPress : undefined}
             >
-              <DndContext
-                sensors={sensors}
-                collisionDetection={closestCenter}
-                onDragEnd={handleDragEnd}
-              >
-                <SortableContext
-                  items={orderedItems.map(i => i.key)}
-                  strategy={horizontalListSortingStrategy}
+              {reordering ? (
+                <Suspense
+                  fallback={orderedItems.map(item => renderTrayItemContent({
+                    item,
+                    reordering: false,
+                    isSelected: item.key === (selectedKey ?? null),
+                    unreadBadgeKey,
+                    unreadCount,
+                    onSelect,
+                  }))}
                 >
-                  {orderedItems.map(item => (
-                    <SortableItem
-                      key={item.key}
-                      item={item}
-                      reordering={reordering}
-                      unreadBadgeKey={unreadBadgeKey}
-                      unreadCount={unreadCount}
-                      isSelected={item.key === selectedKey}
-                      onSelect={onSelect}
-                    />
-                  ))}
-                </SortableContext>
-              </DndContext>
+                  <NavTraySortable
+                    items={orderedItems}
+                    unreadBadgeKey={unreadBadgeKey}
+                    unreadCount={unreadCount}
+                    selectedKey={selectedKey ?? null}
+                    onReorder={handleReorder}
+                    onSelect={onSelect}
+                  />
+                </Suspense>
+              ) : (
+                orderedItems.map(item => renderTrayItemContent({
+                  item,
+                  reordering: false,
+                  isSelected: item.key === (selectedKey ?? null),
+                  unreadBadgeKey,
+                  unreadCount,
+                  onSelect,
+                }))
+              )}
             </div>
 
             {showFade && !reordering && (
