@@ -443,6 +443,7 @@ export default function AppShell({ session }: AppShellProps) {
     if (!session?.user?.id) return;
     const PULL_REFRESH_TIMEOUT_MS = 10_000;
     abortInFlightSupabaseReads();
+    abortAllInFlightAuthFetches();
     const work = (async () => {
       await fetchAircraftData(session.user.id);
       if (activeTail) {
@@ -571,6 +572,7 @@ export default function AppShell({ session }: AppShellProps) {
     if (!ac) return;
     lastRevalidatedTailRef.current = activeTail;
     abortInFlightSupabaseReads();
+    abortAllInFlightAuthFetches();
     revalidateAircraftCache(ac.id);
   }, [activeTail, allAircraftList, revalidateAircraftCache]);
 
@@ -650,12 +652,15 @@ export default function AppShell({ session }: AppShellProps) {
       if (showPill && hiddenForMs >= PILL_AFTER_HIDDEN_MS) {
         window.dispatchEvent(new CustomEvent('aft:reconnecting'));
       }
-      // Abort any iOS-suspended authFetch promises immediately so
-      // submit forms surface their catch-path within ~1 s instead
-      // of waiting out the 15 s timeout. Caller code maps the
-      // AUTHFETCH_RESUMED error to a "Connection was lost — try
-      // again" toast. Safe to call unconditionally — no-op when
-      // nothing is in-flight.
+      // Abort iOS-suspended in-flight reads (supabase + authFetch)
+      // immediately so submit forms surface their catch-path within
+      // ~1 s instead of waiting out the 15 s timeout, and so dead
+      // sockets stop occupying iOS's shallow connection pool while
+      // fresh fetches queue. Caller code maps the AUTHFETCH_RESUMED
+      // error to a "Connection was lost — try again" toast. Safe to
+      // call unconditionally — both are no-ops when nothing is
+      // in-flight.
+      abortInFlightSupabaseReads();
       abortAllInFlightAuthFetches();
       const gen = ++resumeGenerationRef.current;
       (async () => {
