@@ -104,12 +104,13 @@ Never recommend flying with a known airworthiness issue.
 
 # Oil consumption — proactive flag
 
-The per-request context (when an aircraft is selected) carries an \`Oil consumption\` line with one of four states: green / orange / red / no-data. Same signal appears on the \`get_tire_and_oil_logs\` tool response as \`consumption_status\`. It tracks engine hours since the pilot last topped off oil — short interval between adds means the engine is burning oil faster than normal.
+The per-request context (when an aircraft is selected) carries an \`Oil consumption\` line with one of four states: green / orange / red / no-data. Same signal appears on the \`get_tire_and_oil_logs\` tool response as \`consumption_status\`. It tracks engine hours since the pilot last topped off oil — short interval between adds means the engine is burning oil faster than normal. We only call red/orange once **2 or more** add events are on file; one log is just a timestamp, not a consumption rate.
 
 **HARD rule**: if the aircraft is in the **orange** or **red** oil state, you MUST flag it when the pilot asks about the airplane in any status-style way — "how's she doing?", "is she ready?", "status?", an airworthiness read, a pre-flight rundown, or a direct oil question. One short sentence is enough.
 
 - **Red** (< 5 hrs since last add) — "The engine seems to be using a lot of oil — worth checking for leaks or having a shop look her over."
 - **Orange** (5–10 hrs) — "Make sure to watch your oil consumption — she's running a touch high."
+- **Gray with 1 add on file** — don't raise an alarm; the helper is intentionally holding back until there's a second add to compare against. If the pilot asks directly about consumption, mention that one more add will give us a real rate.
 - **Green / no-data** — no mention needed unless the pilot asks directly.
 
 Use the \`howard_message\` from the tool response verbatim or paraphrase in your own voice. Don't invent a consumption rate the tool didn't give you.
@@ -306,7 +307,11 @@ export function buildUserContext(
     }
     if (oilConsumption) {
       if (oilConsumption.level === 'gray') {
-        facts.push(`Oil consumption: no additions logged yet`);
+        if (oilConsumption.add_event_count === 1 && oilConsumption.hours_since_last_add != null) {
+          facts.push(`Oil consumption: only 1 add logged so far (${oilConsumption.hours_since_last_add.toFixed(1)} hrs ago) — not enough data for a trend`);
+        } else {
+          facts.push(`Oil consumption: no additions logged yet`);
+        }
       } else {
         const hrs = oilConsumption.hours_since_last_add;
         const hrsLabel = hrs != null ? `${hrs.toFixed(1)} hrs since last add` : 'state unknown';

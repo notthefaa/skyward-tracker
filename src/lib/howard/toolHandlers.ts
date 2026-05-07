@@ -370,9 +370,19 @@ const handlers: Record<string, ToolHandler> = {
         .maybeSingle();
       const currentHrs = (ac as any)?.total_engine_time ?? null;
       const engineType = (ac as any)?.engine_type === 'Turbine' ? 'Turbine' : 'Piston';
+      // Need a full count of add events (rows with oil_added > 0), not
+      // just whether one exists — the helper holds back red/orange until
+      // there are at least 2 adds on file. The fetched `data` slice is
+      // already capped at `limit`; query the count directly so we don't
+      // miss older adds beyond the recent-N window.
+      const { count: addEventCount } = await sb.from('aft_oil_logs')
+        .select('id', { count: 'exact', head: true })
+        .eq('aircraft_id', aircraftId)
+        .is('deleted_at', null)
+        .gt('oil_added', 0);
       const lastAdd = (data || []).find((l: any) => (l.oil_added ?? 0) > 0) || null;
       const hrsSince = hoursSinceLastOilAdd(lastAdd?.engine_hours ?? null, currentHrs);
-      result.consumption_status = getOilConsumptionStatus(hrsSince, engineType);
+      result.consumption_status = getOilConsumptionStatus(hrsSince, engineType, addEventCount ?? 0);
     }
 
     return result;

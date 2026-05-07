@@ -62,6 +62,10 @@ export interface OilConsumptionStatus {
   color: string;
   /** Null when no oil-addition events are on file yet. */
   hours_since_last_add: number | null;
+  /** Number of oil-addition events on file (rows with oil_added > 0).
+   * Below 2 we return gray and skip the threshold logic — one add isn't
+   * a consumption rate, just a single timestamp. */
+  add_event_count: number;
   /** Short, UI-caption-ready. Null when level is green/gray (no warning to show). */
   ui_warning: string | null;
   /** Conversational sentence Howard can surface verbatim or paraphrase. */
@@ -72,24 +76,33 @@ export interface OilConsumptionStatus {
 }
 
 /**
- * Resolve a consumption status given hours since the last oil add and
- * the engine type. Engine-type defaults to Piston so legacy callers
- * (and historical aircraft rows where engine_type may be null) stay
- * on the safer-but-louder piston bands rather than silently passing
- * a turbine-flagged value as green.
+ * Resolve a consumption status given hours since the last oil add, the
+ * engine type, and how many oil-addition events are on file. Engine-type
+ * defaults to Piston so legacy callers (and historical aircraft rows
+ * where engine_type may be null) stay on the safer-but-louder piston
+ * bands rather than silently passing a turbine-flagged value as green.
+ *
+ * The 2-event floor: with one add event, "hours since last add" is just
+ * elapsed time — not a consumption rate. The threshold logic was tripping
+ * red on first-time loggers ("you topped off 3 hrs ago = burning a quart
+ * every 3 hrs!") even though there's no prior interval to compare against.
+ * Below 2 we return gray with a "need more data" message.
  */
 export function getOilConsumptionStatus(
   hoursSinceLastAdd: number | null,
   engineType: EngineType = 'Piston',
+  addEventCount: number = 0,
 ): OilConsumptionStatus {
   const thresholds = OIL_THRESHOLDS[engineType];
   const isTurb = engineType === 'Turbine';
+  const count = Math.max(0, Math.floor(addEventCount));
 
   if (hoursSinceLastAdd === null || !Number.isFinite(hoursSinceLastAdd)) {
     return {
       level: 'gray',
       color: OIL_COLORS.gray,
       hours_since_last_add: null,
+      add_event_count: count,
       ui_warning: null,
       howard_message: "No oil additions logged yet — consumption rate can't be determined.",
       engine_type: engineType,
@@ -98,11 +111,24 @@ export function getOilConsumptionStatus(
 
   const hrs = Math.max(0, hoursSinceLastAdd);
 
+  if (count < 2) {
+    return {
+      level: 'gray',
+      color: OIL_COLORS.gray,
+      hours_since_last_add: hrs,
+      add_event_count: count,
+      ui_warning: null,
+      howard_message: `Only one oil add logged so far (${hrs.toFixed(1)} hrs ago) — need at least one more to gauge consumption rate.`,
+      engine_type: engineType,
+    };
+  }
+
   if (hrs < thresholds.redHrs) {
     return {
       level: 'red',
       color: OIL_COLORS.red,
       hours_since_last_add: hrs,
+      add_event_count: count,
       ui_warning: 'Check Oil Consumption',
       howard_message: isTurb
         ? `Burning oil faster than a turbine should — only ${hrs.toFixed(1)} hrs since the last add. That's seal-or-scavenge territory; worth a shop look before the next leg.`
@@ -116,6 +142,7 @@ export function getOilConsumptionStatus(
       level: 'orange',
       color: OIL_COLORS.orange,
       hours_since_last_add: hrs,
+      add_event_count: count,
       ui_warning: 'Slightly Higher Consumption',
       howard_message: isTurb
         ? `Oil use is on the high side for a turbine — ${hrs.toFixed(1)} hrs since the last add. Worth watching the trend on the next few legs.`
@@ -128,6 +155,7 @@ export function getOilConsumptionStatus(
     level: 'green',
     color: OIL_COLORS.green,
     hours_since_last_add: hrs,
+    add_event_count: count,
     ui_warning: null,
     howard_message: isTurb
       ? `Oil consumption is in the normal turbine range — ${hrs.toFixed(1)} hrs since the last add.`

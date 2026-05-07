@@ -205,18 +205,29 @@ export async function POST(req: Request) {
       // dial. Surfacing it in Howard's per-request context means he'll
       // mention orange/red states when the pilot asks about the plane,
       // not just when he happens to pull the oil log.
-      const { data: lastAddRow } = await supabaseAdmin
-        .from('aft_oil_logs')
-        .select('engine_hours')
-        .eq('aircraft_id', currentAircraft.id)
-        .is('deleted_at', null)
-        .gt('oil_added', 0)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+      // Pull the latest add (for hours-since math) plus a total count of
+      // add events. The helper holds back red/orange until count >= 2 —
+      // one log isn't a consumption rate, just a single timestamp.
+      const [{ data: lastAddRow }, { count: addEventCount }] = await Promise.all([
+        supabaseAdmin
+          .from('aft_oil_logs')
+          .select('engine_hours')
+          .eq('aircraft_id', currentAircraft.id)
+          .is('deleted_at', null)
+          .gt('oil_added', 0)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+        supabaseAdmin
+          .from('aft_oil_logs')
+          .select('id', { count: 'exact', head: true })
+          .eq('aircraft_id', currentAircraft.id)
+          .is('deleted_at', null)
+          .gt('oil_added', 0),
+      ]);
       const currentHrs = (currentAircraft as any)?.total_engine_time ?? null;
       const hrsSince = hoursSinceLastOilAdd((lastAddRow as any)?.engine_hours ?? null, currentHrs);
-      oilConsumption = getOilConsumptionStatus(hrsSince);
+      oilConsumption = getOilConsumptionStatus(hrsSince, 'Piston', addEventCount ?? 0);
     }
 
     // Only flag a switch when the client's previousTail is different

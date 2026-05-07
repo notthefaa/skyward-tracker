@@ -185,9 +185,9 @@ function tireDial(latest: TireCheck | null, now: Date): DialState {
  * Howard, the dial, and the chart read from the same source. The
  * visual cap shifts with engine type — turbine green starts at 30
  * hrs, so the arc saturates at 60 to give visual headroom. */
-function oilDial(lastAdded: OilLog | null, currentEngineHours: number, engineType: EngineType): DialState {
+function oilDial(lastAdded: OilLog | null, addEventCount: number, currentEngineHours: number, engineType: EngineType): DialState {
   const hoursSince = hoursSinceLastOilAdd(lastAdded?.engine_hours ?? null, currentEngineHours);
-  const status = getOilConsumptionStatus(hoursSince, engineType);
+  const status = getOilConsumptionStatus(hoursSince, engineType, addEventCount);
   const visualCap = OIL_THRESHOLDS[engineType].visualCapHrs;
 
   if (hoursSince === null) {
@@ -203,7 +203,10 @@ function oilDial(lastAdded: OilLog | null, currentEngineHours: number, engineTyp
     value: hoursSince,
     progress,
     color: status.color,
-    sublabel: 'Hrs since add',
+    // Below 2 adds we still show the elapsed value but in gray with a
+    // "need more data" sublabel — no warning yet, since one log isn't
+    // enough to call a consumption trend.
+    sublabel: addEventCount < 2 ? 'Need 2+ adds for trend' : 'Hrs since add',
     suffix: 'hrs',
     warning: status.ui_warning ?? undefined,
   };
@@ -265,15 +268,20 @@ export default function ChecksTab({ aircraft, session, role, userInitials }: Pro
   );
   // Oil: we want the most recent entry where oil_added > 0. A pure
   // level-check with oil_added null/0 shouldn't reset the "hours since
-  // last add" consumption indicator.
-  const { data: oilLastAdded } = useSWR<OilLog | null>(
+  // last add" consumption indicator. We also need the total count of
+  // add events — the consumption helper holds back red/orange until
+  // there are at least 2 on file (one log = a timestamp, not a rate).
+  const { data: oilAddSummary } = useSWR<{ lastAdded: OilLog | null; count: number }>(
     aircraft ? swrKeys.oilLastAdded(aircraft.id) : null,
     async () => {
-      const { data, error } = await supabase
-        .from('aft_oil_logs').select('*').eq('aircraft_id', aircraft!.id).is('deleted_at', null)
+      const { data, error, count } = await supabase
+        .from('aft_oil_logs').select('*', { count: 'exact' }).eq('aircraft_id', aircraft!.id).is('deleted_at', null)
         .gt('oil_added', 0).order('occurred_at', { ascending: false }).order('created_at', { ascending: false }).limit(1);
       if (error) throw error;
-      return (data?.[0] as OilLog | undefined) || null;
+      return {
+        lastAdded: (data?.[0] as OilLog | undefined) || null,
+        count: count ?? 0,
+      };
     },
   );
 
@@ -282,7 +290,7 @@ export default function ChecksTab({ aircraft, session, role, userInitials }: Pro
   const now = new Date();
   const vor = vorDial(vorLatest ?? null, now);
   const tire = tireDial(tirePage1?.checks?.[0] ?? null, now);
-  const oil = oilDial(oilLastAdded ?? null, aircraft.total_engine_time || 0, (aircraft.engine_type === 'Turbine' ? 'Turbine' : 'Piston'));
+  const oil = oilDial(oilAddSummary?.lastAdded ?? null, oilAddSummary?.count ?? 0, aircraft.total_engine_time || 0, (aircraft.engine_type === 'Turbine' ? 'Turbine' : 'Piston'));
 
   const scrollTo = (ref: React.RefObject<HTMLDivElement | null>) => {
     if (!ref.current) return;
