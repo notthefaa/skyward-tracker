@@ -182,8 +182,18 @@ export function handleApiError(error: unknown, req?: Request): NextResponse {
 
   // Unexpected errors — log structured and forward to Sentry when wired.
   logError('[API Error]', error, { requestId, route: req?.url });
+  // Include a short request-ID hint in the user-visible error so a
+  // pilot reporting a 500 can hand us something greppable in Vercel
+  // logs. Without this every "Something unexpected" toast was a
+  // dead-end that required a developer to dig through timestamps.
+  // The full requestId stays in the body for programmatic callers.
+  const refHint = requestId ? ` (ref: ${requestId.slice(0, 8)})` : '';
   return NextResponse.json(
-    { ok: false, error: 'Something unexpected happened. Try again.', ...(requestId ? { requestId } : {}) },
+    {
+      ok: false,
+      error: `Something unexpected happened. Try again.${refHint}`,
+      ...(requestId ? { requestId } : {}),
+    },
     { status: 500, headers: requestId ? { 'x-request-id': requestId } : undefined }
   );
 }
