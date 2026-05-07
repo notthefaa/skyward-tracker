@@ -150,7 +150,9 @@ export default function AppShell({ session }: AppShellProps) {
       if (typeof k === 'string' && matcher(k)) keys.add(k);
     }
     for (const k of allForAircraft(aircraftId)) keys.add(k);
-    for (const k of keys) {
+    // tsconfig targets es5 without downlevelIteration — same Array.from
+    // wrap the cache.keys() walk above uses.
+    for (const k of Array.from(keys)) {
       globalMutate(k);
     }
   }, [globalMutate, swrCache]);
