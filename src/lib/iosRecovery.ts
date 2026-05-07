@@ -46,13 +46,21 @@ export async function probeNetwork(timeoutMs = 5_000): Promise<boolean> {
  * Returns true if the reload was triggered, false if the cooldown
  * suppressed it (avoids reload loops when the network is genuinely
  * unreachable).
+ *
+ * `reason` is logged via console.warn so Safari Web Inspector
+ * captures a breadcrumb when this fires. The lifecycle hardening
+ * commits aim to make this path inert in routine operation — if it
+ * fires in the field, the reason string narrows the next root-cause
+ * pass.
  */
-export function recoveryReload(): boolean {
+export function recoveryReload(reason: string = 'unspecified'): boolean {
   if (typeof window === 'undefined') return false;
   if (navigator.onLine === false) return false;
   try {
     const last = Number(localStorage.getItem(RECOVERY_RELOAD_KEY) || 0);
     if (Number.isFinite(last) && Date.now() - last < RECOVERY_RELOAD_COOLDOWN_MS) {
+      // eslint-disable-next-line no-console
+      console.warn('[lifecycle] recoveryReload suppressed by cooldown —', { reason });
       return false;
     }
     localStorage.setItem(RECOVERY_RELOAD_KEY, String(Date.now()));
@@ -60,6 +68,8 @@ export function recoveryReload(): boolean {
     // localStorage can throw in private mode / when full — proceed
     // anyway. The cooldown is belt-and-suspenders, not load-bearing.
   }
+  // eslint-disable-next-line no-console
+  console.warn('[lifecycle] recoveryReload firing —', { reason });
   window.location.reload();
   return true;
 }

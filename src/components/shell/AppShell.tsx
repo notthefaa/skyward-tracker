@@ -486,7 +486,7 @@ export default function AppShell({ session }: AppShellProps) {
         // equivalent automatically (rate-limited so a genuinely
         // offline user doesn't bounce in a reload loop).
         showError("Refresh timed out — reloading…");
-        setTimeout(() => { recoveryReload(); }, 600);
+        setTimeout(() => { recoveryReload('pull-refresh-timeout'); }, 600);
       } else {
         showError("Refresh failed — try again.");
         console.error('[handlePullRefresh]', err);
@@ -635,13 +635,15 @@ export default function AppShell({ session }: AppShellProps) {
     // in-flight promise state that comes with it). This automates
     // the user's manual close-and-reopen workaround.
     //
-    // 90s is aggressive but cheap: probe is one ~30 byte GET on a
-    // healthy network and reads `navigator.onLine` first, so an
-    // offline user falls through. The reload is rate-limited to
-    // 30s in iosRecovery so a brief check-another-app foregrounding
-    // can't loop. Catching wedged sockets at 90s instead of 5min
-    // means the user never sees the long suspension hang.
-    const PROBE_AFTER_HIDDEN_MS = 90_000;
+    // After the abort+canonical-key revalidation hardening landed,
+    // the routine resume path stopped needing a reload at the 90s
+    // mark — the FETCH-zombie clear lets SWR refire fresh fetches
+    // without the JS-process reset. Bumped to 5min so the reload is
+    // a true last-resort for genuinely wedged WKWebView network
+    // stacks, not the routine-after-a-couple-minutes path. Probe is
+    // still cheap (~30 byte GET, gated on navigator.onLine) and the
+    // 30s reload cooldown in iosRecovery still prevents loops.
+    const PROBE_AFTER_HIDDEN_MS = 5 * 60 * 1000;
     const PROBE_TIMEOUT_MS = 4_000;
     // Pill threshold is separate from the resume threshold. Quick
     // screen-flicks (lock for a few seconds, switch tabs) still
@@ -685,7 +687,7 @@ export default function AppShell({ session }: AppShellProps) {
         if (hiddenForMs >= PROBE_AFTER_HIDDEN_MS) {
           const ok = await probeNetwork(PROBE_TIMEOUT_MS);
           if (!ok) {
-            if (recoveryReload()) return;
+            if (recoveryReload('resume-probe-failed')) return;
           }
           if (resumeGenerationRef.current !== gen) return;
         }
