@@ -76,6 +76,15 @@ END $$;
 CREATE INDEX IF NOT EXISTS idx_idempotency_keys_cleanup
   ON aft_idempotency_keys (created_at);
 
+-- Lock the table down. Only the service-role client (used by every
+-- route handler via supabaseAdmin) ever reads or writes here, and
+-- service role bypasses RLS regardless. RLS-on with NO policies means
+-- anon + authenticated PostgREST queries return an empty set — which
+-- matters because response_body caches actual API response payloads
+-- (generated IDs, email recipients, etc.) and we don't want a future
+-- accidentally-exposed REST surface to leak them across users.
+ALTER TABLE aft_idempotency_keys ENABLE ROW LEVEL SECURITY;
+
 COMMIT;
 
 -- Tell PostgREST to reload its schema cache so the new table is
