@@ -7,7 +7,7 @@ import { probeNetwork, recoveryReload } from "@/lib/iosRecovery";
 import { useFleetData, useRealtimeSync, useGroundedStatus, useAircraftRole, usePullToRefresh } from "@/hooks";
 import { useModalScrollLock } from "@/hooks/useModalScrollLock";
 import { NETWORK_TIMEOUT_MS } from "@/lib/constants";
-import { swrKeys, matchesAircraft } from "@/lib/swrKeys";
+import { swrKeys, matchesAircraft, allForAircraft } from "@/lib/swrKeys";
 import { clearPersistedSwrCache } from "@/lib/swrCache";
 import useSWR, { useSWRConfig } from "swr";
 import { HOWARD_STALE_MS } from "@/lib/howard/quickPrompts";
@@ -132,10 +132,24 @@ export default function AppShell({ session }: AppShellProps) {
   // resume-from-background recovery path, and the tail-switch effect.
   const revalidateAircraftCache = useCallback((aircraftId: string) => {
     const matcher = matchesAircraft(aircraftId);
-    const keys: string[] = [];
+    // Two-pass clear:
+    //   Pass A — walk every key currently in the cache provider that
+    //     matches the aircraft (catches paginated variants, calendar
+    //     months opened earlier in the session, etc.).
+    //   Pass B — walk the canonical list of aircraft-scoped keys with
+    //     default args (catches keys whose hook mounted but whose
+    //     first fetch suspended on iOS *before* SWR's cache.set
+    //     landed — those wouldn't show up in cache.keys() yet, but
+    //     their FETCH[key] zombie still pins future dedupe checks).
+    // Both passes route through `globalMutate(key)`, which clears
+    // FETCH[key] / PRELOAD[key] internally and triggers the
+    // revalidator if a hook is currently subscribed. Set-based dedupe
+    // so duplicate keys don't double-fire mutate.
+    const keys = new Set<string>();
     for (const k of Array.from(swrCache.keys())) {
-      if (typeof k === 'string' && matcher(k)) keys.push(k);
+      if (typeof k === 'string' && matcher(k)) keys.add(k);
     }
+    for (const k of allForAircraft(aircraftId)) keys.add(k);
     for (const k of keys) {
       globalMutate(k);
     }

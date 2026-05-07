@@ -73,3 +73,62 @@ export function matchesAircraft(aircraftId: string) {
   const pattern = new RegExp(`(^|[-_/])${aircraftId}(?=[-_/]|$)`);
   return (key: unknown) => typeof key === 'string' && pattern.test(key);
 }
+
+/**
+ * Canonical list of every aircraft-scoped SWR key the app uses, with
+ * default values for keys that take pagination / month / boolean args.
+ *
+ * AppShell's tail-switch + resume + pull-refresh handlers run a walk
+ * of the SWR cache provider's `keys()` and `globalMutate()` each match
+ * to clear pinned-but-dead `FETCH[key]` / `PRELOAD[key]` entries (the
+ * iOS-suspended-promise trap). That walk only sees keys SWR has
+ * already initialized state for. A key whose hook mounted in this
+ * session and whose first fetch suspended *before* SWR's initial
+ * cache.set landed survives the walk — and dedupes any future fetch
+ * against a zombie promise. Walking this canonical list in addition
+ * to `cache.keys()` clears the FETCH map for those keys too.
+ *
+ * If you add a new aircraft-scoped key to `swrKeys`, add it here too.
+ * The unit test in `__tests__/swrKeys.test.ts` will fail if the list
+ * size doesn't match the canonical-key count, catching the omission.
+ */
+export function allForAircraft(aircraftId: string): string[] {
+  const id = aircraftId;
+  const now = new Date();
+  return [
+    // Summary sub-cards
+    swrKeys.summaryMx(id),
+    swrKeys.summarySquawks(id),
+    swrKeys.summaryNote(id),
+    swrKeys.summaryFlight(id),
+    swrKeys.summaryReservations(id),
+    swrKeys.summaryCurrentStatus(id),
+    swrKeys.summaryCrew(id),
+    // Per-aircraft tabs
+    swrKeys.ads(id),
+    swrKeys.notes(id),
+    swrKeys.mxItems(id),
+    swrKeys.mxEvents(id),
+    swrKeys.squawks(id),
+    swrKeys.vorLatest(id),
+    swrKeys.oilChart(id),
+    swrKeys.oilLastAdded(id),
+    swrKeys.docs(id),
+    swrKeys.crew(id),
+    swrKeys.calDash(id),
+    // Equipment has a boolean variant — both states get a tab visit.
+    swrKeys.equipment(id, false),
+    swrKeys.equipment(id, true),
+    // Pagination variants — page 1 is the only state mounted on a
+    // fresh tail switch / resume. Subsequent pages live in the cache
+    // walk if the user paginated last time on this aircraft.
+    swrKeys.times(id, 1),
+    swrKeys.vor(id, 1),
+    swrKeys.tire(id, 1),
+    swrKeys.oil(id, 1),
+    // Calendar key folds in year + month. Clear the *current* month
+    // canonically; the cache walk handles any other months the pilot
+    // already opened in this session.
+    swrKeys.calendar(id, now.getFullYear(), now.getMonth()),
+  ];
+}

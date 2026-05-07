@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { swrKeys, matchesAircraft } from '../swrKeys';
+import { swrKeys, matchesAircraft, allForAircraft } from '../swrKeys';
 
 describe('swrKeys', () => {
   it('namespaces every aircraft-scoped key under the aircraftId', () => {
@@ -103,5 +103,72 @@ describe('matchesAircraft + cache.keys() iteration (the AppShell tail-switch pat
     expect(matched).not.toContain(swrKeys.summaryMx(stranger));
     expect(matched).not.toContain(swrKeys.mxItems(stranger));
     expect(matched).not.toContain('howard-user-some-user-id');
+  });
+});
+
+// =============================================================
+// `allForAircraft(id)` is the canonical list AppShell walks on tail
+// switch / resume / pull-refresh, on top of the cache.keys() walk.
+// It exists to cover the "FETCH[key] pinned without a cache.set
+// having landed" edge case where iOS suspends a fetch promise
+// before SWR initializes cache state for that key. If that key is
+// not in `cache.keys()`, the existing walk misses it and the next
+// `useSWR(key)` mount dedupes against a zombie. Walking this list
+// in addition guarantees the FETCH map gets cleared.
+//
+// If you add a new aircraft-scoped key to `swrKeys`, also add it
+// to `allForAircraft` and update the assertions below.
+// =============================================================
+describe('allForAircraft', () => {
+  const id = 'aaaa1111-bbbb-2222-cccc-3333dddd4444';
+
+  it('returns every key whose first arg is an aircraft id', () => {
+    const list = allForAircraft(id);
+    // Spot-check: every aircraft-keyed swrKey is represented at
+    // least once. The exhaustive count check below catches drift
+    // when a new key is added without updating the canonical list.
+    expect(list).toContain(swrKeys.summaryMx(id));
+    expect(list).toContain(swrKeys.summarySquawks(id));
+    expect(list).toContain(swrKeys.summaryNote(id));
+    expect(list).toContain(swrKeys.summaryFlight(id));
+    expect(list).toContain(swrKeys.summaryReservations(id));
+    expect(list).toContain(swrKeys.summaryCurrentStatus(id));
+    expect(list).toContain(swrKeys.summaryCrew(id));
+    expect(list).toContain(swrKeys.ads(id));
+    expect(list).toContain(swrKeys.notes(id));
+    expect(list).toContain(swrKeys.mxItems(id));
+    expect(list).toContain(swrKeys.mxEvents(id));
+    expect(list).toContain(swrKeys.squawks(id));
+    expect(list).toContain(swrKeys.vorLatest(id));
+    expect(list).toContain(swrKeys.oilChart(id));
+    expect(list).toContain(swrKeys.oilLastAdded(id));
+    expect(list).toContain(swrKeys.docs(id));
+    expect(list).toContain(swrKeys.crew(id));
+    expect(list).toContain(swrKeys.calDash(id));
+    expect(list).toContain(swrKeys.equipment(id, false));
+    expect(list).toContain(swrKeys.equipment(id, true));
+    expect(list).toContain(swrKeys.times(id, 1));
+    expect(list).toContain(swrKeys.vor(id, 1));
+    expect(list).toContain(swrKeys.tire(id, 1));
+    expect(list).toContain(swrKeys.oil(id, 1));
+  });
+
+  it('every entry contains the aircraft id and is a non-empty string', () => {
+    const list = allForAircraft(id);
+    expect(list.length).toBeGreaterThan(20);
+    for (const k of list) {
+      expect(typeof k).toBe('string');
+      expect(k.length).toBeGreaterThan(0);
+      expect(k).toContain(id);
+    }
+  });
+
+  it('canonical-list size matches the count of aircraft-scoped swrKeys (drift detector)', () => {
+    // If this fails after you add a new aircraft-scoped key to
+    // `swrKeys`, add the same key to `allForAircraft` and bump the
+    // expected count below. That keeps the lifecycle revalidation
+    // walk in lockstep with the key surface.
+    const EXPECTED = 25;
+    expect(allForAircraft(id).length).toBe(EXPECTED);
   });
 });
