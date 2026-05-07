@@ -1,7 +1,7 @@
 import { test, expect } from '../fixtures/seeded-user';
 import { test as crossTest } from '../fixtures/two-users';
 import { adminClient } from '../helpers/admin';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 /**
  * Settings — FAA ratings + notification preferences live entirely
@@ -17,7 +17,7 @@ import { createClient } from '@supabase/supabase-js';
  *   - User CANNOT insert prefs as another user (RLS rejects).
  */
 
-function authedClient(): ReturnType<typeof createClient> {
+function authedClient(): SupabaseClient {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!url || !anon) throw new Error('NEXT_PUBLIC_SUPABASE_URL / ANON_KEY must be set');
