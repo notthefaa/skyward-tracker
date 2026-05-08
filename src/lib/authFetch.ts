@@ -49,6 +49,7 @@
 // =============================================================
 
 import { supabase } from './supabase';
+import { recoveryReload } from './iosRecovery';
 
 const UNAUTHORIZED_EVENT = 'authfetch:unauthorized';
 const AUTH_FETCH_TIMEOUT_MS = 15_000;
@@ -57,6 +58,21 @@ const AUTH_FETCH_TIMEOUT_MS = 15_000;
 export const UPLOAD_TIMEOUT_MS = 60_000;
 
 const inFlight = new Set<AbortController>();
+
+// Post-resume self-heal window. AppShell calls `markPostResume` on
+// every visibilitychange/pageshow/online resume; if a subsequent
+// authFetch hits its 15s timeout inside this window, the WKWebView's
+// network pool is almost certainly still wedged from suspension and
+// only a JS-process reset will recover it. Auto-firing recoveryReload
+// here mimics the user's manual pull-to-refresh-then-reload workaround
+// without making them watch a spinner timeout first. Bounded by the
+// 30s reload cooldown in iosRecovery so a genuinely-offline user
+// doesn't bounce in a loop.
+let lastPostResumeAt = 0;
+const POST_RESUME_RECOVERY_WINDOW_MS = 5 * 60 * 1000;
+export function markPostResume(): void {
+  lastPostResumeAt = Date.now();
+}
 
 /**
  * Abort every authFetch currently in-flight. Used by the resume
@@ -154,6 +170,14 @@ async function fetchWithDeadline(
       // what we set when our timer fired or resume aborted.
       const reason: any = controller.signal.reason;
       if (reason instanceof DOMException && reason.name === 'TimeoutError') {
+        // Post-resume self-heal: a 15s timeout right after a resume
+        // event almost always means the WKWebView pool is still
+        // wedged. Reload eagerly instead of leaving the user with a
+        // toast they can only resolve by manually pull-to-refresh.
+        // Outer cooldown in recoveryReload prevents reload loops.
+        if (lastPostResumeAt && Date.now() - lastPostResumeAt < POST_RESUME_RECOVERY_WINDOW_MS) {
+          recoveryReload('authfetch-timeout-post-resume');
+        }
         const e = new Error("Network's slow — request timed out. Try again.");
         (e as any).code = 'AUTHFETCH_TIMEOUT';
         throw e;

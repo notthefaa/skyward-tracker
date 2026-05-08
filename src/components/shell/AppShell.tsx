@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase, abortInFlightSupabaseReads } from "@/lib/supabase";
-import { authFetch, onAuthFetchUnauthorized, abortAllInFlightAuthFetches } from "@/lib/authFetch";
-import { probeNetwork, recoveryReload } from "@/lib/iosRecovery";
+import { authFetch, onAuthFetchUnauthorized, abortAllInFlightAuthFetches, markPostResume } from "@/lib/authFetch";
+import { probeNetworkDeep, recoveryReload } from "@/lib/iosRecovery";
 import { useFleetData, useRealtimeSync, useGroundedStatus, useAircraftRole, usePullToRefresh } from "@/hooks";
 import { useModalScrollLock } from "@/hooks/useModalScrollLock";
 import { NETWORK_TIMEOUT_MS } from "@/lib/constants";
@@ -647,6 +647,13 @@ export default function AppShell({ session }: AppShellProps) {
     // 30s reload cooldown in iosRecovery still prevents loops.
     const PROBE_AFTER_HIDDEN_MS = 5 * 60 * 1000;
     const PROBE_TIMEOUT_MS = 4_000;
+    // Past this much suspension, skip the probe-and-maybe-reload
+    // dance and just reload. The user has been gone hours — they're
+    // not mid-form, the JS process is almost certainly stale, and a
+    // brief reload is cheaper than the spinner-then-pull-refresh
+    // recovery they otherwise have to do manually. 30s cooldown in
+    // recoveryReload still prevents loops.
+    const LONG_SUSPENSION_RELOAD_MS = 2 * 60 * 60 * 1000;
     // Pill threshold is separate from the resume threshold. Quick
     // screen-flicks (lock for a few seconds, switch tabs) still
     // trigger abort+revalidate so iOS can't wedge a fetch silently —
@@ -660,9 +667,14 @@ export default function AppShell({ session }: AppShellProps) {
       const now = Date.now();
       if (now - lastResumeAtRef.current < RESUME_DEDUP_MS) return;
       lastResumeAtRef.current = now;
-      if (!activeTail) return;
-      const ac = allAircraftList.find(a => a.tail_number === activeTail);
-      if (!ac) return;
+
+      // Notify authFetch so its 15s timeout path can self-heal if the
+      // network stack is still wedged after our probe-and-revalidate
+      // cycle (e.g., the cheap probe falsely passed but a real
+      // request still hangs). Bounded by the 5min recovery window in
+      // authFetch + the 30s recoveryReload cooldown.
+      markPostResume();
+
       // Surface a small "Reconnecting…" pill so the abort+revalidate
       // cycle reads as intentional. Auto-clears in ~1.5s; the indicator
       // listens for the event in ReconnectingIndicator.tsx. Gated on
@@ -670,6 +682,7 @@ export default function AppShell({ session }: AppShellProps) {
       if (showPill && hiddenForMs >= PILL_AFTER_HIDDEN_MS) {
         window.dispatchEvent(new CustomEvent('aft:reconnecting'));
       }
+
       // Abort iOS-suspended in-flight reads (supabase + authFetch)
       // immediately so submit forms surface their catch-path within
       // ~1 s instead of waiting out the 15 s timeout, and so dead
@@ -678,21 +691,46 @@ export default function AppShell({ session }: AppShellProps) {
       // error to a "Connection was lost — try again" toast. Safe to
       // call unconditionally — both are no-ops when nothing is
       // in-flight.
+      //
+      // ABORT + LONG-SUSPENSION RELOAD + PROBE run BEFORE the
+      // activeTail/ac bail so admins, un-hydrated boots, and
+      // logged-out callers all get the network protection. The
+      // bail below only gates aircraft-scoped revalidation, which
+      // genuinely needs an aircraft.
       abortInFlightSupabaseReads();
       abortAllInFlightAuthFetches();
+
       const gen = ++resumeGenerationRef.current;
       (async () => {
+        // Very long suspension: skip the probe gamble, just reload.
+        // After hours away the JS process is almost certainly stale
+        // and the manual fix the user does (kill + reopen the PWA)
+        // is faster than waiting out spinners. Cooldown protects
+        // genuinely-offline users from a reload loop.
+        if (hiddenForMs >= LONG_SUSPENSION_RELOAD_MS) {
+          if (recoveryReload('long-suspension')) return;
+        }
         // Long-suspension probe: if the network is wedged, no amount
         // of refreshSession + revalidate will recover — only a fresh
-        // process will. Reload eagerly so the user doesn't sit on
-        // stale data waiting out our 30 s authFetch timeouts.
+        // process will. Probes BOTH the Edge stack AND a supabase
+        // round-trip — the cheap version-only probe was false-passing
+        // on partially-wedged pools, leaving the user with a fine
+        // dashboard but every fresh fetch hung.
         if (hiddenForMs >= PROBE_AFTER_HIDDEN_MS) {
-          const ok = await probeNetwork(PROBE_TIMEOUT_MS);
+          const ok = await probeNetworkDeep(PROBE_TIMEOUT_MS);
           if (!ok) {
             if (recoveryReload('resume-probe-failed')) return;
           }
           if (resumeGenerationRef.current !== gen) return;
         }
+
+        // Aircraft-scoped revalidation. Skip when there's no active
+        // tail — the abort + probe + reload work above has already
+        // run, which is what the network actually needed.
+        if (!activeTail) return;
+        const ac = allAircraftList.find(a => a.tail_number === activeTail);
+        if (!ac) return;
+
         if (forceRefresh) {
           // Race the refresh against a tight timeout — we'd rather
           // revalidate with a stale token (and let SWR retry on 401)

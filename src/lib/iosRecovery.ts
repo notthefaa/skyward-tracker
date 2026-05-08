@@ -15,12 +15,22 @@
 // session-refresh state, SWR's FETCH map, and React state, which
 // is enough to recover from most JS-side fetch wedges.
 //
+// `probeNetworkDeep` adds a supabase auth round-trip in parallel.
+// Field reports showed `/api/version` succeeding on a leftover
+// warm socket while the heavier supabase REST pool was still
+// half-dead — the user'd see the dashboard render from cache
+// then hang the moment they opened any non-SWR-backed modal.
+// Probing both pools catches partial wedges the lightweight
+// version-only probe misses.
+//
 // `recoveryReload` is rate-limited via localStorage to prevent
 // reload loops when the network is genuinely down (airplane mode,
 // bad cell, captive portal). The cooldown survives the reload
 // itself, so the post-reload page won't immediately reload again
 // if its first fetches still fail.
 // =============================================================
+
+import { supabase } from './supabase';
 
 const PROBE_URL = '/api/version';
 const RECOVERY_RELOAD_KEY = 'aft_recovery_reload_at';
@@ -39,6 +49,56 @@ export async function probeNetwork(timeoutMs = 5_000): Promise<boolean> {
   } finally {
     clearTimeout(timer);
   }
+}
+
+/**
+ * Two-stack probe: the Edge route (/api/version) AND a supabase
+ * auth round-trip. Returns true only when both come back inside
+ * `timeoutMs`. The supabase leg is skipped (and counted as healthy)
+ * for logged-out callers — there's no auth pool to probe and we
+ * shouldn't bounce them off the welcome page on resume.
+ */
+export async function probeNetworkDeep(timeoutMs = 5_000): Promise<boolean> {
+  if (typeof window === 'undefined') return true;
+  if (navigator.onLine === false) return false;
+
+  const versionProbe = (async () => {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+    try {
+      const res = await fetch(PROBE_URL, { signal: ctrl.signal, cache: 'no-store' });
+      return res.ok;
+    } catch {
+      return false;
+    } finally {
+      clearTimeout(timer);
+    }
+  })();
+
+  // Race the entire supabase leg against the deadline. getSession is
+  // normally a cache hit, but if the GoTrue lock is held by a
+  // wedged refresh it can stall — that itself is a wedge signal,
+  // so deadline-loss returns false (probe fails → caller reloads).
+  const supabaseProbe = (async () => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const deadline = new Promise<boolean>(resolve => {
+      timer = setTimeout(() => resolve(false), timeoutMs);
+    });
+    const inner = (async () => {
+      const { data } = await supabase.auth.getSession();
+      if (!data.session) return true;
+      const r = await supabase.auth.getUser();
+      return !r.error;
+    })().catch(() => false);
+    try {
+      return await Promise.race([inner, deadline]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  })();
+
+  const [edgeOk, supaOk] = await Promise.all([versionProbe, supabaseProbe]);
+  return edgeOk && supaOk;
 }
 
 /**
