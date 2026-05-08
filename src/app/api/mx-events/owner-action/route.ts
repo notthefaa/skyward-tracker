@@ -35,6 +35,16 @@ export async function POST(req: Request) {
     await requireAircraftAdmin(supabaseAdmin, user.id, event.aircraft_id);
     await setAppUser(supabaseAdmin, user.id);
 
+    // Double-tap protection: same X-Idempotency-Key returns the cached
+    // {success:true} without re-running emails / state changes.
+    // MUST come before the cancelled-status guard below — a legitimate
+    // network-retry of a successful cancel would otherwise hit the
+    // cancelled-check (status now='cancelled') and 409 instead of
+    // returning the cached 200 from the original successful call.
+    const idem = idempotency(supabaseAdmin, user.id, req, 'mx-events/owner-action');
+    const cached = await idem.check();
+    if (cached) return cached;
+
     // Cancel is terminal. Once status='cancelled' lands, the access_token
     // has been rotated and the mechanic's portal link is dead — letting
     // a follow-up confirm/counter/comment land would either send the
@@ -44,12 +54,6 @@ export async function POST(req: Request) {
     if (event.status === 'cancelled') {
       return NextResponse.json({ error: 'This event was already cancelled.' }, { status: 409 });
     }
-
-    // Double-tap protection: same X-Idempotency-Key returns the cached
-    // {success:true} without re-running emails / state changes.
-    const idem = idempotency(supabaseAdmin, user.id, req, 'mx-events/owner-action');
-    const cached = await idem.check();
-    if (cached) return cached;
 
     const portalUrl = `${new URL(req.url).origin}/service/${event.access_token}`;
     const mxEmail = event.mx_contact_email;

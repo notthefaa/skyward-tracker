@@ -396,6 +396,23 @@ export async function PUT(req: Request) {
       }
     }
 
+    // Double-tap protection. MUST run before the cancelled-status guard
+    // below so a legitimate network-retry of a successful edit returns
+    // the cached 200 instead of being rejected as if the row had just
+    // been cancelled (it hadn't — the original call landed cleanly).
+    const idem = idempotency(supabaseAdmin, user.id, req, 'reservations/PUT');
+    const cached = await idem.check();
+    if (cached) return cached;
+
+    // Cancel is terminal. Editing a cancelled reservation's start/end
+    // times silently changes the row but leaves status='cancelled', so
+    // it never reappears on the calendar — the user thinks they
+    // restored their booking but it stays invisible. Mirrors the
+    // mx-events cancel-terminal guard.
+    if (existing.status === 'cancelled') {
+      return NextResponse.json({ error: 'This reservation was already cancelled. Book a new one instead.' }, { status: 409 });
+    }
+
     const newStart = startTime || existing.start_time;
     const newEnd = endTime || existing.end_time;
 
@@ -547,7 +564,9 @@ export async function PUT(req: Request) {
       }
     }
 
-    return NextResponse.json({ success: true });
+    const responseBody = { success: true };
+    await idem.save(200, responseBody);
+    return NextResponse.json(responseBody);
   } catch (error) {
     return handleApiError(error);
   }
@@ -595,6 +614,22 @@ export async function DELETE(req: Request) {
       if (!callerAccess || callerAccess.aircraft_role !== 'admin') {
         return NextResponse.json({ error: 'You can only cancel your own reservations.' }, { status: 403 });
       }
+    }
+
+    // Double-tap protection. MUST run before the already-cancelled
+    // guard below so a legitimate network-retry of a successful cancel
+    // returns the cached 200 instead of 409. Without idempotency the
+    // route also re-sent the "Reservation Cancelled" email to every
+    // assigned pilot on each retry.
+    const idem = idempotency(supabaseAdmin, user.id, req, 'reservations/DELETE');
+    const cached = await idem.check();
+    if (cached) return cached;
+
+    // Cancel is terminal. A second cancel on an already-cancelled
+    // reservation used to silently re-fire the cancellation email to
+    // every assigned pilot.
+    if (reservation.status === 'cancelled') {
+      return NextResponse.json({ error: 'This reservation was already cancelled.' }, { status: 409 });
     }
 
     // Cancel the reservation (soft delete). Throw on update error so the
@@ -675,7 +710,9 @@ export async function DELETE(req: Request) {
       }
     }
 
-    return NextResponse.json({ success: true });
+    const responseBody = { success: true };
+    await idem.save(200, responseBody);
+    return NextResponse.json(responseBody);
   } catch (error) {
     return handleApiError(error);
   }

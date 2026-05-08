@@ -25,6 +25,17 @@ export async function POST(req: Request) {
     await requireAircraftAdmin(supabaseAdmin, user.id, event.aircraft_id);
     await setAppUser(supabaseAdmin, user.id);
 
+    // Idempotency — a slow-network double-tap on "Complete Event"
+    // would otherwise re-run the atomic RPC and double-advance MX
+    // intervals + duplicate squawk-resolves. The cleaned-completions
+    // payload below is deterministic, so a same-key replay returns
+    // the cached {allResolved, unmatchedIds} without re-applying.
+    // MUST come before the cancelled-status guard below so a retry of
+    // a successful complete returns cached 200 instead of a fresh 409.
+    const idem = idempotency(supabaseAdmin, user.id, req, 'mx-events/complete');
+    const cached = await idem.check();
+    if (cached) return cached;
+
     // Cancel is terminal. The owner-action route rotates the
     // access_token at cancel time so the mechanic's portal link is
     // already dead — letting Complete advance MX intervals + resolve
@@ -34,15 +45,6 @@ export async function POST(req: Request) {
     if (event.status === 'cancelled') {
       return NextResponse.json({ error: 'This event was already cancelled.' }, { status: 409 });
     }
-
-    // Idempotency — a slow-network double-tap on "Complete Event"
-    // would otherwise re-run the atomic RPC and double-advance MX
-    // intervals + duplicate squawk-resolves. The cleaned-completions
-    // payload below is deterministic, so a same-key replay returns
-    // the cached {allResolved, unmatchedIds} without re-applying.
-    const idem = idempotency(supabaseAdmin, user.id, req, 'mx-events/complete');
-    const cached = await idem.check();
-    if (cached) return cached;
 
     // Pre-validate finite numeric fields in every completion so the
     // API returns a clean 400 with a pointer to the bad item instead

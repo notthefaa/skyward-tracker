@@ -328,6 +328,42 @@ test.describe('owner-action — branch coverage', () => {
     await cleanup(eventId);
   });
 
+  test('idempotency: cancel replay with same key returns cached 200, not 409', async ({ seededUser, baseURL }) => {
+    // The cancel-terminal guard and idempotency check are both gates,
+    // but they must be ordered idem-first so a network-retry of a
+    // SUCCESSFUL cancel doesn't fall into the cancelled-status check
+    // and 409 instead of returning the cached 200. Lock the ordering.
+    const admin = adminClient();
+    const { eventId } = await seedScheduledEvent(seededUser);
+    const token = await getAccessToken(seededUser.email, seededUser.password);
+    const idemKey = randomUUID();
+
+    const res1 = await fetchAs(token, baseURL!, '/api/mx-events/owner-action', {
+      method: 'POST',
+      headers: { 'X-Idempotency-Key': idemKey },
+      body: JSON.stringify({ eventId, action: 'cancel', message: 'Network drops next.' }),
+    });
+    expect(res1.status).toBe(200);
+
+    const res2 = await fetchAs(token, baseURL!, '/api/mx-events/owner-action', {
+      method: 'POST',
+      headers: { 'X-Idempotency-Key': idemKey },
+      body: JSON.stringify({ eventId, action: 'cancel', message: 'Network drops next.' }),
+    });
+    expect(res2.status).toBe(200);
+
+    // Only one cancel message row — the replay returned cached without
+    // re-running the INSERT into aft_event_messages.
+    const { data: msgs } = await admin
+      .from('aft_event_messages')
+      .select('message_type')
+      .eq('event_id', eventId)
+      .eq('message_type', 'status_update');
+    expect((msgs ?? []).length).toBe(1);
+
+    await cleanup(eventId);
+  });
+
   test('idempotency: same X-Idempotency-Key returns cached response without duplicate side effects', async ({ seededUser, baseURL }) => {
     const admin = adminClient();
     const { eventId } = await seedScheduledEvent(seededUser);
