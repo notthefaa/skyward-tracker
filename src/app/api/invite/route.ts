@@ -20,12 +20,28 @@ export async function POST(req: Request) {
     const idem = idempotency(supabaseAdmin, user.id, req, 'invite');
     const cached = await idem.check();
     if (cached) return cached;
-    // Reject anything other than the two roles downstream gates know
-    // about — without this an arbitrary string would land in
+    // Reject anything other than the three role values the dropdown
+    // emits — without this an arbitrary string would land in
     // aft_user_roles.role and silently fail every role-based check.
-    if (!['admin', 'pilot'].includes(role)) {
-      return NextResponse.json({ error: 'Role must be "admin" or "pilot".' }, { status: 400 });
+    // 'aircraft_admin' is a UI-only synonym; we split it below into
+    // a global pilot role + per-aircraft admin role.
+    if (!['admin', 'aircraft_admin', 'pilot'].includes(role)) {
+      return NextResponse.json({ error: 'Role must be "admin", "aircraft_admin", or "pilot".' }, { status: 400 });
     }
+
+    // Aircraft admin only makes sense when scoped to at least one
+    // aircraft; otherwise the invite mints a user with the global
+    // pilot role and no access rows — i.e. no admin authority anywhere.
+    if (role === 'aircraft_admin' && (!Array.isArray(aircraftIds) || aircraftIds.length === 0)) {
+      return NextResponse.json({ error: 'Aircraft administrators must be assigned to at least one aircraft.' }, { status: 400 });
+    }
+
+    // Split the UI value into the two columns the schema actually
+    // stores. Global admins keep their per-aircraft access at 'pilot'
+    // (their global role supersedes anyway); aircraft admins get a
+    // global pilot role with admin authority on each assigned tail.
+    const globalRole: 'admin' | 'pilot' = role === 'admin' ? 'admin' : 'pilot';
+    const perAircraftRole: 'admin' | 'pilot' = role === 'aircraft_admin' ? 'admin' : 'pilot';
 
     // Lowercase the address before storing it. Supabase auth normalizes
     // case internally, but pilot-invite (and other lookups) match by
@@ -66,7 +82,7 @@ export async function POST(req: Request) {
       const fleetMembershipPreassigned = Array.isArray(aircraftIds) && aircraftIds.length > 0;
       const { error: roleErr } = await supabaseAdmin.from('aft_user_roles').upsert({
         user_id: data.user.id,
-        role: role,
+        role: globalRole,
         email: normalizedEmail,
         completed_onboarding: fleetMembershipPreassigned,
       });
@@ -75,14 +91,14 @@ export async function POST(req: Request) {
       // 2. Assign the Aircraft instantly. The access row NEEDS an
       //    aircraft_role — downstream gates compare it against
       //    'admin' / 'pilot' string literals, and a NULL value means
-      //    the user would silently be treated as having no role. We
-      //    default to 'pilot'; a caller who wants to mint admins must
-      //    do it from Admin Modals (which specifies the role).
+      //    the user would silently be treated as having no role.
+      //    perAircraftRole is 'admin' only when the inviter picked
+      //    "Aircraft Administrator"; otherwise pilot.
       if (aircraftIds && aircraftIds.length > 0) {
         const accessInserts = aircraftIds.map((id: string) => ({
           user_id: data.user.id,
           aircraft_id: id,
-          aircraft_role: 'pilot',
+          aircraft_role: perAircraftRole,
         }));
         const { error: accessErr } = await supabaseAdmin.from('aft_user_aircraft_access').insert(accessInserts);
         if (accessErr) throw accessErr;

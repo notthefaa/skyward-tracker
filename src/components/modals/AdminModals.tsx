@@ -71,7 +71,7 @@ export default function AdminModals({
   const [emailPreviewType, setEmailPreviewType] = useState<'squawk_mx' | 'squawk_internal' | 'mx_schedule' | 'mx_reminder'>('squawk_mx');
   
   const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteRole, setInviteRole] = useState<'admin'|'pilot'>('pilot');
+  const [inviteRole, setInviteRole] = useState<'admin'|'aircraft_admin'|'pilot'>('pilot');
   const [inviteAircraftIds, setInviteAircraftIds] = useState<string[]>([]);
 
   const [allUsers, setAllUsers] = useState<AdminUser[]>([]);
@@ -382,13 +382,21 @@ export default function AdminModals({
   };
 
   const handleInviteUser = async (e: React.FormEvent) => {
-    e.preventDefault(); setIsSubmitting(true);
+    e.preventDefault();
+    // Aircraft admin without a tail = a pilot-role account with no
+    // access rows, i.e. admin of nothing. Block before the request
+    // so the API doesn't have to surface the same error.
+    if (inviteRole === 'aircraft_admin' && inviteAircraftIds.length === 0) {
+      showError('Pick at least one aircraft for an aircraft administrator.');
+      return;
+    }
+    setIsSubmitting(true);
     try {
       const idemKey = crypto.randomUUID();
       const res = await authFetch('/api/invite', { method: 'POST', headers: idempotencyHeader(idemKey), body: JSON.stringify({ email: inviteEmail, role: inviteRole, aircraftIds: inviteAircraftIds }) });
       if (!res.ok) { const errData = await res.json(); throw new Error(errData.error || "Couldn't send invitation"); }
       showSuccess(`Invitation sent to ${inviteEmail}.`);
-      setShowInviteModal(false); setInviteEmail(""); setInviteAircraftIds([]);
+      setShowInviteModal(false); setInviteEmail(""); setInviteRole('pilot'); setInviteAircraftIds([]);
     } catch (error: any) { showError("Couldn't send invitation: " + error.message); }
     setIsSubmitting(false);
   };
@@ -530,6 +538,11 @@ export default function AdminModals({
   const handleSetAircraftAdmin = async (userId: string) => {
     const u = globalUsers.find(u => u.user_id === userId);
     if (!u) return;
+    const pilotAircraft = u.aircraft.filter((a: AdminUserAircraftAccess) => a.aircraft_role !== 'admin');
+    if (u.aircraft.length === 0) {
+      showError("Assign at least one aircraft to this user before making them an Aircraft Admin.");
+      return;
+    }
     setIsSubmitting(true);
     try {
       // If currently a global admin, demote to pilot first
@@ -545,6 +558,11 @@ export default function AdminModals({
           return;
         }
         const res = await authFetch('/api/admin/users', { method: 'PUT', body: JSON.stringify({ targetUserId: userId, newRole: 'pilot' }) });
+        if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Failed'); }
+      }
+      // Promote every assigned aircraft from pilot → admin (no-op if already admin)
+      for (const ac of pilotAircraft) {
+        const res = await authFetch('/api/aircraft-access', { method: 'PUT', body: JSON.stringify({ targetUserId: userId, aircraftId: ac.aircraft_id, newRole: 'admin' }) });
         if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Failed'); }
       }
       await refreshUsers();
@@ -729,9 +747,14 @@ export default function AdminModals({
               <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Email Address</label><input type="email" required value={inviteEmail} onChange={e=>setInviteEmail(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 outline-none focus:border-navy" /></div>
               <div>
                 <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Role</label>
-                <select value={inviteRole} onChange={e=>setInviteRole(e.target.value as 'admin' | 'pilot')} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 outline-none focus:border-navy">
-                  <option value="pilot">Pilot</option><option value="admin">Administrator</option>
+                <select value={inviteRole} onChange={e=>setInviteRole(e.target.value as 'admin' | 'aircraft_admin' | 'pilot')} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 outline-none focus:border-navy">
+                  <option value="pilot">Pilot</option>
+                  <option value="aircraft_admin">Aircraft Administrator</option>
+                  <option value="admin">Global Administrator</option>
                 </select>
+                {inviteRole === 'aircraft_admin' && (
+                  <p className="text-[10px] text-gray-500 mt-1">Admin authority on the aircraft selected below. No global access.</p>
+                )}
               </div>
               <div className="border border-gray-200 rounded p-3 bg-gray-50 mt-2 max-h-[30vh] overflow-y-auto">
                 <h3 className="text-[10px] font-bold uppercase tracking-widest text-navy mb-2">Assign Aircraft Access</h3>
