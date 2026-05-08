@@ -35,6 +35,16 @@ export async function POST(req: Request) {
     await requireAircraftAdmin(supabaseAdmin, user.id, event.aircraft_id);
     await setAppUser(supabaseAdmin, user.id);
 
+    // Cancel is terminal. Once status='cancelled' lands, the access_token
+    // has been rotated and the mechanic's portal link is dead — letting
+    // a follow-up confirm/counter/comment land would either send the
+    // mechanic an email referencing a broken link, or silently mutate
+    // an event the mechanic has already been told is cancelled.
+    // Mirrors the symmetric guard in mx-events/respond/route.ts:67.
+    if (event.status === 'cancelled') {
+      return NextResponse.json({ error: 'This event was already cancelled.' }, { status: 409 });
+    }
+
     // Double-tap protection: same X-Idempotency-Key returns the cached
     // {success:true} without re-running emails / state changes.
     const idem = idempotency(supabaseAdmin, user.id, req, 'mx-events/owner-action');

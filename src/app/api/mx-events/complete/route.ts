@@ -25,6 +25,16 @@ export async function POST(req: Request) {
     await requireAircraftAdmin(supabaseAdmin, user.id, event.aircraft_id);
     await setAppUser(supabaseAdmin, user.id);
 
+    // Cancel is terminal. The owner-action route rotates the
+    // access_token at cancel time so the mechanic's portal link is
+    // already dead — letting Complete advance MX intervals + resolve
+    // squawks here would silently undo the cancel and leave the
+    // mechanic out of sync. Mirrors the symmetric guard in
+    // owner-action/route.ts and respond/route.ts:67.
+    if (event.status === 'cancelled') {
+      return NextResponse.json({ error: 'This event was already cancelled.' }, { status: 409 });
+    }
+
     // Idempotency — a slow-network double-tap on "Complete Event"
     // would otherwise re-run the atomic RPC and double-advance MX
     // intervals + duplicate squawk-resolves. The cleaned-completions
