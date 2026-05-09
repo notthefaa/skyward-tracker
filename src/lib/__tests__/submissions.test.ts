@@ -75,6 +75,31 @@ describe('validateFlightLogInput', () => {
     }
   });
 
+  it('defaults missing engine_cycles to 0 (NOT NULL on aft_flight_logs; piston pilots have no cycles)', () => {
+    // The companion-app queue may omit engine_cycles entirely for
+    // piston aircraft. Without this default, log_flight_atomic fails
+    // with a constraint-violation on insert, surfacing as a confusing
+    // INTERNAL_ERROR instead of a successful piston flight log.
+    const input = validateFlightLogInput({
+      initials: 'AG', hobbs: 1010, tach: 1010, landings: 1,
+    });
+    expect(input.engine_cycles).toBe(0);
+  });
+
+  it('preserves an explicit engine_cycles value (turbine pilots send the real count)', () => {
+    const input = validateFlightLogInput({
+      initials: 'AG', aftt: 1234.5, ftt: 1200.2, landings: 1, engine_cycles: 7,
+    });
+    expect(input.engine_cycles).toBe(7);
+  });
+
+  it('treats engine_cycles=0 from the web client as a real value, not "missing"', () => {
+    const input = validateFlightLogInput({
+      initials: 'AG', hobbs: 1010, tach: 1010, landings: 1, engine_cycles: 0,
+    });
+    expect(input.engine_cycles).toBe(0);
+  });
+
   it('allows occurred_at from 30 days ago (normal offline buffer)', () => {
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
     const input = validateFlightLogInput({

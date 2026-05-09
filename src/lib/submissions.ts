@@ -131,7 +131,24 @@ export function validateFlightLogInput(raw: unknown): FlightLogInput {
       throw new CodedError('VALIDATION_ERROR', `Invalid ${field}: must be a finite non-negative number.`, 400);
     }
   }
-  return { ...(d as FlightLogInput), occurred_at: normalizeOccurredAt(d.occurred_at) ?? undefined };
+  // engine_cycles is NOT NULL on aft_flight_logs but is a turbine
+  // concept — piston pilots have no cycles to log. The web client
+  // explicitly sends 0 for piston (SummaryTab + TimesTab), but the
+  // companion app's offline queue may omit the field entirely. The
+  // log_flight_atomic RPC's `nullif(...)::int` then resolves to NULL
+  // and the insert 500s with a constraint-violation message that
+  // surfaces as `INTERNAL_ERROR` — confusing for the user. Default
+  // to 0 here so every caller of validateFlightLogInput is covered.
+  // (`landings` already has a coalesce default in the RPC itself.)
+  const cyclesRaw = d.engine_cycles;
+  const engine_cycles = (cyclesRaw === null || cyclesRaw === undefined || cyclesRaw === '')
+    ? 0
+    : Number(cyclesRaw);
+  return {
+    ...(d as FlightLogInput),
+    engine_cycles,
+    occurred_at: normalizeOccurredAt(d.occurred_at) ?? undefined,
+  };
 }
 
 export async function submitFlightLog(
