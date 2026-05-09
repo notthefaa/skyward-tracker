@@ -857,6 +857,18 @@ export default function AppShell({ session }: AppShellProps) {
     }
   }, [activeTail, allAircraftList.length, session, activeTab]);
 
+  // Reset unreadNotes immediately on tail change so the More-tab
+  // badge can't display the PREVIOUS tail's count under the NEW
+  // tail's selection. The throttled effect above re-fetches the
+  // accurate count when it fires (or on the next 30s expiry); if
+  // throttled, '0' stays — a safer default than carrying a wrong
+  // number. Same pattern that fixed the status-dot bleed (see
+  // `useGroundedStatus`'s tail-keyed maps). Only depends on
+  // activeTail so in-tab navigation doesn't clobber the badge.
+  useEffect(() => {
+    setUnreadNotes(0);
+  }, [activeTail]);
+
   // ─── Helpers ───
   const handleInitialFetch = async (userId: string) => {
     try {

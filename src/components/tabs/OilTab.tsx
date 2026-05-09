@@ -141,6 +141,19 @@ export default function OilTab({
   const [initials, setInitials] = useState(userInitials);
   const [notes, setNotes] = useState('');
 
+  // Reset per-aircraft UI state on tail switch. Component stays
+  // mounted across aircraft changes; without this, pagination past
+  // the new tail's last page renders empty, and a half-filled modal
+  // would submit against B with A-context data. Mirrors TimesTab.
+  useEffect(() => {
+    setShowModal(false);
+    setPage(1);
+    setOilQty('');
+    setOilAdded('');
+    setEngineHours('');
+    setNotes('');
+  }, [aircraft?.id]);
+
   // Paginated table data
   const { data, mutate } = useSWR(
     aircraft ? swrKeys.oil(aircraft.id, page) : null,

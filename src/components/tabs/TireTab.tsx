@@ -89,6 +89,23 @@ export default function TireTab({
   const [notes, setNotes] = useState('');
   const [allGood, setAllGood] = useState(false);
 
+  // Reset per-aircraft UI state on tail switch. Component stays
+  // mounted; without this, pagination past the new tail's last page
+  // renders empty, and a half-filled modal would submit against B
+  // with A-context data. Mirrors TimesTab.
+  useEffect(() => {
+    setShowModal(false);
+    setPage(1);
+    setNoseLow(false);
+    setLeftLow(false);
+    setRightLow(false);
+    setNosePsi('');
+    setLeftMainPsi('');
+    setRightMainPsi('');
+    setNotes('');
+    setAllGood(false);
+  }, [aircraft?.id]);
+
   const { data, mutate } = useSWR(
     aircraft ? swrKeys.tire(aircraft.id, page) : null,
     async () => {

@@ -47,6 +47,18 @@ export default function VorTab({
   const [bearingError, setBearingError] = useState('');
   const [initials, setInitials] = useState(userInitials);
 
+  // Reset per-aircraft UI state on tail switch. The component stays
+  // mounted (only the `aircraft` prop changes), so without this a
+  // pilot on Page 5 of A's checks who switches to B sees an empty
+  // Page 5 instead of Page 1, and any half-filled form modal would
+  // submit against B with A-context data. Mirrors TimesTab.
+  useEffect(() => {
+    setShowModal(false);
+    setPage(1);
+    setStation('');
+    setBearingError('');
+  }, [aircraft?.id]);
+
   const { data, mutate } = useSWR(
     aircraft ? swrKeys.vor(aircraft.id, page) : null,
     async () => {
