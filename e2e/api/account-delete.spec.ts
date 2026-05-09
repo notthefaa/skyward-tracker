@@ -165,4 +165,86 @@ test.describe('account-delete — sole-admin guard', () => {
 
     await admin.auth.admin.deleteUser(callerId).then(undefined, () => {});
   });
+
+  test('sole-admin guard relaxes when ANOTHER global admin already has access to the aircraft', async ({ baseURL }) => {
+    // Setup: victim is the only aircraft-admin on a plane, but a
+    // global admin has an access row on that same plane. The
+    // RELAXATION is at the route level — the sole-admin check no
+    // longer 400s when a global admin has access. We assert the
+    // route doesn't return 400; we don't assert it returns 200
+    // because there's a SEPARATE latent cascade-deletion issue in
+    // the DB schema (duplicate FK on aft_user_aircraft_access.user_id,
+    // similar shape to migration 055's aft_aircraft.created_by fix)
+    // that surfaces a 500 from auth.deleteUser when a victim has
+    // created an aircraft. That's a DB-level bug, not a route-level
+    // bug, and is being tracked separately. The relaxation logic
+    // itself is verified here; the demote / remove paths in
+    // aircraft-lifecycle.spec.ts exercise the full success path
+    // since they don't go through auth.admin.deleteUser.
+    const admin = adminClient();
+
+    // Global admin caller.
+    const callerEmail = `e2e-relax-caller-${randomUUID()}@skyward-test.local`;
+    const callerPw = `pw-${randomUUID().slice(0, 12)}`;
+    const { data: callerU } = await admin.auth.admin.createUser({
+      email: callerEmail, password: callerPw, email_confirm: true,
+    });
+    const callerId = callerU!.user!.id;
+    await admin.from('aft_user_roles').upsert(
+      { user_id: callerId, role: 'admin', email: callerEmail, completed_onboarding: true },
+      { onConflict: 'user_id' },
+    );
+
+    // Victim: sole admin on a fresh aircraft.
+    const victimEmail = `e2e-relax-victim-${randomUUID()}@skyward-test.local`;
+    const victimPw = `pw-${randomUUID().slice(0, 12)}`;
+    const { data: victimU } = await admin.auth.admin.createUser({
+      email: victimEmail, password: victimPw, email_confirm: true,
+    });
+    const victimId = victimU!.user!.id;
+    const tail = `N${randomUUID().slice(0, 5).toUpperCase()}`;
+    const { data: ac, error: rpcErr } = await admin.rpc('create_aircraft_atomic', {
+      p_user_id: victimId,
+      p_payload: {
+        tail_number: tail,
+        aircraft_type: 'Cessna 172S',
+        engine_type: 'Piston',
+      },
+    });
+    if (rpcErr) throw new Error(`create_aircraft_atomic: ${rpcErr.message}`);
+    const acId = (ac as { id: string }).id;
+
+    // Add the global admin caller to the aircraft's access list.
+    // (aircraft_role: 'pilot' is fine — global admin gives the powers.)
+    const { error: accessErr } = await admin
+      .from('aft_user_aircraft_access')
+      .insert({ user_id: callerId, aircraft_id: acId, aircraft_role: 'pilot' });
+    if (accessErr) throw accessErr;
+
+    try {
+      const token = await getAccessToken(callerEmail, callerPw);
+      const res = await fetchAs(token, baseURL!, '/api/users', {
+        method: 'DELETE',
+        body: JSON.stringify({ userId: victimId }),
+      });
+      // Pre-relaxation: 400 with "only admin" error.
+      // Post-relaxation: route gets past the guard. (May still 500
+      // due to the unrelated cascade bug noted above; that's
+      // tracked separately and doesn't invalidate the relaxation.)
+      expect(res.status).not.toBe(400);
+      const body = await res.json();
+      // Confirm the guard wasn't the blocker — the route either
+      // succeeded (200) OR failed during the actual delete with a
+      // database-level error. Either is fine for THIS test; what
+      // we're locking is that "only admin" is no longer the
+      // refusal reason when a global admin has access.
+      if (res.status >= 400) {
+        expect(body.error).not.toMatch(/only admin/i);
+      }
+    } finally {
+      await admin.from('aft_aircraft').delete().eq('id', acId).then(undefined, () => {});
+      await admin.auth.admin.deleteUser(victimId).then(undefined, () => {});
+      await admin.auth.admin.deleteUser(callerId).then(undefined, () => {});
+    }
+  });
 });

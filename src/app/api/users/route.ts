@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { requireAuth, handleApiError } from '@/lib/auth';
+import { requireAuth, handleApiError, aircraftHasGlobalAdminWithAccess } from '@/lib/auth';
 
 export async function DELETE(req: Request) {
   try {
@@ -39,12 +39,22 @@ export async function DELETE(req: Request) {
         .eq('aircraft_role', 'admin');
       if (adminsErr) throw adminsErr;
       if ((admins?.length ?? 0) <= 1) {
+        // Relaxed sole-admin guard: if a global admin already has
+        // access to this aircraft, deleting the only aircraft-level
+        // admin doesn't strand the plane — the global admin can
+        // promote a pilot or take admin actions directly. Skip the
+        // block in that case. (Falls back to the original block if
+        // no global admin has access.)
+        const hasGlobalAdmin = await aircraftHasGlobalAdminWithAccess(
+          supabaseAdmin, row.aircraft_id, userId,
+        );
+        if (hasGlobalAdmin) continue;
         // Pull the tail for a more helpful error.
         const { data: ac, error: acErr } = await supabaseAdmin
           .from('aft_aircraft').select('tail_number').eq('id', row.aircraft_id).maybeSingle();
         if (acErr) throw acErr;
         return NextResponse.json(
-          { error: `This user is the only admin on ${ac?.tail_number ?? 'an aircraft'}. Promote another pilot on that aircraft before deleting.` },
+          { error: `This user is the only admin on ${ac?.tail_number ?? 'an aircraft'}. Promote another pilot on that aircraft before deleting, or add a global admin to the aircraft.` },
           { status: 400 },
         );
       }

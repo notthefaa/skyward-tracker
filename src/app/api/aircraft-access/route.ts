@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { requireAuth, handleApiError } from '@/lib/auth';
+import { requireAuth, handleApiError, aircraftHasGlobalAdminWithAccess } from '@/lib/auth';
 
 /** Update a user's aircraft role */
 export async function PUT(req: Request) {
@@ -83,17 +83,29 @@ export async function PUT(req: Request) {
       if (countErr) throw countErr;
 
       if ((remainingAdmins ?? 0) === 0) {
-        // Restore — and tell the caller why.
-        const { error: restoreErr } = await supabaseAdmin
-          .from('aft_user_aircraft_access')
-          .update({ aircraft_role: 'admin' })
-          .eq('user_id', targetUserId)
-          .eq('aircraft_id', aircraftId);
-        if (restoreErr) throw restoreErr;
-        const msg = targetUserId === user.id
-          ? 'Cannot demote yourself — no other admins remain. Promote another pilot first.'
-          : 'Cannot demote the only remaining admin. Promote another pilot first.';
-        return NextResponse.json({ error: msg }, { status: 409 });
+        // Relaxed sole-admin guard: if a global admin has access to
+        // this aircraft, leaving zero aircraft-admins doesn't strand
+        // the plane — the global admin can recover (promote a pilot,
+        // edit the aircraft directly). Don't restore the demotion in
+        // that case. We exclude the target so a self-demote of a
+        // global admin still demands another global admin elsewhere
+        // on the access list.
+        const hasGlobalAdmin = await aircraftHasGlobalAdminWithAccess(
+          supabaseAdmin, aircraftId, targetUserId,
+        );
+        if (!hasGlobalAdmin) {
+          // Restore — and tell the caller why.
+          const { error: restoreErr } = await supabaseAdmin
+            .from('aft_user_aircraft_access')
+            .update({ aircraft_role: 'admin' })
+            .eq('user_id', targetUserId)
+            .eq('aircraft_id', aircraftId);
+          if (restoreErr) throw restoreErr;
+          const msg = targetUserId === user.id
+            ? 'Cannot demote yourself — no other admins remain. Promote another pilot first, or add a global admin to the aircraft.'
+            : 'Cannot demote the only remaining admin. Promote another pilot first, or add a global admin to the aircraft.';
+          return NextResponse.json({ error: msg }, { status: 409 });
+        }
       }
 
       return NextResponse.json({ success: true });
@@ -190,18 +202,27 @@ export async function DELETE(req: Request) {
         .eq('aircraft_role', 'admin');
 
       if ((remainingAdmins ?? 0) === 0) {
-        // Restore the row so the aircraft isn't orphaned.
-        await supabaseAdmin
-          .from('aft_user_aircraft_access')
-          .insert({
-            user_id: targetUserId,
-            aircraft_id: aircraftId,
-            aircraft_role: 'admin',
-          });
-        const msg = targetUserId === user.id
-          ? 'Cannot remove yourself — no other admins remain. Promote another pilot first.'
-          : 'Cannot remove the only remaining admin. Promote another pilot first.';
-        return NextResponse.json({ error: msg }, { status: 409 });
+        // Relaxed sole-admin guard: if a global admin has access to
+        // this aircraft (excluding the just-removed target), removing
+        // the only aircraft-admin doesn't strand the plane. Skip the
+        // restore in that case.
+        const hasGlobalAdmin = await aircraftHasGlobalAdminWithAccess(
+          supabaseAdmin, aircraftId, targetUserId,
+        );
+        if (!hasGlobalAdmin) {
+          // Restore the row so the aircraft isn't orphaned.
+          await supabaseAdmin
+            .from('aft_user_aircraft_access')
+            .insert({
+              user_id: targetUserId,
+              aircraft_id: aircraftId,
+              aircraft_role: 'admin',
+            });
+          const msg = targetUserId === user.id
+            ? 'Cannot remove yourself — no other admins remain. Promote another pilot first, or add a global admin to the aircraft.'
+            : 'Cannot remove the only remaining admin. Promote another pilot first, or add a global admin to the aircraft.';
+          return NextResponse.json({ error: msg }, { status: 409 });
+        }
       }
     }
 

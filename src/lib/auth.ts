@@ -154,6 +154,49 @@ export async function requireAircraftAdmin(
 }
 
 /**
+ * Returns true if any user on this aircraft's access list (optionally
+ * excluding one user) is a global admin (`aft_user_roles.role = 'admin'`).
+ *
+ * Used to relax the sole-aircraft-admin guard on user delete + aircraft-
+ * access demote/remove. A global admin who has access to the aircraft can
+ * recover it (promote a pilot, take admin actions) even if the operation
+ * leaves zero aircraft-level admins, so the guard becomes overly strict
+ * in fleets that have a global admin on the access list.
+ *
+ * Note: a global admin without a row in `aft_user_aircraft_access` for
+ * this aircraft is NOT counted — the access row is what surfaces the
+ * aircraft in their UI by default. Without it, recovery requires direct
+ * DB access or admin tooling, which is exactly the unrecoverable state
+ * the original guard exists to prevent.
+ */
+export async function aircraftHasGlobalAdminWithAccess(
+  supabaseAdmin: AdminClient,
+  aircraftId: string,
+  excludeUserId?: string,
+): Promise<boolean> {
+  let accessQuery = supabaseAdmin
+    .from('aft_user_aircraft_access')
+    .select('user_id')
+    .eq('aircraft_id', aircraftId);
+  if (excludeUserId) {
+    accessQuery = accessQuery.neq('user_id', excludeUserId);
+  }
+  const { data: accessRows, error: accessErr } = await accessQuery;
+  if (accessErr) throw accessErr;
+  const userIds = (accessRows || []).map(r => (r as { user_id: string }).user_id);
+  if (userIds.length === 0) return false;
+
+  const { data: admins, error: adminErr } = await supabaseAdmin
+    .from('aft_user_roles')
+    .select('user_id')
+    .in('user_id', userIds)
+    .eq('role', 'admin')
+    .limit(1);
+  if (adminErr) throw adminErr;
+  return (admins?.length ?? 0) > 0;
+}
+
+/**
  * Standard error response builder for API routes.
  * Handles both auth errors (thrown by requireAuth) and generic errors.
  *

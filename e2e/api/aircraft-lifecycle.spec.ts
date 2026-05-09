@@ -325,3 +325,138 @@ test.describe('aircraft-access — sole-admin guards', () => {
     expect(row?.aircraft_role).toBe('admin');
   });
 });
+
+test.describe('aircraft-access — sole-admin guard relaxed when a global admin has access', () => {
+  // The original guard refused to demote / remove the only aircraft-
+  // admin to prevent stranding the plane. With the relaxation, if a
+  // global admin already has an access row on the aircraft, they can
+  // recover it (promote a pilot, edit directly), so the guard steps
+  // aside. Without a global admin on the access list, the original
+  // behavior holds.
+
+  async function attachGlobalAdminToAircraft(aircraftId: string): Promise<{ adminId: string; cleanup: () => Promise<void> }> {
+    const admin = adminClient();
+    const email = `e2e-globadmin-relax-${randomUUID()}@skyward-test.local`;
+    const password = `pw-${randomUUID().slice(0, 12)}`;
+    const { data: u, error: uErr } = await admin.auth.admin.createUser({
+      email, password, email_confirm: true,
+    });
+    if (uErr || !u.user) throw new Error(`createUser: ${uErr?.message}`);
+    const adminId = u.user.id;
+    // Promote to global admin AND grant aircraft access. The role
+    // upsert handles the case where the auth.users insert trigger
+    // already seeded a 'pilot' row for this user.
+    await admin.from('aft_user_roles').upsert(
+      { user_id: adminId, role: 'admin', email, completed_onboarding: true },
+      { onConflict: 'user_id' },
+    );
+    await admin.from('aft_user_aircraft_access').insert({
+      user_id: adminId,
+      aircraft_id: aircraftId,
+      aircraft_role: 'pilot', // pilot here is fine — global admin gives the powers
+    });
+    return {
+      adminId,
+      cleanup: async () => {
+        try { await admin.auth.admin.deleteUser(adminId); } catch { /* noop */ }
+      },
+    };
+  }
+
+  test('demoting the only aircraft-admin SUCCEEDS when a global admin has access', async ({ seededUser, baseURL }) => {
+    const admin = adminClient();
+    const { cleanup } = await attachGlobalAdminToAircraft(seededUser.aircraftId);
+    try {
+      const token = await getAccessToken(seededUser.email, seededUser.password);
+      const res = await fetchAs(token, baseURL!, '/api/aircraft-access', {
+        method: 'PUT',
+        body: JSON.stringify({
+          targetUserId: seededUser.userId,
+          aircraftId: seededUser.aircraftId,
+          newRole: 'pilot',
+        }),
+      });
+      expect(res.status).toBe(200);
+
+      // Role actually flipped this time.
+      const { data: row } = await admin
+        .from('aft_user_aircraft_access')
+        .select('aircraft_role')
+        .eq('user_id', seededUser.userId)
+        .eq('aircraft_id', seededUser.aircraftId)
+        .single();
+      expect(row?.aircraft_role).toBe('pilot');
+    } finally {
+      await cleanup();
+    }
+  });
+
+  test('removing the only aircraft-admin SUCCEEDS when a global admin has access', async ({ seededUser, baseURL }) => {
+    const admin = adminClient();
+    const { cleanup } = await attachGlobalAdminToAircraft(seededUser.aircraftId);
+    try {
+      const token = await getAccessToken(seededUser.email, seededUser.password);
+      const res = await fetchAs(token, baseURL!, '/api/aircraft-access', {
+        method: 'DELETE',
+        body: JSON.stringify({
+          targetUserId: seededUser.userId,
+          aircraftId: seededUser.aircraftId,
+        }),
+      });
+      expect(res.status).toBe(200);
+
+      // Access row actually deleted this time.
+      const { data: row } = await admin
+        .from('aft_user_aircraft_access')
+        .select('aircraft_role')
+        .eq('user_id', seededUser.userId)
+        .eq('aircraft_id', seededUser.aircraftId)
+        .maybeSingle();
+      expect(row).toBeNull();
+    } finally {
+      await cleanup();
+    }
+  });
+
+  test('global admin without aircraft access does NOT relax the guard (original behavior holds)', async ({ seededUser, baseURL }) => {
+    // Sanity: the relaxation is gated on the global admin having an
+    // access row. A global admin who isn't on the access list can
+    // still recover via admin tooling, but the access row is what
+    // surfaces the aircraft in their UI by default — without it, the
+    // recovery requires direct DB intervention. Keep the guard.
+    const admin = adminClient();
+    const email = `e2e-globadmin-noaccess-${randomUUID()}@skyward-test.local`;
+    const password = `pw-${randomUUID().slice(0, 12)}`;
+    const { data: u } = await admin.auth.admin.createUser({
+      email, password, email_confirm: true,
+    });
+    const adminId = u!.user!.id;
+    await admin.from('aft_user_roles').upsert(
+      { user_id: adminId, role: 'admin', email, completed_onboarding: true },
+      { onConflict: 'user_id' },
+    );
+    // Note: NOT inserting into aft_user_aircraft_access.
+
+    try {
+      const token = await getAccessToken(seededUser.email, seededUser.password);
+      const res = await fetchAs(token, baseURL!, '/api/aircraft-access', {
+        method: 'PUT',
+        body: JSON.stringify({
+          targetUserId: seededUser.userId,
+          aircraftId: seededUser.aircraftId,
+          newRole: 'pilot',
+        }),
+      });
+      expect(res.status).toBe(409);
+      const { data: row } = await admin
+        .from('aft_user_aircraft_access')
+        .select('aircraft_role')
+        .eq('user_id', seededUser.userId)
+        .eq('aircraft_id', seededUser.aircraftId)
+        .single();
+      expect(row?.aircraft_role).toBe('admin');
+    } finally {
+      try { await admin.auth.admin.deleteUser(adminId); } catch { /* noop */ }
+    }
+  });
+});
