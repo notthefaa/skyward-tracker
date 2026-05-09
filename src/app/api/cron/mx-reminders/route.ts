@@ -67,15 +67,21 @@ export async function GET(req: Request) {
     // and skew both the 180-day window inclusion AND the burn-rate
     // math — every just-flushed flight would look like "flown today"
     // and spike recency-weighted projections.
+    //
+    // Throw on read failure: a transient supabase blip would otherwise
+    // return undefined → empty array → burnRate=0 → predictive heads-up
+    // alerts never fire on this tick. Silent missed maintenance is the
+    // worst failure mode for a cron, so let the next tick retry.
     const lookbackDate = new Date();
     lookbackDate.setDate(lookbackDate.getDate() - FLIGHT_DATA_LOOKBACK_DAYS);
-    const { data: recentLogs } = await supabaseAdmin
+    const { data: recentLogs, error: recentLogsErr } = await supabaseAdmin
       .from('aft_flight_logs')
       .select('aircraft_id, ftt, tach, created_at, occurred_at')
       .is('deleted_at', null)
       .gte('occurred_at', lookbackDate.toISOString())
       .order('occurred_at', { ascending: true })
       .order('created_at', { ascending: true });
+    if (recentLogsErr) throw recentLogsErr;
 
     // Build set of MX items already in active events. Throw on read
     // errors here — a silent fallback to an empty set would let the
@@ -626,12 +632,23 @@ export async function GET(req: Request) {
 
             // Only insert the nudge marker if the email actually went
             // out — otherwise we'd suppress the retry on the next tick.
-            await supabaseAdmin.from('aft_event_messages').insert({
-              event_id: ev.id,
-              sender: 'system',
-              message_type: 'status_update',
-              message: `${READY_PICKUP_NUDGE_MARKER} Reminder sent to primary contact — aircraft awaiting logbook entry.`,
-            } as any);
+            // Log marker-insert failures so the duplicate-email storm
+            // they cause is at least visible in the cron log instead of
+            // looking like the dedup logic just stopped working.
+            const { error: markerErr } = await supabaseAdmin
+              .from('aft_event_messages')
+              .insert({
+                event_id: ev.id,
+                sender: 'system',
+                message_type: 'status_update',
+                message: `${READY_PICKUP_NUDGE_MARKER} Reminder sent to primary contact — aircraft awaiting logbook entry.`,
+              } as any);
+            if (markerErr) {
+              console.error(
+                `[cron/mx-reminders] pickup nudge marker insert failed for event ${ev.id} — next tick will re-send the email:`,
+                markerErr.message,
+              );
+            }
           } catch (err: any) {
             console.error(`[cron/mx-reminders] pickup nudge email failed for event ${ev.id}:`, err?.message || err);
           }
@@ -652,10 +669,23 @@ export async function GET(req: Request) {
 
     for (const [flagsJson, ids] of Object.entries(updateGroups)) {
       const flags = JSON.parse(flagsJson);
-      // Batch in groups of 100 to avoid query size limits
+      // Batch in groups of 100 to avoid query size limits. Log on
+      // failure but don't throw — the email already went out, so the
+      // worst case from an unflipped flag is one duplicate reminder
+      // on the next tick, not a missed alert. Killing the cron here
+      // would also forfeit any successfully-flipped earlier batches.
       for (let i = 0; i < ids.length; i += 100) {
         const batch = ids.slice(i, i + 100);
-        await supabaseAdmin.from('aft_maintenance_items').update(flags).in('id', batch);
+        const { error: flagErr } = await supabaseAdmin
+          .from('aft_maintenance_items')
+          .update(flags)
+          .in('id', batch);
+        if (flagErr) {
+          console.error(
+            `[cron/mx-reminders] flag-flip failed (batch of ${batch.length}, flags=${flagsJson}):`,
+            flagErr.message,
+          );
+        }
       }
     }
 

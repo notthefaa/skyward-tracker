@@ -256,8 +256,28 @@ export async function POST(req: Request) {
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
       async start(controller) {
+        // Client-cancel detector. When the consumer cancels the body
+        // (navigation, tab close, AbortController.abort), `enqueue`
+        // throws ERR_INVALID_STATE. Without this, every legitimate
+        // cancel logs as `[Howard stream failed]` in monitoring and
+        // races into the DB-error-message write below — noise that
+        // masks real stream failures.
+        let clientGone = false;
         const send = (data: any) => {
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+          if (clientGone) return;
+          try {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+          } catch {
+            clientGone = true;
+          }
+        };
+        const closeController = () => {
+          if (clientGone) return;
+          try {
+            controller.close();
+          } catch {
+            clientGone = true;
+          }
         };
 
         // SSE comment lines keep the TCP/HTTP pipe warm through long
@@ -270,10 +290,14 @@ export async function POST(req: Request) {
         // under one-and-three-quarter heartbeats of slack so an
         // iOS-suspended socket recovers in ≤14s instead of ≤20s.
         const heartbeat = setInterval(() => {
+          if (clientGone) return;
           try {
             controller.enqueue(encoder.encode(': hb\n\n'));
           } catch {
-            // Controller may already be closed — nothing to do.
+            // Client cancelled between sends — flag so subsequent
+            // send() / closeController() short-circuit instead of
+            // throwing into the catch block below.
+            clientGone = true;
           }
         }, 8000);
 
@@ -343,9 +367,17 @@ export async function POST(req: Request) {
 
           send({ type: 'done', assistantMessage: assistantMsg, threadId });
           clearInterval(heartbeat);
-          controller.close();
+          closeController();
         } catch (err: any) {
           clearInterval(heartbeat);
+          // Client cancelled mid-stream (navigation, tab close, abort).
+          // No partial reply to persist — the user won't see it. Skip
+          // the noisy log + DB error-message write so monitoring isn't
+          // swamped with false-positive "stream failed" entries.
+          if (clientGone) {
+            closeController();
+            return;
+          }
           // Inner-catch errors (Anthropic stream failure, tool crash,
           // DB write after partial stream, etc.) never reach the outer
           // `handleApiError` because the HTTP response has already
@@ -388,7 +420,7 @@ export async function POST(req: Request) {
           } catch {
             send({ type: 'error', error: reason });
           }
-          controller.close();
+          closeController();
         }
       },
     });
