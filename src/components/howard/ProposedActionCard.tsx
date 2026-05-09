@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useSWRConfig } from "swr";
 import { authFetch } from "@/lib/authFetch";
+import { newIdempotencyKey, idempotencyHeader } from "@/lib/idempotencyClient";
 import { CheckCircle, X, Loader2, Sparkles, Calendar, FileText, Wrench, Plane, AlertTriangle, RefreshCw, UserPlus } from "lucide-react";
 import type { ProposedAction } from "@/lib/howard/proposedActions";
 import { matchesAircraft } from "@/lib/swrKeys";
@@ -155,7 +156,14 @@ export default function ProposedActionCard({ action, onChange }: Props) {
   const handleConfirm = async (mode: 'confirm' | 'retry' = 'confirm') => {
     setIsPending(mode); setError(null);
     try {
-      const res = await authFetch(`/api/howard/actions/${action.id}`, { method: 'POST' });
+      // Fresh key per submission so retry-after-failure produces a
+      // brand-new attempt (server only caches success); a transient
+      // network drop within a single submission still replays cleanly.
+      const idemKey = newIdempotencyKey();
+      const res = await authFetch(`/api/howard/actions/${action.id}`, {
+        method: 'POST',
+        headers: idempotencyHeader(idemKey),
+      });
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
         throw new Error(d.error || (mode === 'retry' ? "Retry didn't work" : "Couldn't confirm"));
@@ -172,7 +180,11 @@ export default function ProposedActionCard({ action, onChange }: Props) {
   const handleCancel = async () => {
     setIsPending('cancel'); setError(null);
     try {
-      const res = await authFetch(`/api/howard/actions/${action.id}`, { method: 'DELETE' });
+      const idemKey = newIdempotencyKey();
+      const res = await authFetch(`/api/howard/actions/${action.id}`, {
+        method: 'DELETE',
+        headers: idempotencyHeader(idemKey),
+      });
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
         throw new Error(d.error || "Couldn't cancel");

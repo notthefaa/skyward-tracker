@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireAuth, requireAircraftAccess, requireAircraftAdmin, handleApiError } from '@/lib/auth';
 import { setAppUser } from '@/lib/audit';
+import { idempotency } from '@/lib/idempotency';
 import { executeAction, type ProposedAction } from '@/lib/howard/proposedActions';
 
 // POST /api/howard/actions/[id] — confirm and execute a proposed action
@@ -8,6 +9,16 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   try {
     const { id } = await params;
     const { user, supabaseAdmin } = await requireAuth(req);
+
+    // Double-tap protection: same X-Idempotency-Key replays the cached
+    // {success, action_id, record} without re-running executeAction.
+    // MUST come before the terminal-status guard below — a legitimate
+    // network-retry of a successful confirm would otherwise hit the
+    // executed-status check (status now='executed') and return 409
+    // instead of the cached 200 from the original successful call.
+    const idem = idempotency(supabaseAdmin, user.id, req, 'howard/actions/POST');
+    const cached = await idem.check();
+    if (cached) return cached;
 
     const { data: action, error: fetchErr } = await supabaseAdmin
       .from('aft_proposed_actions')
@@ -70,11 +81,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         console.error('[howard/actions] executed but status update failed', updateErr);
       }
 
-      return NextResponse.json({
-        success: true,
-        action_id: id,
-        record: result,
-      });
+      const responseBody = { success: true, action_id: id, record: result };
+      await idem.save(200, responseBody);
+      return NextResponse.json(responseBody);
     } catch (execErr: any) {
       // Mark the row as failed so the UI can offer a retry. If even
       // this update fails, surface a warning — leaving the action stuck
@@ -99,6 +108,16 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
     const { id } = await params;
     const { user, supabaseAdmin } = await requireAuth(req);
 
+    // Double-tap protection: same X-Idempotency-Key replays the cached
+    // {success:true} without re-running the cancel UPDATE. MUST come
+    // before the cancelled-status guard below — a legitimate network-
+    // retry of a successful cancel would otherwise hit the cancelled-
+    // check (status now='cancelled') and 409 instead of returning the
+    // cached 200 from the original successful call.
+    const idem = idempotency(supabaseAdmin, user.id, req, 'howard/actions/DELETE');
+    const cached = await idem.check();
+    if (cached) return cached;
+
     // Read errors must surface as 500, not 404 — masking a transient DB
     // hit as "not found" would cause the UI to drop the action card on
     // a flake, leaving the user with no way to confirm or cancel.
@@ -120,7 +139,9 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
       .eq('id', id);
     if (cancelErr) throw cancelErr;
 
-    return NextResponse.json({ success: true });
+    const responseBody = { success: true };
+    await idem.save(200, responseBody);
+    return NextResponse.json(responseBody);
   } catch (error) { return handleApiError(error); }
 }
 
