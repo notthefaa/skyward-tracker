@@ -1,32 +1,31 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import { useSWRConfig } from "swr";
 import { supabase } from "@/lib/supabase";
 import { computeAirworthinessStatus, applyOpenSquawkOverride } from "@/lib/airworthiness";
 import { swrKeys } from "@/lib/swrKeys";
 import type { AircraftWithMetrics, AircraftStatus } from "@/lib/types";
 
-export function useGroundedStatus(allAircraftList: AircraftWithMetrics[]) {
-  // Start as 'unknown' so a first-fetch failure doesn't render the
-  // header dot green for an aircraft we haven't actually verified.
-  // The UI maps 'unknown' to a neutral gray dot + suppresses the
-  // grounded banner; once a fetch lands the verdict resolves to one
-  // of airworthy/issues/grounded.
-  const [aircraftStatus, setAircraftStatus] = useState<AircraftStatus>('unknown');
-  const [groundedReason, setGroundedReason] = useState<string>("");
-  const lastTailRef = useRef<string>("");
+export function useGroundedStatus(allAircraftList: AircraftWithMetrics[], activeTail: string) {
+  // Status keyed by tail — the previous shape stored a single
+  // `aircraftStatus` value that lingered when the AppShell-level
+  // throttle (per-tail, 30s) skipped a fresh checkGroundedStatus on
+  // tail switch. The header would then render the OLD tail's verdict
+  // under the NEW tail's tail-number until either the throttle elapsed
+  // or some other write fired a refresh. Keying by tail means the
+  // displayed value always tracks the active selection, even when the
+  // throttle suppresses the actual fetch.
+  const [statusByTail, setStatusByTail] = useState<Record<string, AircraftStatus>>({});
+  const [reasonByTail, setReasonByTail] = useState<Record<string, string>>({});
   const { cache: swrCache } = useSWRConfig();
 
+  // Default 'unknown' so first-paint after a tail switch (before any
+  // fetch lands) renders a neutral gray dot — never a stale green.
+  const aircraftStatus: AircraftStatus = activeTail ? (statusByTail[activeTail] ?? 'unknown') : 'unknown';
+  const groundedReason: string = activeTail ? (reasonByTail[activeTail] ?? '') : '';
+
   const checkGroundedStatus = useCallback(async (tail: string) => {
-    // Tail switch: reset to 'unknown' immediately so the previous
-    // aircraft's verdict can't bleed into this one. A fresh fetch
-    // (or fleet-cache read below) lands on top.
-    if (tail !== lastTailRef.current) {
-      lastTailRef.current = tail;
-      setAircraftStatus('unknown');
-      setGroundedReason("");
-    }
     const ac = allAircraftList.find(a => a.tail_number === tail);
     if (!ac) return;
 
@@ -46,11 +45,11 @@ export function useGroundedStatus(allAircraftList: AircraftWithMetrics[]) {
     if (Array.isArray(fleetData)) {
       const cached = fleetData.find((entry: any) => entry?.id === ac.id);
       if (cached?.status) {
-        setAircraftStatus(cached.status as AircraftStatus);
+        setStatusByTail(prev => ({ ...prev, [tail]: cached.status as AircraftStatus }));
         // Fleet cache holds the verdict but not the reason string.
         // Empty string suppresses the banner; the next fresh fetch
         // (below) populates it if grounded.
-        setGroundedReason("");
+        setReasonByTail(prev => ({ ...prev, [tail]: "" }));
       }
     }
 
@@ -76,19 +75,20 @@ export function useGroundedStatus(allAircraftList: AircraftWithMetrics[]) {
         .eq('aircraft_id', ac.id).is('deleted_at', null).eq('is_superseded', false),
     ]);
 
-    // If a tail switch happened mid-fetch, drop this run — the new
-    // tail's check will land on top and we don't want to write the
-    // wrong aircraft's verdict into the header.
-    if (lastTailRef.current !== tail) return;
+    // No mid-fetch drop needed any more — verdicts are tail-keyed,
+    // so writing to setStatusByTail[tail] for an inactive tail still
+    // doesn't bleed into the header (which reads statusByTail[activeTail]).
+    // The check below keeps the previous shape's robustness against
+    // partial-failure clobbering, just per-tail now.
 
     if (mxRes.error || sqRes.error || eqRes.error || adRes.error) {
       console.warn('[useGroundedStatus] fetch failed', {
         mx: mxRes.error?.message, sq: sqRes.error?.message,
         eq: eqRes.error?.message, ad: adRes.error?.message,
       });
-      // Keep whatever the fleet-cache pass already wrote (or
-      // 'unknown' if the cache was empty). Don't clobber a good
-      // verdict with a transient blip.
+      // Keep whatever the fleet-cache pass already wrote for this
+      // tail (or 'unknown' if the cache was empty). Don't clobber a
+      // good verdict with a transient blip.
       return;
     }
 
@@ -107,8 +107,9 @@ export function useGroundedStatus(allAircraftList: AircraftWithMetrics[]) {
     });
 
     const openSquawkCount = (sqRes.data || []).length;
-    setGroundedReason(verdict.reason || "");
-    setAircraftStatus(applyOpenSquawkOverride(verdict.status, openSquawkCount));
+    const finalStatus = applyOpenSquawkOverride(verdict.status, openSquawkCount);
+    setReasonByTail(prev => ({ ...prev, [tail]: verdict.reason || "" }));
+    setStatusByTail(prev => ({ ...prev, [tail]: finalStatus }));
   }, [allAircraftList, swrCache]);
 
   return { aircraftStatus, groundedReason, checkGroundedStatus };

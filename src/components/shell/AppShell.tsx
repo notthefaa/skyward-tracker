@@ -124,13 +124,38 @@ export default function AppShell({ session }: AppShellProps) {
   // Walk `cache.keys()` directly (bypasses (a)) and call single-arg
   // `globalMutate(key)` per matched key (bypasses (b) — that path
   // explicitly does `delete FETCH[key]; delete PRELOAD[key]` before
-  // triggering the revalidator). We do NOT pass `undefined` as the
-  // data arg, so existing visible data stays put while the refetch is
-  // in flight. A flaky refetch on a half-warm iOS socket won't strand
-  // the user on a blank screen — last-good values stay rendered until
-  // the new fetch lands. Used by the pull-refresh handler, the
-  // resume-from-background recovery path, and the tail-switch effect.
-  const revalidateAircraftCache = useCallback((aircraftId: string) => {
+  // triggering the revalidator). Default mode does NOT pass `undefined`
+  // as the data arg, so existing visible data stays put while the
+  // refetch is in flight — a flaky refetch on a half-warm iOS socket
+  // won't strand the user on a blank screen. Used by pull-refresh and
+  // resume-from-background.
+  //
+  // `blankFirst: true` mode forces the visible data to undefined on
+  // list-type keys before triggering revalidation. The tail-switch
+  // path uses this so a localStorage-persisted entry from a prior
+  // session can't render under the freshly-selected tail's header.
+  // (Pilots reported: "I switched aircraft, the flight-log table
+  // showed entries that didn't match the current tail or weren't the
+  // latest" — that was week-old persisted data from an earlier visit
+  // to the same tail. Blanking ensures a skeleton/empty render while
+  // the fresh fetch lands instead of a stale list the pilot can't
+  // distinguish from current data.)
+  // Single-row summary keys keep last-good even in blank-first mode —
+  // they refresh quickly and the small data is self-evidently "an
+  // older snapshot of the right thing" if briefly stale.
+  const LIST_KEY_PREFIXES = [
+    'times-', 'vor-', 'vor-latest-', 'tire-', 'oil-', 'oil-chart-',
+    'oil-last-added-', 'mx-', 'mx-events-', 'squawks-', 'ads-',
+    'notes-', 'docs-', 'crew-', 'equipment-', 'calendar-',
+  ];
+  const isListKey = (k: string): boolean => {
+    // summary-* keys can collide with the broad `mx-` prefix
+    // ("summary-mx-..." starts with "summary-", so we're safe — but
+    // be explicit for future maintainers).
+    if (k.startsWith('summary-')) return false;
+    return LIST_KEY_PREFIXES.some(p => k.startsWith(p));
+  };
+  const revalidateAircraftCache = useCallback((aircraftId: string, opts?: { blankFirst?: boolean }) => {
     const matcher = matchesAircraft(aircraftId);
     // Two-pass clear:
     //   Pass A — walk every key currently in the cache provider that
@@ -153,7 +178,11 @@ export default function AppShell({ session }: AppShellProps) {
     // tsconfig targets es5 without downlevelIteration — same Array.from
     // wrap the cache.keys() walk above uses.
     for (const k of Array.from(keys)) {
-      globalMutate(k);
+      if (opts?.blankFirst && isListKey(k)) {
+        globalMutate(k, undefined, { revalidate: true });
+      } else {
+        globalMutate(k);
+      }
     }
   }, [globalMutate, swrCache]);
 
@@ -290,7 +319,7 @@ export default function AppShell({ session }: AppShellProps) {
   }, [navigateTab]);
 
   // ─── Derived State (extracted hooks) ───
-  const { aircraftStatus, groundedReason, checkGroundedStatus } = useGroundedStatus(allAircraftList);
+  const { aircraftStatus, groundedReason, checkGroundedStatus } = useGroundedStatus(allAircraftList, activeTail);
   const currentAircraftRole = useAircraftRole(activeTail, allAircraftList, allAccessRecords, session);
 
   // Grounded-banner refresh — ProposedActionCard fires aft:refresh-grounded
@@ -577,10 +606,15 @@ export default function AppShell({ session }: AppShellProps) {
   //   (2) "Empty B with stale A color" flash. The previous wipe path
   //       set every B-key's data to undefined and triggered revalidation,
   //       which made any cached B data (e.g., from a prior visit in
-  //       this session) momentarily disappear. The gentler revalidate
-  //       still clears SWR's FETCH[key] / PRELOAD[key] map per-key
-  //       (the iOS-suspended dead-promise trap that ad59485 fixed),
-  //       but keeps last-good visible while the refetch lands.
+  //       this session) momentarily disappear. The current path uses
+  //       `blankFirst: true` so list-type keys (flight logs, MX items,
+  //       squawks, etc.) are blanked — without that, persisted-cache
+  //       entries from a prior session render under the new tail's
+  //       header until a fresh fetch lands, and pilots see "wrong-
+  //       looking" rows they can't distinguish from current data.
+  //       Single-row summary keys keep last-good — they refresh fast
+  //       and the briefly-stale display is self-evidently "the same
+  //       thing, slightly older."
   const lastRevalidatedTailRef = useRef<string>("");
   useEffect(() => {
     if (!activeTail || activeTail === lastRevalidatedTailRef.current) return;
@@ -589,7 +623,7 @@ export default function AppShell({ session }: AppShellProps) {
     lastRevalidatedTailRef.current = activeTail;
     abortInFlightSupabaseReads();
     abortAllInFlightAuthFetches();
-    revalidateAircraftCache(ac.id);
+    revalidateAircraftCache(ac.id, { blankFirst: true });
   }, [activeTail, allAircraftList, revalidateAircraftCache]);
 
   // ─── Resume-from-background recovery ───
