@@ -8,6 +8,7 @@ import { computeMetrics, computeMxDueState } from '@/lib/math';
 import { FLIGHT_DATA_LOOKBACK_DAYS, MX_AGGREGATION_WINDOW_DAYS } from '@/lib/constants';
 import { emailShell, heading, paragraph, callout, bulletList, button } from '@/lib/email/layout';
 import { getAppUrl } from '@/lib/email/appUrl';
+import { loadMutedMxReminderEmails, isMxReminderMuted } from '@/lib/mxReminderMutes';
 
 // Cap the cron at 5 minutes so a slow Resend round can't let the next
 // scheduled invocation overlap and double-send reminders. Vercel will
@@ -48,6 +49,20 @@ export async function GET(req: Request) {
     if (mxItemsErr) throw mxItemsErr;
 
     if (!aircraftList || !mxItems) return NextResponse.json({ success: true, note: 'No data' });
+
+    // Build the mx_reminder mute set up-front. Settings exposes the
+    // `mx_reminder` toggle to anyone who's a primary contact on at
+    // least one aircraft; opting out should suppress every mx-reminder
+    // email this cron sends (Phase 2 work-package draft, Phase 3
+    // heads-up, Phase 4 per-item reminder). Phase 2 still ships the
+    // in-app draft so the user has the alert via the maintenance tab —
+    // muting only quiets the email channel. Phase 5 (ready_for_pickup
+    // nudge) is `service_update` territory, intentionally not gated
+    // by this pref.
+    const mutedMxRecipients = await loadMutedMxReminderEmails(
+      supabaseAdmin,
+      aircraftList.map((a: any) => a.main_contact_email),
+    );
 
     // Fetch Global Settings
     const { data: settings } = await supabaseAdmin.from('aft_system_settings').select('*').eq('id', 1).single();
@@ -322,8 +337,14 @@ export async function GET(req: Request) {
           // would otherwise skip these items every subsequent run, so
           // a stuck-but-not-flagged draft is the same as silently
           // dropping the alert.
+          //
+          // mx_reminder mute: when the recipient muted this category
+          // we skip the email channel BUT keep the draft + flag updates
+          // — the user has the alert via the maintenance tab. Without
+          // the flag-flip the cron would loop on this item forever.
+          const mxRemindersMuted = isMxReminderMuted(aircraft.main_contact_email, mutedMxRecipients);
           let emailOk = true;
-          if (aircraft.main_contact_email) {
+          if (aircraft.main_contact_email && !mxRemindersMuted) {
             const safeTail = escapeHtml(aircraft.tail_number);
             const safeMainContact = escapeHtml(aircraft.main_contact || 'Operations');
             const safeMxContact = escapeHtml(aircraft.mx_contact || 'your mechanic');
@@ -364,9 +385,10 @@ export async function GET(req: Request) {
             }
           }
 
-          // Queue flag updates only if the email went through (or there
-          // was no recipient configured — in that case the draft is the
-          // only notification channel and we shouldn't re-loop).
+          // Queue flag updates if (a) the email went through, (b) the
+          // recipient muted mx_reminder (draft is their channel), or
+          // (c) there's no recipient at all (same — draft only). The
+          // teardown branch only fires for genuine email-send failures.
           if (emailOk) {
             for (const { mx } of lineItemDescriptions) {
               flagUpdates.push({ id: mx.id, flags: { mx_schedule_sent: true } });
@@ -388,7 +410,12 @@ export async function GET(req: Request) {
       // PHASE 3: LOW-CONFIDENCE HEADS-UP
       // ─────────────────────────────────────────────────
       const headsUpItems = evaluated.filter(e => e.triggersHeadsUp);
-      if (headsUpItems.length > 0 && aircraft.main_contact_email) {
+      // Skip the heads-up entirely (no email + no flag flip) when the
+      // recipient has muted mx_reminder. Without the flag flip, the
+      // next cron tick re-evaluates from scratch — so if the user
+      // un-mutes later, they'll get the heads-up that wave.
+      const phase3Muted = isMxReminderMuted(aircraft.main_contact_email, mutedMxRecipients);
+      if (headsUpItems.length > 0 && aircraft.main_contact_email && !phase3Muted) {
         const safeTail = escapeHtml(aircraft.tail_number);
         const safeMainContact = escapeHtml(aircraft.main_contact || 'Operations');
 
@@ -512,8 +539,16 @@ export async function GET(req: Request) {
         // the draft as a fallback notification channel; Phase 4 has
         // no fallback, so a missing recipient must NOT mark the
         // reminder as sent — we'd silently retire the alert forever.
+        //
+        // mx_reminder mute: when the recipient has muted this category
+        // we DO flip the flag (treated as "delivered" for cron-state
+        // purposes) so the cron doesn't re-evaluate this reminder
+        // stage on every tick. The user has the in-app due date /
+        // hours indicator regardless of email; muting only suppresses
+        // the email channel.
+        const phase4Muted = isMxReminderMuted(aircraft.main_contact_email, mutedMxRecipients);
         let reminderEmailOk = !(internalTriggerTemplate && !aircraft.main_contact_email);
-        if (internalTriggerTemplate && aircraft.main_contact_email) {
+        if (internalTriggerTemplate && aircraft.main_contact_email && !phase4Muted) {
           const safeTail = escapeHtml(aircraft.tail_number);
           const safeItemName = escapeHtml(mx.item_name);
 
