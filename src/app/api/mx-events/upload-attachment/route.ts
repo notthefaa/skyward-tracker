@@ -259,6 +259,7 @@ export async function POST(req: Request) {
             ${bulletList(fileLines)}
             ${button(appUrl, 'Open Skyward')}
           `,
+          preferencesUrl: `${appUrl}#settings`,
         }),
       });
     }

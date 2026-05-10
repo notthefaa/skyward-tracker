@@ -354,7 +354,7 @@ export default function AppShell({ session }: AppShellProps) {
     },
     [session, refreshForAircraft]
   );
-  useRealtimeSync(session, boundRefresh);
+  const { cancelPendingTimers: cancelRealtimeTimers } = useRealtimeSync(session, boundRefresh);
 
   // ─── Slow-network watchdog ───
   // Providers fires `aft:slow-network` when SWR's loadingTimeout
@@ -623,6 +623,7 @@ export default function AppShell({ session }: AppShellProps) {
     lastRevalidatedTailRef.current = activeTail;
     abortInFlightSupabaseReads();
     abortAllInFlightAuthFetches();
+    cancelRealtimeTimers();
     // Defer one microtask so the just-aborted fetches can reject and
     // SWR's per-key `globalMutate` (which clears FETCH[key]) sees a
     // clean slate. Without the defer, the revalidate races the abort
@@ -632,7 +633,7 @@ export default function AppShell({ session }: AppShellProps) {
     // and pairs with the SWR `onErrorRetry` bail that prevents the
     // aborted fetcher from queueing a retry storm.
     queueMicrotask(() => revalidateAircraftCache(ac.id, { blankFirst: true }));
-  }, [activeTail, allAircraftList, revalidateAircraftCache]);
+  }, [activeTail, allAircraftList, revalidateAircraftCache, cancelRealtimeTimers]);
 
   // ─── Resume-from-background recovery ───
   // iOS PWAs / Safari suspend in-flight fetches AND pause the

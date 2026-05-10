@@ -142,7 +142,13 @@ export default function PilotOnboarding({
           // Extension + explicit contentType: without these, Supabase
           // serves the object as application/octet-stream, and Firefox's
           // OpaqueResponseBlocking refuses to render it inside <img>.
-          const fileName = `${tailValue.toUpperCase()}_${Date.now()}.jpg`;
+          // Sanitize tail to match the squawk + note path normalization
+           // (59e4ba0). Storage path slashes split keys; FAA tails are
+           // constrained to alphanumerics anyway, but a dashboard-edited
+           // tail with a stray space / slash would otherwise spawn a
+           // pseudo-folder the orphan-sweeper diff can't resolve.
+          const safeTail = tailValue.toUpperCase().replace(/[^a-zA-Z0-9._-]/g, '_');
+          const fileName = `${safeTail}_${Date.now()}.jpg`;
           const { data } = await supabase.storage.from('aft_aircraft_avatars').upload(fileName, compressed, { contentType: 'image/jpeg' });
           if (data) {
             const { data: urlData } = supabase.storage.from('aft_aircraft_avatars').getPublicUrl(data.path);

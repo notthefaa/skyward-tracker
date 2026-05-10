@@ -1,17 +1,24 @@
 "use client";
 
-import { useEffect } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { useSWRConfig } from "swr";
 import { supabase } from "@/lib/supabase";
 
 /**
  * Subscribes to Supabase Realtime changes across fleet tables.
  * Debounces per-aircraft refreshes and skips events caused by the current user.
+ *
+ * Returns `cancelPendingTimers` so callers (e.g., AppShell tail-switch
+ * effect) can drop in-flight debounces alongside the abort calls.
+ * Without this, a 1.5s debounce armed for tail A keeps ticking and
+ * fires `refreshForAircraft(A_id)` after the user has already switched
+ * to B — wasted fetches that compound into the iOS pool wedge described
+ * in `project_swr_retry_storm_fix_2026_05_10`.
  */
 export function useRealtimeSync(
   session: any,
   refreshForAircraft: (aircraftId: string, userId: string) => void,
-) {
+): { cancelPendingTimers: () => void } {
   // Pull cache + per-key mutate from context. Filter-form mutate
   // (`globalMutate(() => true, ...)`) hits two SWR-internal traps that
   // leave hydrated-but-not-yet-resubscribed entries stuck (the `_k`
@@ -19,11 +26,17 @@ export function useRealtimeSync(
   // FETCH map clear is per-key only). Walking cache.keys() + per-key
   // mutate sidesteps both. See `feedback_swr_filter_mutate_gotcha`.
   const { cache: swrCache, mutate: keyedMutate } = useSWRConfig();
+  const timersRef = useRef<Record<string, NodeJS.Timeout>>({});
+
+  const cancelPendingTimers = useCallback(() => {
+    for (const t of Object.values(timersRef.current)) clearTimeout(t);
+    timersRef.current = {};
+  }, []);
 
   useEffect(() => {
     if (!session) return;
 
-    const timers: Record<string, NodeJS.Timeout> = {};
+    const timers = timersRef.current;
 
     const handle = (payload: any) => {
       const nr = payload.new;
@@ -85,8 +98,10 @@ export function useRealtimeSync(
       .subscribe();
 
     return () => {
-      Object.values(timers).forEach(t => clearTimeout(t));
+      cancelPendingTimers();
       supabase.removeChannel(ch);
     };
-  }, [session, refreshForAircraft, swrCache, keyedMutate]);
+  }, [session, refreshForAircraft, swrCache, keyedMutate, cancelPendingTimers]);
+
+  return { cancelPendingTimers };
 }

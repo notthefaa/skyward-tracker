@@ -159,6 +159,7 @@ export async function POST(req: Request) {
               ${paragraph('Open the app to confirm or propose a different date.')}
               ${button(appUrl, 'Open Skyward')}
             `,
+            preferencesUrl: `${appUrl}#settings`,
           }),
         });
       }
@@ -213,6 +214,7 @@ export async function POST(req: Request) {
               ${safeMessage ? callout(safeMessage, { variant: 'success' }) : ''}
               ${button(appUrl, 'Open Skyward', { variant: 'success' })}
             `,
+            preferencesUrl: `${appUrl}#settings`,
           }),
         });
       }
@@ -257,6 +259,7 @@ export async function POST(req: Request) {
               ${callout(safeMessage, { variant: 'note' })}
               ${button(appUrl, 'Open Skyward')}
             `,
+            preferencesUrl: `${appUrl}#settings`,
           }),
         });
       }
@@ -313,6 +316,7 @@ export async function POST(req: Request) {
                 ${bulletList(itemLines)}
                 ${button(appUrl, 'Open Skyward')}
               `,
+              preferencesUrl: `${appUrl}#settings`,
             }),
           });
         }
@@ -347,6 +351,7 @@ export async function POST(req: Request) {
               ${safeMessage ? callout(safeMessage, { variant: 'warning' }) : ''}
               ${button(appUrl, 'Open Skyward')}
             `,
+            preferencesUrl: `${appUrl}#settings`,
           }),
         });
       }
@@ -392,6 +397,7 @@ export async function POST(req: Request) {
               )}
               ${button(appUrl, 'Open Skyward')}
             `,
+            preferencesUrl: `${appUrl}#settings`,
           }),
         });
       }
@@ -433,6 +439,7 @@ export async function POST(req: Request) {
               ${paragraph(`You might want to reach out to a different mechanic or reschedule.`)}
               ${button(appUrl, 'Open Skyward')}
             `,
+            preferencesUrl: `${appUrl}#settings`,
           }),
         });
       }
@@ -471,6 +478,7 @@ export async function POST(req: Request) {
               ${paragraph(`Log in to enter the logbook data from your mechanic&apos;s sign-off. That closes out the service event and resets maintenance tracking.`)}
               ${button(appUrl, 'Enter Logbook Data', { variant: 'success' })}
             `,
+            preferencesUrl: `${appUrl}#settings`,
           }),
         });
       }

@@ -499,20 +499,27 @@ const handlers: Record<string, ToolHandler> = {
     const normalized = params.airports.map(normalizeIcao);
     const ids = normalized.join(',');
     try {
-      // Cap the upstream call at NETWORK_TIMEOUT_MS so a hung
-      // aviationweather.gov pull bails fast and the outer
-      // HOWARD_TOOL_TIMEOUT_MS race isn't burned waiting on it.
-      const [metarRes, tafRes] = await Promise.all([
+      // allSettled so a hung TAF pull doesn't drop METARs (or vice
+      // versa). NETWORK_TIMEOUT_MS still bounds each leg.
+      const [metarSettled, tafSettled] = await Promise.allSettled([
         fetch(`https://aviationweather.gov/api/data/metar?ids=${ids}&format=json&hours=2`, { signal: AbortSignal.timeout(NETWORK_TIMEOUT_MS) }),
         fetch(`https://aviationweather.gov/api/data/taf?ids=${ids}&format=json`, { signal: AbortSignal.timeout(NETWORK_TIMEOUT_MS) }),
       ]);
-      const metars = metarRes.ok ? await metarRes.json() : [];
-      const tafs = tafRes.ok ? await tafRes.json() : [];
+      const metars = metarSettled.status === 'fulfilled' && metarSettled.value.ok
+        ? await metarSettled.value.json().catch(() => [])
+        : [];
+      const tafs = tafSettled.status === 'fulfilled' && tafSettled.value.ok
+        ? await tafSettled.value.json().catch(() => [])
+        : [];
+      const partial: string[] = [];
+      if (metarSettled.status !== 'fulfilled' || !metarSettled.value.ok) partial.push('metars');
+      if (tafSettled.status !== 'fulfilled' || !tafSettled.value.ok) partial.push('tafs');
       return {
         source: 'aviationweather.gov (NOAA AWC)',
         metars: Array.isArray(metars) ? metars : [],
         tafs: Array.isArray(tafs) ? tafs : [],
         airports_queried: normalized,
+        ...(partial.length > 0 ? { partial_failure: partial } : {}),
       };
     } catch (err: any) {
       return { error: `Weather fetch failed: ${err.message}` };
@@ -836,17 +843,25 @@ const handlers: Record<string, ToolHandler> = {
     const normalized = params.airports.map(normalizeIcao);
     const ids = normalized.join(',');
     try {
-      const [pirepRes, sigmetRes] = await Promise.all([
+      const [pirepSettled, sigmetSettled] = await Promise.allSettled([
         fetch(`https://aviationweather.gov/api/data/pirep?id=${ids}&format=json&age=2`, { signal: AbortSignal.timeout(NETWORK_TIMEOUT_MS) }),
         fetch(`https://aviationweather.gov/api/data/airsigmet?format=json`, { signal: AbortSignal.timeout(NETWORK_TIMEOUT_MS) }),
       ]);
-      const pireps = pirepRes.ok ? await pirepRes.json() : [];
-      const sigmets = sigmetRes.ok ? await sigmetRes.json() : [];
+      const pireps = pirepSettled.status === 'fulfilled' && pirepSettled.value.ok
+        ? await pirepSettled.value.json().catch(() => [])
+        : [];
+      const sigmets = sigmetSettled.status === 'fulfilled' && sigmetSettled.value.ok
+        ? await sigmetSettled.value.json().catch(() => [])
+        : [];
+      const partial: string[] = [];
+      if (pirepSettled.status !== 'fulfilled' || !pirepSettled.value.ok) partial.push('pireps');
+      if (sigmetSettled.status !== 'fulfilled' || !sigmetSettled.value.ok) partial.push('sigmets_airmets');
       return {
         source: 'aviationweather.gov (NOAA AWC)',
         pireps: Array.isArray(pireps) ? pireps.slice(0, 20) : [],
         sigmets_airmets: Array.isArray(sigmets) ? sigmets.slice(0, 15) : [],
         airports_queried: normalized,
+        ...(partial.length > 0 ? { partial_failure: partial } : {}),
       };
     } catch (err: any) {
       return { error: `Hazard fetch failed: ${err.message}` };

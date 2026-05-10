@@ -253,7 +253,8 @@ export default function AircraftModal({
           // Extension + explicit contentType: without these, Supabase
           // serves the object as application/octet-stream, and Firefox's
           // OpaqueResponseBlocking refuses to render it inside <img>.
-          const fileName = `${tailValue.toUpperCase()}_${Date.now()}.jpg`;
+          const safeTail = tailValue.toUpperCase().replace(/[^a-zA-Z0-9._-]/g, '_');
+          const fileName = `${safeTail}_${Date.now()}.jpg`;
           const { data } = await supabase.storage.from('aft_aircraft_avatars').upload(fileName, compressed, { contentType: 'image/jpeg' });
           if (data) {
             const { data: urlData } = supabase.storage.from('aft_aircraft_avatars').getPublicUrl(data.path);

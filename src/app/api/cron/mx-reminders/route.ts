@@ -355,6 +355,7 @@ export async function GET(req: Request) {
                     ])}
                     ${button(appUrl, 'Review & Send', { variant: 'info' })}
                   `,
+                  preferencesUrl: `${appUrl}#settings`,
                 }),
               });
             } catch (err: any) {
@@ -413,6 +414,7 @@ export async function GET(req: Request) {
                 ${paragraph(`No action is needed yet. We'll create a draft work package automatically when ${headsUpItems.length > 1 ? 'items get' : 'the item gets'} closer to ${headsUpItems.length > 1 ? 'their thresholds' : 'its threshold'}. You can also schedule service proactively from the Maintenance tab at any time.`)}
                 ${button(appUrl, 'Open Skyward')}
               `,
+              preferencesUrl: `${appUrl}#settings`,
             }),
           });
 
@@ -532,6 +534,7 @@ export async function GET(req: Request) {
                   )}
                   ${button(appUrl, 'Open Skyward')}
                 `,
+                preferencesUrl: `${appUrl}#settings`,
               }),
             });
           } catch (err: any) {
@@ -628,6 +631,7 @@ export async function GET(req: Request) {
                   ${paragraph(`Until you enter the logbook data, maintenance tracking won't reset and the aircraft may remain blocked on the calendar. Open the app to complete the event when you get a moment.`)}
                   ${button(appUrl, 'Enter Logbook Data')}
                 `,
+                preferencesUrl: `${appUrl}#settings`,
               }),
             });
 

@@ -168,19 +168,11 @@ test.describe('account-delete — sole-admin guard', () => {
 
   test('sole-admin guard relaxes when ANOTHER global admin already has access to the aircraft', async ({ baseURL }) => {
     // Setup: victim is the only aircraft-admin on a plane, but a
-    // global admin has an access row on that same plane. The
-    // RELAXATION is at the route level — the sole-admin check no
-    // longer 400s when a global admin has access. We assert the
-    // route doesn't return 400; we don't assert it returns 200
-    // because there's a SEPARATE latent cascade-deletion issue in
-    // the DB schema (duplicate FK on aft_user_aircraft_access.user_id,
-    // similar shape to migration 055's aft_aircraft.created_by fix)
-    // that surfaces a 500 from auth.deleteUser when a victim has
-    // created an aircraft. That's a DB-level bug, not a route-level
-    // bug, and is being tracked separately. The relaxation logic
-    // itself is verified here; the demote / remove paths in
-    // aircraft-lifecycle.spec.ts exercise the full success path
-    // since they don't go through auth.admin.deleteUser.
+    // global admin has an access row on that same plane. The route
+    // relaxation drops the "only admin" 400; migration 059 dropped
+    // the duplicate fk_*_auth_user FKs that used to surface as a
+    // 500 from auth.admin.deleteUser when the victim had created
+    // an aircraft. End-to-end success path is now testable.
     const admin = adminClient();
 
     // Global admin caller.
@@ -227,20 +219,10 @@ test.describe('account-delete — sole-admin guard', () => {
         method: 'DELETE',
         body: JSON.stringify({ userId: victimId }),
       });
-      // Pre-relaxation: 400 with "only admin" error.
-      // Post-relaxation: route gets past the guard. (May still 500
-      // due to the unrelated cascade bug noted above; that's
-      // tracked separately and doesn't invalidate the relaxation.)
-      expect(res.status).not.toBe(400);
-      const body = await res.json();
-      // Confirm the guard wasn't the blocker — the route either
-      // succeeded (200) OR failed during the actual delete with a
-      // database-level error. Either is fine for THIS test; what
-      // we're locking is that "only admin" is no longer the
-      // refusal reason when a global admin has access.
-      if (res.status >= 400) {
-        expect(body.error).not.toMatch(/only admin/i);
-      }
+      expect(res.status).toBe(200);
+
+      const { data: stillThere } = await admin.auth.admin.getUserById(victimId);
+      expect(stillThere?.user).toBeNull();
     } finally {
       await admin.from('aft_aircraft').delete().eq('id', acId).then(undefined, () => {});
       await admin.auth.admin.deleteUser(victimId).then(undefined, () => {});
