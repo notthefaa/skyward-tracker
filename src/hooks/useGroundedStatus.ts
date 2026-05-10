@@ -2,8 +2,7 @@
 
 import { useCallback, useRef, useState } from "react";
 import { useSWRConfig } from "swr";
-import { supabase } from "@/lib/supabase";
-import { computeAirworthinessStatus, applyOpenSquawkOverride } from "@/lib/airworthiness";
+import { authFetch } from "@/lib/authFetch";
 import { swrKeys } from "@/lib/swrKeys";
 import type { AircraftWithMetrics, AircraftStatus } from "@/lib/types";
 
@@ -23,7 +22,7 @@ export function useGroundedStatus(allAircraftList: AircraftWithMetrics[], active
   // change frequently (new array refs from setState), so each render
   // gets a new closure. On rapid tail switches multiple in-flight
   // copies of `checkGroundedStatus` can be racing; without a guard
-  // a stale earlier call's Promise.all that resolves *after* a newer
+  // a stale earlier call's authFetch that resolves *after* a newer
   // call would overwrite the freshly-computed verdict for the same or
   // a different tail. Bumping `genRef.current` on entry and bailing
   // when it no longer matches stops the stale write.
@@ -43,9 +42,8 @@ export function useGroundedStatus(allAircraftList: AircraftWithMetrics[], active
     // FleetSummary's fetcher already pulls all 4 airworthiness tables
     // in one batch on app open and computes a verdict per aircraft.
     // Reading that pre-computed verdict means the status dot resolves
-    // INSTANTLY on tail switch without firing 4 fresh queries that
-    // compete for iOS WKWebView's shallow socket pool. The fleet
-    // cache key shape is `fleet-${count}-${idsCsv}` — match by
+    // INSTANTLY on tail switch without firing a fresh roundtrip. The
+    // fleet cache key shape is `fleet-${count}-${idsCsv}` — match by
     // membership of the active aircraft id, since the count/idsCsv
     // can drift if the list updates mid-session.
     const ids = allAircraftList.map(a => a.id).join(',');
@@ -64,71 +62,33 @@ export function useGroundedStatus(allAircraftList: AircraftWithMetrics[], active
     }
 
     // ─── Authoritative fetch (also runs when cache hit) ───
-    // Pull everything needed for the explicit 91.205/.411/.413/.207/.417
-    // regulatory check in a single parallel round-trip. Stays on the
-    // supabase client's 15s per-request deadline; we don't wrap each
-    // query in our own shorter deadline because rejecting the JS
-    // promise early doesn't abort the underlying socket and a retry
-    // would just queue more work behind the still-running originals.
-    const [mxRes, sqRes, eqRes, adRes] = await Promise.all([
-      supabase.from('aft_maintenance_items')
-        .select('item_name, tracking_type, is_required, due_time, due_date')
-        .eq('aircraft_id', ac.id).is('deleted_at', null),
-      supabase.from('aft_squawks')
-        .select('affects_airworthiness, location, status')
-        .eq('aircraft_id', ac.id).eq('status', 'open').is('deleted_at', null),
-      supabase.from('aft_aircraft_equipment')
-        .select('*')
-        .eq('aircraft_id', ac.id).is('deleted_at', null).is('removed_at', null),
-      supabase.from('aft_airworthiness_directives')
-        .select('*')
-        .eq('aircraft_id', ac.id).is('deleted_at', null).eq('is_superseded', false),
-    ]);
-
-    // No mid-fetch drop needed any more — verdicts are tail-keyed,
-    // so writing to setStatusByTail[tail] for an inactive tail still
-    // doesn't bleed into the header (which reads statusByTail[activeTail]).
-    // The check below keeps the previous shape's robustness against
-    // partial-failure clobbering, just per-tail now.
-
-    // A newer checkGroundedStatus call has started since this one
-    // dispatched its queries — bail before touching state so a slow
-    // prior tail's verdict can't land on top of a fresh active tail's
-    // value. Pairs with the per-tail keying below (which already
-    // prevents wrong-tail rendering); this prevents wrong-VERDICT
-    // rendering for the same tail when retries / resumes restart the
-    // check before the prior one returned.
-    if (myGen !== genRef.current) return;
-
-    if (mxRes.error || sqRes.error || eqRes.error || adRes.error) {
-      console.warn('[useGroundedStatus] fetch failed', {
-        mx: mxRes.error?.message, sq: sqRes.error?.message,
-        eq: eqRes.error?.message, ad: adRes.error?.message,
-      });
-      // Keep whatever the fleet-cache pass already wrote for this
-      // tail (or 'unknown' if the cache was empty). Don't clobber a
-      // good verdict with a transient blip.
+    // Single cookie-bearing call to /api/aircraft/[id]/airworthiness.
+    // Server pulls the 4 regulatory tables in parallel (with the
+    // service-role key, no per-call GoTrue mutex) and returns the
+    // computed verdict. Replaces 4 direct supabase.from() reads that
+    // each had to attach a Bearer via supabase-js's auth lock.
+    let verdictPayload: { status: AircraftStatus; reason: string; openSquawkCount: number } | null = null;
+    try {
+      const res = await authFetch(`/api/aircraft/${ac.id}/airworthiness`);
+      if (!res.ok) {
+        console.warn('[useGroundedStatus] fetch failed', res.status);
+        return;
+      }
+      verdictPayload = await res.json();
+    } catch (err) {
+      console.warn('[useGroundedStatus] fetch error', err);
       return;
     }
 
-    const verdict = computeAirworthinessStatus({
-      aircraft: {
-        id: ac.id,
-        tail_number: ac.tail_number,
-        total_engine_time: ac.total_engine_time,
-        is_ifr_equipped: (ac as any).is_ifr_equipped,
-        is_for_hire: (ac as any).is_for_hire,
-      },
-      equipment: (eqRes.data || []) as any,
-      mxItems: mxRes.data || [],
-      squawks: (sqRes.data || []) as any,
-      ads: (adRes.data || []) as any,
-    });
+    // A newer checkGroundedStatus call has started since this one
+    // dispatched its query — bail before touching state so a slow
+    // prior tail's verdict can't land on top of a fresh active tail's
+    // value.
+    if (myGen !== genRef.current) return;
+    if (!verdictPayload) return;
 
-    const openSquawkCount = (sqRes.data || []).length;
-    const finalStatus = applyOpenSquawkOverride(verdict.status, openSquawkCount);
-    setReasonByTail(prev => ({ ...prev, [tail]: verdict.reason || "" }));
-    setStatusByTail(prev => ({ ...prev, [tail]: finalStatus }));
+    setReasonByTail(prev => ({ ...prev, [tail]: verdictPayload!.reason }));
+    setStatusByTail(prev => ({ ...prev, [tail]: verdictPayload!.status }));
   }, [allAircraftList, swrCache]);
 
   return { aircraftStatus, groundedReason, checkGroundedStatus };
