@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireAuth, createAdminClient, handleApiError } from '@/lib/auth';
+import { isPortalLinkExpired } from '@/lib/portalExpiry';
 
 /**
  * POST /api/storage/sign
@@ -266,13 +267,23 @@ async function signWithToken(urls: string[], accessToken: string): Promise<NextR
   // event token must be able to sign both buckets.
   let eventMatched = false;
   if (wantsEventBucket || wantsSquawkBucket) {
+    // Pull status + completed_at so the same expiry rule that gates
+    // /api/mx-events/respond + /upload-attachment also gates signed-URL
+    // handouts. Without this, a mechanic's old portal link could keep
+    // pulling attachments past PORTAL_EXPIRY_DAYS even though every
+    // mutating route on the same event already 403s.
     const { data: event } = await supabaseAdmin
       .from('aft_maintenance_events')
-      .select('id')
+      .select('id, status, completed_at')
       .eq('access_token', accessToken)
       .is('deleted_at', null)
       .maybeSingle();
-    if (event) {
+    // Cancelled events: cancel rotates the access_token server-side,
+    // so a stale link's lookup won't match in the first place. The
+    // explicit check is defense-in-depth for any code path that might
+    // reuse a pre-rotation token snapshot.
+    const eventActive = event && event.status !== 'cancelled' && !isPortalLinkExpired(event);
+    if (eventActive) {
       eventMatched = true;
       if (wantsEventBucket) {
         const items = byBucket.get('aft_event_attachments') || [];

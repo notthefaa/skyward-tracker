@@ -6,7 +6,7 @@ import { idempotency } from '@/lib/idempotency';
 import { env } from '@/lib/env';
 import { escapeHtml } from '@/lib/sanitize';
 import { cancelConflictingReservations } from '@/lib/mxConflicts';
-import { PORTAL_EXPIRY_DAYS } from '@/lib/constants';
+import { isPortalLinkExpired } from '@/lib/portalExpiry';
 import { isIsoDate } from '@/lib/validation';
 import { emailShell, heading, paragraph, callout, bulletList, button } from '@/lib/email/layout';
 import { getAppUrl } from '@/lib/email/appUrl';
@@ -61,18 +61,15 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Service event not found.' }, { status: 404 });
     }
 
-    // Token expiry: complete events expire PORTAL_EXPIRY_DAYS after
-    // completed_at; cancelled events expire immediately (mirrors
-    // upload-attachment). Leaving cancelled events open would let a
-    // mechanic keep commenting on a service the owner walked away from.
+    // Token expiry: cancelled events expire immediately, complete
+    // events expire PORTAL_EXPIRY_DAYS after completed_at. Leaving
+    // cancelled events open would let a mechanic keep commenting on a
+    // service the owner walked away from.
     if (event.status === 'cancelled') {
       return NextResponse.json({ error: 'This service was cancelled and the portal link is no longer active.' }, { status: 403 });
     }
-    if (event.status === 'complete' && event.completed_at) {
-      const expiryDate = new Date(new Date(event.completed_at).getTime() + PORTAL_EXPIRY_DAYS * 24 * 60 * 60 * 1000);
-      if (new Date() > expiryDate) {
-        return NextResponse.json({ error: 'This service portal link has expired.' }, { status: 403 });
-      }
+    if (isPortalLinkExpired(event)) {
+      return NextResponse.json({ error: 'This service portal link has expired.' }, { status: 403 });
     }
 
     // Token-gated route — no auth user_id, so rate-limit on the event

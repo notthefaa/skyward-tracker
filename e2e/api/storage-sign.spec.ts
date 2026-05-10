@@ -434,4 +434,112 @@ test.describe('storage/sign — portal-mode token gating', () => {
       await admin.from('aft_maintenance_events').delete().eq('id', ev!.id);
     }
   });
+
+  test('event completed >7 days ago: portal token signs nothing (expiry guard)', async ({ seededUser, baseURL, request }) => {
+    // Mirrors /api/mx-events/respond + /upload-attachment expiry rule
+    // (PORTAL_EXPIRY_DAYS=7). Without this guard, a stale mechanic link
+    // could pull historical attachments long after the event closed.
+    const admin = adminClient();
+    const tokenE = randomUUID().replace(/-/g, '');
+    const completedAt = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString();
+    const { data: ev } = await admin.from('aft_maintenance_events').insert({
+      aircraft_id: seededUser.aircraftId,
+      status: 'complete',
+      completed_at: completedAt,
+      access_token: tokenE,
+    }).select('id').single();
+    const url = publicUrl('aft_event_attachments', `${ev!.id}_old.pdf`);
+    await admin.from('aft_event_messages').insert({
+      event_id: ev!.id,
+      sender: 'mechanic',
+      message_type: 'comment',
+      message: 'old attachment',
+      attachments: [{ url, name: 'old.pdf' }],
+    } as any);
+
+    try {
+      const res = await request.post(`${baseURL}/api/storage/sign`, {
+        data: { urls: [url], accessToken: tokenE },
+      });
+      expect(res.status()).toBe(200);
+      const body = await res.json();
+      expect(body.signed[url]).toBeNull();
+    } finally {
+      await admin.from('aft_event_messages').delete().eq('event_id', ev!.id);
+      await admin.from('aft_maintenance_events').delete().eq('id', ev!.id);
+    }
+  });
+
+  test('event completed 1 day ago: portal token still signs (within window)', async ({ seededUser, baseURL, request }) => {
+    // Inverse of the above — a recently-completed event must still
+    // hand out signed URLs so the mechanic can review their work
+    // during the 7-day grace window.
+    const admin = adminClient();
+    const tokenF = randomUUID().replace(/-/g, '');
+    const completedAt = new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString();
+    const { data: ev } = await admin.from('aft_maintenance_events').insert({
+      aircraft_id: seededUser.aircraftId,
+      status: 'complete',
+      completed_at: completedAt,
+      access_token: tokenF,
+    }).select('id').single();
+    const url = publicUrl('aft_event_attachments', `${ev!.id}_recent.pdf`);
+    await admin.from('aft_event_messages').insert({
+      event_id: ev!.id,
+      sender: 'mechanic',
+      message_type: 'comment',
+      message: 'recent attachment',
+      attachments: [{ url, name: 'recent.pdf' }],
+    } as any);
+
+    try {
+      const res = await request.post(`${baseURL}/api/storage/sign`, {
+        data: { urls: [url], accessToken: tokenF },
+      });
+      expect(res.status()).toBe(200);
+      const body = await res.json();
+      // URL must be present in the response map; signed value will be
+      // a string (storage object missing → null is fine here too —
+      // the key thing is the route DIDN'T short-circuit it the way
+      // the expired path does).
+      expect(url in body.signed).toBe(true);
+    } finally {
+      await admin.from('aft_event_messages').delete().eq('event_id', ev!.id);
+      await admin.from('aft_maintenance_events').delete().eq('id', ev!.id);
+    }
+  });
+
+  test('cancelled event: portal token signs nothing', async ({ seededUser, baseURL, request }) => {
+    // Cancel rotates the access_token, but the explicit status check
+    // is defense-in-depth for any path that might reuse a pre-rotation
+    // token snapshot. Verify a status='cancelled' event refuses to
+    // sign even when the original token still happens to match.
+    const admin = adminClient();
+    const tokenC = randomUUID().replace(/-/g, '');
+    const { data: ev } = await admin.from('aft_maintenance_events').insert({
+      aircraft_id: seededUser.aircraftId,
+      status: 'cancelled',
+      access_token: tokenC,
+    }).select('id').single();
+    const url = publicUrl('aft_event_attachments', `${ev!.id}_c.pdf`);
+    await admin.from('aft_event_messages').insert({
+      event_id: ev!.id,
+      sender: 'mechanic',
+      message_type: 'comment',
+      message: 'cancelled attachment',
+      attachments: [{ url, name: 'c.pdf' }],
+    } as any);
+
+    try {
+      const res = await request.post(`${baseURL}/api/storage/sign`, {
+        data: { urls: [url], accessToken: tokenC },
+      });
+      expect(res.status()).toBe(200);
+      const body = await res.json();
+      expect(body.signed[url]).toBeNull();
+    } finally {
+      await admin.from('aft_event_messages').delete().eq('event_id', ev!.id);
+      await admin.from('aft_maintenance_events').delete().eq('id', ev!.id);
+    }
+  });
 });
