@@ -9,6 +9,7 @@ import { escapeHtml } from '@/lib/sanitize';
 import { cancelConflictingReservations } from '@/lib/mxConflicts';
 import { isIsoDate } from '@/lib/validation';
 import { emailShell, heading, paragraph, callout, button } from '@/lib/email/layout';
+import { getAppUrl } from '@/lib/email/appUrl';
 
 const resend = new Resend(env.RESEND_API_KEY);
 const FROM_EMAIL = 'notifications@skywardsociety.com';
@@ -55,7 +56,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'This event was already cancelled.' }, { status: 409 });
     }
 
-    const portalUrl = `${new URL(req.url).origin}/service/${event.access_token}`;
+    const portalUrl = `${getAppUrl(req)}/service/${event.access_token}`;
     const mxEmail = event.mx_contact_email;
     const primaryEmail = event.primary_contact_email;
 
@@ -131,7 +132,7 @@ export async function POST(req: Request) {
           estimatedCompletion: event.estimated_completion || null,
           tailNumber: aircraft.tail_number,
           mechanicName: event.mx_contact_name,
-          appUrl: new URL(req.url).origin,
+          appUrl: getAppUrl(req),
           timeZone,
         });
       }

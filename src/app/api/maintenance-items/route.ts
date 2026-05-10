@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireAuth, requireAircraftAdmin, handleApiError } from '@/lib/auth';
 import { setAppUser } from '@/lib/audit';
+import { idempotency } from '@/lib/idempotency';
 import { pickAllowedFields, parseFiniteNumber, isIsoDate } from '@/lib/validation';
 
 // Columns a client may set when creating / updating a maintenance item.
@@ -80,6 +81,9 @@ function validateMxItemRow(
 export async function POST(req: Request) {
   try {
     const { user, supabaseAdmin } = await requireAuth(req);
+    const idem = idempotency(supabaseAdmin, user.id, req, 'maintenance-items/POST');
+    const cached = await idem.check();
+    if (cached) return cached;
     const body = await req.json();
     const { aircraftId, itemData, items } = body;
     if (!aircraftId) return NextResponse.json({ error: 'Aircraft ID required.' }, { status: 400 });
@@ -114,7 +118,9 @@ export async function POST(req: Request) {
       if (error) throw error;
     }
 
-    return NextResponse.json({ success: true });
+    const ok = { success: true };
+    await idem.save(200, ok);
+    return NextResponse.json(ok);
   } catch (error) { return handleApiError(error); }
 }
 
@@ -122,6 +128,9 @@ export async function POST(req: Request) {
 export async function PUT(req: Request) {
   try {
     const { user, supabaseAdmin } = await requireAuth(req);
+    const idem = idempotency(supabaseAdmin, user.id, req, 'maintenance-items/PUT');
+    const cached = await idem.check();
+    if (cached) return cached;
     const { itemId, aircraftId, itemData } = await req.json();
     if (!itemId || !aircraftId) return NextResponse.json({ error: 'Item ID and Aircraft ID required.' }, { status: 400 });
     await requireAircraftAdmin(supabaseAdmin, user.id, aircraftId);
@@ -173,7 +182,9 @@ export async function PUT(req: Request) {
       .is('deleted_at', null);
     if (error) throw error;
 
-    return NextResponse.json({ success: true });
+    const ok = { success: true };
+    await idem.save(200, ok);
+    return NextResponse.json(ok);
   } catch (error) { return handleApiError(error); }
 }
 
@@ -181,6 +192,9 @@ export async function PUT(req: Request) {
 export async function DELETE(req: Request) {
   try {
     const { user, supabaseAdmin } = await requireAuth(req);
+    const idem = idempotency(supabaseAdmin, user.id, req, 'maintenance-items/DELETE');
+    const cached = await idem.check();
+    if (cached) return cached;
     const { itemId, aircraftId } = await req.json();
     if (!itemId || !aircraftId) return NextResponse.json({ error: 'Item ID and Aircraft ID required.' }, { status: 400 });
     await requireAircraftAdmin(supabaseAdmin, user.id, aircraftId);
@@ -198,13 +212,19 @@ export async function DELETE(req: Request) {
     }
 
     await setAppUser(supabaseAdmin, user.id);
+    // Filter by deleted_at IS NULL — without this, a retry of a
+    // successful soft-delete would overwrite deleted_at with a later
+    // timestamp, breaking the "first-deletion-wins" audit semantics.
     const { error } = await supabaseAdmin
       .from('aft_maintenance_items')
       .update({ deleted_at: new Date().toISOString(), deleted_by: user.id })
       .eq('id', itemId)
-      .eq('aircraft_id', aircraftId);
+      .eq('aircraft_id', aircraftId)
+      .is('deleted_at', null);
     if (error) throw error;
 
-    return NextResponse.json({ success: true });
+    const ok = { success: true };
+    await idem.save(200, ok);
+    return NextResponse.json(ok);
   } catch (error) { return handleApiError(error); }
 }

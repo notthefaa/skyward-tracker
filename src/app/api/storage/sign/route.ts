@@ -129,7 +129,8 @@ export async function POST(req: Request) {
           .in('file_url', urlList)
           .is('deleted_at', null);
         if (!isGlobalAdmin) q = q.in('aircraft_id', accessibleAircraftIds);
-        const { data } = await q;
+        const { data, error } = await q;
+        if (error) throw error;
         for (const row of data || []) allowed.add(row.file_url);
       } else if (bucket === 'aft_aircraft_avatars') {
         // Avatar URL is stored on aft_aircraft.avatar_url.
@@ -139,7 +140,8 @@ export async function POST(req: Request) {
           .in('avatar_url', urlList)
           .is('deleted_at', null);
         if (!isGlobalAdmin) q = q.in('id', accessibleAircraftIds);
-        const { data } = await q;
+        const { data, error } = await q;
+        if (error) throw error;
         for (const row of data || []) if (row.avatar_url) allowed.add(row.avatar_url);
       } else if (bucket === 'aft_event_attachments') {
         // Path is `${eventId}_${ts}_${name}` — pull eventId from each
@@ -162,7 +164,8 @@ export async function POST(req: Request) {
             .in('id', Array.from(eventIds))
             .is('deleted_at', null);
           if (!isGlobalAdmin) q = q.in('aircraft_id', accessibleAircraftIds);
-          const { data } = await q;
+          const { data, error } = await q;
+          if (error) throw error;
           for (const row of data || []) {
             const urls = itemsByEvent.get(row.id) ?? [];
             for (const u of urls) allowed.add(u);
@@ -186,7 +189,8 @@ export async function POST(req: Request) {
           .overlaps('pictures', urlList)
           .is('deleted_at', null);
         if (!isGlobalAdmin) q = q.in('aircraft_id', accessibleAircraftIds);
-        const { data } = await q;
+        const { data, error } = await q;
+        if (error) throw error;
         for (const row of data || []) {
           for (const u of (row.pictures || []) as string[]) {
             if (urlList.includes(u)) allowed.add(u);

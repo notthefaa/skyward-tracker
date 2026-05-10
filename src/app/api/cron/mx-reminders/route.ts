@@ -7,6 +7,7 @@ import { escapeHtml } from '@/lib/sanitize';
 import { computeMetrics, computeMxDueState } from '@/lib/math';
 import { FLIGHT_DATA_LOOKBACK_DAYS, MX_AGGREGATION_WINDOW_DAYS } from '@/lib/constants';
 import { emailShell, heading, paragraph, callout, bulletList, button } from '@/lib/email/layout';
+import { getAppUrl } from '@/lib/email/appUrl';
 
 // Cap the cron at 5 minutes so a slow Resend round can't let the next
 // scheduled invocation overlap and double-send reminders. Vercel will
@@ -241,7 +242,7 @@ export async function GET(req: Request) {
       // PHASE 2: AGGREGATE SCHEDULING
       // ─────────────────────────────────────────────────
       const schedulingTriggers = evaluated.filter(e => e.triggersScheduling);
-      const appUrl = new URL(req.url).origin;
+      const appUrl = getAppUrl(req);
 
       if (schedulingTriggers.length > 0) {
         const itemsForDraft = evaluated.filter(e =>
@@ -559,7 +560,7 @@ export async function GET(req: Request) {
     // and avoid spamming by checking for a marker message.
     // =====================================================
     {
-      const appUrl = new URL(req.url).origin;
+      const appUrl = getAppUrl(req);
       const { data: pickupEvents, error: pickupErr } = await supabaseAdmin
         .from('aft_maintenance_events')
         .select('id, aircraft_id, primary_contact_email')

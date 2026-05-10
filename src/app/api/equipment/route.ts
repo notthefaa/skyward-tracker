@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireAuth, requireAircraftAccess, requireAircraftAdmin, handleApiError } from '@/lib/auth';
 import { setAppUser } from '@/lib/audit';
+import { idempotency } from '@/lib/idempotency';
 import { stripProtectedFields } from '@/lib/validation';
 
 // GET — list equipment for an aircraft
@@ -33,6 +34,9 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const { user, supabaseAdmin } = await requireAuth(req);
+    const idem = idempotency(supabaseAdmin, user.id, req, 'equipment/POST');
+    const cached = await idem.check();
+    if (cached) return cached;
     const { aircraftId, equipmentData, bulk } = await req.json();
     if (!aircraftId) return NextResponse.json({ error: 'Aircraft ID required.' }, { status: 400 });
     await requireAircraftAdmin(supabaseAdmin, user.id, aircraftId);
@@ -57,7 +61,9 @@ export async function POST(req: Request) {
         .insert(rows)
         .select();
       if (error) throw error;
-      return NextResponse.json({ equipment: data || [] });
+      const body = { equipment: data || [] };
+      await idem.save(200, body);
+      return NextResponse.json(body);
     }
 
     if (!equipmentData?.name || !equipmentData?.category) {
@@ -69,7 +75,9 @@ export async function POST(req: Request) {
       .select()
       .single();
     if (error) throw error;
-    return NextResponse.json({ equipment: data });
+    const body = { equipment: data };
+    await idem.save(200, body);
+    return NextResponse.json(body);
   } catch (error) { return handleApiError(error); }
 }
 
@@ -77,6 +85,9 @@ export async function POST(req: Request) {
 export async function PUT(req: Request) {
   try {
     const { user, supabaseAdmin } = await requireAuth(req);
+    const idem = idempotency(supabaseAdmin, user.id, req, 'equipment/PUT');
+    const cached = await idem.check();
+    if (cached) return cached;
     const { equipmentId, aircraftId, equipmentData } = await req.json();
     if (!equipmentId || !aircraftId) {
       return NextResponse.json({ error: 'Equipment ID and Aircraft ID required.' }, { status: 400 });
@@ -119,13 +130,18 @@ export async function PUT(req: Request) {
       }
     }
 
+    // Filter on deleted_at IS NULL so a PUT can't resurrect a soft-
+    // deleted equipment row through a stale id reference.
     const { error } = await supabaseAdmin
       .from('aft_aircraft_equipment')
       .update(safeUpdate)
       .eq('id', equipmentId)
-      .eq('aircraft_id', aircraftId);
+      .eq('aircraft_id', aircraftId)
+      .is('deleted_at', null);
     if (error) throw error;
-    return NextResponse.json({ success: true });
+    const ok = { success: true };
+    await idem.save(200, ok);
+    return NextResponse.json(ok);
   } catch (error) { return handleApiError(error); }
 }
 
@@ -135,6 +151,9 @@ export async function PUT(req: Request) {
 export async function DELETE(req: Request) {
   try {
     const { user, supabaseAdmin } = await requireAuth(req);
+    const idem = idempotency(supabaseAdmin, user.id, req, 'equipment/DELETE');
+    const cached = await idem.check();
+    if (cached) return cached;
     const { equipmentId, aircraftId } = await req.json();
     if (!equipmentId || !aircraftId) {
       return NextResponse.json({ error: 'Equipment ID and Aircraft ID required.' }, { status: 400 });
@@ -142,12 +161,18 @@ export async function DELETE(req: Request) {
     await requireAircraftAdmin(supabaseAdmin, user.id, aircraftId);
     await setAppUser(supabaseAdmin, user.id);
 
+    // Filter on deleted_at IS NULL — a retry of a successful soft-
+    // delete would otherwise overwrite deleted_at with a later
+    // timestamp, breaking the "first deletion wins" audit semantics.
     const { error } = await supabaseAdmin
       .from('aft_aircraft_equipment')
       .update({ deleted_at: new Date().toISOString(), deleted_by: user.id })
       .eq('id', equipmentId)
-      .eq('aircraft_id', aircraftId);
+      .eq('aircraft_id', aircraftId)
+      .is('deleted_at', null);
     if (error) throw error;
-    return NextResponse.json({ success: true });
+    const ok = { success: true };
+    await idem.save(200, ok);
+    return NextResponse.json(ok);
   } catch (error) { return handleApiError(error); }
 }

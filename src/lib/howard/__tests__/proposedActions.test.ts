@@ -407,17 +407,25 @@ describe('executeAction — onboarding_setup', () => {
     expect(result.recordId).toBe('ac-new');
     expect(insertedAircraftId).toBe('ac-new');
 
-    // Profile upsert flipped the onboarding flag and normalized initials.
-    // Upsert (not update) so a missing role row gets created instead of
-    // silently no-oping for invited users whose row hasn't landed yet.
+    // Profile upsert seeds the user's identity; the onboarding gate
+    // flag is flipped in a SECOND update only after the aircraft +
+    // access rows land successfully (otherwise a partial-failure
+    // strands the user on an empty-fleet screen with the gate
+    // already marked done). Upsert is used so a missing role row
+    // gets created for invited users whose row hasn't landed yet.
     const profileUpsert = calls.find(c => c.table === 'aft_user_roles' && c.op === 'upsert');
     expect(profileUpsert!.payload).toMatchObject({
       user_id: 'user-new',
       full_name: 'Jane Smith',
       initials: 'JS',
-      completed_onboarding: true,
       faa_ratings: ['PPL', 'IFR'],
     });
+    // Belt-and-suspenders: the upsert must NOT pre-flip the gate.
+    expect((profileUpsert!.payload as any).completed_onboarding).toBeUndefined();
+    // The completed_onboarding flip happens in a follow-up update on
+    // the same table after access lands.
+    const profileGateUpdate = calls.find(c => c.table === 'aft_user_roles' && c.op === 'update');
+    expect(profileGateUpdate!.payload).toMatchObject({ completed_onboarding: true });
 
     // Aircraft insert normalized tail + home airport to uppercase and
     // seeded total_* from setup_*.

@@ -39,6 +39,9 @@ export async function POST(req: Request) {
 export async function PUT(req: Request) {
   try {
     const { user, supabaseAdmin } = await requireAuth(req);
+    const idem = idempotency(supabaseAdmin, user.id, req, 'notes/PUT');
+    const cached = await idem.check();
+    if (cached) return cached;
     const { noteId, aircraftId, noteData } = await req.json();
     if (!noteId || !aircraftId) return NextResponse.json({ error: 'Note ID and Aircraft ID required.' }, { status: 400 });
 
@@ -76,7 +79,9 @@ export async function PUT(req: Request) {
       .is('deleted_at', null);
     if (error) throw error;
 
-    return NextResponse.json({ success: true });
+    const ok = { success: true };
+    await idem.save(200, ok);
+    return NextResponse.json(ok);
   } catch (error) { return handleApiError(error); }
 }
 
@@ -84,6 +89,9 @@ export async function PUT(req: Request) {
 export async function DELETE(req: Request) {
   try {
     const { user, supabaseAdmin } = await requireAuth(req);
+    const idem = idempotency(supabaseAdmin, user.id, req, 'notes/DELETE');
+    const cached = await idem.check();
+    if (cached) return cached;
     const { noteId, aircraftId } = await req.json();
     if (!noteId || !aircraftId) return NextResponse.json({ error: 'Note ID and Aircraft ID required.' }, { status: 400 });
 
@@ -118,6 +126,8 @@ export async function DELETE(req: Request) {
       .is('deleted_at', null);
     if (error) throw error;
 
-    return NextResponse.json({ success: true });
+    const ok = { success: true };
+    await idem.save(200, ok);
+    return NextResponse.json(ok);
   } catch (error) { return handleApiError(error); }
 }

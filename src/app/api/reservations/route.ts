@@ -3,6 +3,7 @@ import { Resend } from 'resend';
 import { requireAuth, handleApiError } from '@/lib/auth';
 import { env } from '@/lib/env';
 import { escapeHtml } from '@/lib/sanitize';
+import { getAppUrl } from '@/lib/email/appUrl';
 import { idempotency } from '@/lib/idempotency';
 import {
   safeTimeZone,
@@ -231,37 +232,44 @@ export async function POST(req: Request) {
       }
     }
 
-    // Notify other assigned users (single consolidated email)
-    const { data: aircraft } = await supabaseAdmin
+    // Notify other assigned users (single consolidated email).
+    // Throw on read errors instead of swallowing — a transient blip
+    // would otherwise drop the email fan-out silently after the
+    // reservation already committed, leaving no one informed.
+    const { data: aircraft, error: acReadErr } = await supabaseAdmin
       .from('aft_aircraft')
       .select('tail_number')
       .eq('id', aircraftId)
       .single();
+    if (acReadErr) throw acReadErr;
 
-    const { data: assignedUsers } = await supabaseAdmin
+    const { data: assignedUsers, error: assignedErr } = await supabaseAdmin
       .from('aft_user_aircraft_access')
       .select('user_id')
       .eq('aircraft_id', aircraftId)
       .neq('user_id', user.id);
+    if (assignedErr) throw assignedErr;
 
     if (assignedUsers && assignedUsers.length > 0 && aircraft && created.length > 0) {
       const userIds = assignedUsers.map(u => u.user_id);
 
-      const { data: mutedUsers } = await supabaseAdmin
+      const { data: mutedUsers, error: mutedErr } = await supabaseAdmin
         .from('aft_notification_preferences')
         .select('user_id')
         .in('user_id', userIds)
         .eq('notification_type', 'reservation_created')
         .eq('enabled', false);
+      if (mutedErr) throw mutedErr;
 
       const mutedIds = new Set((mutedUsers || []).map(u => u.user_id));
       const notifyIds = userIds.filter(id => !mutedIds.has(id));
 
       if (notifyIds.length > 0) {
-        const { data: notifyUsers } = await supabaseAdmin
+        const { data: notifyUsers, error: notifyUsersErr } = await supabaseAdmin
           .from('aft_user_roles')
           .select('email')
           .in('user_id', notifyIds);
+        if (notifyUsersErr) throw notifyUsersErr;
 
         const emails = (notifyUsers || []).map(u => u.email).filter(Boolean) as string[];
 
@@ -275,7 +283,7 @@ export async function POST(req: Request) {
           const safeTitle = title ? escapeHtml(title) : '';
           const safeRoute = route ? escapeHtml(route) : '';
 
-          const appUrl = new URL(req.url).origin;
+          const appUrl = getAppUrl(req);
 
           if (created.length === 1) {
             const startStr = formatInTimeZone(created[0].start, tz);
@@ -500,36 +508,42 @@ export async function PUT(req: Request) {
     const timesChanged = newStart !== existing.start_time || newEnd !== existing.end_time;
 
     if (timesChanged) {
-      const { data: aircraft } = await supabaseAdmin
+      // Throw on each read so a transient blip doesn't silently drop
+      // the change-notification fan-out after the row already updated.
+      const { data: aircraft, error: acReadErr } = await supabaseAdmin
         .from('aft_aircraft')
         .select('tail_number')
         .eq('id', existing.aircraft_id)
         .single();
+      if (acReadErr) throw acReadErr;
 
-      const { data: assignedUsers } = await supabaseAdmin
+      const { data: assignedUsers, error: assignedErr } = await supabaseAdmin
         .from('aft_user_aircraft_access')
         .select('user_id')
         .eq('aircraft_id', existing.aircraft_id)
         .neq('user_id', user.id);
+      if (assignedErr) throw assignedErr;
 
       if (assignedUsers && assignedUsers.length > 0 && aircraft) {
         const userIds = assignedUsers.map(u => u.user_id);
 
-        const { data: mutedUsers } = await supabaseAdmin
+        const { data: mutedUsers, error: mutedErr } = await supabaseAdmin
           .from('aft_notification_preferences')
           .select('user_id')
           .in('user_id', userIds)
           .eq('notification_type', 'reservation_created')
           .eq('enabled', false);
+        if (mutedErr) throw mutedErr;
 
         const mutedIds = new Set((mutedUsers || []).map(u => u.user_id));
         const notifyIds = userIds.filter(id => !mutedIds.has(id));
 
         if (notifyIds.length > 0) {
-          const { data: notifyUsers } = await supabaseAdmin
+          const { data: notifyUsers, error: notifyUsersErr } = await supabaseAdmin
             .from('aft_user_roles')
             .select('email')
             .in('user_id', notifyIds);
+          if (notifyUsersErr) throw notifyUsersErr;
 
           const emails = (notifyUsers || []).map(u => u.email).filter(Boolean) as string[];
 
@@ -539,7 +553,7 @@ export async function PUT(req: Request) {
             const newStartStr = formatInTimeZone(newStart, tz);
             const newEndStr = formatInTimeZone(newEnd, tz);
 
-            const appUrl = new URL(req.url).origin;
+            const appUrl = getAppUrl(req);
             await resend.emails.send({
               from: `Skyward Aircraft Manager <${FROM_EMAIL}>`,
               to: emails,
@@ -645,37 +659,42 @@ export async function DELETE(req: Request) {
       .eq('aircraft_id', reservation.aircraft_id);
     if (cancelErr) throw cancelErr;
 
-    // Notify other assigned users
-    const { data: aircraft } = await supabaseAdmin
+    // Notify other assigned users — throw on each read so a blip
+    // doesn't silently drop the cancellation notification fan-out.
+    const { data: aircraft, error: acReadErr } = await supabaseAdmin
       .from('aft_aircraft')
       .select('tail_number')
       .eq('id', reservation.aircraft_id)
       .single();
+    if (acReadErr) throw acReadErr;
 
-    const { data: assignedUsers } = await supabaseAdmin
+    const { data: assignedUsers, error: assignedErr } = await supabaseAdmin
       .from('aft_user_aircraft_access')
       .select('user_id')
       .eq('aircraft_id', reservation.aircraft_id)
       .neq('user_id', user.id);
+    if (assignedErr) throw assignedErr;
 
     if (assignedUsers && assignedUsers.length > 0 && aircraft) {
       const userIds = assignedUsers.map(u => u.user_id);
 
-      const { data: mutedUsers } = await supabaseAdmin
+      const { data: mutedUsers, error: mutedErr } = await supabaseAdmin
         .from('aft_notification_preferences')
         .select('user_id')
         .in('user_id', userIds)
         .eq('notification_type', 'reservation_cancelled')
         .eq('enabled', false);
+      if (mutedErr) throw mutedErr;
 
       const mutedIds = new Set((mutedUsers || []).map(u => u.user_id));
       const notifyIds = userIds.filter(id => !mutedIds.has(id));
 
       if (notifyIds.length > 0) {
-        const { data: notifyUsers } = await supabaseAdmin
+        const { data: notifyUsers, error: notifyUsersErr } = await supabaseAdmin
           .from('aft_user_roles')
           .select('email')
           .in('user_id', notifyIds);
+        if (notifyUsersErr) throw notifyUsersErr;
 
         const emails = (notifyUsers || []).map(u => u.email).filter(Boolean) as string[];
 
@@ -689,7 +708,7 @@ export async function DELETE(req: Request) {
           const safeTail = escapeHtml(aircraft.tail_number);
           const safePilotName = escapeHtml(reservation.pilot_name);
 
-          const appUrl = new URL(req.url).origin;
+          const appUrl = getAppUrl(req);
           await resend.emails.send({
             from: `Skyward Aircraft Manager <${FROM_EMAIL}>`,
             to: emails,
@@ -700,7 +719,7 @@ export async function DELETE(req: Request) {
               body: `
                 ${heading('Reservation Cancelled', 'danger')}
                 ${paragraph(`A reservation for <strong>${safeTail}</strong> on <strong>${startStr}</strong> has been cancelled.`)}
-                ${safePilotName ? paragraph(`<span style="color:#525659;">Originally booked by: ${safePilotName}</span>`) : ''}
+                ${safePilotName ? paragraph(`Originally booked by: ${safePilotName}`) : ''}
                 ${button(appUrl, 'Open Skyward')}
               `,
               preferencesUrl: `${appUrl}#settings`,

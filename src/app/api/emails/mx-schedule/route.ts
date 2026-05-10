@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { Resend } from 'resend';
 import { requireAuth, requireAircraftAccess, handleApiError } from '@/lib/auth';
 import { checkEmailRateLimit } from '@/lib/submitRateLimit';
+import { idempotency } from '@/lib/idempotency';
 import { env } from '@/lib/env';
 import { escapeHtml } from '@/lib/sanitize';
 import { emailShell, heading, paragraph, callout, keyValueBlock } from '@/lib/email/layout';
@@ -12,6 +13,14 @@ const FROM_EMAIL = 'notifications@skywardsociety.com';
 export async function POST(req: Request) {
   try {
     const { user, supabaseAdmin } = await requireAuth(req);
+
+    // Idempotency BEFORE the rate-limit so a network-blip retry of a
+    // successful send returns the cached 200 instead of double-mailing
+    // the mechanic + main contact and burning the per-user email
+    // budget for a noop.
+    const idem = idempotency(supabaseAdmin, user.id, req, 'emails/mx-schedule/POST');
+    const cached = await idem.check();
+    if (cached) return cached;
 
     const rl = await checkEmailRateLimit(supabaseAdmin, user.id);
     if (!rl.allowed) {
@@ -85,14 +94,20 @@ export async function POST(req: Request) {
       // Update the database to clear the manual trigger button.
       // Scope the update to the verified aircraft so a caller can't
       // flip mx_schedule_sent on another aircraft's item by id.
-      await supabaseAdmin
+      // Throw on error — a silent UPDATE failure would leave the
+      // "Send Schedule Request" button enabled, inviting a retry that
+      // (after the cache window expires) re-emails the mechanic.
+      const { error: flagErr } = await supabaseAdmin
         .from('aft_maintenance_items')
         .update({ mx_schedule_sent: true })
         .eq('id', mxItem.id)
         .eq('aircraft_id', aircraft.id);
+      if (flagErr) throw flagErr;
     }
 
-    return NextResponse.json({ success: true });
+    const ok = { success: true };
+    await idem.save(200, ok);
+    return NextResponse.json(ok);
   } catch (error) {
     return handleApiError(error);
   }

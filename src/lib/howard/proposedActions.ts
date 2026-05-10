@@ -333,7 +333,13 @@ export async function executeAction(
         user_id: userId,
         full_name: p.profile.full_name.trim(),
         initials: p.profile.initials.toUpperCase().slice(0, 3),
-        completed_onboarding: true,
+        // NOTE: completed_onboarding is intentionally NOT flipped here.
+        // We flip it only after the aircraft + access rows land
+        // successfully — otherwise a partial failure (e.g. dup-tail
+        // 23505 on aircraft insert) would leave the user with an
+        // empty fleet but the onboarding gate marked done, stranding
+        // them on the empty-fleet screen with no clear way back to
+        // the welcome chat.
       };
       if (p.profile.faa_ratings && p.profile.faa_ratings.length > 0) {
         profileFields.faa_ratings = p.profile.faa_ratings;
@@ -412,17 +418,33 @@ export async function executeAction(
         throw accessErr;
       }
 
+      // 4. Now that everything stuck, flip the onboarding gate. A
+      // failure here is non-fatal — the user has an aircraft and
+      // access; they'll just see the welcome chat again, which is a
+      // softer fallback than an empty-fleet stranded state.
+      const { error: gateErr } = await sb
+        .from('aft_user_roles')
+        .update({ completed_onboarding: true })
+        .eq('user_id', userId);
+      if (gateErr) {
+        console.error('[howard onboarding] could not flip completed_onboarding flag', gateErr);
+      }
+
       return { recordId: created.id, recordTable: 'aft_aircraft' };
     }
 
     case 'mx_schedule': {
       const p = action.payload as MxSchedulePayload;
-      // Pull aircraft for contact defaults.
-      const { data: ac } = await sb
+      // Pull aircraft for contact defaults. Throw on read error so a
+      // transient blip doesn't silently emit a work-package email
+      // with no mechanic / main contact wired up — the executor
+      // would commit the event but the email would have empty TO/CC.
+      const { data: ac, error: acErr } = await sb
         .from('aft_aircraft')
         .select('mx_contact, mx_contact_email, main_contact, main_contact_email')
         .eq('id', action.aircraft_id)
         .maybeSingle();
+      if (acErr) throw acErr;
 
       const { data: event, error: evErr } = await sb
         .from('aft_maintenance_events')

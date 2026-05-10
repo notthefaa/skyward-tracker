@@ -76,17 +76,25 @@ export async function POST(req: Request) {
     await requireAircraftAdmin(supabaseAdmin, user.id, ad.aircraft_id);
     await setAppUser(supabaseAdmin, user.id);
 
-    const { data: aircraft } = await supabaseAdmin
+    // Throw on read errors — without these, a transient supabase blip
+    // returns `null` for aircraft + equipment, the matcher computes
+    // against an empty serial/equipment set, and the verdict
+    // ("review_required" by default) gets persisted on the AD row +
+    // cached AI result. We'd then burn another Haiku call on the next
+    // refresh that the cache treats as authoritative.
+    const { data: aircraft, error: acErr } = await supabaseAdmin
       .from('aft_aircraft')
       .select('id, serial_number')
       .eq('id', ad.aircraft_id)
       .maybeSingle();
-    const { data: equipmentData } = await supabaseAdmin
+    if (acErr) throw acErr;
+    const { data: equipmentData, error: eqErr } = await supabaseAdmin
       .from('aft_aircraft_equipment')
       .select('category, make, model')
       .eq('aircraft_id', ad.aircraft_id)
       .is('deleted_at', null)
       .is('removed_at', null);
+    if (eqErr) throw eqErr;
     const equipment = equipmentData || [];
 
     const sourceHash = ad.sync_hash || 'unknown';
@@ -95,12 +103,13 @@ export async function POST(req: Request) {
     let parsed: ParsedApplicability | null = null;
     let fromCache = false;
 
-    const { data: cached } = await supabaseAdmin
+    const { data: cached, error: cachedErr } = await supabaseAdmin
       .from('aft_ad_applicability_cache')
       .select('parsed')
       .eq('ad_number', ad.ad_number)
       .eq('source_hash', sourceHash)
       .maybeSingle();
+    if (cachedErr) throw cachedErr;
 
     if (cached?.parsed) {
       parsed = cached.parsed as ParsedApplicability;
@@ -137,10 +146,13 @@ export async function POST(req: Request) {
       }
       parsed = toolBlock.input as ParsedApplicability;
 
-      // Cache the parse globally.
-      await supabaseAdmin
+      // Cache the parse globally. Surface insert errors — a silent
+      // failure means we'd hit the Haiku endpoint again on every
+      // recheck of this same AD/source-hash pair.
+      const { error: cacheInsertErr } = await supabaseAdmin
         .from('aft_ad_applicability_cache')
         .insert({ ad_number: ad.ad_number, source_hash: sourceHash, parsed });
+      if (cacheInsertErr) throw cacheInsertErr;
     }
 
     const verdict = computeVerdict(parsed, aircraft || {}, equipment);

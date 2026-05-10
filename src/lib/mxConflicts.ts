@@ -156,7 +156,7 @@ export async function cancelConflictingReservations({
             ${paragraph(`Your reservation${plural ? 's' : ''} for <strong>${safeTailNumber}</strong> ${plural ? 'have' : 'has'} been automatically cancelled due to scheduled maintenance.`)}
             ${callout(bulletList(reservationLines), { variant: 'danger', label: `Cancelled Reservation${plural ? 's' : ''}` })}
             ${callout(
-              `<strong>${mxDateRange}</strong><div style="margin-top:4px;color:#6B7280;font-size:13px;">Serviced by ${mechanicLabel}</div>`,
+              `<strong>${mxDateRange}</strong><div class="sw-paragraph" style="margin-top:4px;font-size:13px;">Serviced by ${mechanicLabel}</div>`,
               { variant: 'warning', label: 'Maintenance Period' }
             )}
             ${paragraph(`Rebook your flight for after the maintenance period. Sorry for the inconvenience.`)}

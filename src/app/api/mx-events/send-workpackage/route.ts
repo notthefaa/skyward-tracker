@@ -7,6 +7,7 @@ import { idempotency } from '@/lib/idempotency';
 import { env } from '@/lib/env';
 import { escapeHtml } from '@/lib/sanitize';
 import { emailShell, heading, paragraph, callout, sectionHeading, bulletList, button } from '@/lib/email/layout';
+import { getAppUrl } from '@/lib/email/appUrl';
 
 const resend = new Resend(env.RESEND_API_KEY);
 const FROM_EMAIL = 'notifications@skywardsociety.com';
@@ -198,7 +199,7 @@ export async function POST(req: Request) {
     // block guarded so a future refactor that loosens that pre-check
     // doesn't quietly send into the void.)
     if (aircraft.mx_contact_email) {
-      const portalUrl = `${new URL(req.url).origin}/service/${event.access_token}`;
+      const portalUrl = `${getAppUrl(req)}/service/${event.access_token}`;
       const mxCc = aircraft.main_contact_email ? [aircraft.main_contact_email] : [];
 
       // Fetch ALL line items

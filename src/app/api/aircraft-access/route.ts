@@ -1,10 +1,19 @@
 import { NextResponse } from 'next/server';
 import { requireAuth, handleApiError, aircraftHasGlobalAdminWithAccess } from '@/lib/auth';
+import { idempotency } from '@/lib/idempotency';
 
 /** Update a user's aircraft role */
 export async function PUT(req: Request) {
   try {
     const { user, supabaseAdmin } = await requireAuth(req);
+    // Idempotency BEFORE the read-and-demote dance — without this a
+    // network-blip retry of a successful demote re-runs the verify
+    // count + reverts on a transient failure, surfacing a confusing
+    // "cannot demote — only admin" error to a user whose first call
+    // actually succeeded.
+    const idem = idempotency(supabaseAdmin, user.id, req, 'aircraft-access/PUT');
+    const cached = await idem.check();
+    if (cached) return cached;
     const { targetUserId, aircraftId, newRole } = await req.json();
 
     if (!targetUserId || !aircraftId || !newRole) {
@@ -59,7 +68,9 @@ export async function PUT(req: Request) {
       }
       if (targetCurrent.aircraft_role === 'pilot') {
         // Already a pilot — nothing to do, treat as success.
-        return NextResponse.json({ success: true });
+        const ok = { success: true };
+        await idem.save(200, ok);
+        return NextResponse.json(ok);
       }
 
       // Apply the demotion, then verify in a single follow-up read
@@ -108,7 +119,9 @@ export async function PUT(req: Request) {
         }
       }
 
-      return NextResponse.json({ success: true });
+      const ok = { success: true };
+      await idem.save(200, ok);
+      return NextResponse.json(ok);
     }
 
     // Promotion to admin — no admin-count concern.
@@ -119,7 +132,9 @@ export async function PUT(req: Request) {
       .eq('aircraft_id', aircraftId);
     if (promoteErr) throw promoteErr;
 
-    return NextResponse.json({ success: true });
+    const ok = { success: true };
+    await idem.save(200, ok);
+    return NextResponse.json(ok);
   } catch (error) {
     return handleApiError(error);
   }
@@ -129,6 +144,12 @@ export async function PUT(req: Request) {
 export async function DELETE(req: Request) {
   try {
     const { user, supabaseAdmin } = await requireAuth(req);
+    // Idempotency BEFORE the read-and-delete dance so a network-blip
+    // retry of a successful removal returns cached 200 instead of
+    // running the read + restore + count again with stale state.
+    const idem = idempotency(supabaseAdmin, user.id, req, 'aircraft-access/DELETE');
+    const cached = await idem.check();
+    if (cached) return cached;
     const { targetUserId, aircraftId } = await req.json();
 
     if (!targetUserId || !aircraftId) {
@@ -169,7 +190,9 @@ export async function DELETE(req: Request) {
 
     if (!targetCurrent) {
       // Already gone — treat as success (idempotent removal).
-      return NextResponse.json({ success: true });
+      const ok = { success: true };
+      await idem.save(200, ok);
+      return NextResponse.json(ok);
     }
 
     // Cancel all future reservations for this user on this aircraft.
@@ -195,11 +218,17 @@ export async function DELETE(req: Request) {
     // Only verify when removing an admin; pilot removal can never
     // strand the aircraft.
     if (targetCurrent.aircraft_role === 'admin') {
-      const { count: remainingAdmins } = await supabaseAdmin
+      // Throw on count error — without this, a transient supabase
+      // blip silently treats remainingAdmins as 0, triggering the
+      // restore path and surfacing a confusing "cannot remove — only
+      // admin" 409 to an admin who just successfully removed a peer
+      // and is one of several remaining admins.
+      const { count: remainingAdmins, error: countErr } = await supabaseAdmin
         .from('aft_user_aircraft_access')
         .select('user_id', { count: 'exact', head: true })
         .eq('aircraft_id', aircraftId)
         .eq('aircraft_role', 'admin');
+      if (countErr) throw countErr;
 
       if ((remainingAdmins ?? 0) === 0) {
         // Relaxed sole-admin guard: if a global admin has access to
@@ -226,7 +255,9 @@ export async function DELETE(req: Request) {
       }
     }
 
-    return NextResponse.json({ success: true });
+    const ok = { success: true };
+    await idem.save(200, ok);
+    return NextResponse.json(ok);
   } catch (error) {
     return handleApiError(error);
   }

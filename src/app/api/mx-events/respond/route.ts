@@ -9,6 +9,7 @@ import { cancelConflictingReservations } from '@/lib/mxConflicts';
 import { PORTAL_EXPIRY_DAYS } from '@/lib/constants';
 import { isIsoDate } from '@/lib/validation';
 import { emailShell, heading, paragraph, callout, bulletList, button } from '@/lib/email/layout';
+import { getAppUrl } from '@/lib/email/appUrl';
 
 const resend = new Resend(env.RESEND_API_KEY);
 const FROM_EMAIL = 'notifications@skywardsociety.com';
@@ -44,7 +45,7 @@ export async function POST(req: Request) {
     }
 
     const supabaseAdmin = createAdminClient();
-    const baseUrl = new URL(req.url).origin;
+    const baseUrl = getAppUrl(req);
 
     const { data: event, error: evErr } = await supabaseAdmin
       .from('aft_maintenance_events')
@@ -287,9 +288,13 @@ export async function POST(req: Request) {
           const summaryLine = `${completedItems}/${totalItems} items complete` + (inProgressItems > 0 ? `, ${inProgressItems} in progress` : '');
 
           const itemLines = allItems.map((li: any) => {
+            // Use slateGray for `deferred` so the badge stays readable
+            // in both light + dark mode email clients. Per
+            // feedback_email_palette.md, gray-700 (#6B7280) is banned
+            // in body content because dark-mode rules don't lift it.
             const color = li.line_status === 'complete' ? '#56B94A'
               : li.line_status === 'in_progress' ? '#3AB0FF'
-              : li.line_status === 'deferred' ? '#6B7280'
+              : li.line_status === 'deferred' ? '#525659'
               : '#F08B46';
             return `${escapeHtml(li.item_name)} — <span style="color:${color};font-weight:700;text-transform:uppercase;font-size:11px;letter-spacing:1px;">${escapeHtml(li.line_status)}</span>`;
           });
@@ -471,7 +476,17 @@ export async function POST(req: Request) {
       }
     }
 
-    const responseBody = { success: true };
+    // Surface email-skip when the owner's per-user email rate limit
+    // is full. Without this, the mechanic-portal taps "Confirm" /
+    // "Mark Ready" / "Update Progress", DB updates land, but the
+    // owner never gets the notification — and neither side has any
+    // signal it didn't ship. Client can soft-warn the mechanic that
+    // the owner will see the change in-app rather than via email.
+    const responseBody: Record<string, unknown> = { success: true };
+    if (event.created_by && !rl.allowed) {
+      responseBody.email_skipped = true;
+      responseBody.email_retry_after_ms = rl.retryAfterMs;
+    }
     if (idem) await idem.save(200, responseBody);
     return NextResponse.json(responseBody);
   } catch (error) {

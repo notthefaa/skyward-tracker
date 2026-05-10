@@ -79,20 +79,24 @@ async function checkAndRecordWebSearch(sb: SupabaseClient, userId: string): Prom
  * window between that check and each tool call to be narrow.
  */
 async function verifyAccess(sb: SupabaseClient, userId: string, aircraftId: string): Promise<boolean> {
-  // Global admins bypass
-  const { data: role } = await sb
+  // Global admins bypass. Throw on read errors instead of silently
+  // treating a transient blip as "no role" → false → tool returns
+  // "no aircraft in fleet". Same shape as the SWR-fetcher fix.
+  const { data: role, error: roleErr } = await sb
     .from('aft_user_roles')
     .select('role')
     .eq('user_id', userId)
-    .single();
+    .maybeSingle();
+  if (roleErr) throw roleErr;
   if (role?.role === 'admin') return true;
 
-  const { data: access } = await sb
+  const { data: access, error: accessErr } = await sb
     .from('aft_user_aircraft_access')
     .select('aircraft_role')
     .eq('user_id', userId)
     .eq('aircraft_id', aircraftId)
     .maybeSingle();
+  if (accessErr) throw accessErr;
   return !!access;
 }
 
@@ -684,20 +688,27 @@ const handlers: Record<string, ToolHandler> = {
     // surfaces the stale id back to the user instead of building a
     // proposal whose contents quietly shrink on Confirm.
     if (Array.isArray(params.mx_item_ids) && params.mx_item_ids.length > 0) {
-      const { data } = await sb.from('aft_maintenance_items')
+      // Throw on read errors so a transient supabase blip doesn't
+      // surface "MX items do not belong to this aircraft" to a pilot
+      // who supplied perfectly valid IDs — the validator's "length
+      // mismatch" trip would otherwise look indistinguishable from a
+      // legitimate stale-id case.
+      const { data, error } = await sb.from('aft_maintenance_items')
         .select('id, aircraft_id')
         .in('id', params.mx_item_ids)
         .is('deleted_at', null);
+      if (error) throw error;
       const bad = (data || []).find((r: any) => r.aircraft_id !== aircraftId);
       if (bad || (data || []).length !== params.mx_item_ids.length) {
         return { error: 'One or more MX items do not belong to this aircraft or have been deleted.' };
       }
     }
     if (Array.isArray(params.squawk_ids) && params.squawk_ids.length > 0) {
-      const { data } = await sb.from('aft_squawks')
+      const { data, error } = await sb.from('aft_squawks')
         .select('id, aircraft_id')
         .in('id', params.squawk_ids)
         .is('deleted_at', null);
+      if (error) throw error;
       const bad = (data || []).find((r: any) => r.aircraft_id !== aircraftId);
       if (bad || (data || []).length !== params.squawk_ids.length) {
         return { error: 'One or more squawks do not belong to this aircraft or have been deleted.' };

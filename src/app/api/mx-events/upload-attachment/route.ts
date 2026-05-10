@@ -7,6 +7,7 @@ import { env } from '@/lib/env';
 import { escapeHtml } from '@/lib/sanitize';
 import { PORTAL_EXPIRY_DAYS } from '@/lib/constants';
 import { emailShell, heading, paragraph, callout, bulletList, button } from '@/lib/email/layout';
+import { getAppUrl } from '@/lib/email/appUrl';
 import { fileBytesMatchType } from '@/lib/fileMagic';
 
 const resend = new Resend(env.RESEND_API_KEY);
@@ -41,7 +42,7 @@ export async function POST(req: Request) {
     }
 
     const supabaseAdmin = createAdminClient();
-    const baseUrl = new URL(req.url).origin;
+    const baseUrl = getAppUrl(req);
 
     // Validate the access token — reject if the owner already soft-deleted
     // the event (matches the respond route).

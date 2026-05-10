@@ -55,6 +55,9 @@ export async function POST(req: Request) {
 export async function PUT(req: Request) {
   try {
     const { user, supabaseAdmin } = await requireAuth(req);
+    const idem = idempotency(supabaseAdmin, user.id, req, 'squawks/PUT');
+    const cached = await idem.check();
+    if (cached) return cached;
     const { squawkId, aircraftId, squawkData } = await req.json();
     if (!squawkId || !aircraftId) {
       return apiErrorCoded('VALIDATION_ERROR', 'Squawk ID and Aircraft ID required.', 400, req);
@@ -105,7 +108,9 @@ export async function PUT(req: Request) {
       .is('deleted_at', null);
     if (error) throw error;
 
-    return NextResponse.json({ success: true });
+    const ok = { success: true };
+    await idem.save(200, ok);
+    return NextResponse.json(ok);
   } catch (error) { return handleCodedError(error, req); }
 }
 
@@ -114,6 +119,9 @@ export async function PUT(req: Request) {
 export async function DELETE(req: Request) {
   try {
     const { user, supabaseAdmin } = await requireAuth(req);
+    const idem = idempotency(supabaseAdmin, user.id, req, 'squawks/DELETE');
+    const cached = await idem.check();
+    if (cached) return cached;
     const { squawkId, aircraftId } = await req.json();
     if (!squawkId || !aircraftId) return NextResponse.json({ error: 'Squawk ID and Aircraft ID required.' }, { status: 400 });
 
@@ -149,6 +157,8 @@ export async function DELETE(req: Request) {
       .is('deleted_at', null);
     if (error) throw error;
 
-    return NextResponse.json({ success: true });
+    const ok = { success: true };
+    await idem.save(200, ok);
+    return NextResponse.json(ok);
   } catch (error) { return handleApiError(error); }
 }
