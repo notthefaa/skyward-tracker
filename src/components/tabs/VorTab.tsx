@@ -1,11 +1,10 @@
 import { useState, useCallback, useEffect, useRef } from "react";
-import { supabase } from "@/lib/supabase";
 import { ModalPortal } from "@/components/ModalPortal";
 import { authFetch } from "@/lib/authFetch";
 import { newIdempotencyKey, idempotencyHeader } from "@/lib/idempotencyClient";
 import { swrKeys } from "@/lib/swrKeys";
 import type { AircraftWithMetrics, VorCheck, VorCheckType } from "@/lib/types";
-import useSWR from "swr";
+import useSWR, { useSWRConfig } from "swr";
 import { X, Trash2, Check, AlertTriangle, ChevronLeft, ChevronRight } from "lucide-react";
 import { useToast } from "@/components/ToastProvider";
 import { useConfirm } from "@/components/ConfirmProvider";
@@ -33,6 +32,7 @@ export default function VorTab({
   openFormSignal?: number;
 }) {
   const { showSuccess, showError } = useToast();
+  const { mutate: globalMutate } = useSWRConfig();
   const confirm = useConfirm();
   const [page, setPage] = useState(1);
   const [showModal, setShowModal] = useState(false);
@@ -59,43 +59,25 @@ export default function VorTab({
     setBearingError('');
   }, [aircraft?.id]);
 
-  const { data, mutate } = useSWR(
+  const { data, mutate } = useSWR<{ checks: VorCheck[]; hasMore: boolean }>(
     aircraft ? swrKeys.vor(aircraft.id, page) : null,
     async () => {
-      // Fetch one extra row instead of using count:'exact' — see
-      // TimesTab for the rationale (PostgREST exact-count clause is
-      // one of the queries that wedges sockets on iOS PWA).
-      const from = (page - 1) * PAGE_SIZE;
-      const to = from + PAGE_SIZE; // inclusive → fetches PAGE_SIZE + 1 rows
-      const { data: checks, error } = await supabase
-        .from('aft_vor_checks')
-        .select('*')
-        .eq('aircraft_id', aircraft!.id)
-        .is('deleted_at', null)
-        .order('occurred_at', { ascending: false })
-        .order('created_at', { ascending: false })
-        .range(from, to);
-      if (error) throw error;
-      const rows = (checks || []) as VorCheck[];
-      const hasMore = rows.length > PAGE_SIZE;
-      return { checks: hasMore ? rows.slice(0, PAGE_SIZE) : rows, hasMore };
+      // Cookie-bearing fetch via /api/vor-checks. Server uses the same
+      // pageSize+1 pattern (no COUNT) — see route docs.
+      const res = await authFetch(`/api/vor-checks?aircraftId=${aircraft!.id}&page=${page}&pageSize=${PAGE_SIZE}`);
+      if (!res.ok) throw new Error(`vor-checks fetch failed: ${res.status}`);
+      return res.json();
     }
   );
 
   // Fetch latest check for due status (always page 1, limit 1)
-  const { data: latestData } = useSWR(
+  const { data: latestData } = useSWR<VorCheck | null>(
     aircraft ? swrKeys.vorLatest(aircraft.id) : null,
     async () => {
-      const { data: checks, error } = await supabase
-        .from('aft_vor_checks')
-        .select('*')
-        .eq('aircraft_id', aircraft!.id)
-        .is('deleted_at', null)
-        .order('occurred_at', { ascending: false })
-        .order('created_at', { ascending: false })
-        .limit(1);
-      if (error) throw error;
-      return (checks && checks.length > 0) ? checks[0] as VorCheck : null;
+      const res = await authFetch(`/api/vor-checks?aircraftId=${aircraft!.id}&latest=1`);
+      if (!res.ok) throw new Error(`vor-checks latest fetch failed: ${res.status}`);
+      const body = await res.json();
+      return body.latest as VorCheck | null;
     }
   );
 
@@ -158,8 +140,9 @@ export default function VorTab({
       showSuccess('VOR check logged.');
       setShowModal(false);
       mutate();
-      // Also revalidate the latest check
-      await supabase.from('aft_vor_checks').select('*').eq('aircraft_id', aircraft.id).order('occurred_at', { ascending: false }).order('created_at', { ascending: false }).limit(1);
+      // Also revalidate the latest-check key so the FAR 91.171 due-
+      // status banner refreshes after a successful log.
+      globalMutate(swrKeys.vorLatest(aircraft.id));
     } catch (err: any) { showError(err.message); }
     finally { setIsSubmitting(false); }
   };

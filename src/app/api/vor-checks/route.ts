@@ -1,11 +1,69 @@
 import { NextResponse } from 'next/server';
-import { requireAuth, requireAircraftAdmin, handleApiError } from '@/lib/auth';
+import { requireAuth, requireAircraftAccess, requireAircraftAdmin, handleApiError } from '@/lib/auth';
 import { setAppUser } from '@/lib/audit';
 import { idempotency } from '@/lib/idempotency';
 import { apiErrorCoded, handleCodedError } from '@/lib/apiResponse';
 import { validateVorCheckInput, submitVorCheck } from '@/lib/submissions';
 import { requireAircraftAccessCoded } from '@/lib/submissionAuth';
 import { checkSubmitRateLimit } from '@/lib/submitRateLimit';
+
+/**
+ * GET /api/vor-checks?aircraftId=...&page=N&pageSize=10
+ *   OR  ?aircraftId=...&latest=1
+ *
+ * Two read modes for VorTab:
+ *   1. Paginated history (default). pageSize+1 hasMore pattern (no
+ *      COUNT clause, mirrors TimesTab).
+ *   2. Latest check — `?latest=1` returns the single most recent
+ *      non-deleted check or null. Drives the FAR 91.171 due-status
+ *      banner above the log table.
+ */
+export async function GET(req: Request) {
+  try {
+    const url = new URL(req.url);
+    const aircraftId = url.searchParams.get('aircraftId');
+    if (!aircraftId) return NextResponse.json({ error: 'aircraftId required' }, { status: 400 });
+
+    const { user, supabaseAdmin } = await requireAuth(req);
+    await requireAircraftAccess(supabaseAdmin, user.id, aircraftId);
+
+    if (url.searchParams.get('latest') === '1') {
+      const { data, error } = await supabaseAdmin
+        .from('aft_vor_checks')
+        .select('*')
+        .eq('aircraft_id', aircraftId)
+        .is('deleted_at', null)
+        .order('occurred_at', { ascending: false })
+        .order('created_at', { ascending: false })
+        .limit(1);
+      if (error) throw error;
+      return NextResponse.json({ latest: (data && data[0]) || null });
+    }
+
+    const page = Math.max(parseInt(url.searchParams.get('page') || '1', 10) || 1, 1);
+    const pageSizeParam = parseInt(url.searchParams.get('pageSize') || '10', 10);
+    const pageSize = Number.isFinite(pageSizeParam) ? Math.min(Math.max(pageSizeParam, 1), 50) : 10;
+    const from = (page - 1) * pageSize;
+    const to = from + pageSize;
+    const { data, error } = await supabaseAdmin
+      .from('aft_vor_checks')
+      .select('*')
+      .eq('aircraft_id', aircraftId)
+      .is('deleted_at', null)
+      .order('occurred_at', { ascending: false })
+      .order('created_at', { ascending: false })
+      .range(from, to);
+    if (error) throw error;
+    const rows = data || [];
+    const hasMore = rows.length > pageSize;
+    return NextResponse.json({
+      checks: hasMore ? rows.slice(0, pageSize) : rows,
+      hasMore,
+    });
+  } catch (error) {
+    return handleApiError(error, req);
+  }
+}
 
 // POST — create VOR check (any user with aircraft access).
 // Companion-app queue contract:

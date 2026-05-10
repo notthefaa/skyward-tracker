@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react";
 import useSWR from "swr";
-import { supabase } from "@/lib/supabase";
+import { authFetch } from "@/lib/authFetch";
 import { swrKeys } from "@/lib/swrKeys";
 import type { AircraftWithMetrics, Reservation } from "@/lib/types";
 import { ChevronLeft, ChevronRight, Wrench, Plane, MapPin, Clock, Filter } from "lucide-react";
@@ -80,26 +80,15 @@ export default function FleetSchedule({
     const rangeStart = new Date(year, month - 1, 1).toISOString();
     const rangeEnd = new Date(year, month + 2, 0).toISOString();
     const ids = aircraftList.map(a => a.id);
-    const [resRes, mxRes] = await Promise.all([
-      supabase.from('aft_reservations')
-        .select('*')
-        .in('aircraft_id', ids)
-        .eq('status', 'confirmed')
-        .gte('end_time', rangeStart)
-        .lte('start_time', rangeEnd)
-        .order('start_time'),
-      supabase.from('aft_maintenance_events')
-        .select('aircraft_id, confirmed_date, estimated_completion, status, mx_contact_name')
-        .in('aircraft_id', ids)
-        .is('deleted_at', null)
-        .in('status', ['confirmed', 'in_progress']),
-    ]);
-    if (resRes.error) throw resRes.error;
-    if (mxRes.error) throw mxRes.error;
-    const reservations = (resRes.data || []) as Reservation[];
-    const mxBlocks: MxBlockRow[] = (mxRes.data || [])
-      .filter((e: any) => e.confirmed_date)
-      .map((e: any) => ({
+    const res = await authFetch(`/api/fleet/schedule?from=${encodeURIComponent(rangeStart)}&to=${encodeURIComponent(rangeEnd)}&ids=${encodeURIComponent(ids.join(','))}`);
+    if (!res.ok) throw new Error(`fleet schedule fetch failed: ${res.status}`);
+    const body = await res.json() as {
+      reservations: Reservation[];
+      mxEvents: Array<{ aircraft_id: string; confirmed_date: string; estimated_completion: string | null; mx_contact_name: string | null }>;
+    };
+    const reservations = body.reservations;
+    const mxBlocks: MxBlockRow[] = body.mxEvents
+      .map((e) => ({
         aircraft_id: e.aircraft_id,
         start: new Date(e.confirmed_date + 'T00:00:00'),
         end: e.estimated_completion
