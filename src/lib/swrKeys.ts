@@ -16,7 +16,13 @@
 // =============================================================
 
 export const swrKeys = {
-  // Summary tab sub-cards
+  // Summary tab — single consolidated key (replaces 7 sub-card keys
+  // post-cookie-auth migration; server-side batch read in
+  // /api/aircraft/[id]/summary returns all 7 datasets).
+  summary:               (id: string) => `summary-${id}`,
+  // Legacy summary sub-card keys retained for the SWR-cache-walk in
+  // `allForAircraft` so any `globalMutate` against a stale per-card
+  // key from a previous app version still clears.
   summaryMx:             (id: string) => `summary-mx-${id}`,
   summarySquawks:        (id: string) => `summary-squawks-${id}`,
   summaryNote:           (id: string) => `summary-note-${id}`,
@@ -96,7 +102,8 @@ export function allForAircraft(aircraftId: string): string[] {
   const id = aircraftId;
   const now = new Date();
   return [
-    // Summary sub-cards
+    // Summary tab — consolidated + legacy sub-card keys for the cache walk
+    swrKeys.summary(id),
     swrKeys.summaryMx(id),
     swrKeys.summarySquawks(id),
     swrKeys.summaryNote(id),

@@ -168,7 +168,7 @@ describe('allForAircraft', () => {
     // `swrKeys`, add the same key to `allForAircraft` and bump the
     // expected count below. That keeps the lifecycle revalidation
     // walk in lockstep with the key surface.
-    const EXPECTED = 25;
+    const EXPECTED = 26;
     expect(allForAircraft(id).length).toBe(EXPECTED);
   });
 });

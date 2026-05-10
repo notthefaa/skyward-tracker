@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
 import { authFetch } from "@/lib/authFetch";
 import { processMxItem, getMxTextColor } from "@/lib/math";
@@ -37,127 +37,55 @@ export default function SummaryTab({
 }) {
   const canEdit = role === 'admin' || aircraftRole === 'admin';
 
-  // ─── Split SWR hooks for granular cache invalidation ───
-  const { data: mxData } = useSWR(
-    aircraft ? swrKeys.summaryMx(aircraft.id) : null,
+  // ─── Consolidated SWR hook ───
+  // Replaces 7 parallel direct supabase.from() reads with a single
+  // cookie-bearing call to /api/aircraft/[id]/summary. Server does the
+  // parallel batch with the service-role key — no per-call GoTrue
+  // mutex pressure on iOS. Per-resource sub-fields derived below.
+  const { data: summary, mutate: mutateSummary } = useSWR<{
+    mxItems: any[];
+    openSquawks: Array<{ id: string; affects_airworthiness: boolean }>;
+    latestNote: any | null;
+    lastFlight: { occurred_at: string; created_at: string; initials: string | null } | null;
+    upcomingReservations: any[];
+    currentStatus: any | null;
+    crew: Array<{ user_id: string; aircraft_role: string; email: string; initials: string; full_name: string }>;
+  }>(
+    aircraft ? swrKeys.summary(aircraft.id) : null,
     async () => {
-      const { data, error } = await supabase.from('aft_maintenance_items')
-        .select('*').eq('aircraft_id', aircraft!.id).is('deleted_at', null);
-      if (error) throw error;
-      if (!data || data.length === 0) return null;
-      const activeItems = data.filter((item: any) => {
-        if (item.tracking_type === 'time') return item.due_time !== null && item.due_time !== undefined;
-        if (item.tracking_type === 'date') return item.due_date !== null && item.due_date !== undefined;
-        return true;
-      });
-      if (activeItems.length === 0) return null;
-      const currentEngineTime = aircraft!.total_engine_time || 0;
-      const processed = activeItems.map(item =>
-        processMxItem(item, currentEngineTime, aircraft!.burnRate, aircraft!.burnRateLow, aircraft!.burnRateHigh)
-      );
-      processed.sort((a, b) => a.remaining - b.remaining);
-      return processed[0];
+      const res = await authFetch(`/api/aircraft/${aircraft!.id}/summary`);
+      if (!res.ok) throw new Error(`Summary fetch failed: ${res.status}`);
+      return res.json();
     },
   );
+  const mutateCrew = mutateSummary; // legacy alias — crew is now part of the consolidated payload
 
-  const { data: squawkData } = useSWR(
-    aircraft ? swrKeys.summarySquawks(aircraft.id) : null,
-    async () => {
-      const { data, error } = await supabase.from('aft_squawks')
-        .select('id, affects_airworthiness').eq('aircraft_id', aircraft!.id).eq('status', 'open');
-      if (error) throw error;
-      return data || [];
-    },
-  );
+  // mx "next due" derivation lives here because it depends on
+  // aircraft.burnRate (in-memory state from useFleetData) — the server
+  // doesn't have that, so we ship the raw rows and process locally.
+  const mxData = useMemo(() => {
+    if (!summary?.mxItems || summary.mxItems.length === 0) return null;
+    if (!aircraft) return null;
+    const activeItems = summary.mxItems.filter((item: any) => {
+      if (item.tracking_type === 'time') return item.due_time !== null && item.due_time !== undefined;
+      if (item.tracking_type === 'date') return item.due_date !== null && item.due_date !== undefined;
+      return true;
+    });
+    if (activeItems.length === 0) return null;
+    const currentEngineTime = aircraft.total_engine_time || 0;
+    const processed = activeItems.map((item: any) =>
+      processMxItem(item, currentEngineTime, aircraft.burnRate, aircraft.burnRateLow, aircraft.burnRateHigh)
+    );
+    processed.sort((a, b) => a.remaining - b.remaining);
+    return processed[0];
+  }, [summary?.mxItems, aircraft]);
 
-  const { data: latestNote } = useSWR(
-    aircraft ? swrKeys.summaryNote(aircraft.id) : null,
-    async () => {
-      const { data, error } = await supabase.from('aft_notes')
-        .select('*').eq('aircraft_id', aircraft!.id).is('deleted_at', null).order('created_at', { ascending: false }).limit(1);
-      if (error) throw error;
-      return data?.[0] || null;
-    },
-  );
-
-  const { data: flightData } = useSWR(
-    aircraft ? swrKeys.summaryFlight(aircraft.id) : null,
-    async () => {
-      const { data, error } = await supabase.from('aft_flight_logs')
-        .select('occurred_at, created_at, initials').eq('aircraft_id', aircraft!.id).is('deleted_at', null).order('occurred_at', { ascending: false }).order('created_at', { ascending: false }).limit(1);
-      if (error) throw error;
-      return data?.[0] || null;
-    },
-  );
-
-  const { data: reservationData } = useSWR(
-    aircraft ? swrKeys.summaryReservations(aircraft.id) : null,
-    async () => {
-      const { data, error } = await supabase.from('aft_reservations')
-        .select('*').eq('aircraft_id', aircraft!.id).eq('status', 'confirmed')
-        .gt('start_time', new Date().toISOString()).order('start_time').limit(2);
-      if (error) throw error;
-      return data || [];
-    }
-  );
-
-  const { data: currentStatus } = useSWR(
-    aircraft ? swrKeys.summaryCurrentStatus(aircraft.id) : null,
-    async () => {
-      const now = new Date().toISOString();
-      // Active reservation (started but not ended)
-      const { data: activeRes, error: activeResErr } = await supabase.from('aft_reservations')
-        .select('pilot_name, pilot_initials, user_id, start_time, end_time')
-        .eq('aircraft_id', aircraft!.id).eq('status', 'confirmed')
-        .lte('start_time', now).gte('end_time', now)
-        .order('start_time').limit(1);
-      if (activeResErr) throw activeResErr;
-      if (activeRes && activeRes.length > 0) return { type: 'reservation' as const, ...activeRes[0] };
-      // Ready for pickup (no date constraint — always show if active)
-      const { data: readyMx, error: readyMxErr } = await supabase.from('aft_maintenance_events')
-        .select('confirmed_date, estimated_completion, mx_contact_name')
-        .eq('aircraft_id', aircraft!.id).eq('status', 'ready_for_pickup')
-        .limit(1);
-      if (readyMxErr) throw readyMxErr;
-      if (readyMx && readyMx.length > 0) return { type: 'ready_for_pickup' as const, ...readyMx[0] };
-      // Active maintenance block — "today" in the aircraft's local zone
-      // (UTC would shift the window by a day for west-of-UTC pilots).
-      const today = todayInZone(aircraft!.time_zone || undefined);
-      const { data: activeMx, error: activeMxErr } = await supabase.from('aft_maintenance_events')
-        .select('confirmed_date, estimated_completion, mx_contact_name')
-        .eq('aircraft_id', aircraft!.id).in('status', ['confirmed', 'in_progress'])
-        .lte('confirmed_date', today)
-        .gte('estimated_completion', today).limit(1);
-      if (activeMxErr) throw activeMxErr;
-      if (activeMx && activeMx.length > 0) return { type: 'maintenance' as const, ...activeMx[0] };
-      return null;
-    },
-  );
-
-  const { data: crewMembers = [], mutate: mutateCrew } = useSWR(
-    aircraft ? swrKeys.summaryCrew(aircraft.id) : null,
-    async () => {
-      const { data: accessData, error: accessErr } = await supabase.from('aft_user_aircraft_access')
-        .select('user_id, aircraft_role').eq('aircraft_id', aircraft!.id);
-      if (accessErr) throw accessErr;
-      if (!accessData || accessData.length === 0) return [];
-      const userIds = accessData.map((a: any) => a.user_id);
-      const { data: usersData, error: usersErr } = await supabase.from('aft_user_roles')
-        .select('user_id, email, initials, full_name').in('user_id', userIds);
-      if (usersErr) throw usersErr;
-      if (!usersData) return [];
-      return accessData.map((access: any) => {
-        const user = usersData.find((u: any) => u.user_id === access.user_id);
-        return {
-          user_id: access.user_id,
-          aircraft_role: access.aircraft_role,
-          email: user?.email || '',
-          initials: user?.initials || '',
-          full_name: user?.full_name || '',
-        };
-      });
-    },
-  );
+  const squawkData = summary?.openSquawks ?? [];
+  const latestNote = summary?.latestNote ?? null;
+  const flightData = summary?.lastFlight ?? null;
+  const reservationData = summary?.upcomingReservations ?? [];
+  const currentStatus = summary?.currentStatus ?? null;
+  const crewMembers = summary?.crew ?? [];
 
   const [showNoteModal, setShowNoteModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
