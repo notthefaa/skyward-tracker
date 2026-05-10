@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { requireAuth, requireAircraftAdmin, handleApiError } from '@/lib/auth';
+import { requireAuth, requireAircraftAccess, requireAircraftAdmin, handleApiError } from '@/lib/auth';
 import { setAppUser } from '@/lib/audit';
 import { idempotency } from '@/lib/idempotency';
 import { pickAllowedFields, parseFiniteNumber, isIsoDate } from '@/lib/validation';
@@ -75,6 +75,36 @@ function validateMxItemRow(
   }
 
   return { ok: out };
+}
+
+/**
+ * GET /api/maintenance-items?aircraftId=...
+ *
+ * Migrated from direct supabase.from() reads in MaintenanceTab + the
+ * Mx slice of SummaryTab so the iOS GoTrue mutex isn't pressured on
+ * every tab open.
+ */
+export async function GET(req: Request) {
+  try {
+    const url = new URL(req.url);
+    const aircraftId = url.searchParams.get('aircraftId');
+    if (!aircraftId) return NextResponse.json({ error: 'aircraftId required' }, { status: 400 });
+
+    const { user, supabaseAdmin } = await requireAuth(req);
+    await requireAircraftAccess(supabaseAdmin, user.id, aircraftId);
+
+    const { data, error } = await supabaseAdmin
+      .from('aft_maintenance_items')
+      .select('*')
+      .eq('aircraft_id', aircraftId)
+      .is('deleted_at', null)
+      .order('due_date')
+      .order('due_time');
+    if (error) throw error;
+    return NextResponse.json({ items: data ?? [] });
+  } catch (error) {
+    return handleApiError(error, req);
+  }
 }
 
 // POST — create maintenance item(s) (aircraft admin only)

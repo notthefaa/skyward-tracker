@@ -4,6 +4,10 @@ import { useToast } from "@/components/ToastProvider";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { supabase } from "@/lib/supabase";
 import { authFetch, UPLOAD_TIMEOUT_MS } from "@/lib/authFetch";
+// supabase still imported for write paths (insert/update/delete on
+// mx items/events that go through .from() — those still attach a
+// Bearer for now). Read paths now go through cookie-bearing /api
+// endpoints to skip the GoTrue lock on tab open.
 import { newIdempotencyKey, idempotencyHeader } from "@/lib/idempotencyClient";
 import { processMxItem, getMxTextColor, isMxExpired } from "@/lib/math";
 import { INPUT_WHITE_BG } from "@/lib/styles";
@@ -74,18 +78,20 @@ export default function MaintenanceTab({
   const { data: mxItems = [], mutate } = useSWR(
     aircraft ? swrKeys.mxItems(aircraft.id) : null,
     async () => {
-      const { data, error } = await supabase.from('aft_maintenance_items').select('*').eq('aircraft_id', aircraft!.id).is('deleted_at', null).order('due_date').order('due_time');
-      if (error) throw error;
-      return (data || []) as any[];
+      const res = await authFetch(`/api/maintenance-items?aircraftId=${aircraft!.id}`);
+      if (!res.ok) throw new Error(`mx-items fetch failed: ${res.status}`);
+      const body = await res.json();
+      return (body.items || []) as any[];
     }
   );
 
-  const { data: activeEvents = [], mutate: mutateEvents } = useSWR(
+  const { data: activeEvents = [], mutate: mutateEvents } = useSWR<any[]>(
     aircraft ? swrKeys.mxEvents(aircraft.id) : null,
     async () => {
-      const { data, error } = await supabase.from('aft_maintenance_events').select('*').eq('aircraft_id', aircraft!.id).is('deleted_at', null).in('status', ['draft', 'scheduling', 'confirmed', 'in_progress', 'ready_for_pickup']).order('created_at', { ascending: false });
-      if (error) throw error;
-      return data || [];
+      const res = await authFetch(`/api/mx-events?aircraftId=${aircraft!.id}&filter=active`);
+      if (!res.ok) throw new Error(`mx-events active fetch failed: ${res.status}`);
+      const body = await res.json();
+      return (body.events || []) as any[];
     }
   );
 
@@ -1065,16 +1071,10 @@ function ServiceEventsList({
   const { data: pastEvents = [] } = useSWR(
     aircraft ? ['mx-events-past', aircraft.id] : null,
     async () => {
-      const { data, error } = await supabase
-        .from('aft_maintenance_events')
-        .select('*')
-        .eq('aircraft_id', aircraft!.id)
-        .is('deleted_at', null)
-        .in('status', ['complete', 'cancelled'])
-        .order('created_at', { ascending: false })
-        .limit(20);
-      if (error) throw error;
-      return data || [];
+      const res = await authFetch(`/api/mx-events?aircraftId=${aircraft!.id}&filter=past&limit=20`);
+      if (!res.ok) throw new Error(`mx-events past fetch failed: ${res.status}`);
+      const body = await res.json();
+      return body.events || [];
     },
   );
 
