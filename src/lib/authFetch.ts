@@ -50,6 +50,8 @@
 
 import { supabase } from './supabase';
 import { recoveryReload } from './iosRecovery';
+import { classifyRefreshOutcome, type RefreshOutcome } from './refreshOutcome';
+export { classifyRefreshOutcome, type RefreshOutcome } from './refreshOutcome';
 
 const UNAUTHORIZED_EVENT = 'authfetch:unauthorized';
 const AUTH_FETCH_TIMEOUT_MS = 15_000;
@@ -213,27 +215,39 @@ export async function authFetch(
   // GoTrue session lock that buildHeaders deadline-races. Without
   // a race here, a stuck lock from an iOS-suspended prior refresh
   // hangs this await forever and the caller's spinner never clears.
-  // On miss, treat as unauthorized so the user gets routed back to
-  // sign-in instead of waiting on a wedge.
-  let refreshed: { session?: any } | null = null;
-  if (timeoutMs > 0) {
-    let rTimer: ReturnType<typeof setTimeout> | undefined;
-    const rDeadline = new Promise<null>(resolve => {
-      rTimer = setTimeout(() => resolve(null), timeoutMs);
-    });
-    const refreshPromise = supabase.auth.refreshSession()
-      .then(r => r.data as any)
-      .catch(() => null);
-    try {
-      refreshed = await Promise.race([refreshPromise, rDeadline]);
-    } finally {
-      if (rTimer) clearTimeout(rTimer);
+  //
+  // CRITICAL distinction between two failure modes (see
+  // `classifyRefreshOutcome`):
+  //   - refreshPromise resolved + no session → session is genuinely
+  //     dead. Notify unauthorized so AppShell signs the user out.
+  //   - deadline race won (refresh hung past timeoutMs) → we don't
+  //     KNOW whether the session is dead; the supabase client just
+  //     couldn't tell us in time. Treat as transient (throw timeout
+  //     so caller's catch fires) and DO NOT notify unauthorized.
+  //     A wedged GoTrue lock from a prior iOS-suspended request
+  //     used to spuriously log users out here.
+  const refreshOutcome: RefreshOutcome = await classifyRefreshOutcome(
+    () => supabase.auth.refreshSession().then(r => (r.data as any)?.session ?? null),
+    timeoutMs,
+  );
+  if (refreshOutcome.kind === 'timed_out') {
+    // Wedged refresh — almost always a stuck GoTrue lock from an
+    // iOS-suspended prior call. Treat exactly like a fetch-timeout:
+    // throw a transient error so the caller's catch path runs and
+    // the spinner clears. The user keeps their session.
+    //
+    // Post-resume escalation: if we're inside the post-resume self-
+    // heal window, the WKWebView is almost certainly still wedged —
+    // fire recoveryReload so the user doesn't have to manually
+    // pull-to-refresh out of it.
+    if (lastPostResumeAt && Date.now() - lastPostResumeAt < POST_RESUME_RECOVERY_WINDOW_MS) {
+      recoveryReload('refresh-timeout-post-resume');
     }
-  } else {
-    const { data } = await supabase.auth.refreshSession();
-    refreshed = data as any;
+    const e = new Error("Network's slow — couldn't verify your session. Try again.");
+    (e as any).code = 'AUTHFETCH_TIMEOUT';
+    throw e;
   }
-  if (!refreshed?.session) {
+  if (!refreshOutcome.session) {
     notifyUnauthorized();
     return res;
   }
