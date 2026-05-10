@@ -240,14 +240,18 @@ export async function POST(req: Request) {
         ? previousTail.toUpperCase().trim()
         : null;
 
-    // Save user message up-front
-    const { data: userMsg, error: userMsgErr } = await supabaseAdmin
-      .from('aft_howard_messages')
-      .insert({ thread_id: thread.id, role: 'user', content: message.trim() })
-      .select()
-      .single();
-    if (userMsgErr) throw userMsgErr;
-
+    // The user-message INSERT used to live up here, before the stream
+    // existed. That left a race window: between the insert and the
+    // first SSE byte, if the request was cancelled (network drop, tab
+    // close, an early hook throw) the message was committed to DB
+    // with no follow-up assistant response — and the user, having
+    // seen no acknowledgment, would retry and create a duplicate.
+    //
+    // Moving the insert INTO `start()` ties the DB write to a live
+    // subscriber: if the request errors or aborts before stream
+    // subscribe, no insert happens. If the insert itself fails, we
+    // surface a clean SSE `error` event (which the client throws on)
+    // instead of a hanging chat with no input row.
     const threadId = thread.id;
     const trimmed = message.trim();
     const historySnapshot = history || [];
@@ -306,6 +310,17 @@ export async function POST(req: Request) {
         let streamedSoFar = '';
 
         try {
+          // Insert the user message now that we have a live subscriber.
+          // Any failure here ships as an SSE `error` event so the client
+          // throws and the optimistic row in the chat is rolled back —
+          // no orphan user message stranded in the thread.
+          const { data: userMsg, error: userMsgErr } = await supabaseAdmin
+            .from('aft_howard_messages')
+            .insert({ thread_id: threadId, role: 'user', content: trimmed })
+            .select()
+            .single();
+          if (userMsgErr) throw userMsgErr;
+
           send({ type: 'user_saved', userMessage: userMsg, threadId });
 
           let assistantText = '';
