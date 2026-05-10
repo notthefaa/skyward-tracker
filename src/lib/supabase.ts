@@ -1,17 +1,27 @@
-import { createClient } from '@supabase/supabase-js';
+// =============================================================
+// BROWSER Supabase client — cookie-based auth (@supabase/ssr)
+//
+// Migrated from createClient (localStorage) → createBrowserClient
+// (cookies) on 2026-05-10 to eliminate the iOS GoTrue-lock pressure
+// that was causing spurious "Session expired" forced logouts. With
+// cookies, same-origin fetches carry the access_token automatically;
+// the browser no longer has to call getSession() to attach a Bearer
+// header on every API call.
+//
+// What's retained from the previous setup:
+//   - 15s timeout on REST (FETCH_TIMEOUT_MS)
+//   - 60s timeout on storage uploads (STORAGE_FETCH_TIMEOUT_MS)
+//   - In-flight read registry + abortInFlightSupabaseReads() for
+//     tail-switch cancellation (still relevant: direct supabase reads
+//     hold WKWebView sockets and a wedged read can starve the
+//     destination tail's fetches)
+// =============================================================
+
+import { createBrowserClient } from '@supabase/ssr';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
-// iOS PWA resume hazard: Safari suspends in-flight fetches when the
-// app backgrounds and doesn't always finalize them on resume — the
-// promise hangs forever, the supabase client has no timeout of its
-// own, and every per-aircraft tab fetcher waits on a dead socket.
-// Wrap the global fetch so REST calls abort after FETCH_TIMEOUT_MS
-// and SWR can fall through to its retry path. Storage uploads get
-// a longer deadline (multi-MB transfers on cellular legitimately
-// exceed the REST budget) but are no longer un-bounded — an iOS
-// suspension mid-upload would previously hang the form forever.
 const FETCH_TIMEOUT_MS = 15_000;
 const STORAGE_FETCH_TIMEOUT_MS = 60_000;
 
@@ -59,6 +69,6 @@ const fetchWithTimeout: typeof fetch = (input, init) => {
   });
 };
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+export const supabase = createBrowserClient(supabaseUrl, supabaseAnonKey, {
   global: { fetch: fetchWithTimeout },
 });

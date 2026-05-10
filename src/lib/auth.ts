@@ -6,12 +6,22 @@
 // Usage in any API route:
 //   const { user, supabaseAdmin } = await requireAuth(req);
 //   const { user, supabaseAdmin } = await requireAuth(req, 'admin');
+//
+// Two auth sources, in order:
+//   1. Cookie (preferred — set by Next.js middleware via @supabase/ssr).
+//      Browser callers ride this automatically on same-origin fetches.
+//   2. Authorization: Bearer header (legacy — used by e2e tests, the
+//      companion app, and any external integration that doesn't have
+//      the cookie). Kept for back-compat during the cookie-auth
+//      migration.
 // =============================================================
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import { env } from './env';
 import { getRequestId, logError } from './requestId';
+import { createServerSupabase } from './supabase/server';
 import type { AppRole } from './types';
 
 // Use a permissive generic so all .from() calls work without a generated schema
@@ -25,6 +35,7 @@ interface AuthResult {
 
 /**
  * Extracts the bearer token from the request's Authorization header.
+ * Returns null when absent; cookie-auth path takes over.
  */
 function extractToken(req: Request): string | null {
   const authHeader = req.headers.get('Authorization') || req.headers.get('authorization');
@@ -50,19 +61,36 @@ export function createAdminClient(): AdminClient {
  */
 export async function requireAuth(req: Request, requiredRole?: AppRole): Promise<AuthResult> {
   const requestId = getRequestId(req);
-  const token = extractToken(req);
-
-  if (!token) {
-    throw { status: 401, message: 'Authentication required. No token provided.', requestId };
-  }
-
   const supabaseAdmin = createAdminClient();
 
-  // Verify the access token by retrieving the user from Supabase Auth
-  const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
+  let user: { id: string; email?: string } | null = null;
 
-  if (error || !user) {
-    throw { status: 401, message: 'Session expired. Log in again.', requestId };
+  // 1. Cookie-based auth (browser callers via @supabase/ssr middleware).
+  //    The middleware refreshed the cookie before we got here; this
+  //    just validates whatever's stored. cookies() throws when called
+  //    outside a request context, hence the try/catch.
+  try {
+    const cookieStore = await cookies();
+    const supabaseCookieClient = createServerSupabase(cookieStore as any);
+    const { data, error } = await supabaseCookieClient.auth.getUser();
+    if (!error && data.user) {
+      user = { id: data.user.id, email: data.user.email };
+    }
+  } catch {
+    // No cookie context (e.g., direct Bearer call); fall through.
+  }
+
+  // 2. Bearer-token fallback (e2e tests, companion app, external integrations).
+  if (!user) {
+    const token = extractToken(req);
+    if (!token) {
+      throw { status: 401, message: 'Authentication required. No token provided.', requestId };
+    }
+    const { data, error } = await supabaseAdmin.auth.getUser(token);
+    if (error || !data.user) {
+      throw { status: 401, message: 'Session expired. Log in again.', requestId };
+    }
+    user = { id: data.user.id, email: data.user.email };
   }
 
   // If a specific role is required, check aft_user_roles
