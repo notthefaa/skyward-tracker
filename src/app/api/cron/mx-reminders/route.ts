@@ -8,7 +8,7 @@ import { computeMetrics, computeMxDueState } from '@/lib/math';
 import { FLIGHT_DATA_LOOKBACK_DAYS, MX_AGGREGATION_WINDOW_DAYS } from '@/lib/constants';
 import { emailShell, heading, paragraph, callout, bulletList, button } from '@/lib/email/layout';
 import { getAppUrl } from '@/lib/email/appUrl';
-import { loadMutedMxReminderEmails, isMxReminderMuted } from '@/lib/mxReminderMutes';
+import { loadMutedRecipients, isRecipientMuted } from '@/lib/notificationMutes';
 
 // Cap the cron at 5 minutes so a slow Resend round can't let the next
 // scheduled invocation overlap and double-send reminders. Vercel will
@@ -59,9 +59,10 @@ export async function GET(req: Request) {
     // muting only quiets the email channel. Phase 5 (ready_for_pickup
     // nudge) is `service_update` territory, intentionally not gated
     // by this pref.
-    const mutedMxRecipients = await loadMutedMxReminderEmails(
+    const mutedMxRecipients = await loadMutedRecipients(
       supabaseAdmin,
       aircraftList.map((a: any) => a.main_contact_email),
+      'mx_reminder',
     );
 
     // Fetch Global Settings
@@ -342,7 +343,7 @@ export async function GET(req: Request) {
           // we skip the email channel BUT keep the draft + flag updates
           // — the user has the alert via the maintenance tab. Without
           // the flag-flip the cron would loop on this item forever.
-          const mxRemindersMuted = isMxReminderMuted(aircraft.main_contact_email, mutedMxRecipients);
+          const mxRemindersMuted = isRecipientMuted(aircraft.main_contact_email, mutedMxRecipients);
           let emailOk = true;
           if (aircraft.main_contact_email && !mxRemindersMuted) {
             const safeTail = escapeHtml(aircraft.tail_number);
@@ -414,7 +415,7 @@ export async function GET(req: Request) {
       // recipient has muted mx_reminder. Without the flag flip, the
       // next cron tick re-evaluates from scratch — so if the user
       // un-mutes later, they'll get the heads-up that wave.
-      const phase3Muted = isMxReminderMuted(aircraft.main_contact_email, mutedMxRecipients);
+      const phase3Muted = isRecipientMuted(aircraft.main_contact_email, mutedMxRecipients);
       if (headsUpItems.length > 0 && aircraft.main_contact_email && !phase3Muted) {
         const safeTail = escapeHtml(aircraft.tail_number);
         const safeMainContact = escapeHtml(aircraft.main_contact || 'Operations');
@@ -546,7 +547,7 @@ export async function GET(req: Request) {
         // stage on every tick. The user has the in-app due date /
         // hours indicator regardless of email; muting only suppresses
         // the email channel.
-        const phase4Muted = isMxReminderMuted(aircraft.main_contact_email, mutedMxRecipients);
+        const phase4Muted = isRecipientMuted(aircraft.main_contact_email, mutedMxRecipients);
         let reminderEmailOk = !(internalTriggerTemplate && !aircraft.main_contact_email);
         if (internalTriggerTemplate && aircraft.main_contact_email && !phase4Muted) {
           const safeTail = escapeHtml(aircraft.tail_number);
@@ -615,11 +616,23 @@ export async function GET(req: Request) {
           .order('created_at', { ascending: false });
         if (pickupMsgErr) throw pickupMsgErr;
 
+        // service_update mute: the Phase 5 nudge is exactly the
+        // "service event status changes" category the Settings UI
+        // exposes. Skip the email AND skip writing the marker so that
+        // an un-mute later in the week still surfaces the nudge on
+        // the next cron tick.
+        const mutedServiceUpdate = await loadMutedRecipients(
+          supabaseAdmin,
+          pickupEvents.map((e: any) => e.primary_contact_email),
+          'service_update',
+        );
+
         const now = Date.now();
         const nudgeWindowMs = READY_PICKUP_NUDGE_DAYS * 24 * 60 * 60 * 1000;
 
         for (const ev of pickupEvents as any[]) {
           if (!ev.primary_contact_email) continue;
+          if (isRecipientMuted(ev.primary_contact_email, mutedServiceUpdate)) continue;
 
           const eventMessages = (pickupMessages || []).filter((m: any) => m.event_id === ev.id);
           // The mark_ready event is the FIRST mechanic status_update on

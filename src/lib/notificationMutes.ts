@@ -1,30 +1,33 @@
 // =============================================================
-// mx_reminder mute lookup
+// Generic notification-pref mute lookup
 //
-// `aft_notification_preferences` has a `mx_reminder` row per primary
-// contact who has explicitly toggled OFF the reminder. The cron
-// (api/cron/mx-reminders) emails `aircraft.main_contact_email` across
-// four phases — all four are user-facing "Maintenance Reminders" per
-// the Settings UI label, so all four should honor the toggle.
+// `aft_notification_preferences` stores per-user toggles for each
+// `NotificationType`. Routes that send categorical emails check this
+// table to honor user opt-outs.
 //
-// `aircraft.main_contact_email` is free-text; the recipient may or may
-// not be a Skyward user. We resolve via `aft_user_roles.email`
-// (denormalized at signup; canonical-enough for a best-effort gate)
-// and skip emails that have an `enabled=false` row for the user_id.
+// Two callers today:
+//   - mx_reminder: cron mx-reminders Phases 2/3/4
+//   - service_update: cron Phase 5 ready_for_pickup nudge,
+//     mx-events/respond mechanic→owner messages, mx-events/upload-
+//     attachment files-uploaded notification
 //
-// External recipients (no matching user row) get the email regardless
-// — they have no Settings UI to toggle, so muting wasn't possible.
+// Recipients are addressed by email (free-text on aircraft + event
+// rows), not user_id, so we resolve via aft_user_roles.email →
+// user_id → preference row. External recipients (no matching user
+// row) get the email regardless — no Settings UI to opt out from.
 // =============================================================
+
+import type { NotificationType } from './types';
 
 /**
  * Returns the lowercased subset of `emails` that have explicitly muted
- * `mx_reminder` notifications. Pure-shape return so callers can do a
- * cheap `mutedEmails.has(aircraft.main_contact_email.toLowerCase())`
- * gate before composing the email body.
+ * the given `type`. Pure-shape return so callers can do a cheap
+ * `mutedEmails.has(recipient.toLowerCase())` gate.
  */
-export async function loadMutedMxReminderEmails(
+export async function loadMutedRecipients(
   supabaseAdmin: any,
   emails: Array<string | null | undefined>,
+  type: NotificationType,
 ): Promise<Set<string>> {
   // Dedup + lowercase + drop falsy.
   const lower = Array.from(
@@ -36,9 +39,9 @@ export async function loadMutedMxReminderEmails(
   );
   if (lower.length === 0) return new Set();
 
-  // Look up matching user rows. Throw on read error so a transient
-  // supabase blip doesn't silently send muted emails — better to fail
-  // the cron tick and retry than to violate a user's pref.
+  // Throw on read error so a transient supabase blip doesn't silently
+  // send muted emails — better to fail the route and retry than to
+  // violate a user's pref.
   const { data: users, error: usersErr } = await supabaseAdmin
     .from('aft_user_roles')
     .select('user_id, email')
@@ -59,7 +62,7 @@ export async function loadMutedMxReminderEmails(
     .from('aft_notification_preferences')
     .select('user_id')
     .in('user_id', userIds)
-    .eq('notification_type', 'mx_reminder')
+    .eq('notification_type', type)
     .eq('enabled', false);
   if (prefsErr) throw prefsErr;
 
@@ -72,9 +75,10 @@ export async function loadMutedMxReminderEmails(
 }
 
 /**
- * Convenience: tests if a given email is muted, lowercase-tolerant.
+ * Convenience: tests if a given email is in a mute set, lowercase-
+ * tolerant. Pure helper — no DB calls.
  */
-export function isMxReminderMuted(
+export function isRecipientMuted(
   email: string | null | undefined,
   muted: Set<string>,
 ): boolean {

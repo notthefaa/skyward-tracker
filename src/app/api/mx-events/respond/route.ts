@@ -7,6 +7,7 @@ import { env } from '@/lib/env';
 import { escapeHtml } from '@/lib/sanitize';
 import { cancelConflictingReservations } from '@/lib/mxConflicts';
 import { isPortalLinkExpired } from '@/lib/portalExpiry';
+import { loadMutedRecipients, isRecipientMuted } from '@/lib/notificationMutes';
 import { isIsoDate } from '@/lib/validation';
 import { emailShell, heading, paragraph, callout, bulletList, button } from '@/lib/email/layout';
 import { getAppUrl } from '@/lib/email/appUrl';
@@ -96,6 +97,17 @@ export async function POST(req: Request) {
 
     const appUrl = baseUrl;
 
+    // service_update mute: if the primary contact has opted out of
+    // "Service Updates" in Settings, skip the email branch on every
+    // mechanic→owner action below. Uses email-keyed lookup since
+    // event.primary_contact_email is the only handle we have.
+    const serviceUpdateMuted = await loadMutedRecipients(
+      supabaseAdmin,
+      [event.primary_contact_email],
+      'service_update',
+    );
+    const ownerMuted = isRecipientMuted(event.primary_contact_email, serviceUpdateMuted);
+
     // Sanitize common user-provided values
     const safeMxName = escapeHtml(event.mx_contact_name || 'Your maintenance provider');
     const safeMessage = escapeHtml(message);
@@ -140,7 +152,7 @@ export async function POST(req: Request) {
       } as any);
       if (propMsgErr) throw propMsgErr;
 
-      if (event.primary_contact_email) {
+      if (event.primary_contact_email && !ownerMuted) {
         if (rl.allowed) await resend.emails.send({
           from: `Skyward Operations <${FROM_EMAIL}>`,
           to: [event.primary_contact_email],
@@ -196,7 +208,7 @@ export async function POST(req: Request) {
       } as any);
       if (confMsgErr) throw confMsgErr;
 
-      if (event.primary_contact_email) {
+      if (event.primary_contact_email && !ownerMuted) {
         if (rl.allowed) await resend.emails.send({
           from: `Skyward Operations <${FROM_EMAIL}>`,
           to: [event.primary_contact_email],
@@ -242,7 +254,7 @@ export async function POST(req: Request) {
       } as any);
       if (commentMsgErr) throw commentMsgErr;
 
-      if (event.primary_contact_email) {
+      if (event.primary_contact_email && !ownerMuted) {
         if (rl.allowed) await resend.emails.send({
           from: `Skyward Operations <${FROM_EMAIL}>`,
           to: [event.primary_contact_email],
@@ -280,7 +292,7 @@ export async function POST(req: Request) {
           .from('aft_event_line_items').select('item_name, line_status').eq('event_id', event.id);
         if (allItemsErr) throw allItemsErr;
         
-        if (allItems && event.primary_contact_email) {
+        if (allItems && event.primary_contact_email && !ownerMuted) {
           const totalItems = allItems.length;
           const completedItems = allItems.filter((li: any) => li.line_status === 'complete').length;
           const inProgressItems = allItems.filter((li: any) => li.line_status === 'in_progress').length;
@@ -334,7 +346,7 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: 'This event was cancelled by the owner.' }, { status: 409 });
       }
 
-      if (event.primary_contact_email && proposedDate) {
+      if (event.primary_contact_email && proposedDate && !ownerMuted) {
         if (rl.allowed) await resend.emails.send({
           from: `Skyward Operations <${FROM_EMAIL}>`,
           to: [event.primary_contact_email],
@@ -377,7 +389,7 @@ export async function POST(req: Request) {
       const safeSuggestedName = escapeHtml(suggestedName);
       const safeItemDescription = escapeHtml(itemDescription);
 
-      if (event.primary_contact_email) {
+      if (event.primary_contact_email && !ownerMuted) {
         if (rl.allowed) await resend.emails.send({
           from: `Skyward Operations <${FROM_EMAIL}>`,
           to: [event.primary_contact_email],
@@ -421,7 +433,7 @@ export async function POST(req: Request) {
       } as any);
       if (declMsgErr) throw declMsgErr;
 
-      if (event.primary_contact_email) {
+      if (event.primary_contact_email && !ownerMuted) {
         if (rl.allowed) await resend.emails.send({
           from: `Skyward Operations <${FROM_EMAIL}>`,
           to: [event.primary_contact_email],
@@ -460,7 +472,7 @@ export async function POST(req: Request) {
       } as any);
       if (rdyMsgErr) throw rdyMsgErr;
 
-      if (event.primary_contact_email) {
+      if (event.primary_contact_email && !ownerMuted) {
         if (rl.allowed) await resend.emails.send({
           from: `Skyward Operations <${FROM_EMAIL}>`,
           to: [event.primary_contact_email],

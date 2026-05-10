@@ -6,6 +6,7 @@ import { idempotency } from '@/lib/idempotency';
 import { env } from '@/lib/env';
 import { escapeHtml } from '@/lib/sanitize';
 import { isPortalLinkExpired } from '@/lib/portalExpiry';
+import { loadMutedRecipients, isRecipientMuted } from '@/lib/notificationMutes';
 import { emailShell, heading, paragraph, callout, bulletList, button } from '@/lib/email/layout';
 import { getAppUrl } from '@/lib/email/appUrl';
 import { fileBytesMatchType } from '@/lib/fileMagic';
@@ -217,7 +218,17 @@ export async function POST(req: Request) {
     // Token-gated routes have no auth user_id; we charge the owner
     // (event.created_by) since the email goes to them anyway and a
     // legitimate mechanic uploads ≤ a few times per event.
-    if (event.primary_contact_email && event.created_by) {
+    //
+    // service_update mute: skip the email if the primary contact has
+    // opted out. The files + message row are already saved, so the
+    // owner sees the upload next time they open the event in-app.
+    const serviceUpdateMuted = await loadMutedRecipients(
+      supabaseAdmin,
+      [event.primary_contact_email],
+      'service_update',
+    );
+    const ownerMuted = isRecipientMuted(event.primary_contact_email, serviceUpdateMuted);
+    if (event.primary_contact_email && event.created_by && !ownerMuted) {
       const rl = await checkEmailRateLimit(supabaseAdmin, event.created_by);
       if (!rl.allowed) {
         // Files already saved + message row already inserted, so the
