@@ -7,7 +7,7 @@ export const tools: Anthropic.Tool[] = [
     input_schema: {
       type: 'object' as const,
       properties: {
-        tail: { type: 'string', description: 'Aircraft tail number. Default to the currently-selected tail in context if the pilot didn\'t name one. Only ask if no aircraft is selected and the pilot has more than one in their fleet.' },
+        tail: { type: 'string', description: 'Aircraft tail number. Default to the currently-selected tail in context if the pilot didn\'t name one. Only ask if no aircraft is selected and the pilot has more than one in their hangar.' },
         limit: { type: 'number', description: 'Max rows (default 10, max 50)' },
         date_from: { type: 'string', description: 'ISO date, inclusive lower bound' },
         date_to: { type: 'string', description: 'ISO date, inclusive upper bound' },

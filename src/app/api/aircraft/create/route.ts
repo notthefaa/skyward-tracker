@@ -70,13 +70,13 @@ export async function POST(req: Request) {
           return NextResponse.json({
             error: isSoftDeleted
               ? `You previously registered ${tail} and it's still in your archive. Restore it from the aircraft picker instead of re-registering.`
-              : `${tail} is already on your fleet. Switch to it from the aircraft picker.`,
+              : `${tail} is already in your hangar. Switch to it from the aircraft picker.`,
             existing_aircraft_id: existing.id,
             owned_by_caller: true,
           }, { status: 409 });
         }
         return NextResponse.json({
-          error: `${tail} is registered to another fleet. Double-check the tail number — if it's truly yours, the previous owner needs to release it first.`,
+          error: `${tail} is registered to another hangar. Double-check the tail number — if it's truly yours, the previous owner needs to release it first.`,
           owned_by_caller: false,
         }, { status: 409 });
       }

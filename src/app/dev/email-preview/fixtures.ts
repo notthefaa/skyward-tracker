@@ -115,7 +115,7 @@ const squawkToMechanic: Variant = {
 const squawkInternal: Variant = {
   slug: 'squawk-internal',
   label: 'Squawk reported (internal)',
-  description: 'Fleet-wide heads-up to every other assigned pilot. Grounding squawks get the danger palette.',
+  description: 'Hangar-wide heads-up to every other assigned pilot. Grounding squawks get the danger palette.',
   category: 'Squawk',
   subject: 'New Squawk: N205WH',
   from: 'Skyward Alerts <notifications@skywardsociety.com>',
@@ -616,7 +616,7 @@ const mechFiles: Variant = {
 const reservationSingle: Variant = {
   slug: 'reservation-single',
   label: 'New single-day reservation',
-  description: 'Pilot booked one flight. Fleet-wide awareness ping.',
+  description: 'Pilot booked one flight. Hangar-wide awareness ping.',
   category: 'Reservation',
   subject: 'N205WH Reserved: May 20',
   from: 'Skyward Aircraft Manager <notifications@skywardsociety.com>',
@@ -704,7 +704,7 @@ const reservationUpdated: Variant = {
 const reservationCancelled: Variant = {
   slug: 'reservation-cancelled',
   label: 'Reservation cancelled (by pilot)',
-  description: 'Pilot-initiated cancellation. Fleet awareness ping.',
+  description: 'Pilot-initiated cancellation. Hangar awareness ping.',
   category: 'Reservation',
   subject: 'N205WH Reservation Cancelled: May 20',
   from: 'Skyward Aircraft Manager <notifications@skywardsociety.com>',

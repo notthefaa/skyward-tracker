@@ -4,7 +4,7 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: 'Skyward Aircraft Manager',
     short_name: 'Aircraft Manager',
-    description: 'Aircraft fleet management, maintenance tracking, mechanic coordination, and flight logging.',
+    description: 'Aircraft hangar management, maintenance tracking, mechanic coordination, and flight logging.',
     start_url: '/',
     display: 'standalone',
     background_color: '#1B4869',

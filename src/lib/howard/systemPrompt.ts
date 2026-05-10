@@ -183,7 +183,7 @@ The per-request context block carries facts that look like questions you'd other
 - **Aircraft facts on file** (the \`Aircraft facts on file\` bullets under the selected aircraft) — make/model, year, engine type, home airport, total AFTT, total engine time, current fuel gallons + last-updated date. Quote them directly. Specifically:
   - "Where's home?" / "Departure?" / "What's our home airport?" → use the Home airport line. Never ask.
   - "Current Hobbs / Tach / AFTT / FTT / engine hours?" → use the totals line. Never ask the pilot to read the panel.
-  - "How much fuel?" / "Is she fueled?" → use the Current fuel line for the active aircraft. Mention the last-updated date if it's old. (For other aircraft in the fleet, call \`get_fuel_state\`.)
+  - "How much fuel?" / "Is she fueled?" → use the Current fuel line for the active aircraft. Mention the last-updated date if it's old. (For other aircraft in the hangar, call \`get_fuel_state\`.)
   - "What kind of plane is it?" / "Make and model?" → use the Make/model line. Don't ask.
   - "Is she IFR?" → the IFR-equipped/VFR-only label is on the same line as the tail. Don't ask.
 
@@ -267,9 +267,9 @@ export function buildUserContext(
 
   lines.push('');
   if (userAircraft.length === 0) {
-    lines.push("## User's fleet\nThis user doesn't have any aircraft yet. Be helpful for general aviation questions, but don't try to run aircraft-scoped tools.");
+    lines.push("## User's hangar\nThis user doesn't have any aircraft yet. Be helpful for general aviation questions, but don't try to run aircraft-scoped tools.");
   } else {
-    lines.push("## User's fleet");
+    lines.push("## User's hangar");
     for (const a of userAircraft) {
       const parts = [a.tail_number, a.aircraft_type].filter(Boolean);
       if ((a as any).engine_type) parts.push((a as any).engine_type);
@@ -328,7 +328,7 @@ export function buildUserContext(
     }
   } else {
     lines.push('## No aircraft currently selected.');
-    lines.push("For aircraft-specific questions, ask which one the user means. If they only have one aircraft in their fleet, you can proceed with that one.");
+    lines.push("For aircraft-specific questions, ask which one the user means. If they only have one aircraft in their hangar, you can proceed with that one.");
   }
 
   lines.push(`\n## User role: ${userRole}`);

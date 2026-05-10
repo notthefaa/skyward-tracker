@@ -472,7 +472,7 @@ export default function AircraftModal({
                 sessionStorage.setItem(
                   'aft_howard_prefill',
                   JSON.stringify({
-                    prompt: "I want to add a new aircraft to my fleet. Walk me through it.",
+                    prompt: "I want to add a new aircraft to my hangar. Walk me through it.",
                     autoSend: true,
                     followUps: [
                       { label: 'Equipment setup', prompt: "Help me add the installed equipment on this aircraft." },

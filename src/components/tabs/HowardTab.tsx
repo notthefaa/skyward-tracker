@@ -742,7 +742,7 @@ export default function HowardTab({
             <p className="font-roboto text-xs text-gray-500 mb-4 max-w-xs">
               {userFleet.length === 0
                 ? "You haven't added an aircraft yet. Once you do, I can dig into maintenance, squawks, airworthiness, and flight briefings. For now I can answer general aviation questions."
-                : 'Ask me about any aircraft in your fleet — maintenance, squawks, airworthiness, flight briefings. I\u2019ll pull real data, never guess.'}
+                : 'Ask me about any aircraft in your hangar — maintenance, squawks, airworthiness, flight briefings. I\u2019ll pull real data, never guess.'}
             </p>
             <div className="flex flex-wrap gap-2 justify-center">
               {(userFleet.length === 0 ? EMPTY_FLEET_SUGGESTIONS : SUGGESTIONS).map(s => (

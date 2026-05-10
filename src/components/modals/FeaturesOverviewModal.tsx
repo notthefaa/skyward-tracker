@@ -22,7 +22,7 @@ import { HOWARD_LOGO_PATH } from "@/lib/howard/persona";
  *   - Howard's onboarding closer mentions it
  *
  * Cards are grouped into five sections that match the app's mental
- * model — Fleet basics, Logging, Maintenance, Shared aircraft, Tools. Each card
+ * model — Hangar basics, Logging, Maintenance, Shared aircraft, Tools. Each card
  * has an icon, a name, a 1–2 sentence blurb, and a "Where to find it"
  * tag so the user can actually navigate to the feature after reading.
  */
@@ -43,7 +43,7 @@ type Section = {
 
 const SECTIONS: Section[] = [
   {
-    title: "Fleet basics",
+    title: "Hangar basics",
     subtitle: "The airplane and where it stands right now",
     cards: [
       {
@@ -54,13 +54,13 @@ const SECTIONS: Section[] = [
       },
       {
         icon: Plane, accent: '#091F3C',
-        name: "Fleet view",
+        name: "Hangar view",
         blurb: "Every tail side-by-side when you've got more than one airplane. Green, orange, red — pick the one you need.",
         where: "Home icon (double-tap with 2+ aircraft)",
       },
       {
         icon: CalendarDays, accent: '#56B94A',
-        name: "Fleet Schedule",
+        name: "Hangar Schedule",
         blurb: "Every booking on every airplane on one calendar — month, week, or day. Filter to the tails you actually fly. Tap a date and you drop into that airplane's calendar.",
         where: "Home → Schedule (with 2+ aircraft)",
       },
@@ -103,7 +103,7 @@ const SECTIONS: Section[] = [
       {
         icon: AlertTriangle, accent: '#CE3732',
         name: "Squawks",
-        blurb: "Write up a squawk with photos. Mark it airworthiness-affecting and the airplane grounds — Howard, the summary, and the fleet view all show it. Deferring under MEL, CDL, NEF, or MDL? Log the category and procedures so the signoff stays with the squawk. When the shop fixes it, the squawk links back to the service event that closed it.",
+        blurb: "Write up a squawk with photos. Mark it airworthiness-affecting and the airplane grounds — Howard, the summary, and the hangar view all show it. Deferring under MEL, CDL, NEF, or MDL? Log the category and procedures so the signoff stays with the squawk. When the shop fixes it, the squawk links back to the service event that closed it.",
         where: "MX → Squawks",
       },
       {

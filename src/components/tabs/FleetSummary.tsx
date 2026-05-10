@@ -6,7 +6,7 @@ import type { AircraftWithMetrics } from "@/lib/types";
 import { swrKeys } from "@/lib/swrKeys";
 import useSWR from "swr";
 import dynamic from "next/dynamic";
-import { PlaneTakeoff, Wrench, AlertTriangle, Droplet, Clock, LayoutGrid, Calendar } from "lucide-react";
+import { PlaneTakeoff, Wrench, AlertTriangle, Droplet, Clock, Warehouse, Calendar } from "lucide-react";
 import { FleetSkeleton } from "@/components/Skeletons";
 import { AircraftAvatarImg } from "@/components/AircraftAvatarImg";
 
@@ -206,20 +206,20 @@ export default function FleetSummary({
     <div className="flex flex-col gap-6 animate-fade-in">
       <div className="bg-navy p-6 rounded-sm shadow-lg text-white border-t-4 border-[#F5B05B]">
         <div className="flex justify-between items-center gap-4">
-          <h2 className="font-oswald text-3xl md:text-4xl font-bold uppercase tracking-widest leading-none min-w-0">My Fleet</h2>
+          <h2 className="font-oswald text-3xl md:text-4xl font-bold uppercase tracking-widest leading-none min-w-0">My Hangar</h2>
           {onSelectAircraftDate && (
             <div className="flex flex-col gap-1.5 shrink-0">
               <button
                 onClick={() => setFleetView('fleet')}
                 className={`text-[10px] font-oswald font-bold uppercase tracking-widest px-3 py-1.5 rounded flex items-center gap-1.5 justify-start transition-colors active:scale-95 ${fleetView === 'fleet' ? 'bg-[#F5B05B] text-navy shadow-sm' : 'bg-white/10 text-gray-300 hover:bg-white/20'}`}
               >
-                <LayoutGrid size={12} /> Fleet Summary
+                <Warehouse size={12} /> Hangar Summary
               </button>
               <button
                 onClick={() => setFleetView('schedule')}
                 className={`text-[10px] font-oswald font-bold uppercase tracking-widest px-3 py-1.5 rounded flex items-center gap-1.5 justify-start transition-colors active:scale-95 ${fleetView === 'schedule' ? 'bg-[#F5B05B] text-navy shadow-sm' : 'bg-white/10 text-gray-300 hover:bg-white/20'}`}
               >
-                <Calendar size={12} /> Fleet Schedule
+                <Calendar size={12} /> Hangar Schedule
               </button>
             </div>
           )}

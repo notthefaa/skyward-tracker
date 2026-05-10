@@ -469,7 +469,7 @@ export default function FleetSchedule({
                   <div className="bg-gray-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
                     <Plane size={28} className="text-gray-300" />
                   </div>
-                  <p className="text-sm text-gray-400 font-oswald font-bold uppercase tracking-widest">Fleet Available</p>
+                  <p className="text-sm text-gray-400 font-oswald font-bold uppercase tracking-widest">Hangar Available</p>
                   <p className="text-xs text-gray-400 font-roboto mt-1">No bookings for this day</p>
                 </div>
               )}

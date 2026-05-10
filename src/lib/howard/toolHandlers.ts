@@ -124,11 +124,11 @@ async function resolveAircraftFromTail(
   // — leaking the distinction lets one user enumerate which tails
   // belong to other users' fleets.
   if (!aircraft) {
-    return { ok: false, error: `No aircraft ${normalized} in the user's fleet.` };
+    return { ok: false, error: `No aircraft ${normalized} in the user's hangar.` };
   }
   const allowed = await verifyAccess(sb, userId, aircraft.id);
   if (!allowed) {
-    return { ok: false, error: `No aircraft ${normalized} in the user's fleet.` };
+    return { ok: false, error: `No aircraft ${normalized} in the user's hangar.` };
   }
   return { ok: true, aircraftId: aircraft.id, tail: aircraft.tail_number };
 }

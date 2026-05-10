@@ -16,7 +16,7 @@ import dynamic from "next/dynamic";
 import type { AircraftWithMetrics, AppTab, LogSubTab, MxSubTab } from "@/lib/types";
 import {
   Wrench, AlertTriangle, FileText, LogOut,
-  ChevronDown, Home, LayoutGrid, Send, ShieldCheck, X, Share, Copy, WifiOff, Loader2, Calendar, Settings,
+  ChevronDown, Home, LayoutGrid, Warehouse, Send, ShieldCheck, X, Share, Copy, WifiOff, Loader2, Calendar, Settings,
   MoreHorizontal, FolderOpen, ShieldAlert,
   ListChecks, PenLine, Plane, BarChart3, Gauge, CheckSquare, Plus,
 } from "lucide-react";
@@ -906,7 +906,7 @@ export default function AppShell({ session }: AppShellProps) {
       // the user know.
       console.error('[AppShell] initial fleet fetch failed', err);
       dataFetchTriggeredRef.current = false;
-      showError("Couldn't load your fleet — check your connection and pull to refresh.");
+      showError("Couldn't load your hangar — check your connection and pull to refresh.");
     }
   };
 
@@ -1088,7 +1088,7 @@ export default function AppShell({ session }: AppShellProps) {
             }
             setOnboardingPath(null);
             setCompletedOnboarding(true);
-            showSuccess('Aircraft added to your fleet.');
+            showSuccess('Aircraft added to your hangar.');
           }}
         />
       );
@@ -1144,7 +1144,7 @@ export default function AppShell({ session }: AppShellProps) {
           // to the new aircraft — the user can pull-to-refresh later.
         }
         setActiveTail(t);
-        showSuccess(wasEditing ? `${t} updated.` : `${t} added to your fleet.`);
+        showSuccess(wasEditing ? `${t} updated.` : `${t} added to your hangar.`);
       }} />}
 
       {showLogItModal && (
@@ -1197,7 +1197,7 @@ export default function AppShell({ session }: AppShellProps) {
             </div>
           </div>
           <div className="flex gap-4">
-            {showFleetButton && <button onClick={() => navigateTab('fleet')} aria-label="Fleet overview" className={`hover:text-white transition-colors flex flex-col items-center active:scale-95 shrink-0 ${activeTab === 'fleet' ? 'text-info' : 'text-gray-300'}`}><LayoutGrid size={18} /><span className="text-[8px] font-bold uppercase tracking-widest mt-1">Fleet</span></button>}
+            {showFleetButton && <button onClick={() => navigateTab('fleet')} aria-label="Hangar overview" className={`hover:text-white transition-colors flex flex-col items-center active:scale-95 shrink-0 ${activeTab === 'fleet' ? 'text-info' : 'text-gray-300'}`}><Warehouse size={18} /><span className="text-[8px] font-bold uppercase tracking-widest mt-1">Hangar</span></button>}
             <button onClick={() => setShowLogItModal(true)} aria-label="Install Log It companion app" className="text-[#F5B05B] hover:text-[#F5B05B]/80 transition-colors flex flex-col items-center active:scale-95 shrink-0"><Send size={18} /><span className="text-[8px] font-bold uppercase tracking-widest mt-1">Log It</span></button>
             {role === 'admin' && <button onClick={() => setShowAdminMenu(true)} aria-label="Admin tools" className="text-gray-300 hover:text-white transition-colors flex flex-col items-center active:scale-95 shrink-0"><ShieldCheck size={18} /><span className="text-[8px] font-bold uppercase tracking-widest mt-1">Admin</span></button>}
             <button onClick={() => setShowSettingsModal(true)} aria-label="Settings" className="text-gray-300 hover:text-white transition-colors flex flex-col items-center active:scale-95 shrink-0"><Settings size={18} /><span className="text-[8px] font-bold uppercase tracking-widest mt-1">Settings</span></button>
@@ -1237,7 +1237,7 @@ export default function AppShell({ session }: AppShellProps) {
                empty ghost town. */
             <div className="flex flex-col items-center justify-center text-center py-16 px-4">
               <Plane size={48} className="text-gray-300 mb-4" />
-              <h2 className="font-oswald text-2xl font-bold uppercase text-navy mb-2">No aircraft in your fleet</h2>
+              <h2 className="font-oswald text-2xl font-bold uppercase text-navy mb-2">No aircraft in your hangar</h2>
               <p className="font-roboto text-sm text-gray-500 mb-6 max-w-sm">
                 Add an aircraft to start tracking flights, maintenance, squawks, and more.
               </p>
@@ -1382,8 +1382,8 @@ export default function AppShell({ session }: AppShellProps) {
           {[
             {
               id: 'summary',
-              icon: activeTab === 'fleet' ? LayoutGrid : Home,
-              label: activeTab === 'fleet' ? 'Fleet' : 'Home',
+              icon: activeTab === 'fleet' ? Warehouse : Home,
+              label: activeTab === 'fleet' ? 'Hangar' : 'Home',
               badge: 0,
             },
             { id: 'log', icon: PenLine, label: 'Log', badge: 0 },

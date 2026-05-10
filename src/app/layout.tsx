@@ -17,7 +17,7 @@ const roboto = Roboto({
 
 export const metadata: Metadata = {
   title: "Skyward Aircraft Manager",
-  description: "Aircraft fleet management, maintenance tracking, mechanic coordination, and flight logging by Skyward Society.",
+  description: "Aircraft hangar management, maintenance tracking, mechanic coordination, and flight logging by Skyward Society.",
   icons: {
     icon: "/icon.png",
     shortcut: "/icon.png",
