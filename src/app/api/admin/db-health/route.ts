@@ -7,6 +7,7 @@ import {
   MX_COMPLETE_RETENTION_MONTHS,
   MX_CANCELLED_RETENTION_MONTHS,
 } from '@/lib/constants';
+import { ORPHAN_SWEEP_MIN_AGE_MS, shouldDeferOrphanSweep } from '@/lib/orphanSweeper';
 
 /**
  * Lists ALL files in a storage bucket using pagination.
@@ -16,7 +17,7 @@ async function listAllFiles(
   supabaseAdmin: any,
   bucket: string
 ) {
-  const allFiles: { name: string }[] = [];
+  const allFiles: { name: string; created_at?: string | null }[] = [];
   const pageSize = 1000;
   let offset = 0;
   let hasMore = true;
@@ -39,7 +40,10 @@ async function listAllFiles(
 }
 
 /**
- * Sweeps a storage bucket for orphaned files not referenced in the active URLs set.
+ * Sweeps a storage bucket for orphaned files not referenced in the
+ * active URLs set. Files newer than ORPHAN_SWEEP_MIN_AGE_MS are
+ * deferred to the next sweep so an upload-in-progress isn't deleted
+ * before its row commits.
  */
 async function sweepBucket(
   supabaseAdmin: any,
@@ -48,9 +52,11 @@ async function sweepBucket(
 ) {
   const files = await listAllFiles(supabaseAdmin, bucket);
   const filesToDelete: string[] = [];
+  const now = Date.now();
 
   for (const f of files) {
     if (f.name === '.emptyFolderPlaceholder') continue;
+    if (shouldDeferOrphanSweep(f.created_at, now, ORPHAN_SWEEP_MIN_AGE_MS)) continue;
     const { data } = supabaseAdmin.storage.from(bucket).getPublicUrl(f.name);
     if (!activeUrls.has(data.publicUrl)) {
       filesToDelete.push(f.name);
