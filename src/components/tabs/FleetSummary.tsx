@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { supabase } from "@/lib/supabase";
+import { authFetch } from "@/lib/authFetch";
 import { processMxItem } from "@/lib/math";
 import { computeAirworthinessStatus, applyOpenSquawkOverride } from "@/lib/airworthiness";
 import type { AircraftWithMetrics } from "@/lib/types";
@@ -75,47 +75,19 @@ export default function FleetSummary({
     aircraftList.length > 0 ? swrKeys.fleet(aircraftList.length, aircraftList.map(a => a.id).join(',')) : null,
     async () => {
       const aircraftIds = aircraftList.map(a => a.id);
-
-      const [mxRes, sqRes, logRes, eqRes, adRes] = await Promise.all([
-        supabase.from('aft_maintenance_items')
-          .select('aircraft_id, item_name, tracking_type, is_required, due_time, due_date, time_interval')
-          .in('aircraft_id', aircraftIds)
-          .is('deleted_at', null),
-        supabase.from('aft_squawks')
-          .select('aircraft_id, affects_airworthiness, location, status')
-          .in('aircraft_id', aircraftIds)
-          .eq('status', 'open')
-          .is('deleted_at', null),
-        supabase.from('aft_flight_logs')
-          .select('aircraft_id, occurred_at, created_at, initials')
-          .in('aircraft_id', aircraftIds)
-          .is('deleted_at', null)
-          .order('occurred_at', { ascending: false })
-          .order('created_at', { ascending: false }),
-        supabase.from('aft_aircraft_equipment')
-          .select('*')
-          .in('aircraft_id', aircraftIds)
-          .is('deleted_at', null)
-          .is('removed_at', null),
-        supabase.from('aft_airworthiness_directives')
-          .select('*')
-          .in('aircraft_id', aircraftIds)
-          .is('deleted_at', null)
-          .eq('is_superseded', false),
-      ]);
-      // Throw on any error so SWR retries instead of caching a partial
-      // dataset as success — silent empty squawks would render a
-      // grounded aircraft as airworthy on the fleet card.
-      if (mxRes.error) throw mxRes.error;
-      if (sqRes.error) throw sqRes.error;
-      if (logRes.error) throw logRes.error;
-      if (eqRes.error) throw eqRes.error;
-      if (adRes.error) throw adRes.error;
-      const mxData = mxRes.data || [];
-      const sqData = sqRes.data || [];
-      const logData = logRes.data || [];
-      const eqData = eqRes.data || [];
-      const adData = adRes.data || [];
+      // Single cookie-bearing call replaces 5 direct supabase.from()
+      // reads. Server returns raw datasets indexed by aircraft_id;
+      // burn-rate-dependent processing stays client-side because
+      // burnRate is in-memory state from useFleetData.
+      const res = await authFetch(`/api/fleet/airworthiness?ids=${encodeURIComponent(aircraftIds.join(','))}`);
+      if (!res.ok) throw new Error(`Fleet airworthiness fetch failed: ${res.status}`);
+      const payload = await res.json() as {
+        mx: Array<{ aircraft_id: string;[k: string]: any }>;
+        squawks: Array<{ aircraft_id: string;[k: string]: any }>;
+        equipment: Array<{ aircraft_id: string;[k: string]: any }>;
+        ads: Array<{ aircraft_id: string;[k: string]: any }>;
+        lastFlights: Array<{ aircraft_id: string; occurred_at: string; initials: string | null }>;
+      };
 
       // Pre-index by aircraft_id
       const mxByAircraft: Record<string, any[]> = {};
@@ -124,27 +96,24 @@ export default function FleetSummary({
       const adByAircraft: Record<string, any[]> = {};
       const lastFlightByAircraft: Record<string, { occurred_at: string; initials: string | null }> = {};
 
-      for (const m of mxData) {
+      for (const m of payload.mx) {
         if (!mxByAircraft[m.aircraft_id]) mxByAircraft[m.aircraft_id] = [];
         mxByAircraft[m.aircraft_id].push(m);
       }
-      for (const s of sqData) {
+      for (const s of payload.squawks) {
         if (!sqByAircraft[s.aircraft_id]) sqByAircraft[s.aircraft_id] = [];
         sqByAircraft[s.aircraft_id].push(s);
       }
-      for (const e of eqData) {
+      for (const e of payload.equipment) {
         if (!eqByAircraft[e.aircraft_id]) eqByAircraft[e.aircraft_id] = [];
         eqByAircraft[e.aircraft_id].push(e);
       }
-      for (const a of adData) {
+      for (const a of payload.ads) {
         if (!adByAircraft[a.aircraft_id]) adByAircraft[a.aircraft_id] = [];
         adByAircraft[a.aircraft_id].push(a);
       }
-      // Logs are sorted descending by occurred_at — first occurrence per aircraft_id is the latest
-      for (const log of logData) {
-        if (!lastFlightByAircraft[log.aircraft_id]) {
-          lastFlightByAircraft[log.aircraft_id] = { occurred_at: log.occurred_at ?? log.created_at, initials: log.initials };
-        }
+      for (const lf of payload.lastFlights) {
+        lastFlightByAircraft[lf.aircraft_id] = { occurred_at: lf.occurred_at, initials: lf.initials };
       }
 
       return aircraftList.map(ac => {
