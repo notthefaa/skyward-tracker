@@ -22,35 +22,18 @@ const whiteBg = { backgroundColor: '#ffffff' } as const;
 
 export default function NotesTab({ aircraft, session, role, aircraftRole, userInitials, onNotesRead }: { aircraft: any, session: any, role: string, aircraftRole: AircraftRole | null, userInitials: string, onNotesRead: () => void }) {
   
-  const { data: notes = [], mutate } = useSWR(
+  const { data: notes = [], mutate } = useSWR<any[]>(
     aircraft ? swrKeys.notes(aircraft.id) : null,
     async () => {
-      const { data: notesData, error: notesErr } = await supabase
-        .from('aft_notes')
-        .select('*')
-        .eq('aircraft_id', aircraft.id)
-        .is('deleted_at', null)
-        .order('created_at', { ascending: false });
-      if (notesErr) throw notesErr;
-
-      if (notesData && notesData.length > 0) {
-        const { data: readsData, error: readsErr } = await supabase
-          .from('aft_note_reads')
-          .select('note_id')
-          .eq('user_id', session.user.id)
-          .in('note_id', notesData.map(n => n.id));
-        if (readsErr) throw readsErr;
-
-        const readIds = readsData ? readsData.map(r => r.note_id) : [];
-        const unreadIds = notesData.filter(n => !readIds.includes(n.id)).map(n => n.id);
-
-        if (unreadIds.length > 0) {
-          const inserts = unreadIds.map(id => ({ note_id: id, user_id: session.user.id }));
-          await supabase.from('aft_note_reads').upsert(inserts, { onConflict: 'note_id,user_id' });
-          onNotesRead();
-        }
-      }
-      return notesData || [];
+      // One cookie-bearing call replaces the previous 2 reads + 1
+      // upsert dance. Server reads notes, computes unread, upserts
+      // read receipts, returns the notes plus a list of just-marked-
+      // read ids so we can refresh the unread-badge in AppShell.
+      const res = await authFetch(`/api/notes?aircraftId=${aircraft.id}`);
+      if (!res.ok) throw new Error(`notes fetch failed: ${res.status}`);
+      const body = await res.json() as { notes: any[]; newlyMarkedRead: string[] };
+      if (body.newlyMarkedRead?.length > 0) onNotesRead();
+      return body.notes || [];
     }
   );
 

@@ -4,6 +4,62 @@ import { setAppUser } from '@/lib/audit';
 import { idempotency } from '@/lib/idempotency';
 import { stripProtectedFields, validatePicturesForBucket } from '@/lib/validation';
 
+/**
+ * GET /api/notes?aircraftId=...
+ *
+ * Returns all non-deleted notes for the aircraft (newest-first), plus
+ * upserts aft_note_reads for any notes this caller hasn't yet read.
+ * The fetcher used to do this with two direct supabase.from() reads
+ * + an upsert; consolidating server-side avoids the iOS GoTrue mutex
+ * pressure on every NotesTab open.
+ *
+ * Response shape: `{ notes, newlyMarkedRead }`. Client uses
+ * newlyMarkedRead.length > 0 as the trigger to refresh the unread-
+ * badge in AppShell.
+ */
+export async function GET(req: Request) {
+  try {
+    const url = new URL(req.url);
+    const aircraftId = url.searchParams.get('aircraftId');
+    if (!aircraftId) return NextResponse.json({ error: 'aircraftId required' }, { status: 400 });
+
+    const { user, supabaseAdmin } = await requireAuth(req);
+    await requireAircraftAccess(supabaseAdmin, user.id, aircraftId);
+
+    const { data: notes, error: notesErr } = await supabaseAdmin
+      .from('aft_notes')
+      .select('*')
+      .eq('aircraft_id', aircraftId)
+      .is('deleted_at', null)
+      .order('created_at', { ascending: false });
+    if (notesErr) throw notesErr;
+
+    let newlyMarkedRead: string[] = [];
+    if (notes && notes.length > 0) {
+      const { data: reads, error: readsErr } = await supabaseAdmin
+        .from('aft_note_reads')
+        .select('note_id')
+        .eq('user_id', user.id)
+        .in('note_id', notes.map(n => (n as any).id));
+      if (readsErr) throw readsErr;
+      const readIds = new Set((reads ?? []).map(r => (r as any).note_id));
+      const unreadIds = notes.filter(n => !readIds.has((n as any).id)).map(n => (n as any).id);
+      if (unreadIds.length > 0) {
+        const inserts = unreadIds.map(id => ({ note_id: id, user_id: user.id }));
+        const { error: upErr } = await supabaseAdmin
+          .from('aft_note_reads')
+          .upsert(inserts, { onConflict: 'note_id,user_id' });
+        if (upErr) throw upErr;
+        newlyMarkedRead = unreadIds as string[];
+      }
+    }
+
+    return NextResponse.json({ notes: notes ?? [], newlyMarkedRead });
+  } catch (error) {
+    return handleApiError(error, req);
+  }
+}
+
 // POST — create note (any user with aircraft access)
 export async function POST(req: Request) {
   try {

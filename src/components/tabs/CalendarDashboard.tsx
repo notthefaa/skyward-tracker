@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { supabase } from "@/lib/supabase";
+import { authFetch } from "@/lib/authFetch";
 import { swrKeys } from "@/lib/swrKeys";
 import type { AircraftWithMetrics, Reservation } from "@/lib/types";
 import useSWR from "swr";
@@ -81,15 +81,15 @@ export default function CalendarDashboard({ aircraft, session }: CalendarDashboa
     async () => {
       const now = new Date();
       const windowEnd = new Date(now.getTime() + WINDOW * 86400000);
-      const [resRes, mxRes] = await Promise.all([
-        supabase.from('aft_reservations').select('*').eq('aircraft_id', aircraft.id).eq('status', 'confirmed').gte('end_time', now.toISOString()).lte('start_time', windowEnd.toISOString()),
-        supabase.from('aft_maintenance_events').select('confirmed_date, estimated_completion, status').eq('aircraft_id', aircraft.id).is('deleted_at', null).in('status', ['confirmed', 'in_progress']),
-      ]);
-      if (resRes.error) throw resRes.error;
-      if (mxRes.error) throw mxRes.error;
+      const res = await authFetch(`/api/aircraft/${aircraft.id}/calendar?from=${encodeURIComponent(now.toISOString())}&to=${encodeURIComponent(windowEnd.toISOString())}`);
+      if (!res.ok) throw new Error(`calendar dash fetch failed: ${res.status}`);
+      const body = await res.json() as {
+        reservations: Reservation[];
+        mxEvents: Array<{ confirmed_date: string; estimated_completion: string | null }>;
+      };
       return {
-        reservations: (resRes.data || []) as Reservation[],
-        mxBlocks: (mxRes.data || []).filter((e: any) => e.confirmed_date).map((e: any) => ({
+        reservations: body.reservations,
+        mxBlocks: body.mxEvents.map((e) => ({
           start: new Date(e.confirmed_date + 'T00:00:00'),
           end: e.estimated_completion ? new Date(e.estimated_completion + 'T23:59:59') : new Date(new Date(e.confirmed_date + 'T00:00:00').getTime() + 86400000),
         })),
@@ -110,15 +110,14 @@ export default function CalendarDashboard({ aircraft, session }: CalendarDashboa
       // physically performed), not created_at (when the server saw it).
       // Otherwise an offline-queued flight from yesterday flushed today
       // would land in today's window instead of yesterday's.
-      const { data: baseline, error: baseErr } = await supabase.from('aft_flight_logs').select('aftt, ftt, hobbs, tach').eq('aircraft_id', aircraft.id).is('deleted_at', null).lt('occurred_at', hoursRange.from.toISOString()).order('occurred_at', { ascending: false }).order('created_at', { ascending: false }).limit(1);
-      if (baseErr) throw baseErr;
-      const { data: current, error: curErr } = await supabase.from('aft_flight_logs').select('aftt, ftt, hobbs, tach').eq('aircraft_id', aircraft.id).is('deleted_at', null).lte('occurred_at', hoursRange.to.toISOString()).order('occurred_at', { ascending: false }).order('created_at', { ascending: false }).limit(1);
-      if (curErr) throw curErr;
-      if (!current || current.length === 0) return 0;
-      const endLog = current[0] as any;
+      const res = await authFetch(`/api/aircraft/${aircraft.id}/flight-hours?from=${encodeURIComponent(hoursRange.from.toISOString())}&to=${encodeURIComponent(hoursRange.to.toISOString())}`);
+      if (!res.ok) throw new Error(`flight-hours fetch failed: ${res.status}`);
+      const body = await res.json() as { baseline: any | null; current: any | null };
+      if (!body.current) return 0;
+      const endLog = body.current as any;
       // Pick a consistent metric for both endpoints — only use hobbs/aftt
       // if BOTH the start and end logs have it, otherwise fall back to tach/ftt.
-      let startLog = (baseline && baseline.length > 0) ? baseline[0] as any : null;
+      let startLog = body.baseline as any | null;
       const canUseAftt = endLog.aftt && (startLog ? startLog.aftt : (aircraft.setup_aftt != null));
       const canUseHobbs = endLog.hobbs && (startLog ? startLog.hobbs : (aircraft.setup_hobbs != null));
 

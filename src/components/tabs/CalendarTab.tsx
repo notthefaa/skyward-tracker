@@ -201,15 +201,15 @@ export default function CalendarTab({
     const month = currentDate.getMonth();
     const rangeStart = new Date(year, month - 1, 1).toISOString();
     const rangeEnd = new Date(year, month + 2, 0).toISOString();
-    const [resRes, mxRes] = await Promise.all([
-      supabase.from('aft_reservations').select('*').eq('aircraft_id', aircraft!.id).eq('status', 'confirmed').gte('end_time', rangeStart).lte('start_time', rangeEnd).order('start_time'),
-      supabase.from('aft_maintenance_events').select('confirmed_date, estimated_completion, status, mx_contact_name').eq('aircraft_id', aircraft!.id).is('deleted_at', null).in('status', ['confirmed', 'in_progress'])
-    ]);
-    if (resRes.error) throw resRes.error;
-    if (mxRes.error) throw mxRes.error;
+    const res = await authFetch(`/api/aircraft/${aircraft!.id}/calendar?from=${encodeURIComponent(rangeStart)}&to=${encodeURIComponent(rangeEnd)}`);
+    if (!res.ok) throw new Error(`calendar fetch failed: ${res.status}`);
+    const body = await res.json() as {
+      reservations: Reservation[];
+      mxEvents: Array<{ confirmed_date: string; estimated_completion: string | null; mx_contact_name: string | null }>;
+    };
     return {
-      reservations: (resRes.data || []) as Reservation[],
-      mxBlocks: (mxRes.data || []).filter((e: any) => e.confirmed_date).map((e: any) => ({
+      reservations: body.reservations,
+      mxBlocks: body.mxEvents.map((e) => ({
         start: new Date(e.confirmed_date + 'T00:00:00'),
         end: e.estimated_completion ? new Date(e.estimated_completion + 'T23:59:59') : new Date(new Date(e.confirmed_date + 'T00:00:00').getTime() + 24 * 60 * 60 * 1000),
         label: `Maintenance${e.mx_contact_name ? ' — ' + e.mx_contact_name : ''}`,
@@ -223,27 +223,13 @@ export default function CalendarTab({
   // Crew assigned to this aircraft — only fetched when caller is an admin so
   // they can book reservations on behalf of other pilots.
   const canBookForOthers = role === 'admin' || aircraftRole === 'admin';
-  const { data: crew = [] } = useSWR(
+  const { data: crew = [] } = useSWR<{ user_id: string; email: string; initials: string; full_name: string; aircraft_role: string }[]>(
     canBookForOthers && aircraft ? swrKeys.crew(aircraft.id) : null,
     async () => {
-      const { data: accessData, error: accessErr } = await supabase.from('aft_user_aircraft_access')
-        .select('user_id, aircraft_role').eq('aircraft_id', aircraft!.id);
-      if (accessErr) throw accessErr;
-      if (!accessData || accessData.length === 0) return [] as { user_id: string; email: string; initials: string; full_name: string; aircraft_role: string }[];
-      const userIds = accessData.map((a: any) => a.user_id);
-      const { data: usersData, error: usersErr } = await supabase.from('aft_user_roles')
-        .select('user_id, email, initials, full_name').in('user_id', userIds);
-      if (usersErr) throw usersErr;
-      return accessData.map((a: any) => {
-        const u = (usersData || []).find((x: any) => x.user_id === a.user_id);
-        return {
-          user_id: a.user_id,
-          aircraft_role: a.aircraft_role,
-          email: u?.email || '',
-          initials: u?.initials || '',
-          full_name: u?.full_name || '',
-        };
-      }).sort((a, b) => (a.full_name || a.email || a.initials).localeCompare(b.full_name || b.email || b.initials));
+      const res = await authFetch(`/api/aircraft/${aircraft!.id}/crew`);
+      if (!res.ok) throw new Error(`crew fetch failed: ${res.status}`);
+      const body = await res.json();
+      return body.crew || [];
     },
   );
   const otherCrew = crew.filter(c => c.user_id !== session?.user?.id);
