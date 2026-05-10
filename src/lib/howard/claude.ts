@@ -27,6 +27,44 @@ const CONTEXT_WINDOW = 10;
 // (typically 2–15s incl. tool use) but well under Vercel's 60s
 // maxDuration so a stalled round doesn't steal the whole response.
 const STREAM_DEADLINE_MS = 45_000;
+// Wall-clock budget across all rounds + tool calls. Vercel's
+// `maxDuration=60s` will hard-kill the function — at which point the
+// SSE stream just dies mid-message and the user sees an empty Howard
+// reply. We bail proactively at 50s so there are 10s of slack left for
+// the assistant-message DB write + final SSE flush + close. The
+// per-round deadline is also clamped to whatever wall-clock remains,
+// so a slow round-1 + slow round-2 can't combine to trip the platform
+// kill before our own AbortSignal fires.
+const WALL_CLOCK_BUDGET_MS = 50_000;
+// Don't even start a new round with less than this much budget left —
+// a 4 s round is basically guaranteed to stall mid-tool-call, and the
+// "I'll just barely make it" attempt usually ends up in the platform-
+// kill path anyway. Better to surface "wrapped up early" cleanly.
+const PER_ROUND_FLOOR_MS = 5_000;
+
+/**
+ * Pure helper for the wall-clock budget logic. Exported so the unit
+ * suite can pin the table of (elapsed, budget, perRound, floor) →
+ * (skip, deadline) without spinning up the Anthropic stream.
+ *
+ *   - `skip: true` → caller should break out of the round loop and
+ *     yield a `complete` with whatever text streamed so far + a
+ *     "wrapped up early" suffix.
+ *   - `skip: false` → caller starts the round with `deadlineMs` as
+ *     the AbortSignal timeout. `deadlineMs` is min(perRound, remaining)
+ *     so a barely-enough budget produces a tight per-round cap rather
+ *     than a normal-length round that overshoots into the platform kill.
+ */
+export function computeRoundBudget(
+  elapsedMs: number,
+  wallClockBudgetMs: number,
+  perRoundMs: number,
+  perRoundFloorMs: number,
+): { skip: boolean; deadlineMs: number } {
+  const remaining = wallClockBudgetMs - elapsedMs;
+  if (remaining < perRoundFloorMs) return { skip: true, deadlineMs: 0 };
+  return { skip: false, deadlineMs: Math.min(perRoundMs, remaining) };
+}
 
 export interface HowardUsage {
   input_tokens: number;
@@ -106,13 +144,29 @@ export async function* sendMessageStream(
     cache_creation_input_tokens: 0,
   };
   let assistantText = '';
+  let bailedForTime = false;
+  const startTime = Date.now();
 
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
-    // Per-round hard deadline. A hung stream (network stall, upstream
-    // latency spike, or mid-stream silence) otherwise holds the
-    // async-iterator open until Vercel's maxDuration kills the whole
-    // request — which looks to the user like Howard vanished.
-    const roundAbort = AbortSignal.timeout(STREAM_DEADLINE_MS);
+    // Wall-clock check BEFORE building the round. Two slow rounds can
+    // chain to ~80s+ of compute even if neither one trips its 45s cap
+    // alone — Vercel's 60s kill fires first and the user gets nothing.
+    // computeRoundBudget either skips the round (we yield 'complete'
+    // with the partial text and a "wrapped up early" suffix) or returns
+    // a per-round deadline clamped to the lesser of STREAM_DEADLINE_MS
+    // and whatever wall-clock remains.
+    const elapsedMs = Date.now() - startTime;
+    const { skip, deadlineMs } = computeRoundBudget(
+      elapsedMs,
+      WALL_CLOCK_BUDGET_MS,
+      STREAM_DEADLINE_MS,
+      PER_ROUND_FLOOR_MS,
+    );
+    if (skip) {
+      bailedForTime = true;
+      break;
+    }
+    const roundAbort = AbortSignal.timeout(deadlineMs);
 
     const stream = client.messages.stream(
       {
@@ -150,12 +204,13 @@ export async function* sendMessageStream(
 
       finalMsg = await stream.finalMessage();
     } catch (err: any) {
-      // AbortError when our 45s deadline fires. Rename to a pilot-
-      // friendly message — the caller catches this and saves whatever
-      // partial text already streamed alongside the timeout notice.
+      // AbortError when our per-round deadline fires (or its clamped
+      // wall-clock variant). Rename to a pilot-friendly message — the
+      // caller catches this and saves whatever partial text already
+      // streamed alongside the timeout notice.
       const isAbort = err?.name === 'AbortError' || err?.name === 'APIUserAbortError' || roundAbort.aborted;
       if (isAbort) {
-        throw new Error(`Howard's reply timed out after ${Math.round(STREAM_DEADLINE_MS / 1000)}s. Try again in a moment.`);
+        throw new Error(`Howard's reply timed out after ${Math.round(deadlineMs / 1000)}s. Try again in a moment.`);
       }
       throw err;
     }
@@ -199,9 +254,24 @@ export async function* sendMessageStream(
     messages.push({ role: 'user', content: toolResultBlocks });
   }
 
+  // Two distinct fall-through cases:
+  //   - bailedForTime: wall-clock budget ran out before another round
+  //     could safely start. Soft-suffix any streamed text so the user
+  //     sees the partial answer + knows to retry.
+  //   - exhausted MAX_TOOL_ROUNDS without an end_turn: model is stuck in
+  //     a tool-use loop. Same soft-fail shape but a different reason.
+  let finalText: string;
+  if (bailedForTime) {
+    finalText = assistantText
+      ? `${assistantText}\n\n⚠️ Wrapped up early to stay under the request budget. Ask again to continue.`
+      : `⚠️ Ran out of time before getting to a clean answer. Try again — usually a quick retry works.`;
+  } else {
+    finalText = assistantText || 'I hit a processing limit on this request. Could you try rephrasing your question?';
+  }
+
   yield {
     type: 'complete',
-    assistantText: assistantText || 'I hit a processing limit on this request. Could you try rephrasing your question?',
+    assistantText: finalText,
     toolCalls: allToolCalls.length > 0 ? allToolCalls : null,
     toolResults: allToolResults.length > 0 ? allToolResults : null,
     usage: totalUsage,
