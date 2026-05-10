@@ -26,34 +26,17 @@ export default function TimesTab({
 }) {
   const [logPage, setLogPage] = useState(1);
   
-  const { data, mutate } = useSWR(
+  const { data, mutate } = useSWR<{ logs: any[]; hasMore: boolean }>(
     aircraft ? swrKeys.times(aircraft.id, logPage) : null,
     async () => {
-      // Pagination uses the "fetch one extra row" pattern instead of
-      // PostgREST `count: 'exact'`. The exact-count clause forces a
-      // server-side COUNT(*) on every page query, which on iOS PWA
-      // is one of the queries that wedges sockets and starves the
-      // rest of the tab. Asking for pageSize+1 rows tells us hasMore
-      // without a COUNT round-trip; we lose the exact totalPages but
-      // the UI just shows "Page N" instead of "Page N / M".
-      const pageSize = 10;
-      const from = (logPage - 1) * pageSize;
-      const to = from + pageSize; // inclusive end → fetches pageSize + 1 rows
-      const { data: fetchLogs, error } = await supabase
-        .from('aft_flight_logs')
-        .select('*')
-        .eq('aircraft_id', aircraft!.id)
-        .is('deleted_at', null)
-        .order('occurred_at', { ascending: false })
-        .order('created_at', { ascending: false })
-        .range(from, to);
-      if (error) throw error;
-      const rows = fetchLogs || [];
-      const hasMore = rows.length > pageSize;
-      return {
-        logs: hasMore ? rows.slice(0, pageSize) : rows,
-        hasMore,
-      };
+      // Cookie-bearing fetch via /api/flight-logs. Server uses the
+      // same "fetch pageSize+1" pattern to avoid the iOS-wedging
+      // COUNT(*) clause; route docs explain the trade-off.
+      const res = await authFetch(
+        `/api/flight-logs?aircraftId=${aircraft!.id}&page=${logPage}&pageSize=10`,
+      );
+      if (!res.ok) throw new Error(`flight-logs fetch failed: ${res.status}`);
+      return res.json();
     }
   );
 
@@ -341,26 +324,21 @@ export default function TimesTab({
       // giving us the wrong neighbor and a misleading validation preview.
       // created_at is the server tiebreaker, matching how the RPC's
       // derive-latest SELECT orders rows.
+      const baseUrl = `/api/flight-logs?aircraftId=${aircraft!.id}&pivotOccurred=${encodeURIComponent(pivotOccurred)}&pivotCreated=${encodeURIComponent(pivotCreated)}`;
       const [prevRes, nextRes] = await Promise.all([
-        supabase.from('aft_flight_logs').select('*')
-          .eq('aircraft_id', aircraft!.id)
-          .is('deleted_at', null)
-          .or(`occurred_at.lt.${pivotOccurred},and(occurred_at.eq.${pivotOccurred},created_at.lt.${pivotCreated})`)
-          .order('occurred_at', { ascending: false }).order('created_at', { ascending: false }).limit(1),
-        supabase.from('aft_flight_logs').select('*')
-          .eq('aircraft_id', aircraft!.id)
-          .is('deleted_at', null)
-          .or(`occurred_at.gt.${pivotOccurred},and(occurred_at.eq.${pivotOccurred},created_at.gt.${pivotCreated})`)
-          .order('occurred_at', { ascending: true }).order('created_at', { ascending: true }).limit(1),
+        authFetch(`${baseUrl}&neighbor=prev`),
+        authFetch(`${baseUrl}&neighbor=next`),
       ]);
       // A failed neighbor lookup would silently treat the edit as the
       // latest log and validate against setup_* — letting the user save
       // a value that overshoots a newer entry's totals.
-      if (prevRes.error || nextRes.error) {
+      if (!prevRes.ok || !nextRes.ok) {
         return showError("Couldn't validate the edit against neighboring logs. Try again.");
       }
-      const prevLog = prevRes.data?.[0] || null;
-      nextLog = nextRes.data?.[0] || null;
+      const prevBody = await prevRes.json();
+      const nextBody = await nextRes.json();
+      const prevLog = prevBody.neighbor || null;
+      nextLog = nextBody.neighbor || null;
       isLatestLog = !nextLog;
 
       prevFtt = prevLog?.ftt ?? aircraft!.setup_ftt ?? 0;

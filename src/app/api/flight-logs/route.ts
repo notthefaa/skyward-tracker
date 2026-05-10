@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { requireAuth, requireAircraftAdmin, handleApiError } from '@/lib/auth';
+import { requireAuth, requireAircraftAccess, requireAircraftAdmin, handleApiError } from '@/lib/auth';
 import { friendlyPgError } from '@/lib/pgErrors';
 import { idempotency } from '@/lib/idempotency';
 import { apiErrorCoded, handleCodedError } from '@/lib/apiResponse';
@@ -9,6 +9,78 @@ import {
 } from '@/lib/submissions';
 import { requireAircraftAccessCoded } from '@/lib/submissionAuth';
 import { checkSubmitRateLimit } from '@/lib/submitRateLimit';
+
+/**
+ * GET /api/flight-logs?aircraftId=...&page=N&pageSize=10
+ *   OR  ?aircraftId=...&neighbor=prev|next&pivotOccurred=...&pivotCreated=...
+ *
+ * Two read modes for TimesTab:
+ *   1. Paginated history (default). Returns `{ logs, hasMore }` using
+ *      the "fetch pageSize+1" pattern — avoids COUNT(*) which wedges
+ *      iOS sockets. Default page=1, pageSize=10 (capped at 50).
+ *   2. Neighbor lookup. For edit-validation: pass `neighbor=prev` or
+ *      `neighbor=next` plus the editing log's `pivotOccurred` /
+ *      `pivotCreated` timestamps. Returns `{ neighbor }` (single row
+ *      or null). Used to validate the edit doesn't overshoot a
+ *      newer log's totals.
+ */
+export async function GET(req: Request) {
+  try {
+    const url = new URL(req.url);
+    const aircraftId = url.searchParams.get('aircraftId');
+    if (!aircraftId) return NextResponse.json({ error: 'aircraftId required' }, { status: 400 });
+
+    const { user, supabaseAdmin } = await requireAuth(req);
+    await requireAircraftAccess(supabaseAdmin, user.id, aircraftId);
+
+    const neighbor = url.searchParams.get('neighbor');
+    if (neighbor === 'prev' || neighbor === 'next') {
+      const pivotOccurred = url.searchParams.get('pivotOccurred');
+      const pivotCreated = url.searchParams.get('pivotCreated');
+      if (!pivotOccurred || !pivotCreated) {
+        return NextResponse.json({ error: 'pivotOccurred + pivotCreated required for neighbor lookups' }, { status: 400 });
+      }
+      const orFilter = neighbor === 'prev'
+        ? `occurred_at.lt.${pivotOccurred},and(occurred_at.eq.${pivotOccurred},created_at.lt.${pivotCreated})`
+        : `occurred_at.gt.${pivotOccurred},and(occurred_at.eq.${pivotOccurred},created_at.gt.${pivotCreated})`;
+      const ascending = neighbor === 'next';
+      const { data, error } = await supabaseAdmin
+        .from('aft_flight_logs')
+        .select('*')
+        .eq('aircraft_id', aircraftId)
+        .is('deleted_at', null)
+        .or(orFilter)
+        .order('occurred_at', { ascending })
+        .order('created_at', { ascending })
+        .limit(1);
+      if (error) throw error;
+      return NextResponse.json({ neighbor: (data && data[0]) || null });
+    }
+
+    const page = Math.max(parseInt(url.searchParams.get('page') || '1', 10) || 1, 1);
+    const pageSizeParam = parseInt(url.searchParams.get('pageSize') || '10', 10);
+    const pageSize = Number.isFinite(pageSizeParam) ? Math.min(Math.max(pageSizeParam, 1), 50) : 10;
+    const from = (page - 1) * pageSize;
+    const to = from + pageSize; // inclusive end → pageSize+1 rows
+    const { data, error } = await supabaseAdmin
+      .from('aft_flight_logs')
+      .select('*')
+      .eq('aircraft_id', aircraftId)
+      .is('deleted_at', null)
+      .order('occurred_at', { ascending: false })
+      .order('created_at', { ascending: false })
+      .range(from, to);
+    if (error) throw error;
+    const rows = data || [];
+    const hasMore = rows.length > pageSize;
+    return NextResponse.json({
+      logs: hasMore ? rows.slice(0, pageSize) : rows,
+      hasMore,
+    });
+  } catch (error) {
+    return handleApiError(error, req);
+  }
+}
 
 // POST — create flight log atomically (any user with aircraft access).
 // Uses log_flight_atomic RPC: locks the aircraft row, derives aircraft
