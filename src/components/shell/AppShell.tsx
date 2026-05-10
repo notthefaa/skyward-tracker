@@ -910,14 +910,17 @@ export default function AppShell({ session }: AppShellProps) {
     }
   };
 
-  const fetchUnreadNotes = async (tail: string, userId: string) => {
+  const fetchUnreadNotes = async (tail: string, _userId: string) => {
     const ac = allAircraftList.find(a => a.tail_number === tail);
     if (!ac) return;
-    const { data: notes } = await supabase.from('aft_notes').select('id').eq('aircraft_id', ac.id).is('deleted_at', null);
-    if (!notes || notes.length === 0) return setUnreadNotes(0);
-    const ids = notes.map(n => n.id);
-    const { data: reads } = await supabase.from('aft_note_reads').select('note_id').eq('user_id', userId).in('note_id', ids);
-    setUnreadNotes(ids.length - (reads ? reads.length : 0));
+    try {
+      const res = await authFetch(`/api/aircraft/${ac.id}/notes/unread-count`);
+      if (!res.ok) return; // leave the badge at its previous value
+      const body = await res.json() as { unread: number };
+      setUnreadNotes(body.unread ?? 0);
+    } catch {
+      // network blip — keep prior count, badge will refresh on next tail switch
+    }
   };
 
   const handleDeleteAircraft = async (id: string) => {
