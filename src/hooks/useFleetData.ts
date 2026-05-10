@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
+import { authFetch } from "@/lib/authFetch";
 import { enrichAircraftWithMetrics } from "@/lib/math";
 import { useSWRConfig } from "swr";
 import { FLIGHT_DATA_LOOKBACK_DAYS } from "@/lib/constants";
@@ -54,68 +55,53 @@ export function useFleetData() {
   const [globalFleetIndex, setGlobalFleetIndex] = useState<FleetIndexEntry[]>([]);
 
   const fetchAircraftData = useCallback(async (userId: string) => {
-    // ─── PHASE 1: Fetch user identity + access in parallel ───
-    // These are small, fast queries that tell us WHO the user is
-    // and WHICH aircraft they can see.
-    //
-    // Throw on any error rather than swallowing — a transient JWT-refresh
-    // race or network blip otherwise renders an empty fleet to a pilot
-    // who has aircraft set up, and `isDataLoaded` flipping true locks
-    // them out of revalidation until they reload the tab.
-    const [sR, rR, aR] = await Promise.all([
-      supabase.from('aft_system_settings').select('*').eq('id', 1).single(),
-      supabase.from('aft_user_roles').select('role, initials, completed_onboarding, tour_completed').eq('user_id', userId).single(),
-      supabase.from('aft_user_aircraft_access').select('aircraft_id, aircraft_role, user_id').eq('user_id', userId),
-    ]);
-
-    // Settings + role missing rows are legit (first-run); only throw on
-    // hard errors. PostgREST returns code 'PGRST116' for "no rows" on
-    // .single(), which we tolerate.
-    if (sR.error && sR.error.code !== 'PGRST116') throw sR.error;
-    if (rR.error && rR.error.code !== 'PGRST116') throw rR.error;
-    if (aR.error) throw aR.error;
-
-    if (sR.data) setSysSettings(sR.data as SystemSettings);
-
-    const userRole = (rR.data?.role || 'pilot') as AppRole;
-    setRole(userRole);
-    setUserInitials(rR.data?.initials || "");
-    setCompletedOnboarding(!!rR.data?.completed_onboarding);
-    setTourCompleted(!!rR.data?.tour_completed);
-
-    const accessData = aR.data || [];
-    setAllAccessRecords(accessData);
-
-    const assignedIds = accessData.map((a: any) => a.aircraft_id);
-
-    // ─── PHASE 2: Fetch only assigned aircraft (both admins and pilots) ───
-    // Admins lazy-load unassigned aircraft on demand from the Global Fleet modal.
-    let allPlanes: AircraftWithMetrics[];
-
-    if (assignedIds.length > 0) {
-      const { data: aircraftData, error: aircraftErr } = await supabase
-        .from('aft_aircraft')
-        .select('*')
-        .in('id', assignedIds)
-        .is('deleted_at', null)
-        .order('tail_number');
-
-      if (aircraftErr) throw aircraftErr;
-
-      allPlanes = (aircraftData || []).map((plane: any) => ({
-        ...plane,
-        ...DEFAULT_METRICS,
-      }));
-    } else {
-      allPlanes = [];
+    // Bootstrap the shell with one cookie-bearing fetch instead of four
+    // direct supabase.from() calls. The /api/me/bootstrap endpoint
+    // performs the same parallel reads server-side and returns one
+    // payload — eliminating four trips through supabase-js's GoTrue
+    // mutex on the iOS-suspend-prone client. `userId` is no longer
+    // strictly needed (the server reads identity from the cookie) but
+    // we keep the param to avoid a breaking change to existing callers.
+    void userId;
+    const res = await authFetch('/api/me/bootstrap');
+    if (!res.ok) {
+      let detail = `${res.status}`;
+      try {
+        const body = await res.json();
+        if (body?.error) detail = body.error;
+      } catch { /* non-JSON body */ }
+      throw new Error(`Bootstrap failed: ${detail}`);
     }
+    const payload = await res.json() as {
+      sysSettings: SystemSettings | null;
+      role: string;
+      userInitials: string;
+      completedOnboarding: boolean;
+      tourCompleted: boolean;
+      access: Array<{ aircraft_id: string; aircraft_role: string; user_id: string }>;
+      aircraft: any[];
+    };
+
+    if (payload.sysSettings) setSysSettings(payload.sysSettings);
+
+    const userRole = (payload.role || 'pilot') as AppRole;
+    setRole(userRole);
+    setUserInitials(payload.userInitials || '');
+    setCompletedOnboarding(!!payload.completedOnboarding);
+    setTourCompleted(!!payload.tourCompleted);
+
+    setAllAccessRecords(payload.access);
+
+    const allPlanes: AircraftWithMetrics[] = (payload.aircraft || []).map((plane: any) => ({
+      ...plane,
+      ...DEFAULT_METRICS,
+    }));
 
     setAllAircraftList(allPlanes);
     setAircraftList(allPlanes);
 
     setIsDataLoaded(true);
 
-    // Return data needed by the caller to set activeTail
     return { allPlanes, assigned: allPlanes };
   }, []);
 
