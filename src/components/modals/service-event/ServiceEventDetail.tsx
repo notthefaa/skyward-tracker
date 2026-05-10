@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import { authFetch } from "@/lib/authFetch";
-import { idempotencyHeader } from "@/lib/idempotencyClient";
+import { newIdempotencyKey, idempotencyHeader } from "@/lib/idempotencyClient";
 import { useSignedUrls } from "@/hooks/useSignedUrls";
 import { 
   ChevronDown, ChevronRight, ExternalLink, Send, CheckCircle, 
@@ -34,6 +34,16 @@ export default function ServiceEventDetail({
   // bucket so the stored public URL form 400s if rendered directly.
   const resolveSigned = useSignedUrls();
 
+  // Sticky idempotency keys per action — generating a fresh UUID
+  // inside the try block lets a network blip plus user-tap re-fire
+  // create a duplicate confirm/counter/comment/cancel and resend the
+  // owner-action email twice. Seed lazily on first attempt; clear on
+  // success so a legitimate later re-action gets a fresh key.
+  const confirmKeyRef = useRef<string | null>(null);
+  const counterKeyRef = useRef<string | null>(null);
+  const commentKeyRef = useRef<string | null>(null);
+  const cancelKeyRef = useRef<string | null>(null);
+
   const hasCompletedItems = eventLineItems.some(li => li.line_status === 'complete');
   const hasPendingItems = eventLineItems.some(li => li.line_status !== 'complete' && li.line_status !== 'deferred');
   const allResolved = eventLineItems.length > 0 && eventLineItems.every(li => li.line_status === 'complete' || li.line_status === 'deferred');
@@ -42,10 +52,9 @@ export default function ServiceEventDetail({
     setIsSubmitting(true);
     try {
       const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-      // Idempotency key per click — authFetch's resume-retry shares the
-      // same key so a network blip can't double-send the confirm email.
-      const idemKey = crypto.randomUUID();
-      await authFetch('/api/mx-events/owner-action', { method: 'POST', headers: idempotencyHeader(idemKey), body: JSON.stringify({ eventId: selectedEvent.id, action: 'confirm', message: ownerMessage || `Confirmed for ${selectedEvent.proposed_date}.`, timeZone }) });
+      if (!confirmKeyRef.current) confirmKeyRef.current = newIdempotencyKey();
+      await authFetch('/api/mx-events/owner-action', { method: 'POST', headers: idempotencyHeader(confirmKeyRef.current), body: JSON.stringify({ eventId: selectedEvent.id, action: 'confirm', message: ownerMessage || `Confirmed for ${selectedEvent.proposed_date}.`, timeZone }) });
+      confirmKeyRef.current = null;
       setOwnerMessage("");
       await fetchEventDetail(selectedEvent.id);
       showSuccess("Date confirmed");
@@ -61,8 +70,9 @@ export default function ServiceEventDetail({
     setIsSubmitting(true);
     try {
       const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-      const idemKey = crypto.randomUUID();
-      await authFetch('/api/mx-events/owner-action', { method: 'POST', headers: idempotencyHeader(idemKey), body: JSON.stringify({ eventId: selectedEvent.id, action: 'counter', proposedDate, message: ownerMessage || `How about ${proposedDate} instead?`, timeZone }) });
+      if (!counterKeyRef.current) counterKeyRef.current = newIdempotencyKey();
+      await authFetch('/api/mx-events/owner-action', { method: 'POST', headers: idempotencyHeader(counterKeyRef.current), body: JSON.stringify({ eventId: selectedEvent.id, action: 'counter', proposedDate, message: ownerMessage || `How about ${proposedDate} instead?`, timeZone }) });
+      counterKeyRef.current = null;
       setOwnerMessage(""); setProposedDate("");
       await fetchEventDetail(selectedEvent.id);
       showSuccess("Counter proposal sent");
@@ -78,8 +88,9 @@ export default function ServiceEventDetail({
     setIsSubmitting(true);
     try {
       const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-      const idemKey = crypto.randomUUID();
-      await authFetch('/api/mx-events/owner-action', { method: 'POST', headers: idempotencyHeader(idemKey), body: JSON.stringify({ eventId: selectedEvent.id, action: 'comment', message: ownerMessage, timeZone }) });
+      if (!commentKeyRef.current) commentKeyRef.current = newIdempotencyKey();
+      await authFetch('/api/mx-events/owner-action', { method: 'POST', headers: idempotencyHeader(commentKeyRef.current), body: JSON.stringify({ eventId: selectedEvent.id, action: 'comment', message: ownerMessage, timeZone }) });
+      commentKeyRef.current = null;
       setOwnerMessage("");
       await fetchEventDetail(selectedEvent.id);
       showSuccess("Message sent");
@@ -94,8 +105,9 @@ export default function ServiceEventDetail({
     setIsSubmitting(true);
     try {
       const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-      const idemKey = crypto.randomUUID();
-      await authFetch('/api/mx-events/owner-action', { method: 'POST', headers: idempotencyHeader(idemKey), body: JSON.stringify({ eventId: selectedEvent.id, action: 'cancel', message: cancelReason || 'Service event cancelled.', timeZone }) });
+      if (!cancelKeyRef.current) cancelKeyRef.current = newIdempotencyKey();
+      await authFetch('/api/mx-events/owner-action', { method: 'POST', headers: idempotencyHeader(cancelKeyRef.current), body: JSON.stringify({ eventId: selectedEvent.id, action: 'cancel', message: cancelReason || 'Service event cancelled.', timeZone }) });
+      cancelKeyRef.current = null;
       setShowCancelConfirm(false); setCancelReason("");
       onRefresh();
       showSuccess("Service event cancelled");

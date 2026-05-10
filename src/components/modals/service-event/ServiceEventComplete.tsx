@@ -2,7 +2,7 @@
 
 import { useState, useRef } from "react";
 import { authFetch, UPLOAD_TIMEOUT_MS } from "@/lib/authFetch";
-import { idempotencyHeader } from "@/lib/idempotencyClient";
+import { newIdempotencyKey, idempotencyHeader } from "@/lib/idempotencyClient";
 import { supabase } from "@/lib/supabase";
 import { Wrench, AlertTriangle, ChevronDown, Camera, Loader2 } from "lucide-react";
 import { PrimaryButton } from "@/components/AppButtons";
@@ -56,6 +56,10 @@ export default function ServiceEventComplete({
 
   const [scanningIdx, setScanningIdx] = useState<number | null>(null);
   const scanInputRefs = useRef<Record<number, HTMLInputElement | null>>({});
+  // Sticky idempotency for the multi-line completion POST so a network
+  // blip + user-tap retry can't double-advance MX intervals or resolve
+  // squawks twice.
+  const completeIdemKeyRef = useRef<string | null>(null);
 
   const handleScanLogEntry = async (idx: number, file: File) => {
     if (!aircraft) return;
@@ -130,13 +134,14 @@ export default function ServiceEventComplete({
         logbookRef: c.logbookRef || null,
       }));
 
-      const idemKey = crypto.randomUUID();
+      if (!completeIdemKeyRef.current) completeIdemKeyRef.current = newIdempotencyKey();
       const res = await authFetch('/api/mx-events/complete', {
         method: 'POST',
-        headers: idempotencyHeader(idemKey),
+        headers: idempotencyHeader(completeIdemKeyRef.current),
         body: JSON.stringify({ eventId: selectedEvent.id, lineCompletions, partial: true })
       });
       if (!res.ok) throw new Error("Couldn't complete the items");
+      completeIdemKeyRef.current = null;
 
       // Migration 049: server reports any line-item IDs that didn't
       // match (stale tab, fabricated payload). Don't fail the submit

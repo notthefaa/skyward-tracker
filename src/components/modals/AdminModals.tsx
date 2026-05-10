@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import { authFetch } from "@/lib/authFetch";
-import { idempotencyHeader } from "@/lib/idempotencyClient";
+import { newIdempotencyKey, idempotencyHeader } from "@/lib/idempotencyClient";
 import { useToast } from "@/components/ToastProvider";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { useModalScrollLock } from "@/hooks/useModalScrollLock";
@@ -78,6 +78,12 @@ export default function AdminModals({
   const [selectedAccessUserId, setSelectedAccessUserId] = useState<string>("");
   const [userAccessList, setUserAccessList] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // Sticky idempotency keys for the insert-flight-log + invite POSTs.
+  // Generating fresh keys inside the try block lets a network-blip
+  // retry create a duplicate flight log or fire a duplicate Supabase
+  // Auth invite. Cleared on success.
+  const insertLogIdemKeyRef = useRef<string | null>(null);
+  const inviteIdemKeyRef = useRef<string | null>(null);
 
   const { showSuccess, showError, showInfo } = useToast();
   const confirm = useConfirm();
@@ -130,6 +136,7 @@ export default function AdminModals({
 
   const openInsertLogModal = () => {
     resetInsertForm();
+    insertLogIdemKeyRef.current = null;
     setShowToolsMenu(false);
     setShowInsertLogModal(true);
   };
@@ -176,16 +183,17 @@ export default function AdminModals({
 
     setIsSubmitting(true);
     try {
-      const idemKey = crypto.randomUUID();
+      if (!insertLogIdemKeyRef.current) insertLogIdemKeyRef.current = newIdempotencyKey();
       const res = await authFetch('/api/admin/flight-logs', {
         method: 'POST',
-        headers: idempotencyHeader(idemKey),
+        headers: idempotencyHeader(insertLogIdemKeyRef.current),
         body: JSON.stringify({ aircraftId: insertAircraftId, logData }),
       });
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
         throw new Error(d.error || "Couldn't insert the flight log");
       }
+      insertLogIdemKeyRef.current = null;
       showSuccess("Flight log inserted in correct slot. Totals recalculated.");
       setShowInsertLogModal(false);
       resetInsertForm();
@@ -392,9 +400,10 @@ export default function AdminModals({
     }
     setIsSubmitting(true);
     try {
-      const idemKey = crypto.randomUUID();
-      const res = await authFetch('/api/invite', { method: 'POST', headers: idempotencyHeader(idemKey), body: JSON.stringify({ email: inviteEmail, role: inviteRole, aircraftIds: inviteAircraftIds }) });
+      if (!inviteIdemKeyRef.current) inviteIdemKeyRef.current = newIdempotencyKey();
+      const res = await authFetch('/api/invite', { method: 'POST', headers: idempotencyHeader(inviteIdemKeyRef.current), body: JSON.stringify({ email: inviteEmail, role: inviteRole, aircraftIds: inviteAircraftIds }) });
       if (!res.ok) { const errData = await res.json(); throw new Error(errData.error || "Couldn't send invitation"); }
+      inviteIdemKeyRef.current = null;
       showSuccess(`Invitation sent to ${inviteEmail}.`);
       setShowInviteModal(false); setInviteEmail(""); setInviteRole('pilot'); setInviteAircraftIds([]);
     } catch (error: any) { showError("Couldn't send invitation: " + error.message); }
@@ -590,7 +599,7 @@ export default function AdminModals({
             <div className="space-y-3">
               <button onClick={openGlobalFleetModal} className="w-full bg-gray-50 border border-gray-200 p-4 rounded text-left flex items-center gap-3 hover:border-navy hover:bg-blue-50 transition-colors active:scale-95"><Globe size={18} className="text-navy" /><div><span className="block font-bold text-navy text-sm uppercase">Global Fleet</span><span className="block text-[10px] text-gray-500 uppercase tracking-widest mt-0.5">View all aircraft in system</span></div></button>
               <button onClick={openUsersModal} className="w-full bg-gray-50 border border-gray-200 p-4 rounded text-left flex items-center gap-3 hover:border-navy hover:bg-blue-50 transition-colors active:scale-95"><Users size={18} className="text-navy" /><div><span className="block font-bold text-navy text-sm uppercase">Global Users</span><span className="block text-[10px] text-gray-500 uppercase tracking-widest mt-0.5">Manage all users, roles & access</span></div></button>
-              <button onClick={() => { setShowAdminMenu(false); setShowInviteModal(true); }} className="w-full bg-gray-50 border border-gray-200 p-4 rounded text-left flex items-center gap-3 hover:border-navy hover:bg-blue-50 transition-colors active:scale-95"><Mail size={18} className="text-navy" /><div><span className="block font-bold text-navy text-sm uppercase">Invite User</span><span className="block text-[10px] text-gray-500 uppercase tracking-widest mt-0.5">Invite pilots & reset passwords</span></div></button>
+              <button onClick={() => { setShowAdminMenu(false); inviteIdemKeyRef.current = null; setShowInviteModal(true); }} className="w-full bg-gray-50 border border-gray-200 p-4 rounded text-left flex items-center gap-3 hover:border-navy hover:bg-blue-50 transition-colors active:scale-95"><Mail size={18} className="text-navy" /><div><span className="block font-bold text-navy text-sm uppercase">Invite User</span><span className="block text-[10px] text-gray-500 uppercase tracking-widest mt-0.5">Invite pilots & reset passwords</span></div></button>
               <button onClick={() => { setShowAdminMenu(false); openAccessModal(); }} className="w-full bg-gray-50 border border-gray-200 p-4 rounded text-left flex items-center gap-3 hover:border-navy hover:bg-blue-50 transition-colors active:scale-95"><PlaneTakeoff size={18} className="text-navy" /><div><span className="block font-bold text-navy text-sm uppercase">Aircraft Access</span><span className="block text-[10px] text-gray-500 uppercase tracking-widest mt-0.5">Assign planes to pilots & admins</span></div></button>
               <button onClick={() => { setShowAdminMenu(false); setShowToolsMenu(true); }} className="w-full bg-gray-50 border border-gray-200 p-4 rounded text-left flex items-center gap-3 hover:border-navy hover:bg-blue-50 transition-colors active:scale-95"><Settings size={18} className="text-navy" /><div><span className="block font-bold text-navy text-sm uppercase">System Tools</span><span className="block text-[10px] text-gray-500 uppercase tracking-widest mt-0.5">Database health & triggers</span></div></button>
             </div>

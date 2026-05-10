@@ -181,10 +181,17 @@ export default function CalendarTab({
     setCancellingId(null);
     setShowDatePicker(false);
     setBookingStartDate(''); setBookingEndDate('');
+    setBookingStartTime('08:00'); setBookingEndTime('17:00');
     setBookingTitle(''); setBookingRoute('');
     setBookingRepeat('none');
+    setBookingRepeatCount(4);
+    setBookingRepeatDays([]);
+    setBookingRepeatInterval(1);
+    setBookingRepeatEnd('count');
+    setBookingRepeatUntil('');
     setBookingForOther(false); setBookingForUserId('');
     setMxBlockStartDate(''); setMxBlockEndDate(''); setMxBlockNotes('');
+    submitIdemKeyRef.current = null;
   }, [aircraft?.id]);
 
   const fetchKey = aircraft ? swrKeys.calendar(aircraft.id, currentDate.getFullYear(), currentDate.getMonth()) : null;

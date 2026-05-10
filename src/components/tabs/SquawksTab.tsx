@@ -122,6 +122,7 @@ export default function SquawksTab({
     setMel(''); setCdl(''); setNef(''); setMdl(''); setMelControl(''); setCategory('');
     setProcCompleted(false); setFullName(''); setCertNum('');
     setNotifyMx(false);
+    setVisibleArchivedCount(10);
   }, [aircraft?.id]);
 
   const isTurbine = aircraft?.engine_type === 'Turbine';
@@ -188,7 +189,16 @@ export default function SquawksTab({
     for (const file of selectedImages) {
       try {
         const compressedFile = await compressImage(file, options);
-        const fileName = `${aircraft!.tail_number}_${Date.now()}_${compressedFile.name}`;
+        // Sanitize the user-supplied filename so a "../../foo.jpg" or
+        // "weird name (1).jpg" can't create stray folders / collide
+        // with the orphan-sweeper that diffs storage objects against
+        // stored URLs by exact path. Tail is sanitized too — FAA
+        // tails are [A-Z0-9-] but a dashboard-edited row could carry
+        // anything; better to scrub at the upload site than depend on
+        // upstream invariants.
+        const safeTail = String(aircraft!.tail_number || 'aircraft').replace(/[^A-Za-z0-9-]/g, '_');
+        const safeName = compressedFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+        const fileName = `${safeTail}_${Date.now()}_${safeName}`;
         const { data } = await supabase.storage.from('aft_squawk_images').upload(fileName, compressedFile);
         if (data) {
           const { data: publicUrlData } = supabase.storage.from('aft_squawk_images').getPublicUrl(data.path);

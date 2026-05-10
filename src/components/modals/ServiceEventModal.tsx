@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { supabase } from "@/lib/supabase";
 import { authFetch, UPLOAD_TIMEOUT_MS } from "@/lib/authFetch";
-import { idempotencyHeader } from "@/lib/idempotencyClient";
+import { newIdempotencyKey, idempotencyHeader } from "@/lib/idempotencyClient";
 import { useModalScrollLock } from "@/hooks/useModalScrollLock";
 import { useEscapeKey } from "@/hooks/useEscapeKey";
 import { Wrench, X, Trash2 } from "lucide-react";
@@ -39,6 +39,11 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
   const [view, setView] = useState<ServiceEventView>('list');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Sticky idempotency for the draft-review send-workpackage POST.
+  // Cleared after successful send; on a retry-after-fail the same
+  // key keeps the server-side dedupe so a network-blip + user-tap
+  // never sends the work package twice.
+  const draftSendIdemKeyRef = useRef<string | null>(null);
   const [events, setEvents] = useState<any[]>([]);
   const [selectedEvent, setSelectedEvent] = useState<any>(null);
   const [eventLineItems, setEventLineItems] = useState<any[]>([]);
@@ -212,11 +217,11 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
         await supabase.from('aft_event_line_items').delete().in('id', removedLineItemIds);
       }
 
-      const idemKey = crypto.randomUUID();
+      if (!draftSendIdemKeyRef.current) draftSendIdemKeyRef.current = newIdempotencyKey();
       const res = await authFetch('/api/mx-events/send-workpackage', {
         method: 'POST',
         timeoutMs: UPLOAD_TIMEOUT_MS,
-        headers: idempotencyHeader(idemKey),
+        headers: idempotencyHeader(draftSendIdemKeyRef.current),
         body: JSON.stringify({
           eventId: selectedEvent.id,
           additionalMxItemIds: selectedMxIds,
@@ -229,6 +234,7 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
         const errData = await res.json().catch(() => ({}));
         throw new Error(errData.error || "Couldn't send the work package");
       }
+      draftSendIdemKeyRef.current = null;
       showSuccess("Work package sent to mechanic");
       fetchEvents();
       onRefresh();

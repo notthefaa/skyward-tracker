@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { authFetch } from "@/lib/authFetch";
 import useSWR from "swr";
 import { Plus, X, Edit2, Trash2, Download, RefreshCw, ExternalLink, ShieldAlert, CheckCircle, AlertTriangle, Sparkles, Info } from "lucide-react";
@@ -95,6 +95,20 @@ export default function ADsTab({ aircraft, role, aircraftRole }: Props) {
 
   useModalScrollLock(showForm);
 
+  // Aircraft switch — close any open AD form and drop the draft so an
+  // AD typed against tail A's avionics/serial can never POST against
+  // tail B's id.
+  useEffect(() => {
+    setShowForm(false);
+    setEditingId(null);
+    setFAdNumber(""); setFSubject(""); setFEffectiveDate("");
+    setFComplianceType('one_time');
+    setFLastCompliedDate(""); setFLastCompliedTime(""); setFLastCompliedBy("");
+    setFRecurringHours(""); setFRecurringMonths("");
+    setFNextDueDate(""); setFNextDueTime("");
+    setFComplianceMethod(""); setFSourceUrl(""); setFAffectsAirworthiness(true); setFNotes("");
+  }, [aircraft?.id]);
+
   const resetForm = () => {
     setEditingId(null);
     setFAdNumber(""); setFSubject(""); setFEffectiveDate("");
@@ -132,18 +146,35 @@ export default function ADsTab({ aircraft, role, aircraftRole }: Props) {
     if (!aircraft) return;
     setIsSubmitting(true);
     try {
+      // Finite-check helpers — `parseFloat("abc")` yields NaN which
+      // JSON-serializes to null sometimes and 400s the route other
+      // times, depending on column constraints. Drop the NaN at the
+      // boundary so the user sees the validation toast rather than a
+      // confusing server error.
+      const finiteOrNull = (s: string): number | null => {
+        const trimmed = s.trim();
+        if (!trimmed) return null;
+        const n = parseFloat(trimmed);
+        return Number.isFinite(n) ? n : null;
+      };
+      const intOrNull = (s: string): number | null => {
+        const trimmed = s.trim();
+        if (!trimmed) return null;
+        const n = parseInt(trimmed, 10);
+        return Number.isFinite(n) ? n : null;
+      };
       const payload: any = {
         ad_number: fAdNumber.trim(),
         subject: fSubject.trim(),
         effective_date: fEffectiveDate || null,
         compliance_type: fComplianceType,
         last_complied_date: fLastCompliedDate || null,
-        last_complied_time: fLastCompliedTime ? parseFloat(fLastCompliedTime) : null,
+        last_complied_time: finiteOrNull(fLastCompliedTime),
         last_complied_by: fLastCompliedBy.trim() || null,
-        recurring_interval_hours: fRecurringHours ? parseFloat(fRecurringHours) : null,
-        recurring_interval_months: fRecurringMonths ? parseInt(fRecurringMonths) : null,
+        recurring_interval_hours: finiteOrNull(fRecurringHours),
+        recurring_interval_months: intOrNull(fRecurringMonths),
         next_due_date: fNextDueDate || null,
-        next_due_time: fNextDueTime ? parseFloat(fNextDueTime) : null,
+        next_due_time: finiteOrNull(fNextDueTime),
         compliance_method: fComplianceMethod.trim() || null,
         source_url: fSourceUrl.trim() || null,
         affects_airworthiness: fAffectsAirworthiness,

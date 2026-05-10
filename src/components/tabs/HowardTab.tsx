@@ -275,7 +275,27 @@ export default function HowardTab({
     let onVisResetByteClock: (() => void) | null = null;
 
     try {
-      const { data: { session: s } } = await supabase.auth.getSession();
+      // iOS PWA hang protection — getSession sits behind GoTrue's
+      // internal lock. A wedged lock from an iOS-suspended prior
+      // refresh would otherwise leave the "Sending…" spinner up
+      // forever, since the abortController isn't wired in until the
+      // fetch() call below. Race against a deadline; on miss send
+      // the message unauthenticated and let /api/howard reply 401.
+      let s: { access_token?: string } | null = null;
+      {
+        let gTimer: ReturnType<typeof setTimeout> | undefined;
+        const gDeadline = new Promise<null>(resolve => {
+          gTimer = setTimeout(() => resolve(null), 8_000);
+        });
+        const sessionPromise = supabase.auth.getSession()
+          .then(r => (r.data.session as any))
+          .catch(() => null);
+        try {
+          s = await Promise.race([sessionPromise, gDeadline]);
+        } finally {
+          if (gTimer) clearTimeout(gTimer);
+        }
+      }
       // Send the pilot's IANA timezone so Howard can resolve relative
       // times ("9am today", "tomorrow 7pm") without asking. Falls back
       // to UTC on the server if absent.

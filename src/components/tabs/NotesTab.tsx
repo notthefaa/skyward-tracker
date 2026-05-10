@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { authFetch } from "@/lib/authFetch";
 import { newIdempotencyKey, idempotencyHeader } from "@/lib/idempotencyClient";
@@ -77,6 +77,20 @@ export default function NotesTab({ aircraft, session, role, aircraftRole, userIn
 
   useModalScrollLock(showModal || !!previewImages);
 
+  // Aircraft switch — close the editor and drop any in-progress draft
+  // so a note typed for tail A (with photos already picked) can never
+  // submit against tail B's id.
+  useEffect(() => {
+    setShowModal(false);
+    setEditingId(null);
+    setContent("");
+    setSelectedImages([]);
+    setExistingImages([]);
+    setPreviewImages(null);
+    setPreviewIndex(0);
+    submitIdemKeyRef.current = null;
+  }, [aircraft?.id]);
+
   const openForm = (note: any = null) => {
     if (note) {
       setEditingId(note.id);
@@ -114,7 +128,13 @@ export default function NotesTab({ aircraft, session, role, aircraftRole, userIn
     for (const file of selectedImages) {
       try {
         const compressedFile = await compressImage(file, options);
-        const fileName = `${aircraft.tail_number}_${Date.now()}_${compressedFile.name}`;
+        // Sanitize tail + filename — the orphan-sweeper diffs storage
+        // paths against stored URLs by exact match, and a slash from
+        // a dashboard-edited tail or a user-supplied "../foo.jpg"
+        // would create folders that drift out of the diff.
+        const safeTail = String(aircraft.tail_number || 'aircraft').replace(/[^A-Za-z0-9-]/g, '_');
+        const safeName = compressedFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+        const fileName = `${safeTail}_${Date.now()}_${safeName}`;
 
         const { data } = await supabase.storage.from('aft_note_images').upload(fileName, compressedFile);
 

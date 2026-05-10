@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { authFetch } from "@/lib/authFetch";
 import { processMxItem, getMxTextColor } from "@/lib/math";
@@ -171,6 +171,11 @@ export default function SummaryTab({
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<'admin' | 'pilot'>('pilot');
   const [isInviting, setIsInviting] = useState(false);
+  // Sticky idempotency key for the pilot-invite POST. A network-blip
+  // retry uses the same key so the same Supabase Auth invite isn't
+  // fired twice (rate-limited or queued double-emails). Cleared on
+  // form open + on successful send.
+  const inviteIdemKeyRef = useRef<string | null>(null);
   const [changingRoleUserId, setChangingRoleUserId] = useState<string | null>(null);
   const [removingUserId, setRemovingUserId] = useState<string | null>(null);
   const [isCrewUpdating, setIsCrewUpdating] = useState(false);
@@ -188,6 +193,32 @@ export default function SummaryTab({
   const { showSuccess, showError } = useToast();
   const { mutate: globalMutate } = useSWRConfig();
   useModalScrollLock(showDeleteModal || showFuelModal || showInviteModal || showNoteModal || showQuickLogModal);
+
+  // Aircraft switch — close every modal + clear every form draft so a
+  // QuickLog/Fuel/Invite/Delete that was composed against tail A can
+  // never silently submit against tail B's id. Same pattern as the
+  // CalendarTab/MaintenanceTab/etc. resets.
+  useEffect(() => {
+    setShowNoteModal(false);
+    setShowDeleteModal(false);
+    setShowCrewList(false);
+    setShowFuelModal(false);
+    setShowInviteModal(false);
+    setShowQuickLogModal(false);
+    setFuelAmount("");
+    setFuelUnit('gallons');
+    setInviteEmail("");
+    setInviteRole('pilot');
+    inviteIdemKeyRef.current = null;
+    setChangingRoleUserId(null);
+    setRemovingUserId(null);
+    setQlEngineHours("");
+    setQlAirframeHours("");
+    setQlLandings("1");
+    setQlCycles("1");
+    setQlReason("");
+    setQlInitials("");
+  }, [aircraft?.id]);
 
   const handleFuelUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -308,22 +339,25 @@ export default function SummaryTab({
     }
   };
 
-  const handleInvitePilot = async (e: React.FormEvent) => {
+  const handleInvitePilot = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!aircraft) return;
-    // Guard against an iOS autofill-drift case where the visible field
-    // has a value but state is empty — without this the form silently
-    // returns and the user sees no feedback after tapping Send Invite.
-    const trimmedEmail = inviteEmail.trim();
+    // Read at submit time via FormData so iOS autofill / 1Password
+    // values that landed in the input without firing onChange still
+    // make it through. Falls back to controlled state for non-autofill
+    // submits. Same pattern as AuthScreen / AddAircraft / PilotOnboarding.
+    const fd = new FormData(e.currentTarget);
+    const trimmedEmail = String(fd.get('email') || inviteEmail).trim();
     if (!trimmedEmail) { showError('Enter an email address.'); return; }
     const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!EMAIL_RE.test(trimmedEmail)) { showError("That email doesn't look right."); return; }
     setIsInviting(true);
     try {
-      const idemKey = newIdempotencyKey();
-      const res = await authFetch('/api/pilot-invite', { method: 'POST', headers: idempotencyHeader(idemKey), body: JSON.stringify({ email: trimmedEmail, aircraftId: aircraft.id, aircraftRole: inviteRole }) });
+      if (!inviteIdemKeyRef.current) inviteIdemKeyRef.current = newIdempotencyKey();
+      const res = await authFetch('/api/pilot-invite', { method: 'POST', headers: idempotencyHeader(inviteIdemKeyRef.current), body: JSON.stringify({ email: trimmedEmail, aircraftId: aircraft.id, aircraftRole: inviteRole }) });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Couldn't send the invitation");
+      inviteIdemKeyRef.current = null;
       showSuccess(data.message || 'Invitation sent'); setShowInviteModal(false); setInviteEmail(""); setInviteRole('pilot'); mutateCrew(); refreshData();
     } catch (err: any) { showError(err.message); }
     setIsInviting(false);
@@ -488,8 +522,8 @@ export default function SummaryTab({
           <div className="bg-white rounded shadow-2xl w-full max-w-sm p-6 border-t-4 border-info animate-slide-up" onClick={e => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-4"><h2 className="font-oswald text-xl font-bold uppercase text-navy flex items-center gap-2"><UserPlus size={20} className="text-info" /> Invite Pilot</h2><button onClick={() => setShowInviteModal(false)} className="text-gray-400 hover:text-danger"><X size={24} /></button></div>
             <p className="text-xs text-gray-500 mb-4">Give a pilot access to <strong>{aircraft.tail_number}</strong>.</p>
-            <form onSubmit={handleInvitePilot} className="space-y-4">
-              <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Email Address *</label><input type="email" required value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-info outline-none" placeholder="pilot@example.com" /></div>
+            <form onSubmit={handleInvitePilot} className="space-y-4" noValidate>
+              <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Email Address *</label><input type="text" inputMode="email" name="email" autoComplete="email" value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-info outline-none" placeholder="pilot@example.com" /></div>
               <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Role for {aircraft.tail_number}</label><select value={inviteRole} onChange={e => setInviteRole(e.target.value as 'admin' | 'pilot')} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-info outline-none"><option value="pilot">Aircraft Pilot</option><option value="admin">Aircraft Admin</option></select></div>
               <div className="pt-2"><PrimaryButton disabled={isInviting}>{isInviting ? <><Loader2 size={16} className="animate-spin" /> Sending...</> : "Send Invitation"}</PrimaryButton></div>
             </form>

@@ -73,9 +73,23 @@ export default function ServicePortal() {
   useBodyScrollOverride();
 
   useEffect(() => {
+    // iOS PWA hang protection — getSession blocks behind GoTrue's
+    // internal lock; a wedged lock after suspend would defer this
+    // promise indefinitely and any UI keyed off `isAppUser` would
+    // sit unresolved. Race against a deadline; on miss assume
+    // mechanic-only (the page's data path uses accessToken anyway).
+    let cancelled = false;
+    const timer = setTimeout(() => { if (!cancelled) setIsAppUser(false); }, 8_000);
     supabase.auth.getSession().then(({ data: { session } }) => {
+      if (cancelled) return;
+      clearTimeout(timer);
       setIsAppUser(!!session);
+    }).catch(() => {
+      if (cancelled) return;
+      clearTimeout(timer);
+      setIsAppUser(false);
     });
+    return () => { cancelled = true; clearTimeout(timer); };
   }, []);
 
   useEffect(() => {

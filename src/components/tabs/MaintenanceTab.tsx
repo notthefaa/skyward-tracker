@@ -4,7 +4,7 @@ import { useToast } from "@/components/ToastProvider";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { supabase } from "@/lib/supabase";
 import { authFetch, UPLOAD_TIMEOUT_MS } from "@/lib/authFetch";
-import { idempotencyHeader } from "@/lib/idempotencyClient";
+import { newIdempotencyKey, idempotencyHeader } from "@/lib/idempotencyClient";
 import { processMxItem, getMxTextColor, isMxExpired } from "@/lib/math";
 import { INPUT_WHITE_BG } from "@/lib/styles";
 import { swrKeys } from "@/lib/swrKeys";
@@ -120,6 +120,11 @@ export default function MaintenanceTab({
   const [pickerSelections, setPickerSelections] = useState<boolean[]>([]);
   const [editQueue, setEditQueue] = useState<number[]>([]);
   const [queueCursor, setQueueCursor] = useState(0);
+  // Per-event sticky idempotency keys for resend-workpackage. A retry
+  // after a network blip uses the same key so the mechanic gets one
+  // copy, not two. Cleared on success so a deliberate later resend
+  // (after a real fix) gets a fresh key.
+  const resendIdemKeysRef = useRef<Map<string, string>>(new Map());
 
   // Reset modal + editing state when the aircraft changes — otherwise
   // a partially-edited MX row from Aircraft A would land on Aircraft
@@ -135,6 +140,8 @@ export default function MaintenanceTab({
     setResendingEventId(null);
     setMxName(''); setMxLastTime(''); setMxIntervalTime(''); setMxDueTime('');
     setMxLastDate(''); setMxIntervalDays(''); setMxDueDate('');
+    setMxTrackingType('date');
+    setMxIsRequired(true);
     setAutomateScheduling(false);
     setIsScanningNewItem(false);
     setScanPrefillHint(null);
@@ -408,8 +415,14 @@ export default function MaintenanceTab({
   const handleResendWorkpackage = async (eventId: string) => {
     setResendingEventId(eventId); setConfirmResendId(null);
     try {
-      const idemKey = crypto.randomUUID();
-      await authFetch('/api/mx-events/send-workpackage', { method: 'POST', headers: idempotencyHeader(idemKey), body: JSON.stringify({ eventId, resend: true }), timeoutMs: UPLOAD_TIMEOUT_MS });
+      // Sticky per-event idempotency key — a network-blip retry of the
+      // resend uses the same key so the mechanic doesn't get two
+      // copies. Cleared on success so a deliberate later resend after
+      // a fix gets a fresh attempt.
+      let key = resendIdemKeysRef.current.get(eventId);
+      if (!key) { key = newIdempotencyKey(); resendIdemKeysRef.current.set(eventId, key); }
+      await authFetch('/api/mx-events/send-workpackage', { method: 'POST', headers: idempotencyHeader(key), body: JSON.stringify({ eventId, resend: true }), timeoutMs: UPLOAD_TIMEOUT_MS });
+      resendIdemKeysRef.current.delete(eventId);
       mutateEvents();
     } catch (err) { console.error(err); showError("Failed to resend."); }
     setResendingEventId(null);

@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { authFetch, UPLOAD_TIMEOUT_MS } from "@/lib/authFetch";
-import { idempotencyHeader } from "@/lib/idempotencyClient";
+import { newIdempotencyKey, idempotencyHeader } from "@/lib/idempotencyClient";
 import { swrKeys } from "@/lib/swrKeys";
 import type { AircraftWithMetrics, AircraftDocument, DocType } from "@/lib/types";
 import useSWR from "swr";
@@ -40,6 +40,22 @@ export default function DocumentsTab({
   const [uploadProgress, setUploadProgress] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [docType, setDocType] = useState<DocType>('POH');
+  // Sticky idempotency for the PDF upload POST. A network blip + user
+  // tap retry uses the same key so OpenAI doesn't re-charge embeddings
+  // on a successful upload that the client thinks failed. Cleared on
+  // success so the next deliberate upload of a different PDF gets a
+  // fresh key.
+  const uploadIdemKeyRef = useRef<string | null>(null);
+
+  // Aircraft switch — drop any picked PDF + reset the doc-type so a
+  // POH selected for tail A can never upload against tail B's id (the
+  // server pulls aircraftId from FormData at submit time, not at file
+  // pick).
+  useEffect(() => {
+    setSelectedFile(null);
+    setDocType('POH');
+    setUploadProgress('');
+  }, [aircraft?.id]);
 
   const { data, mutate } = useSWR(
     aircraft ? swrKeys.docs(aircraft.id) : null,
@@ -76,15 +92,16 @@ export default function DocumentsTab({
       setUploadProgress('Extracting text & generating embeddings...');
 
       // Idempotency — long PDF uploads on cellular regularly retry on
-      // iOS resume; a fresh key per click means a successful upload's
-      // retry returns the cached {document, chunks} body without
-      // re-charging OpenAI for embeddings.
-      const idemKey = crypto.randomUUID();
+      // iOS resume; a sticky key (same key across retries-of-the-same-
+      // attempt) means a successful upload's retry returns the cached
+      // {document, chunks} body without re-charging OpenAI embeddings.
+      // Cleared on success so the next file picked gets a fresh key.
+      if (!uploadIdemKeyRef.current) uploadIdemKeyRef.current = newIdempotencyKey();
       const res = await authFetch('/api/documents', {
         method: 'POST',
         body: formData,
         // Browser sets Content-Type for FormData; only send our idem header.
-        headers: idempotencyHeader(idemKey),
+        headers: idempotencyHeader(uploadIdemKeyRef.current),
         timeoutMs: UPLOAD_TIMEOUT_MS,
       });
 
@@ -94,6 +111,7 @@ export default function DocumentsTab({
       }
 
       const result = await res.json();
+      uploadIdemKeyRef.current = null;
       showSuccess(`Document uploaded! ${result.chunks} sections indexed for search.`);
       setSelectedFile(null);
       mutate();

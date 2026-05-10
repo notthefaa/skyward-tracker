@@ -208,7 +208,31 @@ export async function authFetch(
   // First 401: try to refresh the session, then retry once. A live
   // session whose access token just expired is the most common cause
   // and refreshing usually succeeds without user interaction.
-  const { data: refreshed } = await supabase.auth.refreshSession();
+  //
+  // iOS PWA hang protection — refreshSession sits behind the same
+  // GoTrue session lock that buildHeaders deadline-races. Without
+  // a race here, a stuck lock from an iOS-suspended prior refresh
+  // hangs this await forever and the caller's spinner never clears.
+  // On miss, treat as unauthorized so the user gets routed back to
+  // sign-in instead of waiting on a wedge.
+  let refreshed: { session?: any } | null = null;
+  if (timeoutMs > 0) {
+    let rTimer: ReturnType<typeof setTimeout> | undefined;
+    const rDeadline = new Promise<null>(resolve => {
+      rTimer = setTimeout(() => resolve(null), timeoutMs);
+    });
+    const refreshPromise = supabase.auth.refreshSession()
+      .then(r => r.data as any)
+      .catch(() => null);
+    try {
+      refreshed = await Promise.race([refreshPromise, rDeadline]);
+    } finally {
+      if (rTimer) clearTimeout(rTimer);
+    }
+  } else {
+    const { data } = await supabase.auth.refreshSession();
+    refreshed = data as any;
+  }
   if (!refreshed?.session) {
     notifyUnauthorized();
     return res;

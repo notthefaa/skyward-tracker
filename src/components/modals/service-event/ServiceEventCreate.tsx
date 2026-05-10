@@ -43,6 +43,10 @@ export default function ServiceEventCreate({
   // exists with the cached row → send-workpackage / confirm-list
   // flow runs against it).
   const submitIdemKeyRef = useRef<string | null>(null);
+  // Companion ref for the send-workpackage step — retried on its own
+  // when create succeeded but the email failed (the catch path keeps
+  // the user in the list view where they can resume the same draft).
+  const sendIdemKeyRef = useRef<string | null>(null);
 
   // Filter out items that are already in a draft/active event
   const availableMx = mxItems.filter(mx => !draftedMxIds.includes(mx.id));
@@ -84,11 +88,14 @@ export default function ServiceEventCreate({
       const createData = await createRes.json();
       createdEventId = createData.eventId;
 
-      // Independent idempotency key per send — same flow may retry the
-      // send-workpackage step after the create succeeded; the server
-      // dedupes the second send so the mechanic doesn't get two copies.
-      const sendIdemKey = crypto.randomUUID();
-      const sendRes = await authFetch('/api/mx-events/send-workpackage', { method: 'POST', headers: idempotencyHeader(sendIdemKey), body: JSON.stringify({ eventId: createdEventId, proposedDate: (wantsToPropose && proposedDate) ? proposedDate : null }), timeoutMs: UPLOAD_TIMEOUT_MS });
+      // Independent sticky idempotency key per send — same flow may
+      // retry the send-workpackage step after the create succeeded; the
+      // server dedupes the second send so the mechanic doesn't get two
+      // copies. A sticky-per-attempt ref means a network blip + user
+      // tap retries the SAME key (server dedupe) rather than minting a
+      // fresh one (server treats as new send → duplicate email).
+      if (!sendIdemKeyRef.current) sendIdemKeyRef.current = newIdempotencyKey();
+      const sendRes = await authFetch('/api/mx-events/send-workpackage', { method: 'POST', headers: idempotencyHeader(sendIdemKeyRef.current), body: JSON.stringify({ eventId: createdEventId, proposedDate: (wantsToPropose && proposedDate) ? proposedDate : null }), timeoutMs: UPLOAD_TIMEOUT_MS });
       if (!sendRes.ok) {
         const d = await sendRes.json().catch(() => ({}));
         throw new Error(d.error || "Couldn't send the work package");
