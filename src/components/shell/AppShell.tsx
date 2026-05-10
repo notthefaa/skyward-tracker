@@ -623,7 +623,15 @@ export default function AppShell({ session }: AppShellProps) {
     lastRevalidatedTailRef.current = activeTail;
     abortInFlightSupabaseReads();
     abortAllInFlightAuthFetches();
-    revalidateAircraftCache(ac.id, { blankFirst: true });
+    // Defer one microtask so the just-aborted fetches can reject and
+    // SWR's per-key `globalMutate` (which clears FETCH[key]) sees a
+    // clean slate. Without the defer, the revalidate races the abort
+    // propagation: SWR might still see the dead fetcher's promise in
+    // FETCH[key] and re-attach the new mount to it, leaving the new
+    // tail's data subscribers waiting on a corpse. Cheap (one tick)
+    // and pairs with the SWR `onErrorRetry` bail that prevents the
+    // aborted fetcher from queueing a retry storm.
+    queueMicrotask(() => revalidateAircraftCache(ac.id, { blankFirst: true }));
   }, [activeTail, allAircraftList, revalidateAircraftCache]);
 
   // ─── Resume-from-background recovery ───

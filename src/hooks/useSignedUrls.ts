@@ -72,10 +72,21 @@ function flushBatch() {
   })
     .then(res => res.ok ? res.json() : null)
     .then(data => {
+      // Always clear `pending` for every URL in this batch — the prior
+      // shape only deleted URLs that appeared in `data.signed`, so a
+      // non-OK response (data === null), a 200 with no `signed` map,
+      // or a partial response left some URLs pinned in `pending`
+      // forever. The `if (pending.has(url)) return;` guard in
+      // `enqueue` then skipped re-attempts → avatar (or any private-
+      // bucket renderer) showed the placeholder permanently. This was
+      // the root cause of "the avatar hung" reported across multiple
+      // aircraft switches: each switch enqueued a new tail's avatar,
+      // and a single transient 5xx during the iOS pool wedge stranded
+      // every avatar URL in the same batch.
+      for (const url of urls) pending.delete(url);
       if (!data?.signed) return;
       const now = Date.now();
       for (const [publicUrl, signedUrl] of Object.entries(data.signed)) {
-        pending.delete(publicUrl);
         if (signedUrl) {
           cache.set(publicUrl, { signed: signedUrl as string, expiresAt: now + CACHE_TTL });
         }

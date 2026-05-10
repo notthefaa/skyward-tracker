@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useSWRConfig } from "swr";
 import { supabase } from "@/lib/supabase";
 import { computeAirworthinessStatus, applyOpenSquawkOverride } from "@/lib/airworthiness";
@@ -19,6 +19,15 @@ export function useGroundedStatus(allAircraftList: AircraftWithMetrics[], active
   const [statusByTail, setStatusByTail] = useState<Record<string, AircraftStatus>>({});
   const [reasonByTail, setReasonByTail] = useState<Record<string, string>>({});
   const { cache: swrCache } = useSWRConfig();
+  // Generation counter — `useCallback` deps `[allAircraftList, swrCache]`
+  // change frequently (new array refs from setState), so each render
+  // gets a new closure. On rapid tail switches multiple in-flight
+  // copies of `checkGroundedStatus` can be racing; without a guard
+  // a stale earlier call's Promise.all that resolves *after* a newer
+  // call would overwrite the freshly-computed verdict for the same or
+  // a different tail. Bumping `genRef.current` on entry and bailing
+  // when it no longer matches stops the stale write.
+  const genRef = useRef(0);
 
   // Default 'unknown' so first-paint after a tail switch (before any
   // fetch lands) renders a neutral gray dot — never a stale green.
@@ -26,6 +35,7 @@ export function useGroundedStatus(allAircraftList: AircraftWithMetrics[], active
   const groundedReason: string = activeTail ? (reasonByTail[activeTail] ?? '') : '';
 
   const checkGroundedStatus = useCallback(async (tail: string) => {
+    const myGen = ++genRef.current;
     const ac = allAircraftList.find(a => a.tail_number === tail);
     if (!ac) return;
 
@@ -80,6 +90,15 @@ export function useGroundedStatus(allAircraftList: AircraftWithMetrics[], active
     // doesn't bleed into the header (which reads statusByTail[activeTail]).
     // The check below keeps the previous shape's robustness against
     // partial-failure clobbering, just per-tail now.
+
+    // A newer checkGroundedStatus call has started since this one
+    // dispatched its queries — bail before touching state so a slow
+    // prior tail's verdict can't land on top of a fresh active tail's
+    // value. Pairs with the per-tail keying below (which already
+    // prevents wrong-tail rendering); this prevents wrong-VERDICT
+    // rendering for the same tail when retries / resumes restart the
+    // check before the prior one returned.
+    if (myGen !== genRef.current) return;
 
     if (mxRes.error || sqRes.error || eqRes.error || adRes.error) {
       console.warn('[useGroundedStatus] fetch failed', {

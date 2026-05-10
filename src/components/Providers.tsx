@@ -47,6 +47,40 @@ export function Providers({ children }: { children: React.ReactNode }) {
         // user gets the error UI faster.
         errorRetryCount: 2,
         errorRetryInterval: 3000,
+        // Bail on aborts and timeouts. Tail-switch + resume both fire
+        // `abortInFlightSupabaseReads()` + `abortAllInFlightAuthFetches()`
+        // by design — the in-flight fetcher rejects with AbortError /
+        // TimeoutError, but to SWR that's indistinguishable from a real
+        // network failure. The default retry path then reschedules each
+        // aborted fetch ×2 with 3 s backoff, so every tail switch on a
+        // tab with N useSWR hooks queues ~2N retries against iOS's
+        // shallow socket pool. Across 4-5 rapid switches the pool is
+        // saturated by retries from prior tails and the destination
+        // aircraft's fresh fetches sit forever — that's the field
+        // symptom: switch 4 aircraft fine, on the 5th nothing loads
+        // (status dot gray, avatar placeholder, no logs / squawks).
+        //
+        // We treat any AbortError / TimeoutError / AUTHFETCH_RESUMED /
+        // AUTHFETCH_TIMEOUT as a deliberate cancellation and DON'T retry.
+        // SWR's revalidate-on-mount + the per-key `globalMutate` from
+        // `revalidateAircraftCache` will fire a fresh fetch on the
+        // active tail when the user actually wants the data.
+        onErrorRetry: (error, _key, _config, revalidate, { retryCount }) => {
+          const err: any = error;
+          const name = err?.name || '';
+          const code = err?.code || '';
+          const msg = String(err?.message || '');
+          if (name === 'AbortError' || name === 'TimeoutError') return;
+          if (code === 'AUTHFETCH_RESUMED' || code === 'AUTHFETCH_TIMEOUT') return;
+          // Supabase-js sometimes flattens AbortError into a plain
+          // Error whose message includes the original DOMException
+          // name — match those defensively.
+          if (msg.includes('AbortError') || msg.includes('TimeoutError')) return;
+          if (msg.includes('aborted') || msg.includes('supabase_aborted') || msg.includes('supabase_fetch_timeout')) return;
+          if (msg.includes('authfetch_resumed') || msg.includes('authfetch_timeout')) return;
+          if (retryCount >= 2) return;
+          setTimeout(() => revalidate({ retryCount }), 3000);
+        },
       }}
     >
       <ToastProvider>
