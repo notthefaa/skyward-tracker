@@ -38,24 +38,27 @@ export default function SquawkViewer() {
   }, [token]);
 
   const fetchSquawk = async (signal: AbortSignal) => {
-    // Defensive 12s ceiling on each query — the project-wide supabase
-    // client wraps fetches with a deadline, but the public squawk page
-    // is rendered without an authenticated session and a future
-    // refactor that drops the wrapper would leave this fetch hanging
-    // forever on iOS suspension. Token-gated routes are exactly the
-    // ones a mechanic opens and walks away from.
+    // Defensive 12s ceiling — the project-wide supabase client wraps
+    // fetches with a deadline, but a future refactor that drops the
+    // wrapper would leave this hanging on iOS suspension. Token-gated
+    // routes are exactly the ones a mechanic opens and walks away
+    // from.
     const PUBLIC_FETCH_DEADLINE_MS = 12_000;
     const deadlineSignal = AbortSignal.any([signal, AbortSignal.timeout(PUBLIC_FETCH_DEADLINE_MS)]);
 
     try {
-      const { data: sqData } = await supabase
-        .from('aft_squawks').select('*').eq('access_token', token).is('deleted_at', null).abortSignal(deadlineSignal).maybeSingle();
+      // Single token-scoped RPC replaces the prior anon SELECTs on
+      // aft_squawks + aft_aircraft, which depended on the blanket
+      // `TO anon USING (true)` RLS policies. RPC is SECURITY DEFINER
+      // and validates the token in-database.
+      const { data: rpcData } = await supabase
+        .rpc('get_portal_squawk', { p_token: token })
+        .abortSignal(deadlineSignal);
 
-      if (sqData) {
+      if (rpcData) {
+        const sqData = rpcData.squawk;
         setSquawk(sqData);
-        const { data: acData } = await supabase
-          .from('aft_aircraft').select('tail_number, aircraft_type, serial_number, mx_contact, mx_contact_email, main_contact, main_contact_email').eq('id', sqData.aircraft_id).abortSignal(deadlineSignal).single();
-        if (acData) setAircraft(acData);
+        if (rpcData.aircraft) setAircraft(rpcData.aircraft);
 
         const pics: string[] = Array.isArray(sqData.pictures) ? sqData.pictures : [];
         if (pics.length > 0) {

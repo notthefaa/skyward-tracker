@@ -97,10 +97,16 @@ export default function ServicePortal() {
   }, [accessToken]);
 
   const fetchEventData = async () => {
-    const { data: evData } = await supabase
-      .from('aft_maintenance_events').select('*').eq('access_token', accessToken).single();
+    // Single token-scoped RPC instead of 4-5 anon-key SELECTs.
+    // SECURITY DEFINER validates the token in-database and returns
+    // event + aircraft + line items + linked squawk pictures +
+    // messages in one round-trip. Replaces the dependency on the
+    // blanket `TO anon USING (true)` RLS policies that let anyone
+    // with the anon key dump the entire fleet's data.
+    const { data: rpcData } = await supabase.rpc('get_portal_event', { p_token: accessToken });
 
-    if (evData) {
+    if (rpcData) {
+      const evData = rpcData.event;
       if (evData.status === 'complete' && evData.completed_at) {
         const completedDate = new Date(evData.completed_at);
         const expiryDate = new Date(completedDate.getTime() + PORTAL_EXPIRY_DAYS * 24 * 60 * 60 * 1000);
@@ -115,45 +121,32 @@ export default function ServicePortal() {
       setEstimatedCompletion(evData.estimated_completion || "");
       setMechanicNotes(evData.mechanic_notes || "");
 
-      // Always fetch fresh aircraft data so times are current
-      const { data: acData } = await supabase
-        .from('aft_aircraft').select('*').eq('id', evData.aircraft_id).single();
-      if (acData) setAircraft(acData);
+      if (rpcData.aircraft) setAircraft(rpcData.aircraft);
 
       // Track URLs as we go so we can sign them all in one round-trip
       // at the end of fetchEventData. The four backing buckets are
       // private, so a missed URL renders as a broken image.
       const urlSet = new Set<string>();
 
-      const { data: liData } = await supabase
-        .from('aft_event_line_items').select('*').eq('event_id', evData.id).order('created_at');
-      if (liData) {
-        setLineItems(liData);
-        const squawkIds = liData.filter(li => li.squawk_id).map(li => li.squawk_id);
-        if (squawkIds.length > 0) {
-          const { data: squawksData } = await supabase
-            .from('aft_squawks').select('id, pictures').in('id', squawkIds);
-          if (squawksData) {
-            const photoMap: Record<string, string[]> = {};
-            for (const sq of squawksData) {
-              if (sq.pictures && sq.pictures.length > 0) {
-                photoMap[sq.id] = sq.pictures;
-                for (const u of sq.pictures as string[]) urlSet.add(u);
-              }
-            }
-            setSquawkPhotos(photoMap);
+      const liData = rpcData.line_items || [];
+      setLineItems(liData);
+      const squawksData = rpcData.squawks || [];
+      if (squawksData.length > 0) {
+        const photoMap: Record<string, string[]> = {};
+        for (const sq of squawksData) {
+          if (sq.pictures && sq.pictures.length > 0) {
+            photoMap[sq.id] = sq.pictures;
+            for (const u of sq.pictures as string[]) urlSet.add(u);
           }
         }
+        setSquawkPhotos(photoMap);
       }
 
-      const { data: msgData } = await supabase
-        .from('aft_event_messages').select('*').eq('event_id', evData.id).order('created_at');
-      if (msgData) {
-        setMessages(msgData);
-        for (const m of msgData) {
-          for (const a of (m.attachments || []) as any[]) {
-            if (a?.url) urlSet.add(a.url);
-          }
+      const msgData = rpcData.messages || [];
+      setMessages(msgData);
+      for (const m of msgData) {
+        for (const a of (m.attachments || []) as any[]) {
+          if (a?.url) urlSet.add(a.url);
         }
       }
 
