@@ -13,7 +13,7 @@ import { friendlyPgError } from "@/lib/pgErrors";
 import { INPUT_WHITE_BG } from "@/lib/styles";
 import type { AircraftWithMetrics } from "@/lib/types";
 import { X, Info, Camera, Upload, Plus, Trash2, ChevronDown, ChevronUp, MessageSquare, FileText } from "lucide-react";
-import { PrimaryButton } from "@/components/AppButtons";
+import { PrimaryButton, SecondaryButton } from "@/components/AppButtons";
 import { HOWARD_LOGO_PATH } from "@/lib/howard/persona";
 import { compressImage } from "@/lib/imageCompress";
 import type { Crop } from "react-image-crop";
@@ -828,10 +828,19 @@ export default function AircraftModal({
             </div>
           )}
 
-          <div className="pt-4">
-            <PrimaryButton disabled={isSubmitting || isUploadingDocs}>
-              {isUploadingDocs ? "Uploading documents..." : isSubmitting ? "Saving..." : "Save Aircraft"}
-            </PrimaryButton>
+          <div className="pt-4 flex gap-3">
+            <SecondaryButton
+              onClick={onClose}
+              disabled={isSubmitting || isUploadingDocs}
+              className="flex-1"
+            >
+              Cancel
+            </SecondaryButton>
+            <div className="flex-1">
+              <PrimaryButton disabled={isSubmitting || isUploadingDocs}>
+                {isUploadingDocs ? "Uploading..." : isSubmitting ? "Saving..." : "Save Aircraft"}
+              </PrimaryButton>
+            </div>
           </div>
         </form>
       </div>
