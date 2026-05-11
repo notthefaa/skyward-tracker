@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useBodyScrollOverride } from "@/hooks/useBodyScrollOverride";
@@ -38,6 +38,13 @@ export default function ServicePortal() {
   const [isExpired, setIsExpired] = useState(false);
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  // Sticky idempotency keys per concrete action button. Map keyed by
+  // action name so a Confirm + a Comment in the same session each
+  // get their own key, but a double-tap on either reuses the cached
+  // 200 instead of double-emailing the owner.
+  const actionIdemKeysRef = useRef<Map<string, string>>(new Map());
+  // Sticky key for file uploads — same rationale as actionIdemKeysRef.
+  const uploadIdemKeyRef = useRef<string | null>(null);
 
   const [showDateForm, setShowDateForm] = useState(false);
   const [proposedDate, setProposedDate] = useState("");
@@ -168,11 +175,17 @@ export default function ServicePortal() {
 
   const handleAction = async (action: string, payload: any = {}) => {
     setIsSubmitting(true);
+    // Sticky-per-action idempotency key. Pre-fix the key was minted
+    // fresh inside the try, so a double-tap on Confirm / Decline /
+    // mark_ready would mint two keys and the server cached neither
+    // against the other — both calls landed, owner got two emails.
+    // Cleared on success so a later legitimate retry uses a fresh key.
+    if (!actionIdemKeysRef.current.get(action)) {
+      actionIdemKeysRef.current.set(action, crypto.randomUUID());
+    }
+    const idemKey = actionIdemKeysRef.current.get(action)!;
     try {
       const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-      // Idempotency — same key per click, so a network blip retry won't
-      // double-email the owner with a confirm/decline/comment.
-      const idemKey = crypto.randomUUID();
       const res = await fetch('/api/mx-events/respond', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Idempotency-Key': idemKey },
@@ -183,6 +196,7 @@ export default function ServicePortal() {
         signal: AbortSignal.timeout(15_000),
       });
       if (!res.ok) throw new Error('Request failed');
+      actionIdemKeysRef.current.delete(action);
       // email_skipped is set by the server when the owner's email
       // rate-limit budget is exhausted. The action still recorded; the
       // owner sees the update in-app. Mechanic deserves to know the
@@ -221,12 +235,14 @@ export default function ServicePortal() {
       for (const file of uploadFiles) {
         formData.append('files', file);
       }
-      // Idempotency — a slow upload retry would otherwise re-upload the
-      // same files + duplicate the message row + re-email the owner.
-      const idemKey = crypto.randomUUID();
+      // Sticky idempotency key per upload attempt. Pre-fix the key was
+      // minted fresh inside the try block; a network blip retry produced
+      // two server-side uploads + two messages rows + two owner emails.
+      // Cleared on success so the next legitimate upload uses a new key.
+      if (!uploadIdemKeyRef.current) uploadIdemKeyRef.current = crypto.randomUUID();
       const res = await fetch('/api/mx-events/upload-attachment', {
         method: 'POST',
-        headers: { 'X-Idempotency-Key': idemKey },
+        headers: { 'X-Idempotency-Key': uploadIdemKeyRef.current },
         body: formData,
         // 60s mirrors the upload-route override in the pilot app — file
         // uploads on cellular legitimately need the longer budget.
@@ -236,6 +252,7 @@ export default function ServicePortal() {
         const errData = await res.json();
         throw new Error(errData.error || "Upload didn't finish");
       }
+      uploadIdemKeyRef.current = null;
       // email_skipped: files saved, but the owner notification was
       // rate-limited and didn't send. Surface it so the mechanic knows
       // to follow up by another channel if it's urgent.

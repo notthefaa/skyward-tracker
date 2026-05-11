@@ -114,8 +114,16 @@ export default function ServiceEventComplete({
     if (itemsToComplete.length === 0) return showWarning("Check at least one item to mark complete.");
 
     const mxCompletions = itemsToComplete.filter(c => c.item_type === 'maintenance');
+    // Explicit string-empty checks instead of falsy. completionTime
+    // can legitimately be "0" (brand-new engine logging its first
+    // entry) which the prior `!c.completionTime` rejected, but
+    // accepted as truthy here only when 0 was typed — confusing
+    // mixed semantics. Empty string is the actual "user didn't enter
+    // anything" signal from the form input.
     for (const c of mxCompletions) {
-      if (!c.completionDate && !c.completionTime) return showWarning(`Enter logbook completion data for: ${c.item_name}`);
+      const dateBlank = !c.completionDate || c.completionDate === '';
+      const timeBlank = c.completionTime === undefined || c.completionTime === null || c.completionTime === '';
+      if (dateBlank && timeBlank) return showWarning(`Enter logbook completion data for: ${c.item_name}`);
     }
 
     setIsSubmitting(true);
