@@ -111,6 +111,10 @@ export default function SummaryTab({
   // landings + cycles + purpose only; the full Flight Times tab is
   // for fuel, route, pax, etc.
   const [showQuickLogModal, setShowQuickLogModal] = useState(false);
+  // Sticky-per-attempt idempotency key. Without this a double-tap on
+  // "Log Flight" mints two keys and both inserts land; pre-fix gave
+  // double Last-Flown updates on slow networks.
+  const quickLogIdemKeyRef = useRef<string | null>(null);
   const [qlEngineHours, setQlEngineHours] = useState("");
   const [qlAirframeHours, setQlAirframeHours] = useState("");
   const [qlLandings, setQlLandings] = useState("1");
@@ -243,16 +247,18 @@ export default function SummaryTab({
     }
 
     setIsSavingQuickLog(true);
+    if (!quickLogIdemKeyRef.current) quickLogIdemKeyRef.current = newIdempotencyKey();
     try {
       const res = await authFetch('/api/flight-logs', {
         method: 'POST',
-        headers: idempotencyHeader(newIdempotencyKey()),
+        headers: idempotencyHeader(quickLogIdemKeyRef.current),
         body: JSON.stringify({ aircraftId: aircraft.id, logData, aircraftUpdate: {} }),
       });
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
         throw new Error(d.error || "Couldn't save the flight log.");
       }
+      quickLogIdemKeyRef.current = null;
       setShowQuickLogModal(false);
       // Bust the summary cards' SWR keys so "Last Flown" + Next Mx Due
       // reflect the new log without waiting for a tab switch.

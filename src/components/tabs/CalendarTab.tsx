@@ -145,6 +145,8 @@ export default function CalendarTab({
   // overlapping cancels for different ids each get their own key, but
   // a retry of the same id reuses the existing cached 200.
   const cancelIdemKeysRef = useRef<Map<string, string>>(new Map());
+  // Sticky key for the MX-block create form.
+  const mxBlockIdemKeyRef = useRef<string | null>(null);
 
   const [bookingStartDate, setBookingStartDate] = useState("");
   const [bookingStartTime, setBookingStartTime] = useState("08:00");
@@ -432,11 +434,16 @@ export default function CalendarTab({
   const handleCreateMxBlock = async () => {
     if (!mxBlockStartDate) return showWarning("Pick a start date for the maintenance block.");
     setIsSubmitting(true);
+    // Sticky key per submit attempt. Pre-fix this minted a fresh key
+    // inside the try, so a double-tap on "Create Block" cancelled
+    // two waves of overlapping reservations + emailed every affected
+    // pilot twice.
+    if (!mxBlockIdemKeyRef.current) mxBlockIdemKeyRef.current = newIdempotencyKey();
     try {
       const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-      const idemKey = newIdempotencyKey();
-      const res = await authFetch('/api/mx-events/block', { method: 'POST', headers: idempotencyHeader(idemKey), body: JSON.stringify({ aircraftId: aircraft!.id, startDate: mxBlockStartDate, endDate: mxBlockEndDate || mxBlockStartDate, notes: mxBlockNotes || null, timeZone }) });
+      const res = await authFetch('/api/mx-events/block', { method: 'POST', headers: idempotencyHeader(mxBlockIdemKeyRef.current), body: JSON.stringify({ aircraftId: aircraft!.id, startDate: mxBlockStartDate, endDate: mxBlockEndDate || mxBlockStartDate, notes: mxBlockNotes || null, timeZone }) });
       const data = await res.json(); if (!res.ok) throw new Error(data.error || 'Failed');
+      mxBlockIdemKeyRef.current = null;
       await mutateWithDeadline(mutate()); setShowMxBlockForm(false); showSuccess("Maintenance block created");
     } catch (err: any) { showError(err.message); }
     setIsSubmitting(false);

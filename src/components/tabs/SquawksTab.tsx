@@ -283,16 +283,17 @@ export default function SquawksTab({
           let routeOk = false;
           let mxSendFailed = false;
           try {
-            // Idempotency key tied to this single submit attempt. A
-            // network-blip retry (or an offline-queue replay) hits the
-            // route with the same key and gets the cached 200 instead
-            // of re-sending the email — pilots used to see the
-            // "MX not notified" badge after a blip and click resend,
-            // duplicating notifications to every assigned pilot.
-            const notifyKey = newIdempotencyKey();
+            // Reuse the submit-attempt key so a retry of the whole
+            // create flow (create + notify) hits both routes' caches
+            // instead of just the create route. Idempotency table is
+            // keyed by (user_id, route, key), so the squawk-create
+            // and squawk-notify cached entries don't collide. Pre-fix
+            // the notify key was minted fresh inside this block, so a
+            // double-tap or blip-retry re-fanned the mechanic + pilot
+            // alerts.
             const emailRes = await authFetch('/api/emails/squawk-notify', {
               method: 'POST',
-              headers: idempotencyHeader(notifyKey),
+              headers: idempotencyHeader(submitIdemKeyRef.current!),
               body: JSON.stringify({ squawk: newSquawk, aircraft, notifyMx }),
             });
             routeOk = emailRes.ok;

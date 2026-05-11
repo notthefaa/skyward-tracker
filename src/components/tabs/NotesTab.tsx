@@ -182,13 +182,14 @@ export default function NotesTab({ aircraft, session, role, aircraftRole, userIn
         const noteId: string | undefined = createdBody?.noteId;
 
         try {
-          // Fresh idempotency key per submit so a network-blip retry
-          // hits the cached 200 instead of resending the email to
-          // every assigned pilot. Matches the squawk-notify pattern.
-          const notifyKey = newIdempotencyKey();
+          // Reuse the submit-attempt key — the idempotency table keys
+          // by (user_id, route, key), so the note-create and note-
+          // notify cached entries don't collide, and a retry of the
+          // whole submit hits both caches instead of re-fanning the
+          // notification to every assigned pilot.
           await authFetch('/api/emails/note-notify', {
             method: 'POST',
-            headers: idempotencyHeader(notifyKey),
+            headers: idempotencyHeader(submitIdemKeyRef.current!),
             body: JSON.stringify({ noteId, note: { ...noteData, author_initials: userInitials }, aircraft })
           });
         } catch (err) {
