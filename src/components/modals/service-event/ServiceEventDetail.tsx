@@ -10,7 +10,7 @@ import {
   XCircle, Plane, Paperclip, FileText, Link2, X
 } from "lucide-react";
 import { PrimaryButton } from "@/components/AppButtons";
-import { INPUT_WHITE_BG } from "./shared";
+import { INPUT_WHITE_BG, statusLabel } from "./shared";
 import type { ServiceEventChildProps } from "./shared";
 
 interface ServiceEventDetailProps extends ServiceEventChildProps {
@@ -171,7 +171,7 @@ export default function ServiceEventDetail({
       <div className="bg-gray-50 rounded p-4 border border-gray-200">
         <div className="flex justify-between items-center mb-3">
           <span className={`text-[8px] font-bold uppercase tracking-widest px-2 py-1 rounded text-white ${selectedEvent.status === 'confirmed' ? 'bg-info' : selectedEvent.status === 'complete' ? 'bg-[#56B94A]' : selectedEvent.status === 'ready_for_pickup' ? 'bg-[#56B94A]' : selectedEvent.status === 'cancelled' ? 'bg-danger' : 'bg-mxOrange'}`}>
-            {selectedEvent.status === 'ready_for_pickup' ? 'Ready for Pickup' : selectedEvent.status}
+            {statusLabel(selectedEvent.status)}
           </span>
           {selectedEvent.access_token && selectedEvent.status !== 'complete' && (
             <a href={`/service/${selectedEvent.access_token}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-info bg-blue-50 border border-blue-200 rounded px-3 py-1.5 hover:bg-blue-100 active:scale-95 transition-all">
@@ -282,7 +282,7 @@ export default function ServiceEventDetail({
       {/* Completion actions */}
       {canManageService && selectedEvent.status !== 'complete' && selectedEvent.status !== 'cancelled' && hasPendingItems && (
         <button onClick={() => onNavigate('complete', selectedEvent)} className="w-full bg-[#56B94A] text-white font-oswald font-bold uppercase tracking-widest py-3 rounded active:scale-95 transition-transform flex items-center justify-center gap-2">
-          <CheckCircle size={18} /> Enter Logbook Data{hasCompletedItems ? ' (Remaining Items)' : ''}
+          <CheckCircle size={18} /> Record Completion{hasCompletedItems ? ' (Remaining Items)' : ''}
         </button>
       )}
 
@@ -291,14 +291,14 @@ export default function ServiceEventDetail({
         <div className="bg-green-50 border-2 border-green-200 rounded p-4 text-center">
           <CheckCircle size={32} className="mx-auto text-[#56B94A] mb-2" />
           <p className="font-oswald text-lg font-bold uppercase tracking-widest text-navy mb-2">All Items Resolved</p>
-          <p className="text-xs text-gray-600 mb-4">Every item is either completed or deferred. Close the event to wrap it up.</p>
-          <button onClick={handleCloseEvent} disabled={isSubmitting} className="w-full bg-[#56B94A] text-white font-oswald font-bold uppercase tracking-widest py-3 rounded active:scale-95 disabled:opacity-50">{isSubmitting ? "Closing..." : "Close Service Event"}</button>
+          <p className="text-xs text-gray-600 mb-4">Every item is either completed or deferred. Finalize the event to wrap it up.</p>
+          <button onClick={handleCloseEvent} disabled={isSubmitting} className="w-full bg-[#56B94A] text-white font-oswald font-bold uppercase tracking-widest py-3 rounded active:scale-95 disabled:opacity-50">{isSubmitting ? "Finalizing..." : "Finalize Event"}</button>
         </div>
       )}
 
       {/* Ready for pickup banner */}
       {selectedEvent.status === 'ready_for_pickup' && (
-        <div className="bg-green-50 border-2 border-green-200 rounded p-4 text-center"><Plane size={32} className="mx-auto text-[#56B94A] mb-2" /><p className="font-oswald text-lg font-bold uppercase tracking-widest text-navy">Aircraft Ready</p><p className="text-sm text-gray-600 mt-1">Your mechanic marked every item complete. Enter logbook data above to finish out the event.</p></div>
+        <div className="bg-green-50 border-2 border-green-200 rounded p-4 text-center"><Plane size={32} className="mx-auto text-[#56B94A] mb-2" /><p className="font-oswald text-lg font-bold uppercase tracking-widest text-navy">Aircraft Ready</p><p className="text-sm text-gray-600 mt-1">Your mechanic marked every item complete. Record the completion above to finish out the event.</p></div>
       )}
       {selectedEvent.status === 'cancelled' && (
         <div className="bg-red-50 border-2 border-red-200 rounded p-4 text-center"><XCircle size={32} className="mx-auto text-danger mb-2" /><p className="font-oswald text-lg font-bold uppercase tracking-widest text-navy">Event Cancelled</p></div>
@@ -306,11 +306,11 @@ export default function ServiceEventDetail({
 
       {/* Cancel button */}
       {canManageService && selectedEvent.status !== 'complete' && selectedEvent.status !== 'cancelled' && !showCancelConfirm && (
-        <button onClick={() => setShowCancelConfirm(true)} className="w-full text-[10px] font-bold uppercase tracking-widest text-danger border border-red-200 bg-red-50 rounded py-2 hover:bg-red-100 active:scale-95 transition-all flex items-center justify-center gap-1.5 mt-2"><XCircle size={12} /> Cancel Service Event</button>
+        <button onClick={() => setShowCancelConfirm(true)} className="w-full text-[10px] font-bold uppercase tracking-widest text-danger border border-red-200 bg-red-50 rounded py-2 hover:bg-red-100 active:scale-95 transition-all flex items-center justify-center gap-1.5 mt-2"><XCircle size={12} /> Cancel Event</button>
       )}
       {showCancelConfirm && (
         <div className="bg-red-50 border-2 border-red-200 rounded p-4 space-y-3 animate-fade-in">
-          <p className="text-sm font-bold text-navy">Cancel this service event?</p>
+          <p className="text-sm font-bold text-navy">Cancel this event?</p>
           <textarea value={cancelReason} onChange={e => setCancelReason(e.target.value)} style={INPUT_WHITE_BG} className="w-full border border-gray-300 rounded p-2 text-sm focus:border-danger outline-none min-h-[50px]" placeholder="Reason for the cancellation (optional) — your mechanic will see this." />
           <div className="flex gap-2">
             <button onClick={() => { setShowCancelConfirm(false); setCancelReason(""); }} className="flex-1 border border-gray-300 text-gray-600 font-oswald font-bold uppercase tracking-widest py-2 rounded text-xs active:scale-95">Keep Event</button>

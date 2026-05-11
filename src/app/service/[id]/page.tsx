@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabase";
 import { useBodyScrollOverride } from "@/hooks/useBodyScrollOverride";
 import { fetchSignedUrlsWithToken } from "@/hooks/useSignedUrls";
 import { validateFileSizes, MAX_UPLOAD_SIZE_LABEL, PORTAL_EXPIRY_DAYS } from "@/lib/constants";
+import { statusLabel } from "@/components/modals/service-event/shared";
 import {
   Wrench, AlertTriangle, CheckCircle, Clock, Send,
   MessageSquare, Calendar, Sparkles, X, Plus, Image, ArrowLeft, XCircle, Plane,
@@ -71,8 +72,8 @@ export default function ServicePortal() {
   const [uploadDescription, setUploadDescription] = useState("");
   const [isUploading, setIsUploading] = useState(false);
 
-  // Confirm with duration
-  const [showConfirmWithDuration, setShowConfirmWithDuration] = useState(false);
+  // Confirm-with-duration state — the duration + optional message fields
+  // render inline with the scheduling card now, no click-to-reveal.
   const [confirmDurationDays, setConfirmDurationDays] = useState("");
   const [confirmMessage, setConfirmMessage] = useState("");
 
@@ -210,7 +211,6 @@ export default function ServicePortal() {
       setShowDateForm(false);
       setCommentText("");
       setAvailabilityNote("");
-      setShowConfirmWithDuration(false);
       setConfirmDurationDays("");
       setConfirmMessage("");
     } catch (err) {
@@ -326,7 +326,7 @@ export default function ServicePortal() {
   }
 
   const statusColor = event.status === 'complete' ? 'bg-[#56B94A]' : event.status === 'ready_for_pickup' ? 'bg-[#56B94A]' : event.status === 'confirmed' ? 'bg-info' : event.status === 'cancelled' ? 'bg-danger' : 'bg-mxOrange';
-  const statusLabel = event.status === 'ready_for_pickup' ? 'Ready for Pickup' : event.status;
+  const statusLabelText = statusLabel(event.status);
   const mxLines = lineItems.filter(li => li.item_type === 'maintenance');
   const squawkLines = lineItems.filter(li => li.item_type === 'squawk');
   const addonLines = lineItems.filter(li => li.item_type === 'addon');
@@ -371,7 +371,7 @@ export default function ServicePortal() {
               </div>
               <div className="text-right">
                 <span className="text-[10px] font-bold uppercase tracking-widest block mb-1">Status</span>
-                <span className={`${statusColor} px-3 py-1 rounded text-xs font-bold uppercase tracking-widest`}>{statusLabel}</span>
+                <span className={`${statusColor} px-3 py-1 rounded text-xs font-bold uppercase tracking-widest`}>{statusLabelText}</span>
               </div>
             </div>
             <div className="p-6 grid grid-cols-2 gap-4">
@@ -421,41 +421,31 @@ export default function ServicePortal() {
               {event.proposed_by === 'owner' && (
                 <div className="space-y-3">
                   <p className="text-sm text-gray-600">
-                    {event.proposed_date 
-                      ? <>The owner has proposed <strong>{event.proposed_date}</strong>. Does this date work for your shop?</>
+                    {event.proposed_date
+                      ? <>The owner proposed <strong>{event.proposed_date}</strong>. If it works for your shop, set how many days the aircraft will be in and confirm.</>
                       : <>The owner wants to know your availability. Propose a service date below.</>
                     }
                   </p>
                   {event.proposed_date && (
-                    <div className="space-y-3">
-                      {!showConfirmWithDuration ? (
-                        <div className="flex gap-3">
-                          <button onClick={() => setShowConfirmWithDuration(true)} disabled={isSubmitting} className="flex-1 bg-[#56B94A] text-white font-oswald font-bold uppercase tracking-widest py-3 rounded active:scale-95 transition-transform disabled:opacity-50">Confirm Date</button>
-                          <button onClick={() => setShowDateForm(true)} disabled={isSubmitting} className="flex-1 bg-mxOrange text-white font-oswald font-bold uppercase tracking-widest py-3 rounded active:scale-95 transition-transform disabled:opacity-50">Propose Different</button>
-                        </div>
-                      ) : (
-                        <div className="p-4 bg-green-50 rounded border border-green-200 space-y-3 animate-fade-in">
-                          <p className="text-sm font-bold text-navy">Confirming: {event.proposed_date}</p>
-                          <div>
-                            <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Estimated Duration (Days) *</label>
-                            <input type="number" min="1" value={confirmDurationDays} onChange={e => setConfirmDurationDays(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#56B94A] outline-none" placeholder="How many days will the aircraft be in your shop?" />
-                          </div>
-                          <div>
-                            <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Message (Optional)</label>
-                            <textarea value={confirmMessage} onChange={e => setConfirmMessage(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#56B94A] outline-none min-h-[60px]" placeholder="Any notes about the service..." />
-                          </div>
-                          <div className="flex gap-2">
-                            <button onClick={() => { setShowConfirmWithDuration(false); setConfirmDurationDays(""); setConfirmMessage(""); }} className="flex-1 border border-gray-300 text-gray-600 font-bold py-2 rounded text-xs uppercase tracking-widest active:scale-95">Cancel</button>
-                            <button 
-                              onClick={() => handleAction('confirm', { serviceDurationDays: parseInt(confirmDurationDays), message: confirmMessage || `Confirmed for ${event.proposed_date}. Estimated ${confirmDurationDays} day${parseInt(confirmDurationDays) > 1 ? 's' : ''}.` })} 
-                              disabled={isSubmitting || !confirmDurationDays || parseInt(confirmDurationDays) < 1} 
-                              className="flex-[2] bg-[#56B94A] text-white font-bold py-2 rounded text-xs uppercase tracking-widest active:scale-95 disabled:opacity-50"
-                            >
-                              {isSubmitting ? "Confirming..." : "Confirm & Notify Owner"}
-                            </button>
-                          </div>
-                        </div>
-                      )}
+                    <div className="p-4 bg-green-50 rounded border border-green-200 space-y-3">
+                      <div>
+                        <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Estimated Duration (Days) *</label>
+                        <input type="number" inputMode="decimal" min="1" value={confirmDurationDays} onChange={e => setConfirmDurationDays(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#56B94A] outline-none" placeholder="How many days will the aircraft be in your shop?" />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Message (Optional)</label>
+                        <textarea value={confirmMessage} onChange={e => setConfirmMessage(e.target.value)} style={whiteBg} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-[#56B94A] outline-none min-h-[60px]" placeholder="Any notes about the service..." />
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleAction('confirm', { serviceDurationDays: parseInt(confirmDurationDays), message: confirmMessage || `Confirmed for ${event.proposed_date}. Estimated ${confirmDurationDays} day${parseInt(confirmDurationDays) > 1 ? 's' : ''}.` })}
+                          disabled={isSubmitting || !confirmDurationDays || parseInt(confirmDurationDays) < 1}
+                          className="flex-[2] bg-[#56B94A] text-white font-oswald font-bold uppercase tracking-widest py-3 rounded active:scale-95 transition-transform disabled:opacity-50"
+                        >
+                          {isSubmitting ? "Confirming..." : `Confirm ${event.proposed_date} & Notify Owner`}
+                        </button>
+                        <button onClick={() => setShowDateForm(true)} disabled={isSubmitting} className="flex-1 bg-mxOrange text-white font-oswald font-bold uppercase tracking-widest py-3 rounded active:scale-95 transition-transform disabled:opacity-50">Propose Different</button>
+                      </div>
                     </div>
                   )}
                   {!event.proposed_date && !showDateForm && (
@@ -687,11 +677,14 @@ export default function ServicePortal() {
             </div>
           )}
 
-          {/* MARK AIRCRAFT READY */}
-          {event.status !== 'complete' && event.status !== 'cancelled' && event.status !== 'ready_for_pickup' && lineItems.length > 0 && lineItems.every(li => li.line_status === 'complete') && (
+          {/* MARK AIRCRAFT READY — every live line is either complete or
+              deferred (deferred = "couldn't do, owner deferred", which still
+              counts as resolved for pickup purposes; admin's close-event
+              gate uses the same rule). */}
+          {event.status !== 'complete' && event.status !== 'cancelled' && event.status !== 'ready_for_pickup' && lineItems.length > 0 && lineItems.every(li => li.line_status === 'complete' || li.line_status === 'deferred') && (
             <div className="bg-green-50 shadow-lg rounded-sm p-6 border-t-4 border-[#56B94A]">
-              <h3 className="font-oswald text-lg font-bold uppercase tracking-widest text-navy mb-4 flex items-center gap-2"><Plane size={18} className="text-[#56B94A]"/> All Work Complete</h3>
-              <p className="text-sm text-gray-600 mb-4">All line items are marked complete. Notify the owner that the aircraft is ready for pickup.</p>
+              <h3 className="font-oswald text-lg font-bold uppercase tracking-widest text-navy mb-4 flex items-center gap-2"><Plane size={18} className="text-[#56B94A]"/> Work Resolved</h3>
+              <p className="text-sm text-gray-600 mb-4">Every item is either complete or deferred. Notify the owner that the aircraft is ready for pickup.</p>
               {!showReadyConfirm ? (
                 <button onClick={() => setShowReadyConfirm(true)} className="w-full bg-[#56B94A] text-white font-oswald font-bold uppercase tracking-widest py-3 rounded active:scale-95 transition-transform flex items-center justify-center gap-2"><CheckCircle size={18} /> Mark Aircraft Ready for Pickup</button>
               ) : (
