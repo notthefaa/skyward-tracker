@@ -168,12 +168,21 @@ export async function POST(req: Request) {
       const occStartMs = new Date(occ.start).getTime();
       const occEndMs = new Date(occ.end).getTime();
 
-      // Check existing reservation conflicts
+      // Check existing reservation conflicts. Admins see who they're
+      // colliding with; everyone else gets a generic message — pre-fix
+      // any pilot booking against a peer's reservation got back the
+      // peer's name in the error, an inadvertent enumeration surface.
       const resConflict = allReservations.find(r =>
         new Date(r.start_time).getTime() < occEndMs && new Date(r.end_time).getTime() > occStartMs
       );
       if (resConflict) {
-        skipped.push({ start: occ.start, reason: `Conflicts with ${resConflict.pilot_name || 'another pilot'}` });
+        const isCallerAdmin = userRole?.role === 'admin';
+        skipped.push({
+          start: occ.start,
+          reason: isCallerAdmin
+            ? `Conflicts with ${resConflict.pilot_name || 'another pilot'}`
+            : 'Time slot is unavailable',
+        });
         continue;
       }
 
@@ -585,15 +594,34 @@ export async function PUT(req: Request) {
 
           if (emails.length > 0) {
             const safeTail = escapeHtml(aircraft.tail_number);
-            const safePilot = escapeHtml(existing.pilot_initials || 'A pilot');
-            const newStartStr = formatInTimeZone(newStart, tz);
-            const newEndStr = formatInTimeZone(newEnd, tz);
+            // Re-fetch the booker's initials live — pre-fix this used
+            // existing.pilot_initials which is a snapshot from the
+            // original booking and goes stale if the pilot updated
+            // their initials. Falls back to the snapshot if the live
+            // lookup fails (one missing initials beats an empty card).
+            let liveInitials: string | null = null;
+            if (existing.user_id) {
+              const { data: bookerRole } = await supabaseAdmin
+                .from('aft_user_roles')
+                .select('initials')
+                .eq('user_id', existing.user_id)
+                .maybeSingle();
+              liveInitials = bookerRole?.initials || null;
+            }
+            const safePilot = escapeHtml(liveInitials || existing.pilot_initials || 'A pilot');
+            // Render times in the BOOKER's zone (stored on the row),
+            // not the editor's. An admin in MST editing a Phoenix
+            // pilot's reservation used to send "Apr 15 9:00 AM MST"
+            // to all crew when the original booking was Phoenix time.
+            const displayTz = existing.time_zone || tz;
+            const newStartStr = formatInTimeZone(newStart, displayTz);
+            const newEndStr = formatInTimeZone(newEnd, displayTz);
 
             const appUrl = getAppUrl(req);
             await resend.emails.send({
               from: `Skyward Aircraft Manager <${FROM_EMAIL}>`,
               to: emails,
-              subject: `${safeTail} Reservation Updated: ${formatShortDateInTimeZone(newStart, tz)}`,
+              subject: `${safeTail} Reservation Updated: ${formatShortDateInTimeZone(newStart, displayTz)}`,
               html: emailShell({
                 title: `${safeTail} Reservation Updated`,
                 preheader: `${safePilot} moved their ${safeTail} reservation — ${newStartStr} → ${newEndStr}.`,

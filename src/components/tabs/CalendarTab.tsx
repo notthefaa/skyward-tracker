@@ -420,8 +420,11 @@ export default function CalendarTab({
       showSuccess("Reservation cancelled");
     } catch (err: any) {
       showError(err.message);
+    } finally {
+      // setIsSubmitting was previously outside try/catch — a throw
+      // from mutateWithDeadline left the cancel button stuck disabled.
+      setIsSubmitting(false);
     }
-    setIsSubmitting(false);
   };
 
   const canAdmin = role === 'admin' || aircraftRole === 'admin';
