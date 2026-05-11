@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireAuth, requireAircraftAccess, handleApiError } from '@/lib/auth';
 import { setAppUser } from '@/lib/audit';
+import { idempotency } from '@/lib/idempotency';
 import { parseFiniteNumber } from '@/lib/validation';
 
 // POST — update aircraft fuel state. Replaces the SummaryTab direct
@@ -14,6 +15,14 @@ import { parseFiniteNumber } from '@/lib/validation';
 export async function POST(req: Request) {
   try {
     const { user, supabaseAdmin } = await requireAuth(req);
+
+    // Idempotency — a double-tap on Save Fuel mints duplicate audit
+    // rows + history-trigger fires on each call. Cache the success
+    // response so retries / blip-retries land on the cached 200.
+    const idem = idempotency(supabaseAdmin, user.id, req, 'aircraft/fuel/POST');
+    const cached = await idem.check();
+    if (cached) return cached;
+
     const { aircraftId, gallons } = await req.json();
 
     if (!aircraftId || typeof aircraftId !== 'string') {
@@ -40,7 +49,9 @@ export async function POST(req: Request) {
       .is('deleted_at', null);
     if (error) throw error;
 
-    return NextResponse.json({ success: true, current_fuel_gallons: parsed });
+    const okBody = { success: true, current_fuel_gallons: parsed };
+    await idem.save(200, okBody);
+    return NextResponse.json(okBody);
   } catch (error) {
     return handleApiError(error);
   }

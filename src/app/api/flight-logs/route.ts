@@ -133,6 +133,17 @@ export async function POST(req: Request) {
 export async function PUT(req: Request) {
   try {
     const { user, supabaseAdmin } = await requireAuth(req);
+
+    // Idempotency — a double-tap on Save or a network-blip retry on
+    // an iOS-suspended request would otherwise run edit_flight_log_atomic
+    // twice. The RPC is not idempotent at the row level (each call
+    // re-derives aircraft totals from the latest log, which is fine,
+    // but audit + history rows duplicate). Cache the success response
+    // so retries return it without re-firing the RPC.
+    const idem = idempotency(supabaseAdmin, user.id, req, 'flight-logs/PUT');
+    const cached = await idem.check();
+    if (cached) return cached;
+
     const { logId, aircraftId, logData, aircraftUpdate } = await req.json();
     if (!logId || !aircraftId) return NextResponse.json({ error: 'Log ID and Aircraft ID required.' }, { status: 400 });
     const input = validateFlightLogInput(logData);
@@ -150,7 +161,9 @@ export async function PUT(req: Request) {
       return NextResponse.json({ error: friendlyPgError(rpcErr) }, { status });
     }
 
-    return NextResponse.json({ success: true });
+    const okBody = { success: true };
+    await idem.save(200, okBody);
+    return NextResponse.json(okBody);
   } catch (error) { return handleApiError(error); }
 }
 
