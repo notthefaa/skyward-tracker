@@ -222,6 +222,36 @@ export async function executeAction(
   switch (action.action_type) {
     case 'reservation': {
       const p = action.payload as ReservationPayload;
+      // Reject reservations that start in the past — Claude can
+      // misresolve "tomorrow" against stale clock context.
+      const startMs = Date.parse(p.start_time);
+      if (!Number.isFinite(startMs) || startMs < Date.now() - 60_000) {
+        throw new Error('Reservation start time is in the past.');
+      }
+      // Block MX-conflict overlaps. The /api/reservations POST has
+      // this check; the Howard executor used to bypass it entirely,
+      // letting a confirmed action land a reservation inside an
+      // already-scheduled maintenance block. Reservation-vs-reservation
+      // overlap is still caught by the aft_reservations exclusion
+      // constraint at insert time; this gate covers the MX-block path
+      // that has no DB constraint.
+      const { data: mxEvents, error: mxErr } = await sb
+        .from('aft_maintenance_events')
+        .select('confirmed_date, estimated_completion')
+        .eq('aircraft_id', action.aircraft_id)
+        .in('status', ['confirmed', 'in_progress', 'ready_for_pickup'])
+        .is('deleted_at', null);
+      if (mxErr) throw mxErr;
+      for (const ev of (mxEvents || [])) {
+        if (!ev.confirmed_date) continue;
+        const mxStart = new Date(ev.confirmed_date + 'T00:00:00Z');
+        const mxEnd = ev.estimated_completion
+          ? new Date(ev.estimated_completion + 'T23:59:59.999Z')
+          : new Date(mxStart.getTime() + 86_400_000);
+        if (new Date(p.start_time) < mxEnd && new Date(p.end_time) > mxStart) {
+          throw new Error('Reservation overlaps a scheduled maintenance block.');
+        }
+      }
       const { data, error } = await sb
         .from('aft_reservations')
         .insert({

@@ -47,6 +47,22 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       } else {
         await requireAircraftAccess(supabaseAdmin, user.id, action.aircraft_id);
       }
+
+      // Re-verify the aircraft is still live. requireAircraftAccess /
+      // requireAircraftAdmin check user→aircraft membership but not
+      // aircraft.deleted_at. A stale propose confirmed AFTER the
+      // aircraft was soft-deleted would otherwise insert squawks /
+      // notes / reservations into a deleted aircraft, where they'd
+      // sit orphaned.
+      const { data: ac, error: acErr } = await supabaseAdmin
+        .from('aft_aircraft')
+        .select('id, deleted_at')
+        .eq('id', action.aircraft_id)
+        .maybeSingle();
+      if (acErr) throw acErr;
+      if (!ac || ac.deleted_at) {
+        return NextResponse.json({ error: 'That aircraft is no longer available.' }, { status: 410 });
+      }
     }
 
     // Attribute subsequent writes to the user via the audit trigger.

@@ -114,12 +114,17 @@ async function resolveAircraftFromTail(
     return { ok: false, error: 'Aircraft tail number is required. Ask the user which aircraft they mean.' };
   }
   const normalized = tail.toUpperCase().trim();
-  const { data: aircraft } = await sb
+  const { data: aircraft, error: lookupErr } = await sb
     .from('aft_aircraft')
     .select('id, tail_number')
     .eq('tail_number', normalized)
     .is('deleted_at', null)
     .maybeSingle();
+  // Throw on supabase read error — swallowing turned "transient DB
+  // blip" into "no aircraft N123 in the user's hangar," and Howard
+  // confidently told the pilot their aircraft didn't exist. Same
+  // pattern as the SWR-fetcher-error-swallow feedback memory.
+  if (lookupErr) throw lookupErr;
   // Same error message for "doesn't exist" and "exists but not yours"
   // — leaking the distinction lets one user enumerate which tails
   // belong to other users' fleets.
@@ -301,11 +306,17 @@ const handlers: Record<string, ToolHandler> = {
   },
 
   get_reservations: async (params, sb, aircraftId) => {
+    // aft_reservations has no deleted_at column — soft-delete is via
+    // status='cancelled'. The prior .is('deleted_at', null) filter sent
+    // every reservation tool call into a PostgREST 400, returning
+    // { error: 'column ... does not exist' } and blocking every
+    // reservation-aware Howard reply.
+    const limit = clampLimit(params.limit, 25, 100);
     let query = sb.from('aft_reservations')
       .select('*')
       .eq('aircraft_id', aircraftId)
-      .is('deleted_at', null)
-      .order('start_time', { ascending: true });
+      .order('start_time', { ascending: true })
+      .limit(limit);
     if (params.status) query = query.eq('status', params.status);
     else query = query.eq('status', 'confirmed');
     if (params.date_from) query = query.gte('start_time', params.date_from);
@@ -976,6 +987,13 @@ const GLOBAL_TOOLS = new Set([
   'get_aviation_hazards',
   'get_notams',
   'get_system_settings',
+  // propose_onboarding_setup creates a NEW aircraft — the tail lives
+  // inside the action payload, not as a top-level arg, so the standard
+  // resolveAircraftFromTail path can't apply. Pre-fix, every onboarding
+  // attempt died with "Aircraft tail number is required" before reaching
+  // the handler. Coverage gap: the proposedActions unit tests bypass
+  // executeTool entirely.
+  'propose_onboarding_setup',
 ]);
 
 /** Upper bound on the JSON size of a single tool result sent back to
