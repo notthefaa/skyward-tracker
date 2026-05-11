@@ -290,7 +290,17 @@ const handlers: Record<string, ToolHandler> = {
     if (params.status && params.status !== 'all') query = query.eq('status', params.status);
     const { data, error } = await query;
     if (error) return { error: error.message };
-    return { count: (data || []).length, squawks: data };
+    // Strip pictures arrays — they hold /storage/v1/object/public/ URLs
+    // for a now-private bucket. Claude would render them as markdown
+    // links and the user click would 400 + ORB. Surface a count instead
+    // so Howard can still say "3 photos attached" without leaking dead
+    // links into the chat.
+    const sanitized = (data || []).map((sq: any) => {
+      const picCount = Array.isArray(sq.pictures) ? sq.pictures.length : 0;
+      const { pictures: _drop, ...rest } = sq;
+      return picCount > 0 ? { ...rest, picture_count: picCount } : rest;
+    });
+    return { count: sanitized.length, squawks: sanitized };
   },
 
   get_notes: async (params, sb, aircraftId) => {
@@ -302,7 +312,13 @@ const handlers: Record<string, ToolHandler> = {
       .order('created_at', { ascending: false })
       .limit(limit);
     if (error) return { error: error.message };
-    return { count: (data || []).length, notes: data };
+    // Same private-bucket strip as get_squawks above.
+    const sanitized = (data || []).map((n: any) => {
+      const picCount = Array.isArray(n.pictures) ? n.pictures.length : 0;
+      const { pictures: _drop, ...rest } = n;
+      return picCount > 0 ? { ...rest, picture_count: picCount } : rest;
+    });
+    return { count: sanitized.length, notes: sanitized };
   },
 
   get_reservations: async (params, sb, aircraftId) => {
@@ -432,10 +448,15 @@ const handlers: Record<string, ToolHandler> = {
       if (error) return { error: error.message };
       if (!chunks || chunks.length === 0) return { message: 'No relevant document sections found. The aircraft may not have any documents uploaded yet.' };
 
-      // Enrich with document metadata
+      // Enrich with document metadata. file_url is intentionally
+      // dropped: the documents bucket is private, the stored URL is a
+      // public-format lookup key that 400s + ORBs on direct fetch. If
+      // Claude rendered it as a markdown link the user click would
+      // fail. document_id lets the user navigate to the doc viewer
+      // in-app, which handles the signed-URL swap properly.
       const docIds = Array.from(new Set(chunks.map((c: any) => c.document_id)));
       const { data: docs } = await sb.from('aft_documents')
-        .select('id, filename, doc_type, file_url')
+        .select('id, filename, doc_type')
         .in('id', docIds);
       const docMap = new Map((docs || []).map((d: any) => [d.id, d]));
 
@@ -443,7 +464,7 @@ const handlers: Record<string, ToolHandler> = {
         results: chunks.map((c: any) => ({
           document: docMap.get(c.document_id)?.filename || 'Unknown',
           doc_type: docMap.get(c.document_id)?.doc_type || 'Unknown',
-          file_url: docMap.get(c.document_id)?.file_url || null,
+          document_id: c.document_id,
           page_number: c.page_number || null,
           chunk_index: c.chunk_index,
           content: c.content,
