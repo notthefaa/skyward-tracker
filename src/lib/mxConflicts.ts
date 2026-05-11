@@ -16,6 +16,7 @@ import { env } from '@/lib/env';
 import { escapeHtml } from '@/lib/sanitize';
 import { safeTimeZone, formatInTimeZone } from '@/lib/dateFormat';
 import { emailShell, heading, paragraph, callout, bulletList, button } from '@/lib/email/layout';
+import { loadMutedRecipients, isRecipientMuted } from '@/lib/notificationMutes';
 
 const resend = new Resend(env.RESEND_API_KEY);
 const FROM_EMAIL = 'notifications@skywardsociety.com';
@@ -121,6 +122,18 @@ export async function cancelConflictingReservations({
     ? mxStartLabel
     : `${mxStartLabel} — ${mxEndLabel}`;
 
+  // Honor reservation_cancelled mute preference. Pilots who opted out
+  // of cancellation alerts shouldn't get fan-out from the MX block
+  // path either — the explicit DELETE /reservations path gates the
+  // same way. The reservation itself is already cancelled in the DB,
+  // so the pilot sees it next time they open the app.
+  const affectedEmails = userIds
+    .map(uid => pilotMap[uid].email)
+    .filter((e): e is string => !!e);
+  const muted = affectedEmails.length > 0
+    ? await loadMutedRecipients(supabaseAdmin, affectedEmails, 'reservation_cancelled')
+    : new Set<string>();
+
   // Send a cancellation email to each affected pilot. Wrap each send so
   // one pilot's email failure (bounce, Resend outage, malformed address)
   // doesn't abort the loop — the reservations are already cancelled and
@@ -129,6 +142,7 @@ export async function cancelConflictingReservations({
   for (const userId of userIds) {
     const pilot = pilotMap[userId];
     if (!pilot.email) continue;
+    if (isRecipientMuted(pilot.email, muted)) continue;
 
     const reservationLines = pilot.reservations.map((r: any) => {
       // Prefer the booker's stored zone so the cancellation email reflects

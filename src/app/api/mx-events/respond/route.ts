@@ -77,9 +77,17 @@ export async function POST(req: Request) {
     // owner's quota. A leaked mechanic token can't be used to flood
     // the owner with notification emails. The data write itself
     // (status / message row) still happens; only the email is gated.
+    //
+    // Legacy events with no created_by predate the column. The
+    // rate-limit table FKs auth.users so we can't bucket per-event;
+    // fail closed instead. The action still records (mechanic update
+    // visible in-app) but no email goes out. In practice these events
+    // should all be past PORTAL_EXPIRY_DAYS already and won't reach
+    // here, but pre-fix a leaked legacy token had unlimited email
+    // spam capacity.
     const rl = event.created_by
       ? await checkEmailRateLimit(supabaseAdmin, event.created_by)
-      : { allowed: true, retryAfterMs: 0 };
+      : { allowed: false, retryAfterMs: 0 };
 
     // Idempotency — same X-Idempotency-Key replays the cached
     // {success:true} without re-running the action branch (no
@@ -472,11 +480,17 @@ export async function POST(req: Request) {
       } as any);
       if (rdyMsgErr) throw rdyMsgErr;
 
+      // Pull the tail for the subject — owners with multiple aircraft
+      // can't tell which one is ready otherwise.
+      const { data: rdyAircraft } = await supabaseAdmin
+        .from('aft_aircraft').select('tail_number').eq('id', event.aircraft_id).maybeSingle();
+      const rdyTail = rdyAircraft?.tail_number ? escapeHtml(rdyAircraft.tail_number) : '';
+
       if (event.primary_contact_email && !ownerMuted) {
         if (rl.allowed) await resend.emails.send({
           from: `Skyward Operations <${FROM_EMAIL}>`,
           to: [event.primary_contact_email],
-          subject: `Aircraft Ready for Pickup`,
+          subject: rdyTail ? `Ready for Pickup: ${rdyTail}` : `Aircraft Ready for Pickup`,
           html: emailShell({
             title: `Aircraft Ready for Pickup`,
             preheader: `All work complete. Enter logbook data to close out the service event.`,

@@ -6,6 +6,7 @@ import { idempotency } from '@/lib/idempotency';
 import { env } from '@/lib/env';
 import { escapeHtml } from '@/lib/sanitize';
 import { emailShell, heading, paragraph, callout, keyValueBlock } from '@/lib/email/layout';
+import { loadMutedRecipients, isRecipientMuted } from '@/lib/notificationMutes';
 
 const resend = new Resend(env.RESEND_API_KEY);
 const FROM_EMAIL = 'notifications@skywardsociety.com';
@@ -42,7 +43,17 @@ export async function POST(req: Request) {
     }
 
     if (aircraft.mx_contact_email) {
-      const mxCc = aircraft.main_contact_email ? [aircraft.main_contact_email] : [];
+      // Honor the primary contact's mx_reminder mute on the CC line.
+      // The mechanic-bound email (to:) is the operational notification
+      // and goes regardless; the CC is the same channel the cron's
+      // reminder digest uses, so a contact who opted out of those
+      // shouldn't be re-roped in via the manual Send button.
+      const muted = aircraft.main_contact_email
+        ? await loadMutedRecipients(supabaseAdmin, [aircraft.main_contact_email], 'mx_reminder')
+        : new Set<string>();
+      const mxCc = aircraft.main_contact_email && !isRecipientMuted(aircraft.main_contact_email, muted)
+        ? [aircraft.main_contact_email]
+        : [];
 
       // Sanitize user-provided values
       const safeTail = escapeHtml(aircraft.tail_number);

@@ -16,6 +16,15 @@ export async function POST(req: Request) {
   try {
     const { user, supabaseAdmin } = await requireAuth(req);
 
+    // Idempotency before rate-limit so a network-blip retry hits the
+    // cached 200 instead of burning rate-limit budget on a request the
+    // server already serviced. Same ordering as note-notify +
+    // squawk-notify; pre-fix, a legit "Send" retry could 429 even
+    // though the original send had succeeded.
+    const idem = idempotency(supabaseAdmin, user.id, req, 'mx-events/send-workpackage');
+    const cached = await idem.check();
+    if (cached) return cached;
+
     const rl = await checkEmailRateLimit(supabaseAdmin, user.id);
     if (!rl.allowed) {
       return NextResponse.json(
@@ -58,14 +67,6 @@ export async function POST(req: Request) {
     }
 
     await setAppUser(supabaseAdmin, user.id);
-
-    // Idempotency — a slow-network double-tap on "Send Work Package"
-    // would otherwise email the mechanic twice + flip the draft to
-    // scheduling twice. Cached replay returns the same {success: true}
-    // without re-sending the email or re-inserting line items.
-    const idem = idempotency(supabaseAdmin, user.id, req, 'mx-events/send-workpackage');
-    const cached = await idem.check();
-    if (cached) return cached;
 
     // Fetch aircraft for email content
     const { data: aircraft } = await supabaseAdmin
