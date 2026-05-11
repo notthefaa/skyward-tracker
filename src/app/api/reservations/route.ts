@@ -97,22 +97,31 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: 'Only admins can book reservations for other pilots.' }, { status: 403 });
       }
 
-      // Validate target has access to this aircraft
-      const { data: targetAccess } = await supabaseAdmin
+      // Validate target has access to this aircraft. maybeSingle +
+      // explicit error throw so a DB blip doesn't silently 400 the
+      // book-for-other flow as "pilot not assigned." .single() also
+      // throws PGRST116 on no-row which the silent destructure was
+      // masking as `targetAccess = undefined`.
+      const { data: targetAccess, error: targetAccessErr } = await supabaseAdmin
         .from('aft_user_aircraft_access')
         .select('user_id')
         .eq('user_id', bookForUserId)
         .eq('aircraft_id', aircraftId)
-        .single();
+        .maybeSingle();
+      if (targetAccessErr) throw targetAccessErr;
       if (!targetAccess) {
         return NextResponse.json({ error: 'Selected pilot is not assigned to this aircraft.' }, { status: 400 });
       }
 
-      const { data: targetRole } = await supabaseAdmin
+      const { data: targetRole, error: targetRoleErr } = await supabaseAdmin
         .from('aft_user_roles')
         .select('initials, email, full_name')
         .eq('user_id', bookForUserId)
-        .single();
+        .maybeSingle();
+      // Throw on DB error so a transient blip doesn't silently 400
+      // the admin's book-for-other flow as "Selected pilot not found"
+      // (the pilot exists; the lookup just failed).
+      if (targetRoleErr) throw targetRoleErr;
       if (!targetRole) {
         return NextResponse.json({ error: 'Selected pilot not found.' }, { status: 400 });
       }
