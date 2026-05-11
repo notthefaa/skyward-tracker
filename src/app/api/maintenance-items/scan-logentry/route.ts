@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 import { requireAuth, requireAircraftAdmin, handleApiError } from '@/lib/auth';
+import { checkEmailRateLimit } from '@/lib/submitRateLimit';
 import { fileBytesMatchType } from '@/lib/fileMagic';
 
 const client = new Anthropic();
@@ -30,6 +31,19 @@ const client = new Anthropic();
 export async function POST(req: Request) {
   try {
     const { user, supabaseAdmin } = await requireAuth(req);
+
+    // Rate limit — Anthropic vision is expensive; a fast-tap on the
+    // scan button could rack up hundreds of calls / dollars before any
+    // UI feedback. Reuses the email-budget bucket (per-user expensive
+    // operations live there).
+    const rl = await checkEmailRateLimit(supabaseAdmin, user.id);
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { error: `Too many scans. Retry in ${Math.ceil(rl.retryAfterMs / 1000)}s.` },
+        { status: 429, headers: { 'Retry-After': String(Math.ceil(rl.retryAfterMs / 1000)) } },
+      );
+    }
+
     const formData = await req.formData();
     const image = formData.get('image') as File | null;
     const aircraftId = formData.get('aircraftId') as string | null;
@@ -56,6 +70,8 @@ export async function POST(req: Request) {
     const base64 = buffer.toString('base64');
     const mediaType = image.type as 'image/jpeg' | 'image/png' | 'image/webp';
 
+    // 30s deadline so a stalled Anthropic vision call doesn't hold
+    // the function open until Vercel's platform timeout.
     const response = await client.messages.create({
       model: 'claude-sonnet-4-6',
       max_tokens: 1024,
@@ -112,7 +128,7 @@ Rules:
           ],
         },
       ],
-    });
+    }, { signal: AbortSignal.timeout(30_000) });
 
     const textBlock = response.content.find((b: any) => b.type === 'text');
     const rawText = textBlock?.type === 'text' ? (textBlock as any).text : '';

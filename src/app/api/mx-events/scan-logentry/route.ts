@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 import { requireAuth, requireAircraftAdmin, handleApiError } from '@/lib/auth';
+import { checkEmailRateLimit } from '@/lib/submitRateLimit';
 import { fileBytesMatchType } from '@/lib/fileMagic';
 
 const client = new Anthropic();
@@ -22,6 +23,19 @@ const client = new Anthropic();
 export async function POST(req: Request) {
   try {
     const { user, supabaseAdmin } = await requireAuth(req);
+
+    // Rate limit — Anthropic vision is expensive; a fast-tap on the
+    // camera button (or a misbehaving script) could rack up hundreds
+    // of calls / dollars before any UI feedback. Reuses the email
+    // budget bucket since both are "per-user expensive operations."
+    const rl = await checkEmailRateLimit(supabaseAdmin, user.id);
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { error: `Too many scans. Retry in ${Math.ceil(rl.retryAfterMs / 1000)}s.` },
+        { status: 429, headers: { 'Retry-After': String(Math.ceil(rl.retryAfterMs / 1000)) } },
+      );
+    }
+
     const formData = await req.formData();
     const image = formData.get('image') as File | null;
     const aircraftId = formData.get('aircraftId') as string | null;
@@ -47,6 +61,9 @@ export async function POST(req: Request) {
     const base64 = buffer.toString('base64');
     const mediaType = image.type as 'image/jpeg' | 'image/png' | 'image/webp';
 
+    // 30s deadline on the vision call — without it a stalled Anthropic
+    // request holds the function open until Vercel's platform timeout
+    // (~5 min), starving the user-visible spinner.
     const response = await client.messages.create({
       model: 'claude-sonnet-4-6',
       max_tokens: 1024,
@@ -80,7 +97,7 @@ Be precise with numbers — don't round. If handwriting is ambiguous, pick the m
           ],
         },
       ],
-    });
+    }, { signal: AbortSignal.timeout(30_000) });
 
     const textBlock = response.content.find((b: any) => b.type === 'text');
     const rawText = textBlock?.type === 'text' ? (textBlock as any).text : '';
