@@ -338,16 +338,22 @@ describe('executeAction — note + reservation', () => {
 
   it('inserts a reservation with required fields and confirmed status', async () => {
     const { sb, calls } = makeSb({
+      aft_maintenance_events: () => ({ data: [], error: null }),
       aft_reservations: (op) => {
         if (op === 'insert') return { data: { id: 'res-1' }, error: null };
         return { data: null, error: null };
       },
     });
+    // Compute future ISO strings so the past-time guard in the
+    // reservation executor (added 2026-05-11) doesn't reject this
+    // test as the hardcoded calendar date ages past today.
+    const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    const tomorrowEnd = new Date(tomorrow.getTime() + 3 * 60 * 60 * 1000);
     const action = baseAction({
       action_type: 'reservation',
       payload: {
-        start_time: '2026-05-01T14:00:00Z',
-        end_time: '2026-05-01T17:00:00Z',
+        start_time: tomorrow.toISOString(),
+        end_time: tomorrowEnd.toISOString(),
         pilot_initials: 'AG',
         pod: 'KCMA',
         poa: 'KCMA',
