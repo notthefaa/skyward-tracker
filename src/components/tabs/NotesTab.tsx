@@ -178,6 +178,8 @@ export default function NotesTab({ aircraft, session, role, aircraftRole, userIn
           body: JSON.stringify({ aircraftId: aircraft.id, noteData })
         });
         if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || "Couldn't create the note"); }
+        const createdBody = await res.json().catch(() => ({} as any));
+        const noteId: string | undefined = createdBody?.noteId;
 
         try {
           // Fresh idempotency key per submit so a network-blip retry
@@ -187,7 +189,7 @@ export default function NotesTab({ aircraft, session, role, aircraftRole, userIn
           await authFetch('/api/emails/note-notify', {
             method: 'POST',
             headers: idempotencyHeader(notifyKey),
-            body: JSON.stringify({ note: { ...noteData, author_initials: userInitials }, aircraft })
+            body: JSON.stringify({ noteId, note: { ...noteData, author_initials: userInitials }, aircraft })
           });
         } catch (err) {
           // Notification failure is non-blocking — the note saved. Log

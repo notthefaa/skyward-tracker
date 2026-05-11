@@ -6,6 +6,7 @@ import { idempotency } from '@/lib/idempotency';
 import { env } from '@/lib/env';
 import { escapeHtml } from '@/lib/sanitize';
 import { emailShell, heading, paragraph, callout, button, keyValueBlock } from '@/lib/email/layout';
+import { getAppUrl } from '@/lib/email/appUrl';
 
 const resend = new Resend(env.RESEND_API_KEY);
 const FROM_EMAIL = 'notifications@skywardsociety.com';
@@ -45,7 +46,30 @@ export async function POST(req: Request) {
       await requireAircraftAccess(supabaseAdmin, user.id, aircraft.id);
     }
 
-    const mainAppUrl = process.env.NEXT_PUBLIC_MAIN_APP_URL || new URL(req.url).origin;
+    // Re-fetch the squawk row to close a delete-then-notify race. If
+    // the reporter deleted the squawk between create and the notify
+    // fan-out, the row is gone and both the mechanic and every assigned
+    // pilot would get an email about a deleted squawk. Skip silently in
+    // that case.
+    if (squawk.id) {
+      const { data: row, error: rowErr } = await supabaseAdmin
+        .from('aft_squawks')
+        .select('id, aircraft_id, deleted_at')
+        .eq('id', squawk.id)
+        .is('deleted_at', null)
+        .maybeSingle();
+      if (rowErr) throw rowErr;
+      if (!row) {
+        const body = { success: true, note: 'Squawk no longer exists' };
+        await idem.save(200, body);
+        return NextResponse.json(body);
+      }
+      if (row.aircraft_id !== aircraft.id) {
+        return NextResponse.json({ error: 'Aircraft mismatch.' }, { status: 400 });
+      }
+    }
+
+    const mainAppUrl = getAppUrl(req);
 
     // Sanitize all user-provided values for email HTML
     const safeTail = escapeHtml(aircraft.tail_number);
@@ -62,6 +86,7 @@ export async function POST(req: Request) {
     //    mx_contact_email doesn't bubble up and prevent the assigned-
     //    pilot alert below from going out.
     let mxSendOk = true;
+    let pilotsSendOk = true;
     if (notifyMx && aircraft.mx_contact_email) {
       const mxCc = aircraft.main_contact_email ? [aircraft.main_contact_email] : [];
       const squawkUrl = `${mainAppUrl}/squawk/${squawk.access_token}`;
@@ -154,29 +179,40 @@ export async function POST(req: Request) {
           const dedupedRecipients = Array.from(new Set(recipients));
 
           if (dedupedRecipients.length > 0) {
-            await resend.emails.send({
-              from: `Skyward Alerts <${FROM_EMAIL}>`,
-              to: dedupedRecipients,
-              subject: `New Squawk: ${safeTail}`,
-              html: emailShell({
-                title: `New Squawk: ${safeTail}`,
-                preheader: `${safeInitials} reported a squawk on ${safeTail}${squawk.affects_airworthiness ? ' — aircraft is grounded' : ''}.`,
-                body: `
-                  ${heading('New Squawk', squawk.affects_airworthiness ? 'danger' : 'warning')}
-                  ${paragraph(`A new squawk was reported on <strong>${safeTail}</strong> by <strong>${safeInitials}</strong>.`)}
-                  ${callout(
-                    keyValueBlock([
-                      { label: 'Location', value: safeLocation },
-                      { label: 'Grounded', value: squawk.affects_airworthiness ? `<span style="color:#CE3732;font-weight:700;">Yes</span>` : 'No' },
-                      { label: 'Description', value: safeDescription },
-                    ]),
-                    { variant: squawk.affects_airworthiness ? 'danger' : 'warning', label: 'Squawk Details' }
-                  )}
-                  ${button(mainAppUrl, 'Open Skyward')}
-                `,
-                preferencesUrl: `${mainAppUrl}#settings`,
-              }),
-            });
+            // Wrap in try/catch so a Resend hiccup on the assigned-pilot
+            // fan-out doesn't 500 the route and bypass the idempotency
+            // cache write — without the cache write, the client's
+            // network-blip retry would re-email the mechanic (whose
+            // send already succeeded). The pilotsSendFailed flag lets
+            // the caller decide whether to surface a "retry alert" UX.
+            try {
+              await resend.emails.send({
+                from: `Skyward Alerts <${FROM_EMAIL}>`,
+                to: dedupedRecipients,
+                subject: `New Squawk: ${safeTail}`,
+                html: emailShell({
+                  title: `New Squawk: ${safeTail}`,
+                  preheader: `${safeInitials} reported a squawk on ${safeTail}${squawk.affects_airworthiness ? ' — aircraft is grounded' : ''}.`,
+                  body: `
+                    ${heading('New Squawk', squawk.affects_airworthiness ? 'danger' : 'warning')}
+                    ${paragraph(`A new squawk was reported on <strong>${safeTail}</strong> by <strong>${safeInitials}</strong>.`)}
+                    ${callout(
+                      keyValueBlock([
+                        { label: 'Location', value: safeLocation },
+                        { label: 'Grounded', value: squawk.affects_airworthiness ? `<span style="color:#CE3732;font-weight:700;">Yes</span>` : 'No' },
+                        { label: 'Description', value: safeDescription },
+                      ]),
+                      { variant: squawk.affects_airworthiness ? 'danger' : 'warning', label: 'Squawk Details' }
+                    )}
+                    ${button(mainAppUrl, 'Open Skyward')}
+                  `,
+                  preferencesUrl: `${mainAppUrl}#settings`,
+                }),
+              });
+            } catch (pilotsErr) {
+              console.error('[squawk-notify] pilots fan-out failed', pilotsErr);
+              pilotsSendOk = false;
+            }
           }
         }
       }
@@ -187,7 +223,11 @@ export async function POST(req: Request) {
     // keeps the assigned-pilot alert a best-effort no-toast path while
     // still letting the reporter see the "MX not notified — resend?"
     // badge when they explicitly asked to email the mechanic.
-    const responseBody = { success: true, mxSendFailed: notifyMx && !mxSendOk };
+    const responseBody = {
+      success: true,
+      mxSendFailed: notifyMx && !mxSendOk,
+      pilotsSendFailed: !pilotsSendOk,
+    };
     await idem.save(200, responseBody);
     return NextResponse.json(responseBody);
   } catch (error) {

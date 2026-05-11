@@ -79,10 +79,14 @@ export async function POST(req: Request) {
     // authoritatively so client-supplied values for those can't leak
     // through into the insert.
     const safeNote = stripProtectedFields(noteData);
-    const { error } = await supabaseAdmin.from('aft_notes').insert({ ...safeNote, aircraft_id: aircraftId, author_id: user.id });
+    const { data: inserted, error } = await supabaseAdmin
+      .from('aft_notes')
+      .insert({ ...safeNote, aircraft_id: aircraftId, author_id: user.id })
+      .select('id')
+      .single();
     if (error) throw error;
 
-    const body = { success: true };
+    const body = { success: true, noteId: inserted?.id };
     await idem.save(200, body);
     return NextResponse.json(body);
   } catch (error) { return handleApiError(error); }

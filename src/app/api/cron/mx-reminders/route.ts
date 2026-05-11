@@ -118,7 +118,8 @@ export async function GET(req: Request) {
           .from('aft_maintenance_events')
           .select('id')
           .in('id', eventIds)
-          .in('status', ['draft', 'scheduling', 'confirmed', 'in_progress']);
+          .in('status', ['draft', 'scheduling', 'confirmed', 'in_progress'])
+          .is('deleted_at', null);
         if (activeErr) throw activeErr;
 
         if (activeEvents) {

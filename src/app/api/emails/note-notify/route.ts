@@ -6,6 +6,7 @@ import { idempotency } from '@/lib/idempotency';
 import { env } from '@/lib/env';
 import { escapeHtml } from '@/lib/sanitize';
 import { emailShell, heading, paragraph, callout, button } from '@/lib/email/layout';
+import { getAppUrl } from '@/lib/email/appUrl';
 
 const resend = new Resend(env.RESEND_API_KEY);
 const FROM_EMAIL = 'notifications@skywardsociety.com';
@@ -31,7 +32,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const { note, aircraft } = await req.json();
+    const { noteId, note, aircraft } = await req.json();
 
     if (!note || !aircraft) {
       return NextResponse.json({ error: 'Note and aircraft data are required.' }, { status: 400 });
@@ -39,6 +40,31 @@ export async function POST(req: Request) {
 
     if (aircraft.id) {
       await requireAircraftAccess(supabaseAdmin, user.id, aircraft.id);
+    }
+
+    // Re-fetch the note row to close a delete-then-notify race. If the
+    // author created a note then deleted it between the POST /api/notes
+    // and this fan-out, the row is gone and every assigned pilot would
+    // get an email about a deleted note. Skip silently in that case.
+    // Older clients that don't send noteId fall through to the legacy
+    // body-trusted path; new clients pass the id returned from the
+    // notes POST.
+    if (noteId) {
+      const { data: row, error: rowErr } = await supabaseAdmin
+        .from('aft_notes')
+        .select('id, aircraft_id, deleted_at')
+        .eq('id', noteId)
+        .is('deleted_at', null)
+        .maybeSingle();
+      if (rowErr) throw rowErr;
+      if (!row) {
+        const body = { success: true, note: 'Note no longer exists' };
+        await idem.save(200, body);
+        return NextResponse.json(body);
+      }
+      if (row.aircraft_id !== aircraft.id) {
+        return NextResponse.json({ error: 'Aircraft mismatch.' }, { status: 400 });
+      }
     }
 
     // Get all assigned pilots except the author. Throw on read errors
@@ -52,7 +78,9 @@ export async function POST(req: Request) {
     if (accessErr) throw accessErr;
 
     if (!access || access.length === 0) {
-      return NextResponse.json({ success: true, note: 'No other users to notify' });
+      const body = { success: true, note: 'No other users to notify' };
+      await idem.save(200, body);
+      return NextResponse.json(body);
     }
 
     const otherUserIds = access
@@ -60,7 +88,9 @@ export async function POST(req: Request) {
       .filter(uid => uid !== user.id);
 
     if (otherUserIds.length === 0) {
-      return NextResponse.json({ success: true, note: 'No other users to notify' });
+      const body = { success: true, note: 'No other users to notify' };
+      await idem.save(200, body);
+      return NextResponse.json(body);
     }
 
     // Check notification preferences — filter out users who disabled note_posted
@@ -76,7 +106,9 @@ export async function POST(req: Request) {
     const eligibleUserIds = otherUserIds.filter(uid => !disabledUserIds.has(uid));
 
     if (eligibleUserIds.length === 0) {
-      return NextResponse.json({ success: true, note: 'All recipients have disabled note notifications' });
+      const body = { success: true, note: 'All recipients have disabled note notifications' };
+      await idem.save(200, body);
+      return NextResponse.json(body);
     }
 
     const { data: assignedUsers, error: assignedErr } = await supabaseAdmin
@@ -90,8 +122,9 @@ export async function POST(req: Request) {
       .filter(Boolean) as string[] || [];
     const dedupedRecipients = Array.from(new Set(recipients));
 
-    const mainAppUrl = process.env.NEXT_PUBLIC_MAIN_APP_URL || new URL(req.url).origin;
+    const mainAppUrl = getAppUrl(req);
 
+    let emailSendFailed = false;
     if (dedupedRecipients.length > 0) {
       // Sanitize user-provided content
       const safeAuthor = escapeHtml(note.author_initials || 'A pilot');
@@ -133,10 +166,11 @@ export async function POST(req: Request) {
         });
       } catch (sendErr) {
         console.error('[note-notify] resend send failed', sendErr);
+        emailSendFailed = true;
       }
     }
 
-    const responseBody = { success: true };
+    const responseBody = { success: true, emailSendFailed };
     await idem.save(200, responseBody);
     return NextResponse.json(responseBody);
   } catch (error) {
