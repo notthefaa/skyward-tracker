@@ -212,11 +212,10 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
     if (wantsToPropose && !proposedDate) return showWarning("Enter a date, or switch to 'Request Availability'.");
     setIsSubmitting(true);
     try {
-      // Remove any line items the user unchecked from the draft
-      if (removedLineItemIds.length > 0) {
-        await supabase.from('aft_event_line_items').delete().in('id', removedLineItemIds);
-      }
-
+      // Removed line items are validated + hard-deleted server-side
+      // inside /api/mx-events/send-workpackage. Pre-fix this ran as
+      // a client-side DELETE without aircraft / event scope, so a
+      // fabricated id list could delete another aircraft's draft.
       if (!draftSendIdemKeyRef.current) draftSendIdemKeyRef.current = newIdempotencyKey();
       const res = await authFetch('/api/mx-events/send-workpackage', {
         method: 'POST',
@@ -224,6 +223,7 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
         headers: idempotencyHeader(draftSendIdemKeyRef.current),
         body: JSON.stringify({
           eventId: selectedEvent.id,
+          removedLineItemIds,
           additionalMxItemIds: selectedMxIds,
           additionalSquawkIds: selectedSquawkIds,
           addonServices: selectedAddons,

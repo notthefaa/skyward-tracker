@@ -34,7 +34,7 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json();
-    const { eventId, additionalMxItemIds, additionalSquawkIds, addonServices, proposedDate } = body;
+    const { eventId, additionalMxItemIds, additionalSquawkIds, addonServices, proposedDate, removedLineItemIds } = body;
     const isResend = body.resend === true;
 
     // Tracks the line items inserted in this request so we can undo
@@ -88,6 +88,29 @@ export async function POST(req: Request) {
         { error: 'No mechanic email on file for this aircraft. Add one in Aircraft Settings before sending a work package.' },
         { status: 400 },
       );
+    }
+
+    // Remove line items the user unchecked from the draft review.
+    // Pre-fix this ran as a client-side hard DELETE without aircraft
+    // scope or event scope, so a fabricated id list could delete
+    // another aircraft's draft line items. Validate each id belongs
+    // to THIS draft event before delete, then hard-delete server-side.
+    if (!isResend && Array.isArray(removedLineItemIds) && removedLineItemIds.length > 0) {
+      const { data: ownedLines, error: ownedErr } = await supabaseAdmin
+        .from('aft_event_line_items')
+        .select('id')
+        .in('id', removedLineItemIds)
+        .eq('event_id', eventId);
+      if (ownedErr) throw ownedErr;
+      const ownedIds = (ownedLines || []).map((l: any) => l.id);
+      if (ownedIds.length > 0) {
+        const { error: delErr } = await supabaseAdmin
+          .from('aft_event_line_items')
+          .delete()
+          .in('id', ownedIds)
+          .eq('event_id', eventId);
+        if (delErr) throw delErr;
+      }
     }
 
     // Add additional items (only for initial send, not resend).

@@ -43,6 +43,7 @@ export default function ServiceEventDetail({
   const counterKeyRef = useRef<string | null>(null);
   const commentKeyRef = useRef<string | null>(null);
   const cancelKeyRef = useRef<string | null>(null);
+  const closeKeyRef = useRef<string | null>(null);
 
   const hasCompletedItems = eventLineItems.some(li => li.line_status === 'complete');
   const hasPendingItems = eventLineItems.some(li => li.line_status !== 'complete' && li.line_status !== 'deferred');
@@ -121,14 +122,23 @@ export default function ServiceEventDetail({
 
   const handleCloseEvent = async () => {
     setIsSubmitting(true);
+    if (!closeKeyRef.current) closeKeyRef.current = newIdempotencyKey();
     try {
-      await supabase.from('aft_maintenance_events').update({ status: 'complete', completed_at: new Date().toISOString() }).eq('id', selectedEvent.id);
-      await supabase.from('aft_event_messages').insert({ event_id: selectedEvent.id, sender: 'system', message_type: 'status_update', message: 'Service event closed. Completed items have been reset. Deferred items remain open.' } as any);
+      const res = await authFetch('/api/mx-events/close', {
+        method: 'POST',
+        headers: idempotencyHeader(closeKeyRef.current),
+        body: JSON.stringify({ eventId: selectedEvent.id }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || "Couldn't close the event.");
+      }
+      closeKeyRef.current = null;
       onRefresh();
       showSuccess("Service event closed");
       onNavigate('list');
-    } catch (err) {
-      showError("Couldn't close the event.");
+    } catch (err: any) {
+      showError(err?.message || "Couldn't close the event.");
     } finally {
       setIsSubmitting(false);
     }
