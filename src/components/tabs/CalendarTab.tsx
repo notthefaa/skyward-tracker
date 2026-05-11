@@ -141,6 +141,10 @@ export default function CalendarTab({
   // duplicate recurring extras. PUT is unprotected on purpose; it
   // targets a specific reservation_id and is safe to repeat.
   const submitIdemKeyRef = useRef<string | null>(null);
+  // Per-reservation-id sticky cancel keys. Map (not single ref) so two
+  // overlapping cancels for different ids each get their own key, but
+  // a retry of the same id reuses the existing cached 200.
+  const cancelIdemKeysRef = useRef<Map<string, string>>(new Map());
 
   const [bookingStartDate, setBookingStartDate] = useState("");
   const [bookingStartTime, setBookingStartTime] = useState("08:00");
@@ -343,7 +347,11 @@ export default function CalendarTab({
         // weekday than the one the user typed.
         const baseStartIso = baseStart.toISOString();
         const baseEndIso = baseEnd.toISOString();
-        const putRes = await authFetch('/api/reservations', { method: 'PUT', body: JSON.stringify({ reservationId: editingReservationId, startTime: baseStartIso, endTime: baseEndIso, title: bookingTitle || null, route: bookingRoute || null, timeZone }) });
+        // Reuse the submit-attempt idempotency key so a network-blip
+        // retry hits the cached 200 instead of re-fanning out the
+        // "Reservation Updated" email to every assigned pilot.
+        if (!submitIdemKeyRef.current) submitIdemKeyRef.current = newIdempotencyKey();
+        const putRes = await authFetch('/api/reservations', { method: 'PUT', headers: idempotencyHeader(submitIdemKeyRef.current), body: JSON.stringify({ reservationId: editingReservationId, startTime: baseStartIso, endTime: baseEndIso, title: bookingTitle || null, route: bookingRoute || null, timeZone }) });
         const putData = await putRes.json(); if (!putRes.ok) throw new Error(putData.error || 'Failed');
 
         // Extras = every generated occurrence except the one matching the base
@@ -391,7 +399,27 @@ export default function CalendarTab({
 
   const handleCancelReservation = async (id: string) => {
     setIsSubmitting(true);
-    try { const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone; const res = await authFetch('/api/reservations', { method: 'DELETE', body: JSON.stringify({ reservationId: id, timeZone }) }); if (!res.ok) { const d = await res.json(); throw new Error(d.error); } await mutateWithDeadline(mutate()); setCancellingId(null); showSuccess("Reservation cancelled"); } catch (err: any) { showError(err.message); } setIsSubmitting(false);
+    // Sticky idempotency key per reservation cancel attempt. A
+    // network-blip retry on the same id reuses the cached 200 instead
+    // of re-fanning the "Reservation Cancelled" email to every
+    // assigned pilot. Stored on the ref Map so cancelling A then B
+    // mid-flight uses two distinct keys.
+    if (!cancelIdemKeysRef.current.get(id)) {
+      cancelIdemKeysRef.current.set(id, newIdempotencyKey());
+    }
+    const cancelKey = cancelIdemKeysRef.current.get(id)!;
+    try {
+      const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const res = await authFetch('/api/reservations', { method: 'DELETE', headers: idempotencyHeader(cancelKey), body: JSON.stringify({ reservationId: id, timeZone }) });
+      if (!res.ok) { const d = await res.json(); throw new Error(d.error); }
+      cancelIdemKeysRef.current.delete(id);
+      await mutateWithDeadline(mutate());
+      setCancellingId(null);
+      showSuccess("Reservation cancelled");
+    } catch (err: any) {
+      showError(err.message);
+    }
+    setIsSubmitting(false);
   };
 
   const canAdmin = role === 'admin' || aircraftRole === 'admin';

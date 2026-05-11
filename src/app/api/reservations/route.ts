@@ -491,17 +491,27 @@ export async function PUT(req: Request) {
     // race-window aircraft-reassignment between the verification read
     // and this write can't land the update on a row the caller no
     // longer has admin/owner access to.
-    const { error: updateErr } = await supabaseAdmin
+    //
+    // status='confirmed' guard closes the TOCTOU: a concurrent DELETE
+    // landing between the cancelled-check above (line 420) and this
+    // update would otherwise silently flip the row back from cancelled
+    // to confirmed (this UPDATE writes new times but doesn't touch
+    // status). count:'exact' lets us 409 cleanly when that happens.
+    const { error: updateErr, count: updateCount } = await supabaseAdmin
       .from('aft_reservations')
-      .update(updateData)
+      .update(updateData, { count: 'exact' })
       .eq('id', reservationId)
-      .eq('aircraft_id', existing.aircraft_id);
+      .eq('aircraft_id', existing.aircraft_id)
+      .eq('status', 'confirmed');
 
     if (updateErr) {
       if (updateErr.code === '23P01') {
         return NextResponse.json({ error: 'This time slot conflicts with an existing reservation.' }, { status: 409 });
       }
       throw updateErr;
+    }
+    if (updateCount === 0) {
+      return NextResponse.json({ error: 'This reservation was cancelled by someone else. Refresh and book a new one.' }, { status: 409 });
     }
 
     // Only notify if the times actually changed
@@ -652,12 +662,28 @@ export async function DELETE(req: Request) {
     // sees the "cancelled" booking reappear. Belt-and-suspenders scoping
     // by the existing row's aircraft_id so a race-window reassignment
     // can't slip the cancel onto a row the caller no longer has access to.
-    const { error: cancelErr } = await supabaseAdmin
+    //
+    // status='confirmed' guard closes the TOCTOU: a concurrent PUT
+    // landing between the cancelled-check above and this update would
+    // otherwise let the cancel win on a row whose new times the PUT
+    // had just written, fanning out a stale "cancellation" email for
+    // a booking that was actually edited. count:'exact' lets us 200
+    // the no-op when the race already cancelled the row.
+    const { error: cancelErr, count: cancelCount } = await supabaseAdmin
       .from('aft_reservations')
-      .update({ status: 'cancelled' })
+      .update({ status: 'cancelled' }, { count: 'exact' })
       .eq('id', reservationId)
-      .eq('aircraft_id', reservation.aircraft_id);
+      .eq('aircraft_id', reservation.aircraft_id)
+      .eq('status', 'confirmed');
     if (cancelErr) throw cancelErr;
+    if (cancelCount === 0) {
+      // Lost the race — someone else cancelled or edited it. Treat
+      // as a successful cancel (the user's intent is satisfied) but
+      // skip the notification fan-out so we don't email a stale state.
+      const racedBody = { success: true, raced: true };
+      await idem.save(200, racedBody);
+      return NextResponse.json(racedBody);
+    }
 
     // Notify other assigned users — throw on each read so a blip
     // doesn't silently drop the cancellation notification fan-out.
