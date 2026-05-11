@@ -17,6 +17,43 @@ import { loadMutedRecipients, isRecipientMuted } from '@/lib/notificationMutes';
 // run resumes cleanly on the next tick.
 export const maxDuration = 300;
 
+/**
+ * Apply queued mx_schedule_sent / primary_heads_up_sent / reminder_*_sent
+ * flags. Called after every aircraft's phases complete (instead of once
+ * at the end of the whole run) so a Vercel kill mid-tick doesn't leave a
+ * batch of emails-sent-but-flags-unflipped and re-send the same items
+ * next tick. Mutates flagUpdates in place — drains the array on success.
+ */
+async function flushFlagUpdates(
+  supabaseAdmin: any,
+  flagUpdates: { id: string; flags: Record<string, boolean> }[],
+): Promise<void> {
+  if (flagUpdates.length === 0) return;
+  const updateGroups: Record<string, string[]> = {};
+  for (const { id, flags } of flagUpdates) {
+    const key = JSON.stringify(flags);
+    if (!updateGroups[key]) updateGroups[key] = [];
+    updateGroups[key].push(id);
+  }
+  for (const [flagsJson, ids] of Object.entries(updateGroups)) {
+    const flags = JSON.parse(flagsJson);
+    for (let i = 0; i < ids.length; i += 100) {
+      const batch = ids.slice(i, i + 100);
+      const { error: flagErr } = await supabaseAdmin
+        .from('aft_maintenance_items')
+        .update(flags)
+        .in('id', batch);
+      if (flagErr) {
+        console.error(
+          `[cron/mx-reminders] flag-flip failed (batch of ${batch.length}, flags=${flagsJson}):`,
+          flagErr.message,
+        );
+      }
+    }
+  }
+  flagUpdates.length = 0;
+}
+
 // How many days to let an event sit in ready_for_pickup before nudging
 // the primary contact. The cron will re-nudge at the same cadence until
 // the owner closes the event.
@@ -586,6 +623,12 @@ export async function GET(req: Request) {
           flagUpdates.push({ id: mx.id, flags: flagToUpdate });
         }
       }
+
+      // Flush this aircraft's flag updates before moving to the next
+      // tail. If Vercel kills the function in the middle of the fleet
+      // loop, the aircraft that already had emails sent ALSO have their
+      // flags persisted — no duplicate sends next tick.
+      await flushFlagUpdates(supabaseAdmin, flagUpdates);
       } catch (acErr: any) {
         console.error(`[cron/mx-reminders] aircraft ${aircraft?.tail_number ?? aircraft?.id ?? '?'} failed:`, acErr?.message || acErr);
         logError('[cron/mx-reminders] aircraft failed', acErr, { route: 'cron/mx-reminders', extra: { tail: aircraft?.tail_number ?? '?', aircraftId: aircraft?.id ?? '?' } });
@@ -712,38 +755,11 @@ export async function GET(req: Request) {
       }
     }
 
-    // =====================================================
-    // BATCH ALL FLAG UPDATES
-    // Group by identical flag combinations for fewer DB calls
-    // =====================================================
-    const updateGroups: Record<string, string[]> = {};
-    for (const { id, flags } of flagUpdates) {
-      const key = JSON.stringify(flags);
-      if (!updateGroups[key]) updateGroups[key] = [];
-      updateGroups[key].push(id);
-    }
-
-    for (const [flagsJson, ids] of Object.entries(updateGroups)) {
-      const flags = JSON.parse(flagsJson);
-      // Batch in groups of 100 to avoid query size limits. Log on
-      // failure but don't throw — the email already went out, so the
-      // worst case from an unflipped flag is one duplicate reminder
-      // on the next tick, not a missed alert. Killing the cron here
-      // would also forfeit any successfully-flipped earlier batches.
-      for (let i = 0; i < ids.length; i += 100) {
-        const batch = ids.slice(i, i + 100);
-        const { error: flagErr } = await supabaseAdmin
-          .from('aft_maintenance_items')
-          .update(flags)
-          .in('id', batch);
-        if (flagErr) {
-          console.error(
-            `[cron/mx-reminders] flag-flip failed (batch of ${batch.length}, flags=${flagsJson}):`,
-            flagErr.message,
-          );
-        }
-      }
-    }
+    // Safety net flush — per-aircraft flushFlagUpdates calls inside the
+    // fleet loop should have drained the queue already. If anything
+    // slipped through (e.g. the Phase 5 nudge phase queues flags
+    // outside the per-aircraft loop), this catches it.
+    await flushFlagUpdates(supabaseAdmin, flagUpdates);
 
     return NextResponse.json({ success: true });
   } catch (error) {

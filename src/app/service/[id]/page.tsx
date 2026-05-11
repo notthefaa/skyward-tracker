@@ -190,6 +190,15 @@ export default function ServicePortal() {
         signal: AbortSignal.timeout(15_000),
       });
       if (!res.ok) throw new Error('Request failed');
+      // email_skipped is set by the server when the owner's email
+      // rate-limit budget is exhausted. The action still recorded; the
+      // owner sees the update in-app. Mechanic deserves to know the
+      // email itself didn't go out so they can ring the owner if it
+      // matters (mark_ready / decline are the typical cases).
+      const respBody = await res.json().catch(() => ({} as any));
+      if (respBody?.email_skipped) {
+        showWarning("Saved. Owner email skipped — daily quota reached. They'll see the update in-app.");
+      }
       await fetchEventData();
       setShowDateForm(false);
       setCommentText("");
@@ -233,6 +242,13 @@ export default function ServicePortal() {
       if (!res.ok) {
         const errData = await res.json();
         throw new Error(errData.error || "Upload didn't finish");
+      }
+      // email_skipped: files saved, but the owner notification was
+      // rate-limited and didn't send. Surface it so the mechanic knows
+      // to follow up by another channel if it's urgent.
+      const respBody = await res.json().catch(() => ({} as any));
+      if (respBody?.email_skipped) {
+        showWarning("Files uploaded. Owner email skipped — daily quota reached. They'll see the files in-app.");
       }
       await fetchEventData();
       setUploadFiles([]);
