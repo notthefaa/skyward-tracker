@@ -432,10 +432,14 @@ const handlers: Record<string, ToolHandler> = {
     if (!params.query || typeof params.query !== 'string') return { error: 'Search query is required.' };
     try {
       const openai = new OpenAI();
+      // AbortSignal bound on the embeddings call. The OpenAI SDK
+      // doesn't honor the outer withToolTimeout — without this a
+      // hung embeddings request keeps running on the next tick and
+      // bills the token quota.
       const embResponse = await openai.embeddings.create({
         model: 'text-embedding-3-small',
         input: params.query,
-      });
+      }, { signal: AbortSignal.timeout(NETWORK_TIMEOUT_MS) });
       const queryEmbedding = embResponse.data[0].embedding;
 
       const { data: chunks, error } = await sb.rpc('match_document_chunks', {
@@ -786,6 +790,17 @@ const handlers: Record<string, ToolHandler> = {
     if (typeof params.category !== 'string' || !EQUIPMENT_CATEGORIES.has(params.category)) {
       return { error: `category must be one of: ${Array.from(EQUIPMENT_CATEGORIES).join(', ')}.` };
     }
+    // Trim + length-cap user-visible string fields. Claude can
+    // hallucinate arbitrarily long values; pre-fix the proposer
+    // succeeded but the confirm-time INSERT failed against the
+    // table's column-length constraint, giving the user a generic
+    // "Execution failed."
+    const STRING_FIELDS = ['name', 'make', 'model', 'serial', 'notes'] as const;
+    for (const f of STRING_FIELDS) {
+      if (typeof params[f] === 'string') {
+        params[f] = params[f].trim().slice(0, 200);
+      }
+    }
     // Optional date fields — reject malformed strings early so a
     // garbage "2025-13-45" doesn't land in the DB as a text-cast mess
     // that `transponder_due_date` checks then misread as overdue.
@@ -1036,27 +1051,45 @@ export function capResultSize(result: any, toolName?: string): any {
   // Bounded loop in case a result has many same-size arrays that each
   // need trimming. 6 iterations is enough to shave an order of
   // magnitude off even a huge response.
-  for (let i = 0; i < 6 && serialized.length > MAX_TOOL_RESULT_CHARS; i++) {
-    let largestKey: string | null = null;
-    let largestLen = 0;
-    for (const [k, v] of Object.entries(current)) {
-      if (Array.isArray(v) && v.length > largestLen) {
-        largestKey = k;
-        largestLen = v.length;
+  // Walk one level deep when no top-level array dominates. Some tools
+  // (get_notams returns { results: { KDAL: { notams: [...] }, ... } })
+  // have NO top-level arrays at all; pre-fix the loop bailed without
+  // trimming anything and Claude got the full 50k+ char response. The
+  // nested traversal finds the heaviest array at any depth up to 2.
+  function findHeaviestArrayPath(obj: any, depth: number): { path: (string | number)[]; len: number } | null {
+    if (!obj || typeof obj !== 'object' || depth > 2) return null;
+    let best: { path: (string | number)[]; len: number } | null = null;
+    for (const [k, v] of Object.entries(obj)) {
+      if (k === '_truncated') continue;
+      if (Array.isArray(v)) {
+        if (!best || v.length > best.len) best = { path: [k], len: v.length };
+      } else if (v && typeof v === 'object') {
+        const nested = findHeaviestArrayPath(v, depth + 1);
+        if (nested && (!best || nested.len > best.len)) {
+          best = { path: [k, ...nested.path], len: nested.len };
+        }
       }
     }
-    if (!largestKey || largestLen <= 3) break;
-    const keep = Math.max(3, Math.floor(largestLen / 2));
-    const prevTrunc = current._truncated || {};
-    current = {
-      ...current,
-      [largestKey]: (current[largestKey] as any[]).slice(0, keep),
-      _truncated: {
-        ...prevTrunc,
-        [largestKey]: { original_count: largestLen, returned_count: keep },
-        note: 'Result was too large for context — trimmed. Ask for a tighter filter (limit, date range, status) if you need more.',
-      },
+    return best;
+  }
+
+  for (let i = 0; i < 6 && serialized.length > MAX_TOOL_RESULT_CHARS; i++) {
+    const target = findHeaviestArrayPath(current, 0);
+    if (!target || target.len <= 3) break;
+    const keep = Math.max(3, Math.floor(target.len / 2));
+    // Deep-clone the path so we don't mutate the caller's data.
+    const next = JSON.parse(JSON.stringify(current));
+    let cursor: any = next;
+    for (let p = 0; p < target.path.length - 1; p++) cursor = cursor[target.path[p]];
+    const leaf = target.path[target.path.length - 1] as string;
+    cursor[leaf] = (cursor[leaf] as any[]).slice(0, keep);
+    const prevTrunc = next._truncated || {};
+    next._truncated = {
+      ...prevTrunc,
+      [target.path.join('.')]: { original_count: target.len, returned_count: keep },
+      note: 'Result was too large for context — trimmed. Ask for a tighter filter (limit, date range, status) if you need more.',
     };
+    current = next;
     serialized = JSON.stringify(current);
   }
   // Emit a breadcrumb only when trimming actually fired, so the signal

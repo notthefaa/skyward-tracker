@@ -168,6 +168,13 @@ export async function* sendMessageStream(
     }
     const roundAbort = AbortSignal.timeout(deadlineMs);
 
+    // Force text-only on the final iteration. Without this, if the
+    // model chose to call tools on the last round we'd have nowhere
+    // to send the results — Claude returns tool_use blocks, we have
+    // no further round, and the user sees "I hit a processing limit"
+    // instead of an actual reply.
+    const isFinalRound = round === MAX_TOOL_ROUNDS - 1;
+
     const stream = client.messages.stream(
       {
         model: HOWARD_MODEL,
@@ -179,6 +186,7 @@ export async function* sendMessageStream(
         ],
         tools,
         messages,
+        ...(isFinalRound ? { tool_choice: { type: 'none' as const } } : {}),
       },
       { signal: roundAbort },
     );
@@ -236,19 +244,31 @@ export async function* sendMessageStream(
 
     messages.push({ role: 'assistant', content: finalMsg.content as any });
 
-    const toolResultBlocks: Anthropic.ToolResultBlockParam[] = [];
-    for (const block of finalMsg.content) {
-      if (block.type === 'tool_use') {
-        allToolCalls.push({ name: block.name, input: block.input, id: block.id });
+    // Parallelize all tool calls in this round. Each tool already has
+    // its own 15s timeout (HOWARD_TOOL_TIMEOUT_MS); pre-fix the sequential
+    // await loop meant 3 tool calls × 15s = up to 45s, which exactly
+    // matches STREAM_DEADLINE_MS and trips the per-round cap. Parallel
+    // execution caps the round at max-single-tool-duration regardless of
+    // how many tools the model invoked.
+    const toolUseBlocks = finalMsg.content.filter(
+      (b): b is Anthropic.ToolUseBlock => b.type === 'tool_use',
+    );
+    const settled = await Promise.all(
+      toolUseBlocks.map(async (block) => {
         const result = await executeTool(block.name, block.input, toolCtx, supabaseAdmin);
-        allToolResults.push({ tool_use_id: block.id, result });
-        yield { type: 'tool_use_end', id: block.id, name: block.name };
-        toolResultBlocks.push({
-          type: 'tool_result',
-          tool_use_id: block.id,
-          content: result,
-        });
-      }
+        return { block, result };
+      }),
+    );
+    const toolResultBlocks: Anthropic.ToolResultBlockParam[] = [];
+    for (const { block, result } of settled) {
+      allToolCalls.push({ name: block.name, input: block.input, id: block.id });
+      allToolResults.push({ tool_use_id: block.id, result });
+      yield { type: 'tool_use_end', id: block.id, name: block.name };
+      toolResultBlocks.push({
+        type: 'tool_result',
+        tool_use_id: block.id,
+        content: result,
+      });
     }
 
     messages.push({ role: 'user', content: toolResultBlocks });
