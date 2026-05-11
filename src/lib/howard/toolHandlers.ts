@@ -764,6 +764,14 @@ const handlers: Record<string, ToolHandler> = {
     if (!params.squawk_id || !params.resolution_note) {
       return { error: 'squawk_id and resolution_note are required.' };
     }
+    // Trim + cap the resolution note. Claude can produce 10k+ char
+    // descriptions; the underlying column likely has a length check
+    // and the confirm-time INSERT would fail with a generic
+    // "Execution failed." 2000 chars is enough for a real resolution
+    // narrative without blowing column constraints.
+    if (typeof params.resolution_note === 'string') {
+      params.resolution_note = params.resolution_note.trim().slice(0, 2000);
+    }
     const { data: sq } = await sb.from('aft_squawks')
       .select('id, aircraft_id, deleted_at, status')
       .eq('id', params.squawk_id).maybeSingle();
@@ -780,7 +788,10 @@ const handlers: Record<string, ToolHandler> = {
     if (!params.content || typeof params.content !== 'string' || !params.content.trim()) {
       return { error: 'Note content is required.' };
     }
-    return makeProposal(sb, ctx, 'note', { content: params.content.trim() });
+    // Cap content length at 4000 chars — same rationale as squawk
+    // resolve. Longer than squawk because notes legitimately carry
+    // pre/post-flight narratives.
+    return makeProposal(sb, ctx, 'note', { content: params.content.trim().slice(0, 4000) });
   },
 
   propose_equipment_entry: async (params, sb, _aircraftId, ctx) => {
@@ -825,6 +836,18 @@ const handlers: Record<string, ToolHandler> = {
     if (!aircraft?.tail_number || !aircraft?.engine_type) {
       return { error: 'aircraft.tail_number and aircraft.engine_type are required.' };
     }
+    // Normalize + validate tail format. Claude can hallucinate
+    // arbitrarily long values (N12345 with spaces / sentences); the
+    // downstream insert against aft_aircraft.tail_number then fails
+    // at the column constraint with a generic execution error. FAA
+    // N-numbers are N + 1-5 alphanumeric chars. Accept other-country
+    // tails (C-, G-, JA, etc.) loosely — just bound the length and
+    // strip whitespace.
+    const normalizedTail = String(aircraft.tail_number).toUpperCase().replace(/\s+/g, '').trim();
+    if (!/^[A-Z0-9-]{2,10}$/.test(normalizedTail)) {
+      return { error: 'aircraft.tail_number must be 2-10 alphanumeric characters (e.g. "N123AB").' };
+    }
+    aircraft.tail_number = normalizedTail;
     if (typeof aircraft.is_ifr_equipped !== 'boolean') {
       return { error: 'aircraft.is_ifr_equipped must be true or false — ask if unknown.' };
     }
@@ -995,9 +1018,15 @@ const handlers: Record<string, ToolHandler> = {
             };
           })
           .filter(n => {
-            const start = n.effective_start ? new Date(n.effective_start).getTime() : 0;
-            const end = n.effective_end ? new Date(n.effective_end).getTime() : Infinity;
-            return Number.isFinite(start) && start <= now + 24 * 3600 * 1000 && end >= now;
+            const rawStart = n.effective_start ? new Date(n.effective_start).getTime() : 0;
+            const rawEnd = n.effective_end ? new Date(n.effective_end).getTime() : Infinity;
+            // FAA returns 'PERM' for permanent NOTAMs which parses to
+            // NaN. Pre-fix the Number.isFinite gate rejected those,
+            // dropping legitimately effective NOTAMs from the result.
+            // Treat NaN start as "currently effective" (effectively 0).
+            const start = Number.isFinite(rawStart) ? rawStart : 0;
+            const end = Number.isFinite(rawEnd) ? rawEnd : Infinity;
+            return start <= now + 24 * 3600 * 1000 && end >= now;
           })
           .slice(0, 30);
 

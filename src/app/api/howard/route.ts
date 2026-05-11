@@ -407,7 +407,20 @@ export async function POST(req: Request) {
               current_tail: typeof currentTail === 'string' ? currentTail : '',
             },
           });
-          const reason = err?.message || 'Stream failed';
+          // Sanitize the user-visible reason. Anthropic SDK errors are
+          // mostly safe but raw HTTP bodies / prompt fragments from
+          // less-common error classes have leaked verbatim into the
+          // chat in past incidents. Allowlist the user-visible message:
+          // known timeout/budget classes get a friendly string; anything
+          // else collapses to a generic "Stream failed" so the saved
+          // assistant message can't expose credentials or prompts.
+          const rawMessage = typeof err?.message === 'string' ? err.message : '';
+          const isTimeout = err?.name === 'AbortError'
+            || err?.name === 'APIUserAbortError'
+            || /timed out|wall-clock|wall_clock|deadline/i.test(rawMessage);
+          const reason = isTimeout
+            ? (rawMessage.match(/^Howard's reply timed out[^.]*\./)?.[0] || 'Reply timed out')
+            : 'Stream failed';
           const partial = streamedSoFar.trim();
           const content = partial
             ? `${partial}\n\n⚠️ Howard got cut off before finishing. (${reason})`

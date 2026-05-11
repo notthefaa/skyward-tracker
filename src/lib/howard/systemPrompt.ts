@@ -335,7 +335,7 @@ export function buildUserContext(
   if (currentAircraft && aircraftRole) {
     lines.push(`## Role on \`${currentAircraft.tail_number}\`: ${aircraftRole}`);
     if (aircraftRole !== 'admin' && userRole !== 'admin') {
-      lines.push(`This pilot is NOT an aircraft admin on the selected aircraft. Admin-only actions (propose_mx_schedule, propose_equipment_entry, propose_onboarding_setup) will fail if you propose them. Don't offer to run those — instead explain the pilot would need an admin to handle it, and suggest they contact the aircraft admin.`);
+      lines.push(`This pilot is NOT an aircraft admin on the selected aircraft. Admin-only actions (propose_mx_schedule, propose_equipment_entry) will fail if you propose them. Don't offer to run those — instead explain the pilot would need an admin to handle it, and suggest they contact the aircraft admin.`);
     }
   }
 
