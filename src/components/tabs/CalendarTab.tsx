@@ -364,6 +364,18 @@ export default function CalendarTab({
           // Preserve the original reservation's owner so admin-edited recurring
           // extras stay assigned to the same pilot, not the editing admin.
           const editingRes = reservations.find(r => r.id === editingReservationId);
+          // user_id is null when the original booker's auth account was
+          // deleted (FK is ON DELETE SET NULL). The prior `&& editingRes.user_id`
+          // guard silently fell through to undefined → server defaulted
+          // bookForUserId to the calling admin → extras got assigned to
+          // the editor, not the original (now-orphaned) pilot. Block the
+          // extras-creation path entirely in that case so the admin
+          // doesn't inadvertently inherit someone else's recurring slot.
+          if (editingRes && editingRes.user_id === null) {
+            showError("Can't add recurring instances — the original pilot's account was removed. Cancel and rebook the series instead.");
+            setIsSubmitting(false);
+            return;
+          }
           const inheritedTarget = editingRes && editingRes.user_id && editingRes.user_id !== session?.user?.id
             ? editingRes.user_id
             : undefined;

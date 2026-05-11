@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import useSWR from "swr";
 import { authFetch } from "@/lib/authFetch";
 import { swrKeys } from "@/lib/swrKeys";
@@ -52,6 +52,31 @@ export default function FleetSchedule({
   const [selectedTails, setSelectedTails] = useState<Set<string>>(
     () => new Set(aircraftList.map(a => a.id))
   );
+
+  // Keep selectedTails synced with aircraftList — without this, a
+  // newly-added aircraft never appears in the visible filter set
+  // (useState's initializer only runs once) and a removed aircraft
+  // lingers in the filter forever. Add any new ids; drop any ids
+  // that no longer exist.
+  useEffect(() => {
+    const currentIds = aircraftList.map(a => a.id);
+    const currentSet = new Set(currentIds);
+    setSelectedTails(prev => {
+      let changed = false;
+      const next = new Set<string>();
+      // Array.from instead of for..of Set — the ES target Next 16 uses
+      // on Vercel rejects Set iteration in production builds even
+      // though local tsc accepts it (downlevelIteration trap).
+      for (const id of Array.from(prev)) {
+        if (currentSet.has(id)) next.add(id);
+        else changed = true;
+      }
+      for (const id of currentIds) {
+        if (!next.has(id)) { next.add(id); changed = true; }
+      }
+      return changed ? next : prev;
+    });
+  }, [aircraftList]);
 
   useModalScrollLock(showDatePicker);
 

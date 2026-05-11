@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { authFetch } from "@/lib/authFetch";
 import { swrKeys } from "@/lib/swrKeys";
 import type { AircraftWithMetrics, Reservation } from "@/lib/types";
@@ -73,6 +73,17 @@ export default function CalendarDashboard({ aircraft, session }: CalendarDashboa
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
   const [showPeriodPicker, setShowPeriodPicker] = useState(false);
+  // Reset the period/range filter when the active aircraft changes
+  // (tail-switch state-bleed pattern). Without this, the date range
+  // and picker-open state survive the switch — a Phoenix admin
+  // looking at a custom range on N123 lands on N456 still scoped to
+  // the same custom dates, which is rarely what they want.
+  useEffect(() => {
+    setHoursPeriod(30);
+    setCustomFrom("");
+    setCustomTo("");
+    setShowPeriodPicker(false);
+  }, [aircraft.id]);
   const showCustom = hoursPeriod === -1;
   const isTurbine = aircraft.engine_type === 'Turbine';
 
