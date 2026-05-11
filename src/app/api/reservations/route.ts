@@ -124,7 +124,7 @@ export async function POST(req: Request) {
     const rangeStart = occurrences[0].start;
     const rangeEnd = occurrences.reduce((max, o) => (o.end > max ? o.end : max), occurrences[0].end);
 
-    const [existingRes, mxEvents] = await Promise.all([
+    const [existingRes, mxEvents, aircraftTz] = await Promise.all([
       supabaseAdmin
         .from('aft_reservations')
         .select('*, pilot_name')
@@ -138,6 +138,11 @@ export async function POST(req: Request) {
         .eq('aircraft_id', aircraftId)
         .is('deleted_at', null)
         .in('status', ['confirmed', 'in_progress']),
+      supabaseAdmin
+        .from('aft_aircraft')
+        .select('time_zone')
+        .eq('id', aircraftId)
+        .maybeSingle(),
     ]);
 
     // Throw on read errors so we never proceed with a false-empty conflict list,
@@ -146,6 +151,10 @@ export async function POST(req: Request) {
     if (mxEvents.error) throw mxEvents.error;
     const allReservations = existingRes.data || [];
     const allMxEvents = mxEvents.data || [];
+    // Aircraft tz is the canonical anchor for MX block date interpretation
+    // (the auto-cancel in mxConflicts.ts uses the same fallback chain).
+    // Falls back to caller's tz then UTC for legacy rows.
+    const mxAnchorTz = (aircraftTz.data?.time_zone) || tz;
 
     // Check each occurrence for conflicts
     const created: { start: string; end: string }[] = [];
@@ -177,18 +186,18 @@ export async function POST(req: Request) {
       }
 
       // Check MX conflicts. MX blocks are stored as date-only
-      // (`YYYY-MM-DD`). "2026-04-19T00:00:00Z" hard-codes UTC midnight,
-      // which misaligns with a pilot in UTC+12 whose local-midnight
-      // reservation lands outside that UTC window. Interpret the
-      // block in the pilot's zone instead so same-day conflicts are
-      // detected regardless of where the pilot is.
+      // (`YYYY-MM-DD`). Anchor in the aircraft's tz so this check
+      // and the auto-cancel in mxConflicts.ts agree on which calendar
+      // day a reservation belongs to. Pre-fix this used the booker's
+      // tz; mxConflicts used UTC; the 7-hour disagreement cancelled
+      // reservations on dates the calendar UI didn't visually overlap.
       let mxConflict = false;
       for (const ev of allMxEvents) {
         if (ev.confirmed_date) {
-          const mxStart = zonedDateStartAsUtc(ev.confirmed_date, tz)
+          const mxStart = zonedDateStartAsUtc(ev.confirmed_date, mxAnchorTz)
             ?? new Date(ev.confirmed_date + 'T00:00:00Z');
           const mxEnd = ev.estimated_completion
-            ? (zonedDateEndAsUtc(ev.estimated_completion, tz)
+            ? (zonedDateEndAsUtc(ev.estimated_completion, mxAnchorTz)
               ?? new Date(ev.estimated_completion + 'T23:59:59.999Z'))
             : new Date(mxStart.getTime() + 86_400_000);
           if (new Date(occ.start) < mxEnd && new Date(occ.end) > mxStart) {
@@ -449,23 +458,32 @@ export async function PUT(req: Request) {
     }
 
     // Check for conflicting maintenance events
-    const { data: mxEvents, error: mxErr } = await supabaseAdmin
-      .from('aft_maintenance_events')
-      .select('confirmed_date, estimated_completion, status')
-      .eq('aircraft_id', existing.aircraft_id)
-      .is('deleted_at', null)
-      .in('status', ['confirmed', 'in_progress']);
+    const [mxEventsRes, putAircraftTz] = await Promise.all([
+      supabaseAdmin
+        .from('aft_maintenance_events')
+        .select('confirmed_date, estimated_completion, status')
+        .eq('aircraft_id', existing.aircraft_id)
+        .is('deleted_at', null)
+        .in('status', ['confirmed', 'in_progress']),
+      supabaseAdmin
+        .from('aft_aircraft')
+        .select('time_zone')
+        .eq('id', existing.aircraft_id)
+        .maybeSingle(),
+    ]);
+    const { data: mxEvents, error: mxErr } = mxEventsRes;
     if (mxErr) throw mxErr;
+    // Anchor MX-block dates in the aircraft's tz — matches mxConflicts
+    // auto-cancel + the POST conflict check.
+    const putMxAnchorTz = (putAircraftTz.data?.time_zone) || tz;
 
     if (mxEvents) {
       for (const ev of mxEvents) {
         if (ev.confirmed_date) {
-          // See POST: anchor the date-only block in the pilot's zone
-          // so the conflict window matches the calendar day they see.
-          const mxStart = zonedDateStartAsUtc(ev.confirmed_date, tz)
+          const mxStart = zonedDateStartAsUtc(ev.confirmed_date, putMxAnchorTz)
             ?? new Date(ev.confirmed_date + 'T00:00:00Z');
           const mxEnd = ev.estimated_completion
-            ? (zonedDateEndAsUtc(ev.estimated_completion, tz)
+            ? (zonedDateEndAsUtc(ev.estimated_completion, putMxAnchorTz)
               ?? new Date(ev.estimated_completion + 'T23:59:59.999Z'))
             : new Date(mxStart.getTime() + 24 * 60 * 60 * 1000);
 

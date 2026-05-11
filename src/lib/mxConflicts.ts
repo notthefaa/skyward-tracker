@@ -14,7 +14,7 @@
 import { Resend } from 'resend';
 import { env } from '@/lib/env';
 import { escapeHtml } from '@/lib/sanitize';
-import { safeTimeZone, formatInTimeZone } from '@/lib/dateFormat';
+import { safeTimeZone, formatInTimeZone, zonedDateStartAsUtc, zonedDateEndAsUtc } from '@/lib/dateFormat';
 import { emailShell, heading, paragraph, callout, bulletList, button } from '@/lib/email/layout';
 import { loadMutedRecipients, isRecipientMuted } from '@/lib/notificationMutes';
 
@@ -48,14 +48,29 @@ export async function cancelConflictingReservations({
   appUrl,
   timeZone,
 }: MxConflictParams): Promise<number> {
-  const tz = safeTimeZone(timeZone);
-  // Build the MX block range as a UTC whole-day window. Always use 'Z' so this
-  // is independent of the host server's local TZ — reservations are stored as
-  // ISO UTC and both sides of the overlap check must agree.
-  const mxStart = new Date(confirmedDate + 'T00:00:00Z');
+  // Anchor the MX-block window in the AIRCRAFT'S zone, not the
+  // triggering user's zone. Pre-fix this used UTC midnight, which
+  // produced a 7-hour asymmetry against the booking-conflict check
+  // in /api/reservations (which anchors to the booker's tz). The two
+  // sides disagreed on which calendar day a reservation belonged to:
+  // the booking check allowed a 04-14 evening MST reservation but the
+  // auto-cancel UTC window included it and emailed the pilot a
+  // cancellation for a date the calendar UI shows as Apr 14.
+  // Aircraft tz is the single source of truth; trigger-user tz only
+  // as fallback for legacy rows missing time_zone, then UTC as final
+  // floor.
+  const { data: ac } = await supabaseAdmin
+    .from('aft_aircraft')
+    .select('time_zone')
+    .eq('id', aircraftId)
+    .maybeSingle();
+  const tz = safeTimeZone(ac?.time_zone || timeZone);
+  const mxStart = zonedDateStartAsUtc(confirmedDate, tz)
+    ?? new Date(confirmedDate + 'T00:00:00Z');
   const mxEnd = estimatedCompletion
-    ? new Date(estimatedCompletion + 'T23:59:59.999Z')
-    : new Date(mxStart.getTime() + 24 * 60 * 60 * 1000 - 1); // end of confirmed_date
+    ? (zonedDateEndAsUtc(estimatedCompletion, tz)
+       ?? new Date(estimatedCompletion + 'T23:59:59.999Z'))
+    : new Date(mxStart.getTime() + 24 * 60 * 60 * 1000 - 1);
 
   // Find confirmed reservations that overlap with the MX block.
   // Overlap condition: reservation.start_time < mxEnd AND reservation.end_time > mxStart.
