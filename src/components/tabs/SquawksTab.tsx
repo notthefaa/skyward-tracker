@@ -42,10 +42,14 @@ export default function SquawksTab({
       const resolved = (data || []).filter((s: any) => s.resolved_by_event_id);
       if (resolved.length > 0) {
         const eventIds = resolved.map((s: any) => s.resolved_by_event_id);
+        // Filter to live events — a squawk resolved by an event that
+        // was later soft-deleted would otherwise show "Resolved by
+        // service event on [date]" for a service that no longer exists.
         const { data: events, error: evErr } = await supabase
           .from('aft_maintenance_events')
           .select('id, completed_at, confirmed_date')
-          .in('id', eventIds);
+          .in('id', eventIds)
+          .is('deleted_at', null);
         if (evErr) throw evErr;
 
         if (events) {

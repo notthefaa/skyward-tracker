@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { requireAuth, requireAircraftAccess, handleApiError } from '@/lib/auth';
+import { requireAuth, requireAircraftAdmin, handleApiError } from '@/lib/auth';
 import { setAppUser } from '@/lib/audit';
 import { cancelConflictingReservations } from '@/lib/mxConflicts';
 import { idempotency } from '@/lib/idempotency';
@@ -19,22 +19,12 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'End date must be on or after start date.' }, { status: 400 });
     }
 
-    // Verify the user has access to this aircraft
-    await requireAircraftAccess(supabaseAdmin, user.id, aircraftId);
-
-    // Check the user is a global admin or aircraft admin
-    const { data: roleData } = await supabaseAdmin
-      .from('aft_user_roles').select('role').eq('user_id', user.id).single();
-    const isGlobalAdmin = roleData?.role === 'admin';
-
-    if (!isGlobalAdmin) {
-      const { data: access } = await supabaseAdmin
-        .from('aft_user_aircraft_access').select('aircraft_role')
-        .eq('user_id', user.id).eq('aircraft_id', aircraftId).single();
-      if (access?.aircraft_role !== 'admin') {
-        return NextResponse.json({ error: 'Only admins can create maintenance blocks.' }, { status: 403 });
-      }
-    }
+    // Centralized admin gate — pre-fix this inlined the role lookup
+    // (with a silent destructure on the user_roles + access reads),
+    // and would silently downgrade an admin to non-admin on a
+    // transient DB blip. requireAircraftAdmin throws cleanly and
+    // matches the rest of the mx-events routes.
+    await requireAircraftAdmin(supabaseAdmin, user.id, aircraftId);
 
     await setAppUser(supabaseAdmin, user.id);
 

@@ -283,15 +283,32 @@ export async function POST(req: Request) {
 
     } else if (action === 'update_lines') {
       if (lineItemUpdates && Array.isArray(lineItemUpdates)) {
+        const VALID_LINE_STATUS = new Set(['pending', 'in_progress', 'complete', 'deferred']);
         for (const update of lineItemUpdates) {
           const updatePayload: any = {};
-          if (update.line_status) updatePayload.line_status = update.line_status;
+          if (update.line_status) {
+            // Reject invalid values up front with a clean 400. Without
+            // this, an unexpected value hits the CHECK constraint and
+            // returns a generic 500 to the mechanic with a SQL hint.
+            if (!VALID_LINE_STATUS.has(update.line_status)) {
+              return NextResponse.json(
+                { error: `Invalid line_status: ${update.line_status}` },
+                { status: 400 },
+              );
+            }
+            updatePayload.line_status = update.line_status;
+          }
           if (update.mechanic_comment !== undefined) updatePayload.mechanic_comment = update.mechanic_comment;
           if (Object.keys(updatePayload).length > 0) {
+            // deleted_at IS NULL guard prevents a stale mechanic tab
+            // from silently un-soft-deleting an item that an admin
+            // removed from the draft. Matches the cancel-terminal
+            // pattern used on mx-event UPDATEs everywhere else.
             const { error: lineUpdErr } = await supabaseAdmin.from('aft_event_line_items')
               .update(updatePayload)
               .eq('id', update.id)
-              .eq('event_id', event.id);
+              .eq('event_id', event.id)
+              .is('deleted_at', null);
             if (lineUpdErr) throw lineUpdErr;
           }
         }

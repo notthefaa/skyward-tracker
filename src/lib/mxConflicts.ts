@@ -88,18 +88,29 @@ export async function cancelConflictingReservations({
 
   if (!overlapping || overlapping.length === 0) return 0;
 
-  // Cancel each overlapping reservation
+  // Cancel each overlapping reservation. Status re-filter closes the
+  // gap where a user-initiated cancel landed between the read above
+  // and this update; without it mxConflicts re-flagged the row as
+  // cancelled (no-op) AND re-emailed the booker. Now only rows still
+  // confirmed at write time get the cancellation email below.
   const reservationIds = overlapping.map((r: any) => r.id);
-  const { error: cancelErr } = await supabaseAdmin
+  const { data: actuallyCancelled, error: cancelErr } = await supabaseAdmin
     .from('aft_reservations')
     .update({ status: 'cancelled' })
-    .in('id', reservationIds);
+    .in('id', reservationIds)
+    .eq('status', 'confirmed')
+    .select('id');
   if (cancelErr) throw cancelErr;
+  const actuallyCancelledIds = new Set<string>((actuallyCancelled || []).map((r: any) => r.id));
+  // Drop reservations whose cancel raced — pilot already saw the
+  // cancellation via their own UI; emailing again would be confusing.
+  const stillNeedEmail = overlapping.filter((r: any) => actuallyCancelledIds.has(r.id));
+  if (stillNeedEmail.length === 0) return 0;
 
   // Collect unique affected pilots (by user_id) and their reservation details
   const pilotMap: Record<string, { email?: string; reservations: any[] }> = {};
 
-  for (const r of overlapping) {
+  for (const r of stillNeedEmail) {
     if (!r.user_id) continue;
     if (!pilotMap[r.user_id]) {
       pilotMap[r.user_id] = { reservations: [] };
@@ -107,13 +118,17 @@ export async function cancelConflictingReservations({
     pilotMap[r.user_id].reservations.push(r);
   }
 
-  // Look up emails for all affected pilots
+  // Look up emails for all affected pilots. Throw on read error —
+  // a swallowed failure here silently drops every cancellation email
+  // and the pilot shows up at the airport for a reservation that was
+  // cancelled. Matches the SWR-fetcher feedback pattern.
   const userIds = Object.keys(pilotMap);
   if (userIds.length > 0) {
-    const { data: users } = await supabaseAdmin
+    const { data: users, error: usersErr } = await supabaseAdmin
       .from('aft_user_roles')
       .select('user_id, email')
       .in('user_id', userIds);
+    if (usersErr) throw usersErr;
 
     if (users) {
       for (const u of users) {
@@ -201,10 +216,10 @@ export async function cancelConflictingReservations({
 
   if (emailFailures.length > 0) {
     console.warn(
-      `[mxConflicts] Cancelled ${overlapping.length} reservation(s) for ${tailNumber} but ${emailFailures.length} pilot email(s) failed:`,
+      `[mxConflicts] Cancelled ${stillNeedEmail.length} reservation(s) for ${tailNumber} but ${emailFailures.length} pilot email(s) failed:`,
       emailFailures,
     );
   }
 
-  return overlapping.length;
+  return stillNeedEmail.length;
 }

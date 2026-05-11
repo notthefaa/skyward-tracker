@@ -162,9 +162,14 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
       .filter(e => ['draft', 'scheduling', 'confirmed', 'in_progress'].includes(e.status))
       .map(e => e.id);
     if (activeEventIds.length > 0) {
+      // Filter to live line items — if a line item was soft-deleted
+      // between drafts the create flow would otherwise suppress it
+      // from selection (the drafted-ids set would include the ghost
+      // entry), and the pilot couldn't re-add the underlying mx item.
       const { data: allLines, error: linesErr } = await supabase
         .from('aft_event_line_items').select('maintenance_item_id, squawk_id')
-        .in('event_id', activeEventIds);
+        .in('event_id', activeEventIds)
+        .is('deleted_at', null);
       if (linesErr) {
         // Without these the create flow would let the user re-add an
         // item that's already on a draft — surface so they can retry.

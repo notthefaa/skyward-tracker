@@ -155,9 +155,15 @@ export default function ServiceEventComplete({
 
       onRefresh();
 
-      // Check if all items are now resolved
+      // Check if all items are now resolved. Filter to live rows —
+      // a soft-deleted item with line_status='pending' would pin the
+      // detail view on "remaining items still open" even though no
+      // live items are pending.
       const { data: updatedLines } = await supabase
-        .from('aft_event_line_items').select('line_status').eq('event_id', selectedEvent.id);
+        .from('aft_event_line_items')
+        .select('line_status')
+        .eq('event_id', selectedEvent.id)
+        .is('deleted_at', null);
       const allResolved = updatedLines && updatedLines.every(
         (li: any) => li.line_status === 'complete' || li.line_status === 'deferred'
       );

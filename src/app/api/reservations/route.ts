@@ -69,12 +69,16 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'You do not have access to this aircraft.' }, { status: 403 });
     }
 
-    // Get caller's user info
-    const { data: userRole } = await supabaseAdmin
+    // Get caller's user info. Throw on supabase error — silent
+    // destructure would let a transient DB blip silently downgrade
+    // the caller to non-admin and reject the bookForOther path with
+    // an opaque 403.
+    const { data: userRole, error: userRoleErr } = await supabaseAdmin
       .from('aft_user_roles')
       .select('role, initials, email, full_name')
       .eq('user_id', user.id)
       .single();
+    if (userRoleErr) throw userRoleErr;
 
     // Determine the booking target. Admins (global or aircraft) may book for
     // another pilot on the same aircraft; everyone else can only book for self.
@@ -390,23 +394,27 @@ export async function PUT(req: Request) {
       return NextResponse.json({ error: 'Reservation not found.' }, { status: 404 });
     }
 
-    // Check permissions: own reservation, tailnumber admin, or global admin
-    const { data: callerRole } = await supabaseAdmin
+    // Check permissions: own reservation, tailnumber admin, or global admin.
+    // Throw on read errors — silent destructure would let a transient DB
+    // blip downgrade an admin to non-admin and 403 their own edit.
+    const { data: callerRole, error: callerRoleErr } = await supabaseAdmin
       .from('aft_user_roles')
       .select('role')
       .eq('user_id', user.id)
       .single();
+    if (callerRoleErr) throw callerRoleErr;
 
     const isGlobalAdmin = callerRole?.role === 'admin';
     const isOwner = existing.user_id === user.id;
 
     if (!isGlobalAdmin && !isOwner) {
-      const { data: callerAccess } = await supabaseAdmin
+      const { data: callerAccess, error: callerAccessErr } = await supabaseAdmin
         .from('aft_user_aircraft_access')
         .select('aircraft_role')
         .eq('user_id', user.id)
         .eq('aircraft_id', existing.aircraft_id)
         .single();
+      if (callerAccessErr && callerAccessErr.code !== 'PGRST116') throw callerAccessErr;
 
       if (!callerAccess || callerAccess.aircraft_role !== 'admin') {
         return NextResponse.json({ error: 'You can only edit your own reservations.' }, { status: 403 });
@@ -635,23 +643,27 @@ export async function DELETE(req: Request) {
       return NextResponse.json({ error: 'Reservation not found.' }, { status: 404 });
     }
 
-    // Check permissions: own reservation, tailnumber admin, or global admin
-    const { data: callerRole } = await supabaseAdmin
+    // Check permissions: own reservation, tailnumber admin, or global admin.
+    // Throw on read errors — silent destructure would 403 a legit admin
+    // cancel on a transient DB blip.
+    const { data: callerRole, error: delCallerRoleErr } = await supabaseAdmin
       .from('aft_user_roles')
       .select('role')
       .eq('user_id', user.id)
       .single();
+    if (delCallerRoleErr) throw delCallerRoleErr;
 
     const isGlobalAdmin = callerRole?.role === 'admin';
     const isOwner = reservation.user_id === user.id;
 
     if (!isGlobalAdmin && !isOwner) {
-      const { data: callerAccess } = await supabaseAdmin
+      const { data: callerAccess, error: delCallerAccessErr } = await supabaseAdmin
         .from('aft_user_aircraft_access')
         .select('aircraft_role')
         .eq('user_id', user.id)
         .eq('aircraft_id', reservation.aircraft_id)
         .single();
+      if (delCallerAccessErr && delCallerAccessErr.code !== 'PGRST116') throw delCallerAccessErr;
 
       if (!callerAccess || callerAccess.aircraft_role !== 'admin') {
         return NextResponse.json({ error: 'You can only cancel your own reservations.' }, { status: 403 });
