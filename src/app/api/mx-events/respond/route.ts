@@ -462,9 +462,13 @@ export async function POST(req: Request) {
       }
 
     } else if (action === 'mark_ready') {
+      // ready_at anchors the cron's Phase 5 pickup nudge. Setting it
+      // authoritatively here (instead of letting the cron infer from
+      // message ordering) avoids the suggest_item-before-mark_ready
+      // ambiguity that made the nudge fire days early.
       const { error: rdyUpdErr, count: rdyUpdCount } = await supabaseAdmin
         .from('aft_maintenance_events')
-        .update({ status: 'ready_for_pickup' }, { count: 'exact' })
+        .update({ status: 'ready_for_pickup', ready_at: new Date().toISOString() }, { count: 'exact' })
         .eq('id', event.id)
         .is('deleted_at', null);
       if (rdyUpdErr) throw rdyUpdErr;

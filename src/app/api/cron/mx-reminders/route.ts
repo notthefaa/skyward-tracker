@@ -603,7 +603,7 @@ export async function GET(req: Request) {
       const appUrl = getAppUrl(req);
       const { data: pickupEvents, error: pickupErr } = await supabaseAdmin
         .from('aft_maintenance_events')
-        .select('id, aircraft_id, primary_contact_email')
+        .select('id, aircraft_id, primary_contact_email, ready_at, created_at')
         .eq('status', 'ready_for_pickup')
         .is('deleted_at', null);
       if (pickupErr) throw pickupErr;
@@ -636,18 +636,20 @@ export async function GET(req: Request) {
           if (isRecipientMuted(ev.primary_contact_email, mutedServiceUpdate)) continue;
 
           const eventMessages = (pickupMessages || []).filter((m: any) => m.event_id === ev.id);
-          // The mark_ready event is the FIRST mechanic status_update on
-          // the event — any later mechanic message is a follow-up that
-          // would slide the nudge timer forward. `pickupMessages` is
-          // ordered desc, so the original mark-ready is the last entry
-          // in this filtered list.
-          const mechanicStatusUpdates = eventMessages.filter(
-            (m: any) => m.sender === 'mechanic' && m.message_type === 'status_update'
-          );
-          const markReady = mechanicStatusUpdates[mechanicStatusUpdates.length - 1];
-          if (!markReady) continue;
-
-          const markReadyTime = new Date(markReady.created_at).getTime();
+          // Anchor on the event's ready_at column, set authoritatively
+          // when the mechanic calls mark_ready (migration 060). Pre-
+          // migration backfill falls back to the most recent mechanic
+          // status_update; final fallback is created_at so legacy events
+          // with no message log don't loop forever.
+          //
+          // Pre-fix this filtered mechanic status_updates and took the
+          // oldest — but suggest_item also emits status_update without a
+          // status guard, so a pre-mark_ready suggest_item polluted the
+          // anchor and made the nudge fire days early.
+          const anchorIso: string | null = ev.ready_at || ev.created_at || null;
+          if (!anchorIso) continue;
+          const markReadyTime = new Date(anchorIso).getTime();
+          if (!Number.isFinite(markReadyTime)) continue;
           if (now - markReadyTime < nudgeWindowMs) continue; // not stale yet
 
           // Has a nudge already been sent within the current window?

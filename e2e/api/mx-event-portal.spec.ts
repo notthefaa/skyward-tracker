@@ -76,12 +76,16 @@ test.describe('mx-event portal — happy path + races', () => {
     });
     expect(res.status).toBe(200);
 
-    ({ data: ev } = await admin
+    const { data: rdyEv } = await admin
       .from('aft_maintenance_events')
-      .select('status')
+      .select('status, ready_at')
       .eq('id', eventId)
-      .single());
-    expect(ev?.status).toBe('ready_for_pickup');
+      .single();
+    expect(rdyEv?.status).toBe('ready_for_pickup');
+    // ready_at is the Phase 5 nudge anchor (migration 060). mark_ready
+    // must set it; suggest_item must not. Cron infers stale-pickup from
+    // this column instead of mining message ordering.
+    expect(rdyEv?.ready_at).toBeTruthy();
 
     // 3. Audit-trail: each respond action inserts a message row.
     const { data: msgs } = await admin
