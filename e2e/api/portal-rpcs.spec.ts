@@ -183,6 +183,94 @@ test.describe('portal RPCs — token-scoped reads', () => {
     expect(data).toBeNull();
   });
 
+  test('migration 063: direct anon SELECT is blocked on all five tables', async ({ seededUser }) => {
+    // Pre-063 these queries each returned every row in the fleet
+    // (anon policies were `TO anon USING (true)`). Post-063 the anon
+    // role has NO SELECT policy on these tables, so the queries
+    // return an empty data array — not even the rows belonging to
+    // the seeded test user. Authenticated users keep access via the
+    // pilots_view_* / aft_read_* / admins_full_* policies which are
+    // unchanged.
+    const anon = anonClient();
+    const admin = adminClient();
+
+    // Seed something for each table so a passing test means "the row
+    // exists in the DB but anon can't see it" — not "the table is
+    // empty in the test project."
+    const { data: ev } = await admin
+      .from('aft_maintenance_events')
+      .insert({
+        aircraft_id: seededUser.aircraftId,
+        created_by: seededUser.userId,
+        status: 'scheduling',
+        mx_contact_name: 'Mig 063 Test',
+        mx_contact_email: null,
+        primary_contact_name: 'Mig 063 Test',
+        primary_contact_email: null,
+      })
+      .select('id')
+      .single();
+    await admin.from('aft_event_line_items').insert({
+      event_id: ev!.id,
+      item_type: 'addon',
+      item_name: 'Mig 063 line',
+      line_status: 'pending',
+    });
+    await admin.from('aft_event_messages').insert({
+      event_id: ev!.id,
+      sender: 'owner',
+      message_type: 'comment',
+      message: 'Mig 063 message',
+    });
+    const { data: sq } = await admin
+      .from('aft_squawks')
+      .insert({
+        aircraft_id: seededUser.aircraftId,
+        reported_by: seededUser.userId,
+        description: 'Mig 063 squawk',
+        location: 'N/A',
+        status: 'open',
+      })
+      .select('id')
+      .single();
+
+    const { data: aircraftRows } = await anon
+      .from('aft_aircraft')
+      .select('id')
+      .eq('id', seededUser.aircraftId);
+    expect(aircraftRows).toEqual([]);
+
+    const { data: squawkRows } = await anon
+      .from('aft_squawks')
+      .select('id')
+      .eq('id', sq!.id);
+    expect(squawkRows).toEqual([]);
+
+    const { data: eventRows } = await anon
+      .from('aft_maintenance_events')
+      .select('id')
+      .eq('id', ev!.id);
+    expect(eventRows).toEqual([]);
+
+    const { data: lineRows } = await anon
+      .from('aft_event_line_items')
+      .select('id')
+      .eq('event_id', ev!.id);
+    expect(lineRows).toEqual([]);
+
+    const { data: msgRows } = await anon
+      .from('aft_event_messages')
+      .select('id')
+      .eq('event_id', ev!.id);
+    expect(msgRows).toEqual([]);
+
+    // Teardown.
+    await admin.from('aft_event_messages').delete().eq('event_id', ev!.id);
+    await admin.from('aft_event_line_items').delete().eq('event_id', ev!.id);
+    await admin.from('aft_maintenance_events').delete().eq('id', ev!.id);
+    await admin.from('aft_squawks').delete().eq('id', sq!.id);
+  });
+
   test('get_portal_squawk returns NULL after the squawk is soft-deleted', async ({ seededUser }) => {
     const admin = adminClient();
     const { data: sq } = await admin
