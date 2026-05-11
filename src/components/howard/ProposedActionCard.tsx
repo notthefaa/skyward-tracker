@@ -172,6 +172,13 @@ export default function ProposedActionCard({ action, onChange }: Props) {
       onChange();
     } catch (err: any) {
       setError(err.message);
+      // Refetch the SWR-cached action so its server-side status
+      // ('failed') flows back to the card. Pre-fix the catch only
+      // set local error text; the card stayed in 'pending' state
+      // (showing the original Confirm button) instead of flipping
+      // to the Retry button, and the user had to refresh manually
+      // to escape.
+      onChange();
     } finally {
       setIsPending(null);
     }

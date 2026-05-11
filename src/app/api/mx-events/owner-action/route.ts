@@ -143,11 +143,17 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: 'A valid YYYY-MM-DD date is required for counter.' }, { status: 400 });
       }
 
+      // Clear estimated_completion: it was tied to the mechanic's
+      // prior proposed_date + service_duration_days. Once the owner
+      // picks a different date that estimate is stale (could even
+      // be in the past). The mechanic's eventual `confirm` will
+      // recompute it from the new proposed_date.
       const { error: cntrUpdErr, count: cntrUpdCount } = await supabaseAdmin
         .from('aft_maintenance_events')
         .update({
           proposed_date: proposedDate,
           proposed_by: 'owner',
+          estimated_completion: null,
         }, { count: 'exact' })
         .eq('id', eventId)
         .is('deleted_at', null);
