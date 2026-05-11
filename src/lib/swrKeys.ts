@@ -69,14 +69,14 @@ export const swrKeys = {
  * every cached entry that belongs to a specific aircraft.
  *
  * The regex anchors the aircraftId between word-boundary delimiters
- * (`-`, `_`, `/`, string end) so an unrelated string that merely
- * contains the UUID substring can't get swept up. UUIDs don't share
- * substrings in practice, so this is defense-in-depth rather than
- * a real-world bug fix — but it makes the invalidation contract
- * precise instead of just probably-correct.
+ * (`-`, `_`, `/`, `,`, string end). Comma is included for fleet-wide
+ * keys whose csv-joined aircraft IDs (`fleet-schedule-uuidA,uuidB`)
+ * would otherwise never match. Pre-fix, the FleetSchedule cache
+ * never invalidated on any aircraft's reservation change — stale
+ * data until manual reload.
  */
 export function matchesAircraft(aircraftId: string) {
-  const pattern = new RegExp(`(^|[-_/])${aircraftId}(?=[-_/]|$)`);
+  const pattern = new RegExp(`(^|[-_/,])${aircraftId}(?=[-_/,]|$)`);
   return (key: unknown) => typeof key === 'string' && pattern.test(key);
 }
 

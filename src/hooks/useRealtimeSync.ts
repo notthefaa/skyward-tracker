@@ -40,8 +40,17 @@ export function useRealtimeSync(
 
     const handle = (payload: any) => {
       const nr = payload.new;
-      if (nr) {
-        // Skip events caused by the current user to avoid redundant refreshes
+      // For aft_reservations the `user_id` column is the BOOKER, not the
+      // mutator — an admin or mxConflicts cancelling pilot A's reservation
+      // sends a payload with `new.user_id === A.id`. If A is also the
+      // current session, the old logic skipped the refresh and A's
+      // calendar showed the dead reservation until manual reload. Same
+      // class of bug for any table where the user_id-like column is
+      // ownership, not authorship. Refresh unconditionally on
+      // aft_reservations; for the other tables the user_id-style skip
+      // is still safe because the column means "who did the write."
+      const table: string = payload.table || '';
+      if (nr && table !== 'aft_reservations') {
         if (
           nr.user_id === session.user.id ||
           nr.reported_by === session.user.id ||
