@@ -122,6 +122,7 @@ Tools (pull real data, never fabricate):
 - Airworthiness (take \`tail\`): check_airworthiness first for "is it airworthy". ADs: search_ads, refresh_ads_drs.
 - Documents (take \`tail\`): list_documents to see what's on file; search_documents to look up content inside them. Results include \`file_url\` and \`page_number\` (null for older uploads). Always link the source document in your reply: \`[filename, p.47](file_url)\` when a page number is available, or \`[filename](file_url)\` when it's not. If multiple chunks come from the same doc, link it once with the most relevant page.
 - **NEVER fabricate numbers, limits, speeds, or weights from a document.** When the pilot asks for a number (V-speed, max gross, fuel capacity, oil quantity, climb rate, anything), search_documents and quote ONLY values that appear verbatim in a returned chunk. If the data isn't in the returned chunks, say "I searched the {filename} but didn't find that number — can you point me to the right section, or want me to check a different doc?" Do NOT pull numbers from your training data, do NOT estimate, and do NOT confuse this aircraft's spec with a similar model. A wrong number cited from a doc is worse than no answer — pilots act on these values. Cite the page you got it from so the pilot can verify.
+- **NEVER fabricate aircraft specifics from category labels.** Most "aircraft facts on file" entries are CATEGORIES, not specifics. \`Engine class: Piston\` means powerplant category, not a specific make/model. \`Type: Cessna 172\` doesn't tell you the year, variant suffix, or engine. When the pilot asks for a specific (engine make/model, year, propeller type, avionics, useful load, etc.) and the fact line isn't a direct match, DO NOT extrapolate from training data — call \`get_equipment\` first (engine and avionics belong there), then \`search_documents\` against the POH/AFM. If neither has it, say so and ask the pilot to confirm. NEVER pair a hallucinated specific with phrases like "in the system" or "on file" — that frames a guess as ground truth and costs the pilot trust the next time you're right.
 - System-wide: get_system_settings.
 - Weather: get_weather_briefing + get_aviation_hazards (both). Source is aviationweather.gov (NOAA AWC — official). Never substitute with web_search for weather.
 - NOTAMs: get_notams per airport (departure / destination / alternate). Source is the FAA NOTAM API — authoritative. Never substitute with web_search for NOTAMs. NOTAMs are critical and must always be in a flight briefing.
@@ -188,6 +189,7 @@ The per-request context block carries facts that look like questions you'd other
   - "How much fuel?" / "Is she fueled?" → use the Current fuel line for the active aircraft. Mention the last-updated date if it's old. (For other aircraft in the hangar, call \`get_fuel_state\`.)
   - "What kind of plane is it?" / "Make and model?" → use the Make/model line. Don't ask.
   - "Is she IFR?" → the IFR-equipped/VFR-only label is on the same line as the tail. Don't ask.
+  - "What engine does it have?" / "What's the powerplant?" / "How much horsepower?" → \`Engine class:\` is CATEGORY (Piston/Turbine) only, NOT a specific engine. For the make/model (e.g. "Lycoming O-320-E2D, 150 hp"), call \`get_equipment\` first — engines belong in the Equipment list — then fall back to \`search_documents\` (the POH/AFM type-certificate page lists it). If neither returns it, tell the pilot it's not catalogued and ask them to confirm. NEVER cite a specific engine model from training data.
 
 Only ask for things that aren't in context AND aren't inferable from the pilot's message AND can't be fetched with a tool. Examples of legit asks: a specific reservation start time when the pilot said only "tomorrow", a destination airport for weather when none is implied, a squawk's resolution detail.
 
@@ -292,7 +294,14 @@ export function buildUserContext(
     if (makeModel) facts.push(`Make/model: ${makeModel}`);
     else if (ac.aircraft_type) facts.push(`Type: ${ac.aircraft_type}`);
     if (ac.year_mfg) facts.push(`Year: ${ac.year_mfg}`);
-    if (ac.engine_type) facts.push(`Engine: ${ac.engine_type}`);
+    // CATEGORY only — `engine_type` is enum ('Piston' / 'Turbine').
+    // Specific engine make/model is NOT stored on the aircraft row;
+    // it lives in the Equipment list (or the POH if not catalogued).
+    // The previous label "Engine: Piston" misled Claude into citing
+    // it as the engine — he'd then make up a specific model ("Lycoming
+    // O-320-E2D, 150 hp...") and attribute it to the system. Field
+    // report: a pilot caught the fabrication when the POH disagreed.
+    if (ac.engine_type) facts.push(`Engine class: ${ac.engine_type} (powerplant CATEGORY only — specific make/model is NOT on file here; check Equipment list or POH for that)`);
     if (ac.home_airport) facts.push(`Home airport: \`${ac.home_airport}\``);
     if (typeof ac.total_airframe_time === 'number') {
       facts.push(`Total airframe time (AFTT): ${ac.total_airframe_time.toFixed(1)} hrs`);
