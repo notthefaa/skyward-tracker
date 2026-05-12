@@ -6,6 +6,12 @@ import { idempotency } from '@/lib/idempotency';
 import { PDFParse } from 'pdf-parse';
 import OpenAI from 'openai';
 
+// 5-minute ceiling — a 20 MB POH with 300+ pages can produce 1000+
+// chunks; the OpenAI embeddings call ends up being the long pole.
+// Vercel Pro's default 60s kept killing real POH uploads mid-embed,
+// leaving rows stuck at status='processing' with partial chunks.
+export const maxDuration = 300;
+
 const openai = new OpenAI();
 
 const CHUNK_SIZE = 1500; // chars (~375 tokens)
@@ -164,20 +170,40 @@ export async function POST(req: Request) {
     // identical PDF (and pay for embedding it again).
     const { data: dup, error: dupErr } = await supabaseAdmin
       .from('aft_documents')
-      .select('id, filename')
+      .select('id, filename, status, created_at')
       .eq('aircraft_id', aircraftId)
       .eq('sha256', sha256)
       .is('deleted_at', null)
       .maybeSingle();
     if (dupErr) throw dupErr;
     if (dup) {
-      // Clean up the orphaned storage upload so the bucket doesn't
-      // collect duplicate copies.
-      try { await supabaseAdmin.storage.from('aft_aircraft_documents').remove([storagePath]); } catch {}
-      return NextResponse.json(
-        { error: `This exact file is already uploaded as "${dup.filename}".` },
-        { status: 409 }
-      );
+      // A 'ready' row is a real duplicate — block the upload, clean up
+      // the storage object we just landed, and tell the user.
+      if (dup.status === 'ready') {
+        try { await supabaseAdmin.storage.from('aft_aircraft_documents').remove([storagePath]); } catch {}
+        return NextResponse.json(
+          { error: `This exact file is already uploaded as "${dup.filename}".` },
+          { status: 409 }
+        );
+      }
+      // A 'processing' or 'error' row from a previous attempt that
+      // Vercel killed mid-embed (function timeout, network blip, etc.)
+      // would otherwise lock the user out forever — same SHA, can't
+      // re-upload. Treat any non-'ready' row older than ~30 s as stale
+      // and reclaim it: hard-delete chunks (might be partial), drop
+      // the row, and let this attempt proceed normally. 30 s gives an
+      // in-progress concurrent upload time to finish without a race.
+      const ageMs = Date.now() - Date.parse(dup.created_at);
+      if (ageMs < 30_000) {
+        try { await supabaseAdmin.storage.from('aft_aircraft_documents').remove([storagePath]); } catch {}
+        return NextResponse.json(
+          { error: 'A previous upload of this file is still in progress. Wait a moment and try again.' },
+          { status: 409 }
+        );
+      }
+      console.log(`[documents] reclaiming stale row ${dup.id} (status=${dup.status}, age=${Math.round(ageMs / 1000)}s)`);
+      await supabaseAdmin.from('aft_document_chunks').delete().eq('document_id', dup.id);
+      await supabaseAdmin.from('aft_documents').delete().eq('id', dup.id);
     }
 
     const uploadData = { path: storagePath };

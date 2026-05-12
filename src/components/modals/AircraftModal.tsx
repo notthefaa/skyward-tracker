@@ -447,7 +447,12 @@ export default function AircraftModal({
             ]);
             if (uploadRes.error) { uploadFailed++; continue; }
 
-            // Step 3: register + parse + embed
+            // Step 3: register + parse + embed. 5-minute timeout to
+            // match the server's maxDuration — a real 20 MB POH +
+            // thousands of OpenAI embedding chunks can take 2-3 min,
+            // well over the default UPLOAD_TIMEOUT_MS (60 s) that
+            // would otherwise abort the client mid-embed.
+            const REGISTER_TIMEOUT_MS = 5 * 60 * 1000;
             const idemKey = crypto.randomUUID();
             const res = await authFetch('/api/documents', {
               method: 'POST',
@@ -458,7 +463,7 @@ export default function AircraftModal({
                 filename: df.file.name,
               }),
               headers: idempotencyHeader(idemKey),
-              timeoutMs: UPLOAD_TIMEOUT_MS,
+              timeoutMs: REGISTER_TIMEOUT_MS,
             });
             if (!res.ok) uploadFailed++;
           } catch {

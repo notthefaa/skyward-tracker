@@ -129,8 +129,14 @@ export default function DocumentsTab({
       // Idempotency key sticky across retries of this step so a slow
       // server-side parse + embed doesn't double-charge OpenAI on an
       // iOS-suspended retry. Cleared on success.
-      setUploadProgress('Extracting text & generating embeddings...');
+      // Set expectations — for a real POH/AFM this step is often
+      // 60–180 s (pdf-parse + thousands of OpenAI embedding calls).
+      setUploadProgress('Reading PDF and indexing — this can take 1–3 minutes for large docs…');
       if (!uploadIdemKeyRef.current) uploadIdemKeyRef.current = newIdempotencyKey();
+      // 5-minute timeout to match the server's maxDuration. The default
+      // UPLOAD_TIMEOUT_MS (60 s) would have aborted the client before
+      // Vercel even started killing the function.
+      const REGISTER_TIMEOUT_MS = 5 * 60 * 1000;
       const res = await authFetch('/api/documents', {
         method: 'POST',
         body: JSON.stringify({
@@ -140,7 +146,7 @@ export default function DocumentsTab({
           filename: selectedFile.name,
         }),
         headers: idempotencyHeader(uploadIdemKeyRef.current),
-        timeoutMs: UPLOAD_TIMEOUT_MS,
+        timeoutMs: REGISTER_TIMEOUT_MS,
       });
 
       if (!res.ok) {
