@@ -42,6 +42,18 @@ test.describe('cron auth — Bearer CRON_SECRET required', () => {
     expect(res.status()).toBe(401);
   });
 
+  test('sweep-document-orphans without auth → 401', async ({ baseURL, request }) => {
+    const res = await request.get(`${baseURL}/api/cron/sweep-document-orphans`);
+    expect(res.status()).toBe(401);
+  });
+
+  test('sweep-document-orphans with wrong bearer → 401', async ({ baseURL, request }) => {
+    const res = await request.get(`${baseURL}/api/cron/sweep-document-orphans`, {
+      headers: { Authorization: 'Bearer wrong' },
+    });
+    expect(res.status()).toBe(401);
+  });
+
   test('mx-reminders with correct bearer returns 200 + success shape', async ({ baseURL, request }) => {
     test.skip(!CRON_SECRET, 'CRON_SECRET not in env');
     test.setTimeout(120_000);
@@ -66,5 +78,23 @@ test.describe('cron auth — Bearer CRON_SECRET required', () => {
     // present case returns `totals: { inserted, updated, skipped, errors }`.
     // Either is fine — just don't 500.
     expect(body.note ?? body.totals).toBeDefined();
+  });
+
+  test('sweep-document-orphans dry-run with correct bearer returns 200 + counts', async ({ baseURL, request }) => {
+    // Dry-run mode (?dry=1) — exercises the SELECT + bucket-list paths
+    // without actually removing any storage objects. Safe to run in CI.
+    test.skip(!CRON_SECRET, 'CRON_SECRET not in env');
+    test.setTimeout(120_000);
+    const res = await request.get(`${baseURL}/api/cron/sweep-document-orphans?dry=1`, {
+      headers: { Authorization: `Bearer ${CRON_SECRET}` },
+    });
+    expect(res.status()).toBe(200);
+    const body = await res.json();
+    expect(body.success).toBe(true);
+    expect(body.dryRun).toBe(true);
+    // Dry-run should always return 0 deleted regardless of orphan count.
+    expect(body.deleted).toBe(0);
+    expect(typeof body.scanned).toBe('number');
+    expect(typeof body.found_orphans).toBe('number');
   });
 });
