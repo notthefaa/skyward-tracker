@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, after } from 'next/server';
 import { createHash } from 'crypto';
 import { requireAuth, requireAircraftAccess, requireAircraftAdmin, handleApiError } from '@/lib/auth';
 import { setAppUser } from '@/lib/audit';
@@ -6,11 +6,22 @@ import { idempotency } from '@/lib/idempotency';
 import { PDFParse } from 'pdf-parse';
 import OpenAI from 'openai';
 
-// 5-minute ceiling — a 20 MB POH with 300+ pages can produce 1000+
-// chunks; the OpenAI embeddings call ends up being the long pole.
-// Vercel Pro's default 60s kept killing real POH uploads mid-embed,
-// leaving rows stuck at status='processing' with partial chunks.
+// 5-minute ceiling — even though parse + embed now runs in `after()`
+// after the response is sent, Vercel keeps the function alive only
+// until maxDuration. A 20 MB POH with 1000+ chunks needs that whole
+// budget for OpenAI embeddings.
 export const maxDuration = 300;
+// pdf-parse + Buffer require Node, not the Edge runtime. Default in
+// Next 16 is Node but pin it explicitly so a future default flip can't
+// silently break this route.
+export const runtime = 'nodejs';
+
+// Window after which a non-'ready' row of the same SHA is considered
+// stale and reclaimed. MUST exceed `maxDuration` (300 s) plus a margin
+// so a still-running `after()` from a previous upload can't be torn
+// out from under itself. A bare 30 s window would clobber legitimate
+// large-PDF processing.
+const RECLAIM_PROCESSING_AGE_MS = 360_000; // 6 min
 
 const openai = new OpenAI();
 
@@ -63,6 +74,158 @@ async function generateEmbeddings(texts: string[]): Promise<number[][]> {
     }
   }
   return allEmbeddings;
+}
+
+/**
+ * Runs after the POST response has been sent. Parses the PDF, embeds
+ * the chunks, flips the document row to 'ready' (or 'error' on
+ * failure). The route's response already returned `status='processing'`
+ * to the client, which polls via /api/documents and surfaces a toast
+ * on the transition.
+ *
+ * Wrapped in a top-level try/catch so an unhandled throw inside
+ * `after()` can't leave a doc row stuck at 'processing' forever.
+ */
+async function indexDocumentInBackground(
+  supabaseAdmin: ReturnType<typeof import('@/lib/auth').createAdminClient>,
+  userId: string,
+  doc: { id: string; aircraft_id: string },
+  buffer: Buffer,
+  storagePath: string,
+): Promise<void> {
+  // Re-stamp the audit user. `setAppUser` writes a Postgres session
+  // variable and the after() continuation may run on a different
+  // connection than the request handler, so the variable doesn't
+  // automatically carry over.
+  try { await setAppUser(supabaseAdmin, userId); } catch (e) {
+    console.error('[documents] failed to re-stamp audit user in after():', e);
+  }
+
+  const failDocument = async (reason: string) => {
+    console.error(`[documents] background index failed for doc=${doc.id}: ${reason}`);
+    // Status flip is the critical step — without it the row stays at
+    // 'processing' and the watcher polls indefinitely. Retry up to 3×
+    // with backoff. If it still fails the hourly sweep-stuck-processing
+    // cron is the final safety net.
+    let flipped = false;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const { error } = await supabaseAdmin
+          .from('aft_documents')
+          .update({ status: 'error' })
+          .eq('id', doc.id);
+        if (!error) { flipped = true; break; }
+        console.error(`[documents] status flip attempt ${attempt + 1} failed:`, error.message);
+      } catch (e) {
+        console.error(`[documents] status flip attempt ${attempt + 1} threw:`, e);
+      }
+      if (attempt < 2) await new Promise(r => setTimeout(r, 500 * (attempt + 1)));
+    }
+    if (!flipped) {
+      console.error(`[documents] CRITICAL: status flip permanently failed for doc=${doc.id} — sweep-stuck-processing will catch it.`);
+    }
+    try {
+      await supabaseAdmin.storage.from('aft_aircraft_documents').remove([storagePath]);
+    } catch (e) {
+      console.error('[documents] failed to remove orphan storage object:', e);
+    }
+    // Chunks too — a partial-insert failure path leaves them behind.
+    try {
+      await supabaseAdmin.from('aft_document_chunks').delete().eq('document_id', doc.id);
+    } catch (e) {
+      console.error('[documents] failed to clear partial chunks:', e);
+    }
+  };
+
+  try {
+    let pageCount = 0;
+    let taggedChunks: TaggedChunk[] = [];
+
+    // PDF parse-bomb guard. Was 25 s on the old synchronous shape;
+    // bumped to 60 s now that the embed call sits behind it inside
+    // the same function budget (maxDuration=300 s).
+    const PARSE_DEADLINE_MS = 60_000;
+    const parseDeadline = Date.now() + PARSE_DEADLINE_MS;
+    const withTimeout = <T>(p: Promise<T>, ms: number): Promise<T> =>
+      Promise.race([
+        p,
+        new Promise<T>((_, reject) => setTimeout(() => reject(new Error('pdf_timeout')), ms)),
+      ]);
+
+    try {
+      const parser = new PDFParse({ data: new Uint8Array(buffer) });
+      const fullResult = await withTimeout(parser.getText(), PARSE_DEADLINE_MS);
+      pageCount = fullResult.total || 0;
+
+      if (pageCount > 0) {
+        const pages: Array<{ page: number; text: string }> = [];
+        for (let p = 1; p <= pageCount; p++) {
+          if (Date.now() > parseDeadline) break;
+          try {
+            const remaining = Math.max(1_000, parseDeadline - Date.now());
+            const pageResult = await withTimeout(parser.getText({ partial: [p] }), remaining);
+            if (pageResult.text?.trim()) {
+              pages.push({ page: p, text: pageResult.text });
+            }
+          } catch {
+            // Page-level parse failed — skip silently, the fallback
+            // full-text path below will still produce chunks.
+          }
+        }
+        if (pages.length > 0) {
+          taggedChunks = chunkTextPages(pages);
+        }
+      }
+
+      if (taggedChunks.length === 0 && fullResult.text?.trim()) {
+        taggedChunks = chunkText(fullResult.text);
+      }
+
+      await parser.destroy();
+    } catch (err: any) {
+      if (err?.message === 'pdf_timeout') {
+        return await failDocument('PDF took too long to parse.');
+      }
+      return await failDocument(`pdf-parse threw: ${err?.message || err}`);
+    }
+
+    if (taggedChunks.length === 0) {
+      return await failDocument('No readable text found in PDF.');
+    }
+
+    try {
+      const embeddings = await generateEmbeddings(taggedChunks.map(c => c.content));
+      const chunkRows = taggedChunks.map((chunk, i) => ({
+        document_id: doc.id,
+        chunk_index: i,
+        content: chunk.content,
+        page_number: chunk.page_number,
+        embedding: JSON.stringify(embeddings[i]),
+      }));
+      for (let i = 0; i < chunkRows.length; i += 50) {
+        const batch = chunkRows.slice(i, i + 50);
+        const { error: chunkError } = await supabaseAdmin
+          .from('aft_document_chunks')
+          .insert(batch);
+        if (chunkError) throw chunkError;
+      }
+    } catch (err: any) {
+      return await failDocument(`embed/chunk insert failed: ${err?.message || err}`);
+    }
+
+    const { error: readyErr } = await supabaseAdmin
+      .from('aft_documents')
+      .update({ status: 'ready', page_count: pageCount })
+      .eq('id', doc.id);
+    if (readyErr) {
+      return await failDocument(`status flip to ready failed: ${readyErr.message}`);
+    }
+
+    console.log(`[documents] background index complete doc=${doc.id} chunks=${taggedChunks.length} pages=${pageCount}`);
+  } catch (err: any) {
+    console.error('[documents] background index unexpected error:', err);
+    await failDocument(`unhandled: ${err?.message || err}`);
+  }
 }
 
 // GET — list documents for aircraft
@@ -164,21 +327,19 @@ export async function POST(req: Request) {
     // pulled from storage so it reflects what's actually there.
     const sha256 = createHash('sha256').update(buffer).digest('hex');
 
-    // Reject duplicate uploads (same aircraft, same bytes). Throw on
-    // read error so a transient failure isn't treated as "no
-    // duplicate found" and cause us to land a second copy of the
-    // identical PDF (and pay for embedding it again).
+    // Reject / reclaim a same-SHA row.
+    // Throw on read error so a transient DB failure isn't treated as
+    // "no duplicate found" (which would let us land a second copy).
     const { data: dup, error: dupErr } = await supabaseAdmin
       .from('aft_documents')
-      .select('id, filename, status, created_at')
+      .select('id, filename, file_url, status, created_at')
       .eq('aircraft_id', aircraftId)
       .eq('sha256', sha256)
       .is('deleted_at', null)
       .maybeSingle();
     if (dupErr) throw dupErr;
     if (dup) {
-      // A 'ready' row is a real duplicate — block the upload, clean up
-      // the storage object we just landed, and tell the user.
+      // 'ready' → real duplicate, block the upload and tell the user.
       if (dup.status === 'ready') {
         try { await supabaseAdmin.storage.from('aft_aircraft_documents').remove([storagePath]); } catch {}
         return NextResponse.json(
@@ -186,22 +347,35 @@ export async function POST(req: Request) {
           { status: 409 }
         );
       }
-      // A 'processing' or 'error' row from a previous attempt that
-      // Vercel killed mid-embed (function timeout, network blip, etc.)
-      // would otherwise lock the user out forever — same SHA, can't
-      // re-upload. Treat any non-'ready' row older than ~30 s as stale
-      // and reclaim it: hard-delete chunks (might be partial), drop
-      // the row, and let this attempt proceed normally. 30 s gives an
-      // in-progress concurrent upload time to finish without a race.
-      const ageMs = Date.now() - Date.parse(dup.created_at);
-      if (ageMs < 30_000) {
-        try { await supabaseAdmin.storage.from('aft_aircraft_documents').remove([storagePath]); } catch {}
-        return NextResponse.json(
-          { error: 'A previous upload of this file is still in progress. Wait a moment and try again.' },
-          { status: 409 }
-        );
+      // 'processing' < RECLAIM_PROCESSING_AGE_MS → genuine concurrent
+      // upload in flight; let it finish. (Threshold must exceed
+      // maxDuration=300 s so we never tear out a still-running `after()`
+      // from under itself — a 30 s threshold previously did exactly
+      // that for legitimately-large PDFs.)
+      if (dup.status === 'processing') {
+        const ageMs = Date.now() - Date.parse(dup.created_at);
+        if (ageMs < RECLAIM_PROCESSING_AGE_MS) {
+          try { await supabaseAdmin.storage.from('aft_aircraft_documents').remove([storagePath]); } catch {}
+          return NextResponse.json(
+            { error: 'A previous upload of this file is still being indexed. Wait a minute and try again.' },
+            { status: 409 }
+          );
+        }
       }
-      console.log(`[documents] reclaiming stale row ${dup.id} (status=${dup.status}, age=${Math.round(ageMs / 1000)}s)`);
+      // Reclaim: 'error' (any age — failed attempts unblock re-upload
+      // immediately) OR 'processing' older than RECLAIM_PROCESSING_AGE_MS
+      // (Vercel almost certainly killed the after() — the
+      // sweep-stuck-processing cron will catch these if we don't).
+      console.log(`[documents] reclaiming row ${dup.id} (status=${dup.status}, age=${Math.round((Date.now() - Date.parse(dup.created_at)) / 1000)}s)`);
+      // Remove the OLD storagePath too — without this, every reclaim
+      // leaves an orphaned PDF in the bucket that the daily orphan
+      // sweep has to mop up >24 h later.
+      const oldPath = dup.file_url?.match(/\/aft_aircraft_documents\/(.+)$/)?.[1];
+      if (oldPath && oldPath !== storagePath) {
+        try { await supabaseAdmin.storage.from('aft_aircraft_documents').remove([oldPath]); } catch (e) {
+          console.error('[documents] failed to remove reclaimed storage object:', e);
+        }
+      }
       await supabaseAdmin.from('aft_document_chunks').delete().eq('document_id', dup.id);
       await supabaseAdmin.from('aft_documents').delete().eq('id', dup.id);
     }
@@ -252,137 +426,41 @@ export async function POST(req: Request) {
       throw docError;
     }
 
-    // Extract text from PDF — parse per-page so chunks carry their
-    // source page number, enabling Howard to cite "POH page 47".
-    let pageCount = 0;
-    let taggedChunks: TaggedChunk[] = [];
-
-    // Parse-bomb guard: an adversarial PDF (deeply nested compression,
-    // circular references, password-protected structures) can make
-    // pdf-parse hang indefinitely, eating the whole serverless budget.
-    // 25s ceiling for the full parse + per-page loop keeps us inside
-    // Vercel's 30s pro-tier default with margin for the embeddings call.
-    const PARSE_DEADLINE_MS = 25_000;
-    const parseDeadline = Date.now() + PARSE_DEADLINE_MS;
-    const withTimeout = <T>(p: Promise<T>, ms: number): Promise<T> =>
-      Promise.race([
-        p,
-        new Promise<T>((_, reject) => setTimeout(() => reject(new Error('pdf_timeout')), ms)),
-      ]);
-
-    // Roll back a doc that failed somewhere after the storage upload +
-    // doc-row insert. Without this, every parse / embedding / chunk
-    // failure left the PDF orphaned in the bucket AND the doc row
-    // stuck at status='processing' (UI has no recovery affordance).
-    // Marks the row as 'error' for visibility, then deletes the
-    // storage object so we don't pay to host bytes nobody will read.
-    const failDocument = async (errorMessage: string, httpStatus: number) => {
-      try {
-        await supabaseAdmin.from('aft_documents').update({ status: 'error' }).eq('id', doc.id);
-      } catch (e) {
-        console.error('[documents] failed to set status=error:', e);
-      }
-      try {
-        await supabaseAdmin.storage.from('aft_aircraft_documents').remove([uploadData.path]);
-      } catch (e) {
-        console.error('[documents] failed to remove orphan storage object:', e);
-      }
-      return NextResponse.json({ error: errorMessage }, { status: httpStatus });
+    // Hand the response back to the client immediately. The heavy
+    // parse + embed + chunk-insert work continues inside `after()` so
+    // a 20 MB POH with 1000+ chunks doesn't have to hold an HTTP
+    // connection open for 2-3 minutes (which on mobile means iOS
+    // suspends the request and the upload appears to hang forever).
+    // The client polls for status via /api/documents and surfaces a
+    // toast when this background work flips the row to 'ready'.
+    const immediateBody = {
+      success: true,
+      document: doc,
+      status: 'processing' as const,
+      chunks: 0,
     };
 
-    try {
-      const parser = new PDFParse({ data: new Uint8Array(buffer) });
-      // First pass: get total page count from the full parse.
-      const fullResult = await withTimeout(parser.getText(), PARSE_DEADLINE_MS);
-      pageCount = fullResult.total || 0;
+    // Schedule the background work FIRST. If we did `idem.save()` first
+    // and it threw (transient supabase blip), the catch below would
+    // leave the row at 'processing' with no after() scheduled — the
+    // watcher would poll forever. With after() first, the row always
+    // has a worker assigned to flip it to ready/error.
+    after(async () => {
+      await indexDocumentInBackground(supabaseAdmin, user.id, { id: doc.id, aircraft_id: aircraftId }, buffer, storagePath);
+    });
 
-      // Second pass: extract per-page text so chunks are page-tagged.
-      // For each page, getText({ partial: [p] }) returns only that
-      // page's content. Falls back to un-paged chunking if per-page
-      // parsing fails (some PDFs have non-standard page structures).
-      if (pageCount > 0) {
-        const pages: Array<{ page: number; text: string }> = [];
-        for (let p = 1; p <= pageCount; p++) {
-          // If we've already used up the parse budget, bail out and
-          // fall back to the (already-computed) full-text chunks so
-          // the user at least gets something indexable.
-          if (Date.now() > parseDeadline) break;
-          try {
-            const remaining = Math.max(1_000, parseDeadline - Date.now());
-            const pageResult = await withTimeout(parser.getText({ partial: [p] }), remaining);
-            if (pageResult.text?.trim()) {
-              pages.push({ page: p, text: pageResult.text });
-            }
-          } catch {
-            // Page-level parse failed — skip this page silently;
-            // its content was already in the full-text fallback.
-          }
-        }
-        if (pages.length > 0) {
-          taggedChunks = chunkTextPages(pages);
-        }
-      }
-
-      // Fallback: if per-page extraction yielded nothing (malformed
-      // PDF, single-stream text), chunk the full text without page tags.
-      if (taggedChunks.length === 0 && fullResult.text?.trim()) {
-        taggedChunks = chunkText(fullResult.text);
-      }
-
-      await parser.destroy();
-    } catch (err: any) {
-      if (err?.message === 'pdf_timeout') {
-        return await failDocument('PDF took too long to parse. Try a smaller or simpler file.', 400);
-      }
-      return await failDocument("Couldn't read the PDF — it might be a scan or image-based file that we can't extract text from.", 400);
+    // Idempotency cache save is best-effort — a failure here just
+    // means a retried request will go through the same path and a
+    // second `after()` would be scheduled. The SHA-256 dup-check would
+    // then reclaim the just-inserted row OR (if the after() is still
+    // mid-flight) 409 with "still in progress". Either way the user
+    // sees a sensible message.
+    try { await idem.save(200, immediateBody); } catch (e) {
+      console.error('[documents] idempotency save failed (non-fatal):', e);
     }
 
-    if (taggedChunks.length === 0) {
-      return await failDocument('No readable text found in PDF.', 400);
-    }
-
-    // Generate embeddings + insert chunks. Both can fail (OpenAI 5xx,
-    // DB transient error). On either failure roll the document back so
-    // the bucket doesn't keep an unreachable PDF and the UI doesn't
-    // see a permanent 'processing' row.
-    try {
-      const embeddings = await generateEmbeddings(taggedChunks.map(c => c.content));
-
-      const chunkRows = taggedChunks.map((chunk, i) => ({
-        document_id: doc.id,
-        chunk_index: i,
-        content: chunk.content,
-        page_number: chunk.page_number,
-        embedding: JSON.stringify(embeddings[i]),
-      }));
-
-      for (let i = 0; i < chunkRows.length; i += 50) {
-        const batch = chunkRows.slice(i, i + 50);
-        const { error: chunkError } = await supabaseAdmin
-          .from('aft_document_chunks')
-          .insert(batch);
-        if (chunkError) throw chunkError;
-      }
-    } catch (err: any) {
-      // Leftover chunks from a partial insert would still be readable
-      // by Howard — wipe them before flipping the doc to 'error'.
-      await supabaseAdmin.from('aft_document_chunks').delete().eq('document_id', doc.id);
-      console.error('[documents] embedding/chunk insert failed:', err?.message || err);
-      return await failDocument("Couldn't index the document. Try again — if it keeps failing, the file may be too large or malformed.", 502);
-    }
-
-    // Update document status. Throw on failure: embeddings + chunks
-    // already landed; the user retries thinking it failed and we'd
-    // double-embed.
-    const { error: readyErr } = await supabaseAdmin.from('aft_documents')
-      .update({ status: 'ready', page_count: pageCount })
-      .eq('id', doc.id);
-    if (readyErr) throw readyErr;
-
-    const responseBody = { success: true, document: { ...doc, status: 'ready', page_count: pageCount }, chunks: taggedChunks.length };
-    await idem.save(200, responseBody);
-    return NextResponse.json(responseBody);
-  } catch (error) { return handleApiError(error); }
+    return NextResponse.json(immediateBody);
+  } catch (error) { return handleApiError(error, req); }
 }
 
 // DELETE — soft-delete document (admin only). Chunks are hard-deleted so

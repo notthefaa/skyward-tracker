@@ -5,6 +5,7 @@ import { supabase, abortInFlightSupabaseReads } from "@/lib/supabase";
 import { authFetch, onAuthFetchUnauthorized, abortAllInFlightAuthFetches, markPostResume } from "@/lib/authFetch";
 import { probeNetworkDeep, recoveryReload } from "@/lib/iosRecovery";
 import { useFleetData, useRealtimeSync, useGroundedStatus, useAircraftRole, usePullToRefresh } from "@/hooks";
+import { useDocStatusWatcher } from "@/hooks/useDocStatusWatcher";
 import { useModalScrollLock } from "@/hooks/useModalScrollLock";
 import { NETWORK_TIMEOUT_MS } from "@/lib/constants";
 import { swrKeys, matchesAircraft, allForAircraft } from "@/lib/swrKeys";
@@ -1113,6 +1114,13 @@ export default function AppShell({ session }: AppShellProps) {
   }
   const selectedAircraftData = allAircraftList.find(a => a.tail_number === activeTail) || null;
   const showFleetButton = aircraftList.length > 1;
+
+  // Watch the active aircraft's docs for status='processing' → 'ready'
+  // transitions and surface a toast. Mounted here in AppShell so the
+  // notification fires even when the user has navigated away from the
+  // documents tab (which is the whole point of the fire-and-forget
+  // upload shape).
+  useDocStatusWatcher(selectedAircraftData?.id || null);
 
   return (
     <div className="flex flex-col bg-neutral-100 w-full min-h-screen relative">

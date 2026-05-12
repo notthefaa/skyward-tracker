@@ -14,6 +14,7 @@ import { useConfirm } from "@/components/ConfirmProvider";
 import SectionSelector from "@/components/shell/SectionSelector";
 import { MORE_SELECTOR_ITEMS, emitMoreNavigate } from "@/components/shell/moreNav";
 import { useSignedUrls } from "@/hooks/useSignedUrls";
+import { registerPendingUpload } from "@/hooks/useDocStatusWatcher";
 
 const DOC_TYPES: { value: DocType; label: string }[] = [
   { value: 'POH', label: "Pilot's Operating Handbook" },
@@ -51,11 +52,14 @@ export default function DocumentsTab({
   // Aircraft switch — drop any picked PDF + reset the doc-type so a
   // POH selected for tail A can never upload against tail B's id (the
   // server pulls aircraftId from FormData at submit time, not at file
-  // pick).
+  // pick). Also clear the sticky idempotency key — a left-over key
+  // from tail A would otherwise be reused for tail B's first upload
+  // and the server's idem cache would return the wrong response.
   useEffect(() => {
     setSelectedFile(null);
     setDocType('POH');
     setUploadProgress('');
+    uploadIdemKeyRef.current = null;
   }, [aircraft?.id]);
 
   const { data, mutate } = useSWR(
@@ -125,18 +129,15 @@ export default function DocumentsTab({
       ]);
       if (uploadRes.error) throw uploadRes.error;
 
-      // ── Step 3: register the document + parse + embed ─────────────
-      // Idempotency key sticky across retries of this step so a slow
-      // server-side parse + embed doesn't double-charge OpenAI on an
-      // iOS-suspended retry. Cleared on success.
-      // Set expectations — for a real POH/AFM this step is often
-      // 60–180 s (pdf-parse + thousands of OpenAI embedding calls).
-      setUploadProgress('Reading PDF and indexing — this can take 1–3 minutes for large docs…');
+      // ── Step 3: register the document ─────────────────────────────
+      // Server creates the row at status='processing' and returns
+      // immediately; pdf-parse + OpenAI embeddings run in the
+      // background (Next's `after()`). The status-watcher hook in
+      // AppShell will surface a toast when the row flips to 'ready'.
+      // Idempotency key sticky across retries so a slow `after()`
+      // can't be re-triggered by a network blip + retry.
+      setUploadProgress('Filing the document…');
       if (!uploadIdemKeyRef.current) uploadIdemKeyRef.current = newIdempotencyKey();
-      // 5-minute timeout to match the server's maxDuration. The default
-      // UPLOAD_TIMEOUT_MS (60 s) would have aborted the client before
-      // Vercel even started killing the function.
-      const REGISTER_TIMEOUT_MS = 5 * 60 * 1000;
       const res = await authFetch('/api/documents', {
         method: 'POST',
         body: JSON.stringify({
@@ -146,7 +147,7 @@ export default function DocumentsTab({
           filename: selectedFile.name,
         }),
         headers: idempotencyHeader(uploadIdemKeyRef.current),
-        timeoutMs: REGISTER_TIMEOUT_MS,
+        timeoutMs: UPLOAD_TIMEOUT_MS,
       });
 
       if (!res.ok) {
@@ -165,7 +166,13 @@ export default function DocumentsTab({
 
       const result = await res.json();
       uploadIdemKeyRef.current = null;
-      showSuccess(`Document uploaded! ${result.chunks} sections indexed for search.`);
+      // Register the new doc id with the status watcher so a very fast
+      // server-side embed (small PDF) that completes BEFORE the
+      // watcher's next poll still produces a toast — without this,
+      // the first-sighting-silencing rule would swallow the terminal
+      // status.
+      if (result?.document?.id) registerPendingUpload(result.document.id);
+      showSuccess("Uploaded! Indexing the document in the background — we'll let you know when it's searchable. Feel free to keep using the app.");
       setSelectedFile(null);
       mutate();
     } catch (err: any) {
@@ -243,7 +250,14 @@ export default function DocumentsTab({
               <input
                 type="file"
                 accept="application/pdf"
-                onChange={e => setSelectedFile(e.target.files?.[0] || null)}
+                onChange={e => {
+                  setSelectedFile(e.target.files?.[0] || null);
+                  // Reset the idempotency ref so a NEW file picked
+                  // after a failed prior upload doesn't reuse the
+                  // old key (which would make the server's idem
+                  // cache return the prior 'processing' response).
+                  uploadIdemKeyRef.current = null;
+                }}
                 className="w-full text-sm text-navy file:mr-3 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-bold file:bg-navy file:text-white file:uppercase file:tracking-widest file:cursor-pointer"
               />
               {selectedFile && (

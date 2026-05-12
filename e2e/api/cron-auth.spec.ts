@@ -54,6 +54,18 @@ test.describe('cron auth — Bearer CRON_SECRET required', () => {
     expect(res.status()).toBe(401);
   });
 
+  test('sweep-stuck-processing without auth → 401', async ({ baseURL, request }) => {
+    const res = await request.get(`${baseURL}/api/cron/sweep-stuck-processing`);
+    expect(res.status()).toBe(401);
+  });
+
+  test('sweep-stuck-processing with wrong bearer → 401', async ({ baseURL, request }) => {
+    const res = await request.get(`${baseURL}/api/cron/sweep-stuck-processing`, {
+      headers: { Authorization: 'Bearer wrong' },
+    });
+    expect(res.status()).toBe(401);
+  });
+
   test('mx-reminders with correct bearer returns 200 + success shape', async ({ baseURL, request }) => {
     test.skip(!CRON_SECRET, 'CRON_SECRET not in env');
     test.setTimeout(120_000);
@@ -96,5 +108,19 @@ test.describe('cron auth — Bearer CRON_SECRET required', () => {
     expect(body.deleted).toBe(0);
     expect(typeof body.scanned).toBe('number');
     expect(typeof body.found_orphans).toBe('number');
+  });
+
+  test('sweep-stuck-processing dry-run with correct bearer returns 200 + counts', async ({ baseURL, request }) => {
+    test.skip(!CRON_SECRET, 'CRON_SECRET not in env');
+    test.setTimeout(60_000);
+    const res = await request.get(`${baseURL}/api/cron/sweep-stuck-processing?dry=1`, {
+      headers: { Authorization: `Bearer ${CRON_SECRET}` },
+    });
+    expect(res.status()).toBe(200);
+    const body = await res.json();
+    expect(body.success).toBe(true);
+    expect(body.dryRun).toBe(true);
+    expect(body.flipped).toBe(0); // dry-run never mutates
+    expect(typeof body.foundStuck).toBe('number');
   });
 });

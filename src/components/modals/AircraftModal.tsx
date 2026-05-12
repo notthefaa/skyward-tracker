@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import dynamic from "next/dynamic";
 import { useModalScrollLock } from "@/hooks/useModalScrollLock";
 import { useEscapeKey } from "@/hooks/useEscapeKey";
+import { registerPendingUpload } from "@/hooks/useDocStatusWatcher";
 import { supabase } from "@/lib/supabase";
 import { authFetch, UPLOAD_TIMEOUT_MS } from "@/lib/authFetch";
 import { idempotencyHeader } from "@/lib/idempotencyClient";
@@ -421,7 +422,7 @@ export default function AircraftModal({
       // POH/AFM uploads land instead of silently failing.
       if (newAircraftId && docFiles.length > 0) {
         setIsUploadingDocs(true);
-        let uploadFailed = 0;
+        const failures: string[] = [];
         for (const df of docFiles) {
           try {
             // Step 1: signed upload URL
@@ -433,7 +434,12 @@ export default function AircraftModal({
                 size: df.file.size,
               }),
             });
-            if (!signRes.ok) { uploadFailed++; continue; }
+            if (!signRes.ok) {
+              const bodyText = await signRes.text().catch(() => '');
+              console.error('[aircraft-create] signed-upload-url failed:', df.file.name, signRes.status, bodyText.slice(0, 200));
+              failures.push(df.file.name);
+              continue;
+            }
             const { token, storagePath } = await signRes.json();
 
             // Step 2: upload directly to storage (bounded by UPLOAD_TIMEOUT_MS)
@@ -445,14 +451,16 @@ export default function AircraftModal({
                 setTimeout(() => resolve({ data: null, error: new Error('storage_upload_timeout') }), UPLOAD_TIMEOUT_MS),
               ),
             ]);
-            if (uploadRes.error) { uploadFailed++; continue; }
+            if (uploadRes.error) {
+              console.error('[aircraft-create] storage upload failed:', df.file.name, uploadRes.error.message);
+              failures.push(df.file.name);
+              continue;
+            }
 
-            // Step 3: register + parse + embed. 5-minute timeout to
-            // match the server's maxDuration — a real 20 MB POH +
-            // thousands of OpenAI embedding chunks can take 2-3 min,
-            // well over the default UPLOAD_TIMEOUT_MS (60 s) that
-            // would otherwise abort the client mid-embed.
-            const REGISTER_TIMEOUT_MS = 5 * 60 * 1000;
+            // Step 3: register the document. Server returns
+            // immediately at status='processing' and runs pdf-parse +
+            // embeddings in `after()`. The status-watcher in AppShell
+            // surfaces a toast when each row flips to 'ready'.
             const idemKey = crypto.randomUUID();
             const res = await authFetch('/api/documents', {
               method: 'POST',
@@ -463,15 +471,37 @@ export default function AircraftModal({
                 filename: df.file.name,
               }),
               headers: idempotencyHeader(idemKey),
-              timeoutMs: REGISTER_TIMEOUT_MS,
+              timeoutMs: UPLOAD_TIMEOUT_MS,
             });
-            if (!res.ok) uploadFailed++;
-          } catch {
-            uploadFailed++;
+            if (!res.ok) {
+              const bodyText = await res.text().catch(() => '');
+              console.error('[aircraft-create] register failed:', df.file.name, res.status, bodyText.slice(0, 200));
+              failures.push(df.file.name);
+              continue;
+            }
+            // Tell the AppShell watcher to expect this doc id — covers
+            // the case where the server-side `after()` finishes before
+            // the watcher's first poll observes the 'processing' state.
+            try {
+              const body = await res.json();
+              if (body?.document?.id) registerPendingUpload(body.document.id);
+            } catch { /* swallow — toast lifecycle is best-effort */ }
+          } catch (err: any) {
+            console.error('[aircraft-create] doc upload threw:', df.file.name, err?.message || err);
+            failures.push(df.file.name);
           }
         }
         setIsUploadingDocs(false);
-        if (uploadFailed > 0) showWarning(`Aircraft saved. ${uploadFailed} document(s) failed to upload — you can retry from the Documents tab.`);
+        if (failures.length > 0) {
+          const total = docFiles.length;
+          const succeeded = total - failures.length;
+          const failedList = failures.join(', ');
+          if (succeeded === 0) {
+            showWarning(`Aircraft saved, but none of the ${total} document(s) uploaded (${failedList}). Retry from the Documents tab.`);
+          } else {
+            showWarning(`Aircraft saved with ${succeeded}/${total} document(s). Failed: ${failedList}. Retry the rest from the Documents tab.`);
+          }
+        }
       }
     }
 
