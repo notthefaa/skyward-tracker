@@ -90,6 +90,14 @@ export default function AircraftModal({
   const [docFiles, setDocFiles] = useState<Array<{ file: File; docType: string }>>([]);
   const [isUploadingDocs, setIsUploadingDocs] = useState(false);
   const docInputRef = useRef<HTMLInputElement>(null);
+  // Per-file idempotency keys for the doc-upload loop. Without a
+  // sticky key per File, a user retry of the create-aircraft form
+  // (e.g., one PDF failed, they tap Save again) would re-embed every
+  // PDF with a fresh key → server has no dedup signal → double-charge
+  // on OpenAI. Keyed by File reference; entries are dropped when the
+  // file leaves docFiles (handled in the doc-picker onChange and on
+  // modal close).
+  const docIdemKeys = useRef<Map<File, string>>(new Map());
 
   useEffect(() => {
     if (existingAircraft) {
@@ -461,7 +469,16 @@ export default function AircraftModal({
             // immediately at status='processing' and runs pdf-parse +
             // embeddings in `after()`. The status-watcher in AppShell
             // surfaces a toast when each row flips to 'ready'.
-            const idemKey = crypto.randomUUID();
+            // Sticky idempotency key PER FILE — a retry of the form
+            // reuses each file's key so the server's idem cache
+            // returns the prior response (no double-embed). Keys are
+            // dropped from docIdemKeys when the file is removed from
+            // docFiles.
+            let idemKey = docIdemKeys.current.get(df.file);
+            if (!idemKey) {
+              idemKey = crypto.randomUUID();
+              docIdemKeys.current.set(df.file, idemKey);
+            }
             const res = await authFetch('/api/documents', {
               method: 'POST',
               body: JSON.stringify({
@@ -872,7 +889,14 @@ export default function AircraftModal({
                       >
                         {DOC_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
                       </select>
-                      <button type="button" onClick={() => setDocFiles(prev => prev.filter((_, idx) => idx !== i))} className="text-gray-400 hover:text-danger p-0.5 shrink-0">
+                      <button type="button" onClick={() => {
+                        // Drop the matching idem key so a freshly-
+                        // re-picked file gets a fresh key (avoids
+                        // server idem cache returning a stale 4xx
+                        // for a now-removed file).
+                        docIdemKeys.current.delete(df.file);
+                        setDocFiles(prev => prev.filter((_, idx) => idx !== i));
+                      }} className="text-gray-400 hover:text-danger p-0.5 shrink-0">
                         <Trash2 size={12} />
                       </button>
                     </div>

@@ -36,13 +36,40 @@ import { useToast } from "@/components/ToastProvider";
  *   first-sighting-silencing rule would swallow it.
  */
 
-type DocRow = { id: string; filename: string; status: string };
+type DocRow = { id: string; filename: string; status: string; created_at?: string };
 
 // Module-level set of doc IDs whose first sighting should toast even
 // if the status is already terminal. Populated by the upload sites
 // right after `POST /api/documents` returns the new doc.id. The
 // watcher drains entries when it consumes them.
 const pendingUploads = new Set<string>();
+
+/**
+ * Pick a polling interval based on the oldest `processing` row's age.
+ * Tight 8 s while indexing is fresh (the common case — most embeds
+ * finish under 60 s); back off to 15 s and 30 s for outliers so the
+ * watcher doesn't burn cellular data on a row that's already past
+ * its expected completion time. `0` disables polling entirely (SWR
+ * will resume on the next focus event or upload-triggered mutate).
+ */
+function pollIntervalFor(docs: DocRow[]): number {
+  const now = Date.now();
+  let oldestProcessingAgeMs = 0;
+  for (const d of docs) {
+    if (d.status !== 'processing' || !d.created_at) continue;
+    const age = now - Date.parse(d.created_at);
+    if (Number.isFinite(age) && age > oldestProcessingAgeMs) oldestProcessingAgeMs = age;
+  }
+  if (oldestProcessingAgeMs === 0) {
+    // Either no processing row, or no created_at on any (older rows
+    // pre-dated this column). Fall back to 8 s if any processing row
+    // exists, else idle.
+    return docs.some(d => d.status === 'processing') ? 8_000 : 0;
+  }
+  if (oldestProcessingAgeMs < 60_000) return 8_000;
+  if (oldestProcessingAgeMs < 5 * 60_000) return 15_000;
+  return 30_000;
+}
 
 export function registerPendingUpload(docId: string): void {
   if (docId) pendingUploads.add(docId);
@@ -64,16 +91,13 @@ export function useDocStatusWatcher(aircraftId: string | null | undefined): void
       return await res.json();
     },
     {
-      // Poll while any row is `'processing'`. When idle the refresh
-      // interval is 0 (no polling); the next upload's `mutate()` from
-      // DocumentsTab repopulates the cache and the watcher resumes.
-      // For a brand-new pendingUpload that hasn't landed in the cache
-      // yet, SWR's revalidate-on-focus + an explicit `mutate()` from
-      // the upload site cover the gap.
-      refreshInterval: (latest) => {
-        const docs = latest?.documents || [];
-        return docs.some((d) => d.status === 'processing') ? 8_000 : 0;
-      },
+      // Poll while any row is `'processing'`, with adaptive cadence:
+      // 8 s for the first minute (the common case where the embed is
+      // about to finish), 15 s for minutes 1-5, 30 s after. When idle
+      // refreshInterval=0 disables polling; an upload-triggered
+      // mutate() from DocumentsTab repopulates the cache and the
+      // watcher resumes.
+      refreshInterval: (latest) => pollIntervalFor(latest?.documents || []),
       revalidateOnFocus: true,
       // Don't dedupe — each scheduled tick must actually hit the
       // server so status transitions surface quickly.
@@ -84,6 +108,18 @@ export function useDocStatusWatcher(aircraftId: string | null | undefined): void
   useEffect(() => {
     if (!aircraftId) return;
     const docs = data?.documents || [];
+    // Prune seenStatuses entries for this aircraft whose docId no
+    // longer appears in the current list — without this the map
+    // grows by deleted/replaced docs over a long session. Entries
+    // for OTHER aircraft are preserved (we only own the
+    // `${aircraftId}:*` slice).
+    const liveKeys = new Set(docs.map((d) => `${aircraftId}:${d.id}`));
+    const prefix = `${aircraftId}:`;
+    for (const k of Array.from(seenStatuses.current.keys())) {
+      if (k.startsWith(prefix) && !liveKeys.has(k)) {
+        seenStatuses.current.delete(k);
+      }
+    }
     for (const doc of docs) {
       const key = `${aircraftId}:${doc.id}`;
       const prev = seenStatuses.current.get(key);

@@ -90,17 +90,8 @@ async function indexDocumentInBackground(
   supabaseAdmin: ReturnType<typeof import('@/lib/auth').createAdminClient>,
   userId: string,
   doc: { id: string; aircraft_id: string },
-  buffer: Buffer,
   storagePath: string,
 ): Promise<void> {
-  // Re-stamp the audit user. `setAppUser` writes a Postgres session
-  // variable and the after() continuation may run on a different
-  // connection than the request handler, so the variable doesn't
-  // automatically carry over.
-  try { await setAppUser(supabaseAdmin, userId); } catch (e) {
-    console.error('[documents] failed to re-stamp audit user in after():', e);
-  }
-
   const failDocument = async (reason: string) => {
     console.error(`[documents] background index failed for doc=${doc.id}: ${reason}`);
     // Status flip is the critical step — without it the row stays at
@@ -136,6 +127,37 @@ async function indexDocumentInBackground(
       console.error('[documents] failed to clear partial chunks:', e);
     }
   };
+
+  // Re-stamp the audit user. `setAppUser` writes a Postgres session
+  // variable and the after() continuation may run on a different
+  // connection than the request handler, so the variable doesn't
+  // automatically carry over. If it fails, audit triggers on the
+  // status-flip UPDATEs below would attribute changes to NULL —
+  // fail-closed instead, so the audit trail stays clean.
+  try {
+    await setAppUser(supabaseAdmin, userId);
+  } catch (e) {
+    console.error('[documents] setAppUser failed in after():', e);
+    return await failDocument('audit user re-stamp failed');
+  }
+
+  // Re-download bytes inside the background fn instead of capturing
+  // the outer buffer in the after() closure. The outer 30 MB pin
+  // would otherwise stay in memory for up to maxDuration=300 s per
+  // in-flight upload — multiply by concurrent uploads and it becomes
+  // a real memory-pressure vector on the function.
+  let buffer: Buffer;
+  try {
+    const { data: blob, error: dlError } = await supabaseAdmin.storage
+      .from('aft_aircraft_documents')
+      .download(storagePath);
+    if (dlError || !blob) {
+      return await failDocument(`background re-download failed: ${dlError?.message || 'no blob'}`);
+    }
+    buffer = Buffer.from(await blob.arrayBuffer());
+  } catch (err: any) {
+    return await failDocument(`background re-download threw: ${err?.message || err}`);
+  }
 
   try {
     let pageCount = 0;
@@ -446,7 +468,10 @@ export async function POST(req: Request) {
     // watcher would poll forever. With after() first, the row always
     // has a worker assigned to flip it to ready/error.
     after(async () => {
-      await indexDocumentInBackground(supabaseAdmin, user.id, { id: doc.id, aircraft_id: aircraftId }, buffer, storagePath);
+      // Note: NOT capturing `buffer` here — the background function
+      // re-downloads from storage so the outer buffer can be GC'd as
+      // soon as the response is sent. See indexDocumentInBackground.
+      await indexDocumentInBackground(supabaseAdmin, user.id, { id: doc.id, aircraft_id: aircraftId }, storagePath);
     });
 
     // Idempotency cache save is best-effort — a failure here just
