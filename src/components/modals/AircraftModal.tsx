@@ -416,29 +416,50 @@ export default function AircraftModal({
       }
 
       // ── Upload documents (best-effort after aircraft create) ──
+      // Two-step direct upload — bytes go browser → Supabase Storage,
+      // bypassing Vercel's 4.5 MB inbound body cap so routine 10–20 MB
+      // POH/AFM uploads land instead of silently failing.
       if (newAircraftId && docFiles.length > 0) {
         setIsUploadingDocs(true);
         let uploadFailed = 0;
         for (const df of docFiles) {
           try {
-            const formData = new FormData();
-            // Re-wrap with an ASCII-only filename — WebKit's multipart
-            // serializer throws "The string did not match the expected
-            // pattern" on certain non-ASCII / control characters in
-            // file.name, swallowing the upload silently here.
-            const originalName = df.file.name || 'document.pdf';
-            const asciiName = originalName.replace(/[^\x20-\x7E]/g, '_');
-            const fileToSend = asciiName === originalName
-              ? df.file
-              : new File([df.file], asciiName, { type: df.file.type, lastModified: df.file.lastModified });
-            formData.append('file', fileToSend);
-            formData.append('aircraftId', newAircraftId);
-            formData.append('docType', df.docType);
-            // Per-file idempotency key — a retry of the same upload
-            // returns the cached document row without re-charging
-            // OpenAI embeddings.
+            // Step 1: signed upload URL
+            const signRes = await authFetch('/api/documents/signed-upload-url', {
+              method: 'POST',
+              body: JSON.stringify({
+                aircraftId: newAircraftId,
+                filename: df.file.name,
+                size: df.file.size,
+              }),
+            });
+            if (!signRes.ok) { uploadFailed++; continue; }
+            const { token, storagePath } = await signRes.json();
+
+            // Step 2: upload directly to storage (bounded by UPLOAD_TIMEOUT_MS)
+            const uploadRes = await Promise.race([
+              supabase.storage
+                .from('aft_aircraft_documents')
+                .uploadToSignedUrl(storagePath, token, df.file, { contentType: 'application/pdf' }),
+              new Promise<{ data: null; error: Error }>((resolve) =>
+                setTimeout(() => resolve({ data: null, error: new Error('storage_upload_timeout') }), UPLOAD_TIMEOUT_MS),
+              ),
+            ]);
+            if (uploadRes.error) { uploadFailed++; continue; }
+
+            // Step 3: register + parse + embed
             const idemKey = crypto.randomUUID();
-            const res = await authFetch('/api/documents', { method: 'POST', body: formData, headers: idempotencyHeader(idemKey), timeoutMs: UPLOAD_TIMEOUT_MS });
+            const res = await authFetch('/api/documents', {
+              method: 'POST',
+              body: JSON.stringify({
+                aircraftId: newAircraftId,
+                docType: df.docType,
+                storagePath,
+                filename: df.file.name,
+              }),
+              headers: idempotencyHeader(idemKey),
+              timeoutMs: UPLOAD_TIMEOUT_MS,
+            });
             if (!res.ok) uploadFailed++;
           } catch {
             uploadFailed++;

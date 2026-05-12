@@ -10,7 +10,9 @@ const openai = new OpenAI();
 
 const CHUNK_SIZE = 1500; // chars (~375 tokens)
 const CHUNK_OVERLAP = 200;
-const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB
+// 30 MB ceiling — matches /api/documents/signed-upload-url. Routine
+// POH/AFM are 10–20 MB; PT6 supplements occasionally hit 25 MB.
+const MAX_FILE_SIZE = 30 * 1024 * 1024;
 
 type TaggedChunk = { content: string; page_number: number | null };
 
@@ -77,50 +79,83 @@ export async function GET(req: Request) {
   } catch (error) { return handleApiError(error); }
 }
 
-// POST — upload and process a PDF document
+// POST — register a PDF document that's already in Supabase Storage.
+// The client uploads bytes directly to storage via a signed URL from
+// /api/documents/signed-upload-url, then calls here with the storage
+// path to kick off parse + embed. Bytes never flow through Vercel —
+// this route only downloads them server-to-server from storage, which
+// is not subject to the 4.5 MB inbound body limit.
 export async function POST(req: Request) {
   try {
     const { user, supabaseAdmin } = await requireAuth(req);
-    const formData = await req.formData();
-    const file = formData.get('file') as File | null;
-    const aircraftId = formData.get('aircraftId') as string | null;
-    const docType = formData.get('docType') as string | null;
+    const body = await req.json().catch(() => null);
+    const aircraftId = body?.aircraftId as string | undefined;
+    const docType = body?.docType as string | undefined;
+    const storagePath = body?.storagePath as string | undefined;
+    const filename = body?.filename as string | undefined;
 
-    if (!file) return NextResponse.json({ error: 'File is required.' }, { status: 400 });
     if (!aircraftId) return NextResponse.json({ error: 'Aircraft ID required.' }, { status: 400 });
     if (!docType) return NextResponse.json({ error: 'Document type required.' }, { status: 400 });
-    if (file.size > MAX_FILE_SIZE) return NextResponse.json({ error: 'File too large (max 20MB).' }, { status: 400 });
-    if (file.type !== 'application/pdf') return NextResponse.json({ error: 'Only PDF files are supported.' }, { status: 400 });
+    if (!storagePath) return NextResponse.json({ error: 'Storage path required.' }, { status: 400 });
+    if (!filename) return NextResponse.json({ error: 'Filename required.' }, { status: 400 });
+
+    // Path ownership: the signed-upload-url route prefixes every path
+    // with `${aircraftId}_`. Re-checking it here means a user with
+    // access to A can't register an upload made against B's path by
+    // swapping IDs in this call.
+    if (!storagePath.startsWith(`${aircraftId}_`)) {
+      return NextResponse.json({ error: 'Storage path does not match aircraft.' }, { status: 400 });
+    }
 
     await requireAircraftAccess(supabaseAdmin, user.id, aircraftId);
     await setAppUser(supabaseAdmin, user.id);
 
     // Idempotency — same X-Idempotency-Key replays the cached
-    // {document, chunks} body without re-uploading bytes, re-running
-    // pdf-parse, or re-charging OpenAI for embeddings. iOS PWA
-    // resume-retry on a slow upload would otherwise double-charge
-    // the embedding budget AND leave duplicate chunks pointing at
-    // the same physical document. The SHA-256 dup-check below
+    // {document, chunks} body without re-running pdf-parse or
+    // re-charging OpenAI for embeddings. An iOS-suspended retry of
+    // step 3 would otherwise double-embed even though step 2 (the
+    // storage upload) is idempotent. The SHA-256 dup-check below
     // handles "same file content, different submission"; this
     // handles "same submission, retried."
     const idem = idempotency(supabaseAdmin, user.id, req, 'documents/POST');
     const cached = await idem.check();
     if (cached) return cached;
 
-    // Upload PDF to Supabase Storage
-    const fileName = `${aircraftId}_${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
-    const arrayBuffer = await file.arrayBuffer();
+    // Pull the freshly-uploaded bytes server-to-server. This is the
+    // step that bypasses Vercel's inbound body cap — egress from
+    // storage to the function is unbounded by that limit.
+    const { data: blob, error: dlError } = await supabaseAdmin.storage
+      .from('aft_aircraft_documents')
+      .download(storagePath);
+    if (dlError || !blob) {
+      return NextResponse.json(
+        { error: 'Uploaded file not found in storage. Try uploading again.' },
+        { status: 404 },
+      );
+    }
+    const arrayBuffer = await blob.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
-    // Magic-byte check — `%PDF` (0x25 0x50 0x44 0x46). The `file.type`
-    // header is client-supplied and can be spoofed; this confirms the
+    if (buffer.length > MAX_FILE_SIZE) {
+      // Defense in depth — the signed-upload route already enforces
+      // this client-side, but a manual signed-URL hit could land
+      // larger bytes. Reject and clean up.
+      try { await supabaseAdmin.storage.from('aft_aircraft_documents').remove([storagePath]); } catch {}
+      return NextResponse.json(
+        { error: `File too large (max ${MAX_FILE_SIZE / 1024 / 1024} MB).` },
+        { status: 400 },
+      );
+    }
+
+    // Magic-byte check — `%PDF` (0x25 0x50 0x44 0x46). Confirms the
     // bytes actually start like a PDF before we hand them to pdf-parse.
     if (buffer.length < 4 || !buffer.subarray(0, 4).equals(Buffer.from([0x25, 0x50, 0x44, 0x46]))) {
+      try { await supabaseAdmin.storage.from('aft_aircraft_documents').remove([storagePath]); } catch {}
       return NextResponse.json({ error: 'File does not appear to be a valid PDF.' }, { status: 400 });
     }
 
-    // SHA-256 tamper-evidence hash — computed before upload so we can
-    // detect post-upload mutation of the storage object.
+    // SHA-256 tamper-evidence hash — computed from the bytes we just
+    // pulled from storage so it reflects what's actually there.
     const sha256 = createHash('sha256').update(buffer).digest('hex');
 
     // Reject duplicate uploads (same aircraft, same bytes). Throw on
@@ -136,17 +171,16 @@ export async function POST(req: Request) {
       .maybeSingle();
     if (dupErr) throw dupErr;
     if (dup) {
+      // Clean up the orphaned storage upload so the bucket doesn't
+      // collect duplicate copies.
+      try { await supabaseAdmin.storage.from('aft_aircraft_documents').remove([storagePath]); } catch {}
       return NextResponse.json(
         { error: `This exact file is already uploaded as "${dup.filename}".` },
         { status: 409 }
       );
     }
 
-    const { data: uploadData, error: uploadError } = await supabaseAdmin.storage
-      .from('aft_aircraft_documents')
-      .upload(fileName, buffer, { contentType: 'application/pdf' });
-    if (uploadError) throw new Error(`Upload failed: ${uploadError.message}`);
-
+    const uploadData = { path: storagePath };
     const { data: urlData } = supabaseAdmin.storage
       .from('aft_aircraft_documents')
       .getPublicUrl(uploadData.path);
@@ -162,12 +196,12 @@ export async function POST(req: Request) {
       .insert({
         aircraft_id: aircraftId,
         user_id: user.id,
-        filename: file.name,
+        filename,
         file_url: urlData.publicUrl,
         doc_type: docType,
         status: 'processing',
         sha256,
-        file_size: file.size,
+        file_size: buffer.length,
       })
       .select()
       .single();

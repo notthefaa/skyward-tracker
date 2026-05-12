@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { authFetch, UPLOAD_TIMEOUT_MS } from "@/lib/authFetch";
 import { newIdempotencyKey, idempotencyHeader } from "@/lib/idempotencyClient";
+import { supabase } from "@/lib/supabase";
 import { swrKeys } from "@/lib/swrKeys";
 import type { AircraftWithMetrics, AircraftDocument, DocType } from "@/lib/types";
 import useSWR from "swr";
@@ -75,85 +76,85 @@ export default function DocumentsTab({
       showError('Only PDF files are supported.');
       return;
     }
-    if (selectedFile.size > 20 * 1024 * 1024) {
-      showError('File too large (max 20MB).');
+    if (selectedFile.size > 30 * 1024 * 1024) {
+      showError('File too large (max 30 MB). Try compressing or splitting the PDF.');
       return;
     }
-    // Catch iCloud-stub / partially-downloaded files before we get
-    // deep into FormData + fetch. Safari (both iOS and macOS) throws
-    // an opaque "The string did not match the expected pattern" from
-    // its multipart body serializer when the underlying File can't be
-    // read — telling the user that up front is much more actionable.
+    // iCloud-stub / partially-downloaded files commonly report 0 bytes.
     if (selectedFile.size === 0) {
       showError("That file is empty — if it lives in iCloud, open the Files app and tap to download it first, then try again.");
       return;
     }
 
     setIsUploading(true);
-    setUploadProgress('Uploading PDF...');
+    setUploadProgress('Preparing upload...');
 
     // Log file metadata up front so field reports always carry it,
     // even if the upload throws somewhere outside the catch.
     console.log('[documents] uploading:', selectedFile.name, `${(selectedFile.size / 1024 / 1024).toFixed(2)} MB`, selectedFile.type);
 
     try {
-      const formData = new FormData();
-      // Re-wrap the picked File with an ASCII-only filename. WebKit's
-      // multipart Content-Disposition serializer throws an opaque
-      // SyntaxError ("The string did not match the expected pattern")
-      // on certain non-ASCII / control characters in the filename;
-      // sanitizing here keeps the original name on the server side
-      // (route writes file.name into the doc row) while letting the
-      // request actually reach the server.
-      const originalName = selectedFile.name || 'document.pdf';
-      const asciiName = originalName.replace(/[^\x20-\x7E]/g, '_');
-      const fileToSend = asciiName === originalName
-        ? selectedFile
-        : new File([selectedFile], asciiName, { type: selectedFile.type, lastModified: selectedFile.lastModified });
-      formData.append('file', fileToSend);
-      formData.append('aircraftId', aircraft.id);
-      formData.append('docType', docType);
+      // ── Step 1: ask the server for a signed upload URL ────────────
+      // The server validates aircraft access + size cap + scrubs the
+      // filename into a storage path scoped to this aircraft.
+      const signRes = await authFetch('/api/documents/signed-upload-url', {
+        method: 'POST',
+        body: JSON.stringify({
+          aircraftId: aircraft.id,
+          filename: selectedFile.name,
+          size: selectedFile.size,
+        }),
+      });
+      if (!signRes.ok) {
+        const d = await signRes.json().catch(() => ({}));
+        throw new Error(d.error || 'Could not prepare upload.');
+      }
+      const { token, storagePath } = await signRes.json();
 
+      // ── Step 2: upload bytes directly to Supabase Storage ─────────
+      // This is the step that bypasses Vercel's 4.5 MB inbound body
+      // cap — bytes go browser → storage with no Vercel hop.
+      setUploadProgress('Uploading PDF...');
+      const uploadRes = await Promise.race([
+        supabase.storage
+          .from('aft_aircraft_documents')
+          .uploadToSignedUrl(storagePath, token, selectedFile, { contentType: 'application/pdf' }),
+        new Promise<{ data: null; error: Error }>((resolve) =>
+          setTimeout(() => resolve({ data: null, error: new Error('storage_upload_timeout') }), UPLOAD_TIMEOUT_MS),
+        ),
+      ]);
+      if (uploadRes.error) throw uploadRes.error;
+
+      // ── Step 3: register the document + parse + embed ─────────────
+      // Idempotency key sticky across retries of this step so a slow
+      // server-side parse + embed doesn't double-charge OpenAI on an
+      // iOS-suspended retry. Cleared on success.
       setUploadProgress('Extracting text & generating embeddings...');
-
-      // Idempotency — long PDF uploads on cellular regularly retry on
-      // iOS resume; a sticky key (same key across retries-of-the-same-
-      // attempt) means a successful upload's retry returns the cached
-      // {document, chunks} body without re-charging OpenAI embeddings.
-      // Cleared on success so the next file picked gets a fresh key.
       if (!uploadIdemKeyRef.current) uploadIdemKeyRef.current = newIdempotencyKey();
       const res = await authFetch('/api/documents', {
         method: 'POST',
-        body: formData,
-        // Browser sets Content-Type for FormData; only send our idem header.
+        body: JSON.stringify({
+          aircraftId: aircraft.id,
+          docType,
+          storagePath,
+          filename: selectedFile.name,
+        }),
         headers: idempotencyHeader(uploadIdemKeyRef.current),
         timeoutMs: UPLOAD_TIMEOUT_MS,
       });
 
       if (!res.ok) {
-        // Read the body defensively. Vercel's edge can reject an
-        // oversize body with a 413 + HTML page BEFORE this route ever
-        // runs — `res.json()` on HTML throws a SyntaxError and the
-        // user just sees garbage. Try JSON; on parse failure fall back
-        // to text + status-coded messages.
         const bodyText = await res.text().catch(() => '');
         let serverError = '';
         try {
           const d = JSON.parse(bodyText);
           serverError = d?.error || '';
         } catch {
-          // Non-JSON body. Vercel's 413 page lives here.
+          // Non-JSON body shouldn't happen on this route anymore (no
+          // FormData → no 413 surface), but keep the fallback so a
+          // Vercel infra 5xx HTML page can't crash JSON.parse.
         }
-        if (!serverError) {
-          if (res.status === 413) {
-            serverError = `That PDF is too large for the server (over ${(selectedFile.size / 1024 / 1024).toFixed(1)} MB). Try compressing it or splitting it into smaller files.`;
-          } else if (res.status >= 500) {
-            serverError = `Server hiccup (${res.status}). Try again — if it keeps failing, the file may be too large or the indexer is busy.`;
-          } else {
-            serverError = `Upload failed (status ${res.status}).`;
-          }
-        }
-        throw new Error(serverError);
+        throw new Error(serverError || `Upload failed (status ${res.status}).`);
       }
 
       const result = await res.json();
@@ -162,10 +163,6 @@ export default function DocumentsTab({
       setSelectedFile(null);
       mutate();
     } catch (err: any) {
-      // Always console-log the raw error so a future field report
-      // carries something greppable — `err.message` alone can be an
-      // opaque WebKit string ("The string did not match the expected
-      // pattern") that gives the user no path forward.
       console.error(
         '[documents] upload failed:',
         err?.name,
@@ -176,16 +173,7 @@ export default function DocumentsTab({
         selectedFile?.type,
         err,
       );
-      const raw = String(err?.message || '');
-      // ONLY map the exact WebKit serializer message to the iCloud
-      // hint — a broader `name === 'SyntaxError'` clause was previously
-      // here and incorrectly mapped JSON.parse failures (e.g. a Vercel
-      // 413 HTML response) to the same misleading toast.
-      if (raw.includes('did not match the expected pattern')) {
-        showError("Safari couldn't read the PDF. Try compressing it or saving a fresh copy outside any cloud-synced folder, then upload again.");
-      } else {
-        showError(raw || "Couldn't upload the document.");
-      }
+      showError(err?.message || "Couldn't upload the document.");
     } finally {
       setIsUploading(false);
       setUploadProgress('');
