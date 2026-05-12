@@ -393,13 +393,33 @@ export default function AppShell({ session }: AppShellProps) {
   }, [showError]);
 
   // ─── Howard resets on fresh sign-in ───
-  // Every new auth SIGNED_IN event (distinct from INITIAL_SESSION,
-  // which fires on page reload with an existing token) clears the
-  // user's Howard thread so a fresh login starts with a blank
-  // conversation. Delete happens server-side; the SWR cache is
-  // optimistically reset so the UI flips to empty immediately, then
-  // revalidate so client state converges with server truth if the
-  // DELETE happened to fail (offline, auth hiccup).
+  // A FRESH sign-in (different user than before, or no prior session)
+  // clears the user's Howard thread so the new pilot starts with a
+  // blank conversation. Critically, this MUST ignore session-refresh
+  // SIGNED_IN events for the already-signed-in user: @supabase/ssr
+  // fires a spurious SIGNED_IN on token refresh after iOS Safari
+  // backgrounding (even a few seconds), and without the same-user
+  // guard we'd nuke the chat every time the user flipped to another
+  // app tab — the original "Howard resets when I leave the app"
+  // field report.
+  //
+  // The userId-tracking ref distinguishes:
+  //   prev === null + SIGNED_IN  → fresh sign-in or initial mount → wipe
+  //   prev !== null + SIGNED_IN same user → session refresh → SKIP
+  //   prev !== null + SIGNED_IN different user → user-switch on shared
+  //                              device → wipe (SIGNED_OUT also fired
+  //                              just before, so this is belt+suspenders)
+  const lastSignedInUserIdRef = useRef<string | null>(null);
+  // Seed the ref from the current session BEFORE the auth listener
+  // mounts. If we don't, the first SIGNED_IN (which can be a spurious
+  // post-resume token refresh, NOT a fresh login) sees prev=null and
+  // mistakes itself for a new login → nukes the thread. Page-reload
+  // sessions arrive via INITIAL_SESSION, which we also seed below.
+  useEffect(() => {
+    if (session?.user?.id && lastSignedInUserIdRef.current === null) {
+      lastSignedInUserIdRef.current = session.user.id;
+    }
+  }, [session?.user?.id]);
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, sess) => {
       if (event === 'SIGNED_OUT') {
@@ -408,17 +428,33 @@ export default function AppShell({ session }: AppShellProps) {
         // from localStorage. globalMutate(() => true, ..., false) clears
         // the in-memory SWR map; clearPersistedSwrCache() drops the
         // localStorage blob so the next page load starts cold.
+        lastSignedInUserIdRef.current = null;
         globalMutate(() => true, undefined, { revalidate: false });
         clearPersistedSwrCache();
         return;
       }
+      // INITIAL_SESSION fires on app boot with an existing token.
+      // Use it to seed the ref so the next SIGNED_IN (which iOS may
+      // fire on token-refresh-after-resume) compares against a real
+      // user id, not null.
+      if (event === 'INITIAL_SESSION') {
+        if (sess?.user?.id) lastSignedInUserIdRef.current = sess.user.id;
+        return;
+      }
       if (event !== 'SIGNED_IN' || !sess?.user?.id) return;
+      const newUserId = sess.user.id;
+      const prevUserId = lastSignedInUserIdRef.current;
+      // Spurious SIGNED_IN for the user who's already in the session.
+      // iOS Safari fires this on token-refresh-after-resume, even when
+      // the user has been signed in continuously. Treat as no-op.
+      if (prevUserId === newUserId) return;
+      lastSignedInUserIdRef.current = newUserId;
       try {
         await authFetch('/api/howard', { method: 'DELETE' });
       } catch {
         // Non-blocking — the client-side cache flush below still happens.
       }
-      globalMutate(swrKeys.howardUser(sess.user.id), { thread: null, messages: [] }, { revalidate: true });
+      globalMutate(swrKeys.howardUser(newUserId), { thread: null, messages: [] }, { revalidate: true });
     });
     return () => subscription.unsubscribe();
   }, [globalMutate]);
