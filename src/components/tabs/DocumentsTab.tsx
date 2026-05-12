@@ -92,6 +92,10 @@ export default function DocumentsTab({
     setIsUploading(true);
     setUploadProgress('Uploading PDF...');
 
+    // Log file metadata up front so field reports always carry it,
+    // even if the upload throws somewhere outside the catch.
+    console.log('[documents] uploading:', selectedFile.name, `${(selectedFile.size / 1024 / 1024).toFixed(2)} MB`, selectedFile.type);
+
     try {
       const formData = new FormData();
       // Re-wrap the picked File with an ASCII-only filename. WebKit's
@@ -127,8 +131,29 @@ export default function DocumentsTab({
       });
 
       if (!res.ok) {
-        const d = await res.json();
-        throw new Error(d.error || 'Upload failed');
+        // Read the body defensively. Vercel's edge can reject an
+        // oversize body with a 413 + HTML page BEFORE this route ever
+        // runs — `res.json()` on HTML throws a SyntaxError and the
+        // user just sees garbage. Try JSON; on parse failure fall back
+        // to text + status-coded messages.
+        const bodyText = await res.text().catch(() => '');
+        let serverError = '';
+        try {
+          const d = JSON.parse(bodyText);
+          serverError = d?.error || '';
+        } catch {
+          // Non-JSON body. Vercel's 413 page lives here.
+        }
+        if (!serverError) {
+          if (res.status === 413) {
+            serverError = `That PDF is too large for the server (over ${(selectedFile.size / 1024 / 1024).toFixed(1)} MB). Try compressing it or splitting it into smaller files.`;
+          } else if (res.status >= 500) {
+            serverError = `Server hiccup (${res.status}). Try again — if it keeps failing, the file may be too large or the indexer is busy.`;
+          } else {
+            serverError = `Upload failed (status ${res.status}).`;
+          }
+        }
+        throw new Error(serverError);
       }
 
       const result = await res.json();
@@ -141,10 +166,23 @@ export default function DocumentsTab({
       // carries something greppable — `err.message` alone can be an
       // opaque WebKit string ("The string did not match the expected
       // pattern") that gives the user no path forward.
-      console.error('[documents] upload failed:', err?.name, err?.message, err);
+      console.error(
+        '[documents] upload failed:',
+        err?.name,
+        err?.message,
+        'file:',
+        selectedFile?.name,
+        selectedFile?.size,
+        selectedFile?.type,
+        err,
+      );
       const raw = String(err?.message || '');
-      if (raw.includes('did not match the expected pattern') || err?.name === 'SyntaxError') {
-        showError("Safari couldn't read the PDF. If it's stored in iCloud, open the Files app and tap the file to download it first. Otherwise, try saving the PDF to your device and uploading again.");
+      // ONLY map the exact WebKit serializer message to the iCloud
+      // hint — a broader `name === 'SyntaxError'` clause was previously
+      // here and incorrectly mapped JSON.parse failures (e.g. a Vercel
+      // 413 HTML response) to the same misleading toast.
+      if (raw.includes('did not match the expected pattern')) {
+        showError("Safari couldn't read the PDF. Try compressing it or saving a fresh copy outside any cloud-synced folder, then upload again.");
       } else {
         showError(raw || "Couldn't upload the document.");
       }
