@@ -422,7 +422,16 @@ export default function AircraftModal({
         for (const df of docFiles) {
           try {
             const formData = new FormData();
-            formData.append('file', df.file);
+            // Re-wrap with an ASCII-only filename — WebKit's multipart
+            // serializer throws "The string did not match the expected
+            // pattern" on certain non-ASCII / control characters in
+            // file.name, swallowing the upload silently here.
+            const originalName = df.file.name || 'document.pdf';
+            const asciiName = originalName.replace(/[^\x20-\x7E]/g, '_');
+            const fileToSend = asciiName === originalName
+              ? df.file
+              : new File([df.file], asciiName, { type: df.file.type, lastModified: df.file.lastModified });
+            formData.append('file', fileToSend);
             formData.append('aircraftId', newAircraftId);
             formData.append('docType', df.docType);
             // Per-file idempotency key — a retry of the same upload

@@ -79,13 +79,34 @@ export default function DocumentsTab({
       showError('File too large (max 20MB).');
       return;
     }
+    // Catch iCloud-stub / partially-downloaded files before we get
+    // deep into FormData + fetch. Safari (both iOS and macOS) throws
+    // an opaque "The string did not match the expected pattern" from
+    // its multipart body serializer when the underlying File can't be
+    // read — telling the user that up front is much more actionable.
+    if (selectedFile.size === 0) {
+      showError("That file is empty — if it lives in iCloud, open the Files app and tap to download it first, then try again.");
+      return;
+    }
 
     setIsUploading(true);
     setUploadProgress('Uploading PDF...');
 
     try {
       const formData = new FormData();
-      formData.append('file', selectedFile);
+      // Re-wrap the picked File with an ASCII-only filename. WebKit's
+      // multipart Content-Disposition serializer throws an opaque
+      // SyntaxError ("The string did not match the expected pattern")
+      // on certain non-ASCII / control characters in the filename;
+      // sanitizing here keeps the original name on the server side
+      // (route writes file.name into the doc row) while letting the
+      // request actually reach the server.
+      const originalName = selectedFile.name || 'document.pdf';
+      const asciiName = originalName.replace(/[^\x20-\x7E]/g, '_');
+      const fileToSend = asciiName === originalName
+        ? selectedFile
+        : new File([selectedFile], asciiName, { type: selectedFile.type, lastModified: selectedFile.lastModified });
+      formData.append('file', fileToSend);
       formData.append('aircraftId', aircraft.id);
       formData.append('docType', docType);
 
@@ -116,7 +137,17 @@ export default function DocumentsTab({
       setSelectedFile(null);
       mutate();
     } catch (err: any) {
-      showError(err.message);
+      // Always console-log the raw error so a future field report
+      // carries something greppable — `err.message` alone can be an
+      // opaque WebKit string ("The string did not match the expected
+      // pattern") that gives the user no path forward.
+      console.error('[documents] upload failed:', err?.name, err?.message, err);
+      const raw = String(err?.message || '');
+      if (raw.includes('did not match the expected pattern') || err?.name === 'SyntaxError') {
+        showError("Safari couldn't read the PDF. If it's stored in iCloud, open the Files app and tap the file to download it first. Otherwise, try saving the PDF to your device and uploading again.");
+      } else {
+        showError(raw || "Couldn't upload the document.");
+      }
     } finally {
       setIsUploading(false);
       setUploadProgress('');
