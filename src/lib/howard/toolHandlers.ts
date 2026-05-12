@@ -707,6 +707,29 @@ const handlers: Record<string, ToolHandler> = {
     return { ...verdict, data_completeness };
   },
 
+  // ─── Client-side UI action ─────────────────────────────────
+
+  switch_active_aircraft: async (params, sb, _aircraftId, ctx) => {
+    if (!params.tail || typeof params.tail !== 'string') {
+      return { error: 'tail is required.' };
+    }
+    // Re-use the same access-checked resolver every aircraft-scoped
+    // tool uses — without this a pilot could "switch" to an aircraft
+    // they don't have access to and the next tool call would just
+    // 403, leaving Howard confused mid-turn.
+    const resolved = await resolveAircraftFromTail(sb, ctx.userId, params.tail);
+    if (!resolved.ok) return { error: resolved.error };
+    // Claude sees a clean success payload. The route's stream layer
+    // looks for tool.name === 'switch_active_aircraft' + parses this
+    // result to emit the client_action SSE event (see claude.ts).
+    return {
+      success: true,
+      tail: resolved.tail,
+      aircraft_id: resolved.aircraftId,
+      message: `Switched the app to ${resolved.tail}. Subsequent tool calls in this turn should use this tail.`,
+    };
+  },
+
   // ─── Write tools (propose-confirm) ─────────────────────────
 
   propose_reservation: async (params, sb, _aircraftId, ctx) => {
@@ -1059,6 +1082,11 @@ const GLOBAL_TOOLS = new Set([
   // the handler. Coverage gap: the proposedActions unit tests bypass
   // executeTool entirely.
   'propose_onboarding_setup',
+  // switch_active_aircraft resolves the tail INSIDE its handler so it
+  // can return a structured error to Howard if the pilot doesn't have
+  // access. If the dispatcher pre-resolved it we'd surface a generic
+  // "tail not found" instead of "you don't have access to that one".
+  'switch_active_aircraft',
 ]);
 
 /** Upper bound on the JSON size of a single tool result sent back to

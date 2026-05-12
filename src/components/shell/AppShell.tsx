@@ -305,17 +305,29 @@ export default function AppShell({ session }: AppShellProps) {
       else if (key === 'equipment') navigateTab('equipment');
       else if (key === 'howard') navigateTab('howard');
     };
+    // Howard drives the active-aircraft dropdown via this event. Tail
+    // resolution + access check happen server-side in the
+    // `switch_active_aircraft` tool, so by the time we see this event
+    // it's already authorized. We trust `tail` directly.
+    const handleHowardSwitch = (e: Event) => {
+      const detail = (e as CustomEvent).detail as { tail?: string } | undefined;
+      const tail = detail?.tail;
+      if (typeof tail !== 'string' || !tail) return;
+      setActiveTail(tail);
+    };
     window.addEventListener('aft:navigate-howard', handleNavigateHoward);
     window.addEventListener('aft:navigate-howard-usage', handleNavigateHowardUsage);
     window.addEventListener('aft:mx-ads-nav', handleMxAdsNav);
     window.addEventListener('aft:more-nav', handleMoreNav);
     window.addEventListener('aft:open-features-guide', handleOpenFeaturesGuide);
+    window.addEventListener('howard:switch-aircraft', handleHowardSwitch);
     return () => {
       window.removeEventListener('aft:navigate-howard', handleNavigateHoward);
       window.removeEventListener('aft:navigate-howard-usage', handleNavigateHowardUsage);
       window.removeEventListener('aft:mx-ads-nav', handleMxAdsNav);
       window.removeEventListener('aft:more-nav', handleMoreNav);
       window.removeEventListener('aft:open-features-guide', handleOpenFeaturesGuide);
+      window.removeEventListener('howard:switch-aircraft', handleHowardSwitch);
     };
   }, [navigateTab]);
 

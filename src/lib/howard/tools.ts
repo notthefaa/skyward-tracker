@@ -300,6 +300,17 @@ export const tools: Anthropic.Tool[] = [
     },
   },
   {
+    name: 'switch_active_aircraft',
+    description: "Change the active aircraft selected in the app (the tail in the dropdown at the top). Use ONLY when the pilot explicitly asks to switch tails (e.g. \"switch to N777AB\", \"change to my other plane\"). The pilot must have access to the target aircraft — if they don't, the tool returns an error and you should pass that on. The switch happens immediately client-side; the rest of your reply can naturally reference the new tail. NEVER claim you switched without calling this tool first.",
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        tail: { type: 'string', description: 'Tail number to switch to (e.g. "N15DY"). Must be an aircraft the pilot has access to.' },
+      },
+      required: ['tail'],
+    },
+  },
+  {
     name: 'propose_reservation',
     description: 'Propose a new reservation (booking) for the named aircraft. The user must tap Confirm on the card before anything is written. Use when the user asks to book, schedule, or reserve the aircraft.',
     input_schema: {

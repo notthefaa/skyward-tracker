@@ -77,6 +77,16 @@ export type StreamEvent =
   | { type: 'text_delta'; delta: string }
   | { type: 'tool_use_start'; id: string; name: string }
   | { type: 'tool_use_end'; id: string; name: string }
+  // Client-side side-effect signal emitted alongside specific tool
+  // results (e.g. switch_active_aircraft). The route forwards these
+  // verbatim over SSE; HowardTab listens and dispatches a window event
+  // that AppShell picks up to update the actual app state.
+  | {
+      type: 'client_action';
+      action: 'switch_active_aircraft';
+      tail: string;
+      aircraft_id: string;
+    }
   | {
       type: 'complete';
       assistantText: string;
@@ -264,6 +274,26 @@ export async function* sendMessageStream(
       allToolCalls.push({ name: block.name, input: block.input, id: block.id });
       allToolResults.push({ tool_use_id: block.id, result });
       yield { type: 'tool_use_end', id: block.id, name: block.name };
+      // Some tools carry a client-side side-effect (switch the active
+      // aircraft in the UI). Emit the signal AFTER tool_use_end so the
+      // client can wire it through before Howard's next text streams.
+      if (block.name === 'switch_active_aircraft') {
+        try {
+          const parsed = JSON.parse(result);
+          if (parsed?.success && typeof parsed?.tail === 'string' && typeof parsed?.aircraft_id === 'string') {
+            yield {
+              type: 'client_action',
+              action: 'switch_active_aircraft',
+              tail: parsed.tail,
+              aircraft_id: parsed.aircraft_id,
+            };
+          }
+        } catch {
+          // Tool result wasn't JSON or didn't carry the expected fields;
+          // skip the side-effect, the tool error path will still surface
+          // in Howard's reply.
+        }
+      }
       toolResultBlocks.push({
         type: 'tool_result',
         tool_use_id: block.id,

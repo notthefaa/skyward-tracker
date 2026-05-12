@@ -400,6 +400,18 @@ export default function HowardTab({
             setAwaitingAircraftChoice(false);
           } else if (ev.type === 'tool_use_end') {
             setActiveToolName(null);
+          } else if (ev.type === 'client_action' && ev.action === 'switch_active_aircraft') {
+            // Howard called switch_active_aircraft — drive the app's
+            // active-tail dropdown via a window event AppShell listens
+            // for. Done as a window event (not a prop callback) to
+            // avoid threading setActiveTail through every Howard
+            // surface (tab + onboarding + launcher) — matches the
+            // pattern used by emitMoreNavigate.
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('howard:switch-aircraft', {
+                detail: { tail: ev.tail, aircraftId: ev.aircraft_id },
+              }));
+            }
           } else if (ev.type === 'done') {
             savedAssistantMsg = ev.assistantMessage;
           } else if (ev.type === 'error') {
