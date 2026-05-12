@@ -414,13 +414,24 @@ export async function POST(req: Request) {
           // known timeout/budget classes get a friendly string; anything
           // else collapses to a generic "Stream failed" so the saved
           // assistant message can't expose credentials or prompts.
+          // We DO expose an error-class hint (e.g. "Stream failed:
+          // APIError 529") — class names + HTTP statuses are safe and
+          // make field-report diagnosis much faster.
           const rawMessage = typeof err?.message === 'string' ? err.message : '';
-          const isTimeout = err?.name === 'AbortError'
-            || err?.name === 'APIUserAbortError'
+          const errName = typeof err?.name === 'string' ? err.name : '';
+          const errCtor = err?.constructor?.name;
+          const errClass = (errName || errCtor || 'Error')
+            // Strip anything that's not [A-Za-z0-9]; never leak prompt
+            // fragments via a synthesized class name.
+            .replace(/[^A-Za-z0-9]/g, '')
+            .slice(0, 40);
+          const errStatus = typeof err?.status === 'number' ? err.status : null;
+          const isTimeout = errName === 'AbortError'
+            || errName === 'APIUserAbortError'
             || /timed out|wall-clock|wall_clock|deadline/i.test(rawMessage);
           const reason = isTimeout
             ? (rawMessage.match(/^Howard's reply timed out[^.]*\./)?.[0] || 'Reply timed out')
-            : 'Stream failed';
+            : `Stream failed: ${errClass}${errStatus ? ` ${errStatus}` : ''}`;
           const partial = streamedSoFar.trim();
           const content = partial
             ? `${partial}\n\n⚠️ Howard got cut off before finishing. (${reason})`
