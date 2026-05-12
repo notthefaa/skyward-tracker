@@ -426,12 +426,25 @@ export async function POST(req: Request) {
             .replace(/[^A-Za-z0-9]/g, '')
             .slice(0, 40);
           const errStatus = typeof err?.status === 'number' ? err.status : null;
+          const errCode = typeof err?.code === 'string'
+            ? err.code.replace(/[^A-Za-z0-9_]/g, '').slice(0, 30)
+            : '';
+          // Sanitized message-hint: a-z, 0-9, spaces, basic punctuation
+          // only. Bounded to 80 chars so a leaked prompt fragment can't
+          // fit. Anthropic SDK error messages typically look like
+          // "529 - {"type":"error","error":{"type":"overloaded_error"...}}"
+          // or "Connection error." — both have plenty of useful signal
+          // inside the first 80 chars after sanitizing.
+          const msgHint = rawMessage
+            .replace(/[^\w\s.,!?:;'\-/()]/g, '')
+            .slice(0, 80)
+            .trim();
           const isTimeout = errName === 'AbortError'
             || errName === 'APIUserAbortError'
             || /timed out|wall-clock|wall_clock|deadline/i.test(rawMessage);
           const reason = isTimeout
             ? (rawMessage.match(/^Howard's reply timed out[^.]*\./)?.[0] || 'Reply timed out')
-            : `Stream failed: ${errClass}${errStatus ? ` ${errStatus}` : ''}`;
+            : `Stream failed: ${errClass}${errStatus ? ` ${errStatus}` : ''}${errCode ? ` [${errCode}]` : ''}${msgHint ? ` — ${msgHint}` : ''}`;
           const partial = streamedSoFar.trim();
           const content = partial
             ? `${partial}\n\n⚠️ Howard got cut off before finishing. (${reason})`

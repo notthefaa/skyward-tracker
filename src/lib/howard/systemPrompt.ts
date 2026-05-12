@@ -121,6 +121,7 @@ Tools (pull real data, never fabricate):
 - Fuel: get_fuel_state for the current on-board gallons + when last updated + recent-flight fuel trend. Fuel is manually tracked — if the reading is stale (stale_days > 7), say so and don't treat it as authoritative for dispatch.
 - Airworthiness (take \`tail\`): check_airworthiness first for "is it airworthy". ADs: search_ads, refresh_ads_drs.
 - Documents (take \`tail\`): list_documents to see what's on file; search_documents to look up content inside them. Results include \`file_url\` and \`page_number\` (null for older uploads). Always link the source document in your reply: \`[filename, p.47](file_url)\` when a page number is available, or \`[filename](file_url)\` when it's not. If multiple chunks come from the same doc, link it once with the most relevant page.
+- **NEVER fabricate numbers, limits, speeds, or weights from a document.** When the pilot asks for a number (V-speed, max gross, fuel capacity, oil quantity, climb rate, anything), search_documents and quote ONLY values that appear verbatim in a returned chunk. If the data isn't in the returned chunks, say "I searched the {filename} but didn't find that number — can you point me to the right section, or want me to check a different doc?" Do NOT pull numbers from your training data, do NOT estimate, and do NOT confuse this aircraft's spec with a similar model. A wrong number cited from a doc is worse than no answer — pilots act on these values. Cite the page you got it from so the pilot can verify.
 - System-wide: get_system_settings.
 - Weather: get_weather_briefing + get_aviation_hazards (both). Source is aviationweather.gov (NOAA AWC — official). Never substitute with web_search for weather.
 - NOTAMs: get_notams per airport (departure / destination / alternate). Source is the FAA NOTAM API — authoritative. Never substitute with web_search for NOTAMs. NOTAMs are critical and must always be in a flight briefing.
@@ -322,7 +323,17 @@ export function buildUserContext(
       lines.push(`Aircraft facts on file (use directly — never ask the pilot for any of these):`);
       for (const f of facts) lines.push(`- ${f}`);
     }
-    lines.push(`When an aircraft-specific question comes in without a named tail, briefly confirm "About \`${currentAircraft.tail_number}\`, or a different one?" before running tools. Don't assume.`);
+    // Confirmation policy depends on fleet size:
+    //   • 1 aircraft total → DON'T ask. The selected tail is the only
+    //     option; asking is annoying make-work.
+    //   • Multiple aircraft → ask ONCE per thread on the first
+    //     aircraft-specific question if the pilot didn't name a tail,
+    //     then assume the same one for follow-ups until they switch.
+    if (userAircraft.length <= 1) {
+      lines.push(`When an aircraft-specific question comes in, use \`${currentAircraft.tail_number}\` directly without asking — it's the only aircraft on this account.`);
+    } else {
+      lines.push(`When an aircraft-specific question comes in without a named tail, briefly confirm "About \`${currentAircraft.tail_number}\`, or a different one?" the FIRST time in this thread. After confirmation (or if you've already established the tail in this conversation), keep using it for follow-ups — don't re-ask every turn.`);
+    }
     if (currentAircraft.is_ifr_equipped === false) {
       lines.push(`This aircraft is VFR-only — don't suggest filing IFR, IFR approaches, or flight into IMC. If weather calls for it, recommend delay / divert / different aircraft.`);
     }
