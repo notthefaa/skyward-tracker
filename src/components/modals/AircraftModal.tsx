@@ -255,13 +255,24 @@ export default function AircraftModal({
           // OpaqueResponseBlocking refuses to render it inside <img>.
           const safeTail = tailValue.toUpperCase().replace(/[^a-zA-Z0-9._-]/g, '_');
           const fileName = `${safeTail}_${Date.now()}.jpg`;
-          const { data } = await supabase.storage.from('aft_aircraft_avatars').upload(fileName, compressed, { contentType: 'image/jpeg' });
-          if (data) {
-            const { data: urlData } = supabase.storage.from('aft_aircraft_avatars').getPublicUrl(data.path);
+          // Race the upload against UPLOAD_TIMEOUT_MS. supabase-js storage
+          // uses XHR with no client-side timeout, and iOS Safari (PWA in
+          // particular) can suspend a stalled upload indefinitely — that
+          // leaves the "Saving..." button stuck forever. Fail-soft: drop
+          // the photo, save the aircraft, warn the user.
+          const uploadRes = await Promise.race([
+            supabase.storage.from('aft_aircraft_avatars').upload(fileName, compressed, { contentType: 'image/jpeg' }),
+            new Promise<{ data: null; error: Error }>((resolve) =>
+              setTimeout(() => resolve({ data: null, error: new Error('avatar_upload_timeout') }), UPLOAD_TIMEOUT_MS)
+            ),
+          ]);
+          if (uploadRes.error) throw uploadRes.error;
+          if (uploadRes.data) {
+            const { data: urlData } = supabase.storage.from('aft_aircraft_avatars').getPublicUrl(uploadRes.data.path);
             avatarUrl = urlData.publicUrl;
           }
-        } catch (err) { 
-          console.error('Avatar upload failed:', err); 
+        } catch (err) {
+          console.error('Avatar upload failed:', err);
           showWarning("Photo upload didn't work. Aircraft saved without it — you can add a photo later.");
         }
       }

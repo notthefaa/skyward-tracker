@@ -2,7 +2,7 @@
 
 import { useState, useRef } from "react";
 import dynamic from "next/dynamic";
-import { authFetch } from "@/lib/authFetch";
+import { authFetch, UPLOAD_TIMEOUT_MS } from "@/lib/authFetch";
 import { useToast } from "@/components/ToastProvider";
 import { validateFileSize, MAX_UPLOAD_SIZE_LABEL } from "@/lib/constants";
 import { PlaneTakeoff, LogOut, Camera, Upload } from "lucide-react";
@@ -21,7 +21,7 @@ export default function PilotOnboarding({
   handleLogout: () => void,
   onSuccess: () => void | Promise<void>
 }) {
-  const { showError } = useToast();
+  const { showError, showWarning } = useToast();
   const [newTail, setNewTail] = useState("");
   const [newSerial, setNewSerial] = useState("");
   const [newModel, setNewModel] = useState("");
@@ -149,12 +149,26 @@ export default function PilotOnboarding({
            // pseudo-folder the orphan-sweeper diff can't resolve.
           const safeTail = tailValue.toUpperCase().replace(/[^a-zA-Z0-9._-]/g, '_');
           const fileName = `${safeTail}_${Date.now()}.jpg`;
-          const { data } = await supabase.storage.from('aft_aircraft_avatars').upload(fileName, compressed, { contentType: 'image/jpeg' });
-          if (data) {
-            const { data: urlData } = supabase.storage.from('aft_aircraft_avatars').getPublicUrl(data.path);
+          // Race the upload against UPLOAD_TIMEOUT_MS. supabase-js storage
+          // uses XHR with no client-side timeout, and iOS Safari (PWA in
+          // particular) can suspend a stalled upload indefinitely — that
+          // leaves the "Creating..." button stuck forever during signup.
+          // Fail-soft: drop the photo, save the aircraft, warn the user.
+          const uploadRes = await Promise.race([
+            supabase.storage.from('aft_aircraft_avatars').upload(fileName, compressed, { contentType: 'image/jpeg' }),
+            new Promise<{ data: null; error: Error }>((resolve) =>
+              setTimeout(() => resolve({ data: null, error: new Error('avatar_upload_timeout') }), UPLOAD_TIMEOUT_MS)
+            ),
+          ]);
+          if (uploadRes.error) throw uploadRes.error;
+          if (uploadRes.data) {
+            const { data: urlData } = supabase.storage.from('aft_aircraft_avatars').getPublicUrl(uploadRes.data.path);
             avatarUrl = urlData.publicUrl;
           }
-        } catch (err) { console.error(err); }
+        } catch (err) {
+          console.error('Avatar upload failed:', err);
+          showWarning("Photo upload didn't work. Aircraft saved without it — you can add a photo later.");
+        }
       }
     }
 
