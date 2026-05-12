@@ -30,16 +30,38 @@ export async function GET(req: Request) {
   }
 
   const url = new URL(req.url);
-  const aircraftId = url.searchParams.get('aircraftId');
+  let aircraftId = url.searchParams.get('aircraftId');
+  const tail = url.searchParams.get('tail');
   const q = url.searchParams.get('q') || 'maximum gross weight';
   const threshold = parseFloat(url.searchParams.get('threshold') || '0.2');
   const count = parseInt(url.searchParams.get('count') || '10', 10);
 
-  if (!aircraftId) {
-    return NextResponse.json({ error: 'aircraftId required' }, { status: 400 });
+  const supabaseAdmin = createAdminClient();
+
+  // Allow lookup by tail for easier debugging from the codespace.
+  if (!aircraftId && tail) {
+    const { data: ac } = await supabaseAdmin
+      .from('aft_aircraft')
+      .select('id, tail_number')
+      .ilike('tail_number', tail.replace(/^N/i, 'N'))
+      .is('deleted_at', null)
+      .maybeSingle();
+    if (ac) aircraftId = (ac as { id: string }).id;
   }
 
-  const supabaseAdmin = createAdminClient();
+  if (!aircraftId) {
+    // Return a list of aircraft + their tails so the caller knows what
+    // to query for next.
+    const { data: list } = await supabaseAdmin
+      .from('aft_aircraft')
+      .select('id, tail_number')
+      .is('deleted_at', null)
+      .order('tail_number');
+    return NextResponse.json({
+      error: 'aircraftId or tail required',
+      available_aircraft: list,
+    }, { status: 400 });
+  }
 
   // 1) Inventory: all docs on this aircraft + per-doc chunk count.
   const { data: docs, error: docsErr } = await supabaseAdmin
