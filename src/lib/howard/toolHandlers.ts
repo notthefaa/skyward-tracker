@@ -452,12 +452,13 @@ const handlers: Record<string, ToolHandler> = {
       if (error) return { error: error.message };
       if (!chunks || chunks.length === 0) return { message: 'No relevant document sections found. The aircraft may not have any documents uploaded yet.' };
 
-      // Enrich with document metadata. file_url is intentionally
-      // dropped: the documents bucket is private, the stored URL is a
-      // public-format lookup key that 400s + ORBs on direct fetch. If
-      // Claude rendered it as a markdown link the user click would
-      // fail. document_id lets the user navigate to the doc viewer
-      // in-app, which handles the signed-URL swap properly.
+      // Enrich with document metadata. The stored `file_url` (a
+      // `getPublicUrl()` value) 400s + ORBs on direct fetch because the
+      // bucket is private — so we synthesize a stable, never-expiring
+      // viewer URL: `/api/documents/<id>/view?page=N`. That route
+      // auth-checks, signs, and 302s to the real signed URL with a
+      // `#page=N` fragment so the PDF viewer opens to the cited page.
+      // Claude can render this as a markdown link directly.
       const docIds = Array.from(new Set(chunks.map((c: any) => c.document_id)));
       const { data: docs } = await sb.from('aft_documents')
         .select('id, filename, doc_type')
@@ -473,6 +474,9 @@ const handlers: Record<string, ToolHandler> = {
           chunk_index: c.chunk_index,
           content: c.content,
           relevance: (c.similarity * 100).toFixed(0) + '%',
+          file_url: c.page_number
+            ? `/api/documents/${c.document_id}/view?page=${c.page_number}`
+            : `/api/documents/${c.document_id}/view`,
         })),
       };
     } catch (err: any) {
