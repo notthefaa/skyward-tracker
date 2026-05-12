@@ -3,6 +3,7 @@ import { createHash } from 'crypto';
 import { requireAuth, requireAircraftAccess, requireAircraftAdmin, handleApiError } from '@/lib/auth';
 import { setAppUser } from '@/lib/audit';
 import { idempotency } from '@/lib/idempotency';
+import { ocrPdfWithClaude } from '@/lib/documents/ocr';
 import OpenAI from 'openai';
 
 // 5-minute ceiling — even though parse + embed now runs in `after()`
@@ -236,11 +237,53 @@ async function indexDocumentInBackground(
       if (err?.message === 'pdf_timeout') {
         return await failDocument('PDF took too long to parse.', 'PDF parsing took too long. Try a smaller or simpler PDF.');
       }
-      return await failDocument(`pdf-parse threw: ${err?.message || err}`, "Couldn't read the PDF — it might be a scan, password-protected, or malformed. Try a different file.");
+      // pdf-parse can throw on scanned/password/malformed PDFs.
+      // Don't fail yet — fall through to the OCR fallback below.
+      console.warn('[documents] pdf-parse threw, will try OCR fallback:', err?.message || err);
+    }
+
+    // OCR fallback for scanned PDFs (the common case for older
+    // aviation manuals — POH, AFM, PIM for piston singles often only
+    // exist as scans). Claude Haiku Vision reads the PDF directly
+    // and returns per-page text we can chunk and embed.
+    // Triggered when text extraction yielded nothing OR the per-page
+    // pass returned text from < 30% of pages (mixed scan/text PDFs
+    // would otherwise lose the scanned pages silently).
+    const textCoverage = pageCount > 0 ? taggedChunks.length / pageCount : 0;
+    const shouldOcr = taggedChunks.length === 0 || (pageCount > 0 && textCoverage < 0.3);
+    if (shouldOcr) {
+      console.log(`[documents] OCR fallback: pageCount=${pageCount}, chunks=${taggedChunks.length}, coverage=${textCoverage.toFixed(2)}`);
+      try {
+        const ocrPages = await ocrPdfWithClaude(buffer, { knownPageCount: pageCount || undefined });
+        if (ocrPages.length === 0) {
+          return await failDocument('OCR returned no pages.', 'Could not extract any readable text from this PDF. The scan quality may be too low.');
+        }
+        // Replace whatever pdf-parse gave us with the OCR output —
+        // for a partial-scan PDF, OCR'd pages also contain the
+        // pdf-parse-readable text, so this avoids duplicate chunks.
+        taggedChunks = chunkTextPages(ocrPages);
+        // Use OCR's page count when pdf-parse didn't give us one
+        // (some scans report pageCount=0 despite having pages).
+        if (pageCount === 0) {
+          pageCount = Math.max(...ocrPages.map(p => p.page));
+        }
+        console.log(`[documents] OCR success: ${ocrPages.length} pages, ${taggedChunks.length} chunks`);
+      } catch (err: any) {
+        console.error('[documents] OCR fallback threw:', err);
+        // If we have SOMETHING from pdf-parse, keep it rather than
+        // discarding partial progress.
+        if (taggedChunks.length === 0) {
+          const msg = err?.message || String(err);
+          const userFacing = msg.includes('rate') || msg.includes('quota') || err?.status === 429
+            ? 'OCR service is busy or rate-limited. Try uploading again in a few minutes.'
+            : "Couldn't read the PDF — text extraction and OCR both failed. The scan quality may be too low or the file is corrupt.";
+          return await failDocument(`OCR fallback failed: ${msg}`, userFacing);
+        }
+      }
     }
 
     if (taggedChunks.length === 0) {
-      return await failDocument('No readable text found in PDF.', 'No readable text found — looks like a scan or image-only PDF. Try a text-based PDF.');
+      return await failDocument('No readable text found in PDF.', 'No readable text found — looks like a scan or image-only PDF. Try a different file.');
     }
 
     try {
