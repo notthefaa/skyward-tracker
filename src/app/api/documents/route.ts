@@ -3,6 +3,7 @@ import { createHash } from 'crypto';
 import { requireAuth, requireAircraftAccess, requireAircraftAdmin, handleApiError } from '@/lib/auth';
 import { setAppUser } from '@/lib/audit';
 import { idempotency } from '@/lib/idempotency';
+import OpenAI from 'openai';
 
 // 5-minute ceiling — even though parse + embed now runs in `after()`
 // after the response is sent, Vercel keeps the function alive only
@@ -17,10 +18,12 @@ export const maxDuration = 300;
 // large-PDF processing.
 const RECLAIM_PROCESSING_AGE_MS = 360_000; // 6 min
 
-// OpenAI client + pdf-parse lazy-loaded inside functions that use them.
-// Module-level `new OpenAI()` was crashing the route on Vercel's
-// runtime (worked in local prod build via `next start`). Matches the
-// pattern used by /api/howard/route.ts and toolHandlers.ts.
+// OpenAI is imported at module top (cheap — no env reads happen here)
+// but the client itself is instantiated lazily inside the function
+// that uses it. Module-level `new OpenAI()` was crashing the route on
+// Vercel's runtime (worked in local prod build via `next start`).
+// pdf-parse is dynamic-imported inside the after() callback for the
+// same reason.
 
 const CHUNK_SIZE = 1500; // chars (~375 tokens)
 const CHUNK_OVERLAP = 200;
@@ -58,10 +61,10 @@ function chunkTextPages(pages: Array<{ page: number | null; text: string }>): Ta
 }
 
 async function generateEmbeddings(texts: string[]): Promise<number[][]> {
-  // Lazy-instantiate so the module load doesn't depend on
-  // OPENAI_API_KEY being present at import time on Vercel's runtime.
-  const OpenAIModule = (await import('openai')).default;
-  const openai = new OpenAIModule();
+  // Static import at module top; instantiate inside the function so
+  // module load doesn't depend on OPENAI_API_KEY at Vercel cold-start.
+  // Matches the working pattern in src/lib/howard/toolHandlers.ts.
+  const openai = new OpenAI();
   const batchSize = 100;
   const allEmbeddings: number[][] = [];
   for (let i = 0; i < texts.length; i += batchSize) {
@@ -93,20 +96,39 @@ async function indexDocumentInBackground(
   doc: { id: string; aircraft_id: string },
   storagePath: string,
 ): Promise<void> {
-  const failDocument = async (reason: string) => {
+  const failDocument = async (reason: string, userFacingReason?: string) => {
     console.error(`[documents] background index failed for doc=${doc.id}: ${reason}`);
     // Status flip is the critical step — without it the row stays at
     // 'processing' and the watcher polls indefinitely. Retry up to 3×
     // with backoff. If it still fails the hourly sweep-stuck-processing
     // cron is the final safety net.
+    // `last_error_reason` is the user-facing string that surfaces in
+    // the toast + the docs list row. The internal `reason` stays in
+    // the function logs (greppable by requestId).
+    const persistedReason = userFacingReason || reason;
+    // Fail-soft on the column: if migration 065 hasn't been applied
+    // yet, the UPDATE returns 42703 (undefined_column) / PGRST204
+    // (schema cache missing column). Retry without the column so the
+    // status flip — the critical part — still happens. Pattern mirrors
+    // the idempotency.ts PGRST205 fail-soft.
     let flipped = false;
+    let includeReason = true;
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
+        const payload = includeReason
+          ? { status: 'error', last_error_reason: persistedReason }
+          : { status: 'error' };
         const { error } = await supabaseAdmin
           .from('aft_documents')
-          .update({ status: 'error' })
+          .update(payload)
           .eq('id', doc.id);
         if (!error) { flipped = true; break; }
+        const code = (error as { code?: string }).code;
+        if (includeReason && (code === '42703' || code === 'PGRST204')) {
+          console.warn('[documents] last_error_reason column missing — apply migration 065. Retrying status flip without it.');
+          includeReason = false;
+          continue;
+        }
         console.error(`[documents] status flip attempt ${attempt + 1} failed:`, error.message);
       } catch (e) {
         console.error(`[documents] status flip attempt ${attempt + 1} threw:`, e);
@@ -139,7 +161,7 @@ async function indexDocumentInBackground(
     await setAppUser(supabaseAdmin, userId);
   } catch (e) {
     console.error('[documents] setAppUser failed in after():', e);
-    return await failDocument('audit user re-stamp failed');
+    return await failDocument('audit user re-stamp failed', 'Server error before indexing started. Try uploading again.');
   }
 
   // Re-download bytes inside the background fn instead of capturing
@@ -153,11 +175,11 @@ async function indexDocumentInBackground(
       .from('aft_aircraft_documents')
       .download(storagePath);
     if (dlError || !blob) {
-      return await failDocument(`background re-download failed: ${dlError?.message || 'no blob'}`);
+      return await failDocument(`background re-download failed: ${dlError?.message || 'no blob'}`, "Couldn't re-read the uploaded file. Try uploading again.");
     }
     buffer = Buffer.from(await blob.arrayBuffer());
   } catch (err: any) {
-    return await failDocument(`background re-download threw: ${err?.message || err}`);
+    return await failDocument(`background re-download threw: ${err?.message || err}`, "Couldn't re-read the uploaded file. Try uploading again.");
   }
 
   try {
@@ -212,13 +234,13 @@ async function indexDocumentInBackground(
       await parser.destroy();
     } catch (err: any) {
       if (err?.message === 'pdf_timeout') {
-        return await failDocument('PDF took too long to parse.');
+        return await failDocument('PDF took too long to parse.', 'PDF parsing took too long. Try a smaller or simpler PDF.');
       }
-      return await failDocument(`pdf-parse threw: ${err?.message || err}`);
+      return await failDocument(`pdf-parse threw: ${err?.message || err}`, "Couldn't read the PDF — it might be a scan, password-protected, or malformed. Try a different file.");
     }
 
     if (taggedChunks.length === 0) {
-      return await failDocument('No readable text found in PDF.');
+      return await failDocument('No readable text found in PDF.', 'No readable text found — looks like a scan or image-only PDF. Try a text-based PDF.');
     }
 
     try {
@@ -238,7 +260,15 @@ async function indexDocumentInBackground(
         if (chunkError) throw chunkError;
       }
     } catch (err: any) {
-      return await failDocument(`embed/chunk insert failed: ${err?.message || err}`);
+      // Distinguish OpenAI failures from chunk-insert DB failures —
+      // they need different user actions. Network/quota errors are
+      // usually transient; DB errors should escalate.
+      const msg = err?.message || String(err);
+      const isOpenAI = msg.includes('OpenAI') || msg.includes('rate limit') || msg.includes('quota') || err?.status === 429 || err?.status === 503;
+      const userFacing = isOpenAI
+        ? "Indexing service is busy or rate-limited. Try uploading again in a few minutes."
+        : "Couldn't save the document's index. Try uploading again.";
+      return await failDocument(`embed/chunk insert failed: ${msg}`, userFacing);
     }
 
     const { error: readyErr } = await supabaseAdmin
@@ -246,13 +276,13 @@ async function indexDocumentInBackground(
       .update({ status: 'ready', page_count: pageCount })
       .eq('id', doc.id);
     if (readyErr) {
-      return await failDocument(`status flip to ready failed: ${readyErr.message}`);
+      return await failDocument(`status flip to ready failed: ${readyErr.message}`, "Indexing finished but the final save failed. Try uploading again.");
     }
 
     console.log(`[documents] background index complete doc=${doc.id} chunks=${taggedChunks.length} pages=${pageCount}`);
   } catch (err: any) {
     console.error('[documents] background index unexpected error:', err);
-    await failDocument(`unhandled: ${err?.message || err}`);
+    await failDocument(`unhandled: ${err?.message || err}`, "Something unexpected happened during indexing. Try uploading again.");
   }
 }
 

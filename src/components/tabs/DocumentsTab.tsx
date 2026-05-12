@@ -299,8 +299,18 @@ export default function DocumentsTab({
                 <tr key={doc.id} className="border-b border-gray-200 hover:bg-blue-50/50 transition-colors">
                   <td className="py-3 pr-4">
                     <div className="flex items-center gap-2">
-                      <FileText size={14} className="text-[#56B94A] shrink-0" />
-                      <a href={resolve(doc.file_url) || '#'} target="_blank" rel="noopener noreferrer" className="text-info underline truncate max-w-[180px]">{doc.filename}</a>
+                      <FileText size={14} className={doc.status === 'error' ? 'text-gray-400 shrink-0' : 'text-[#56B94A] shrink-0'} />
+                      {doc.status === 'error' ? (
+                        // Storage object was removed by failDocument; no
+                        // link to render. Show the filename + reason
+                        // inline so the user knows what to retry.
+                        <span className="text-gray-500 truncate max-w-[260px]" title={doc.last_error_reason || undefined}>
+                          {doc.filename}
+                          {doc.last_error_reason ? ` — ${doc.last_error_reason}` : ''}
+                        </span>
+                      ) : (
+                        <a href={resolve(doc.file_url) || '#'} target="_blank" rel="noopener noreferrer" className="text-info underline truncate max-w-[180px]">{doc.filename}</a>
+                      )}
                     </div>
                   </td>
                   <td className="py-3 pr-4 whitespace-nowrap text-[10px] font-bold uppercase tracking-wider">{doc.doc_type}</td>

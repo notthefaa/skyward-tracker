@@ -392,4 +392,7 @@ export interface AircraftDocument {
   page_count?: number | null;
   status: 'processing' | 'ready' | 'error';
   created_at: string;
+  // Populated by indexDocumentInBackground's `failDocument` when
+  // status flips to 'error'. Null on 'processing' / 'ready' rows.
+  last_error_reason?: string | null;
 }

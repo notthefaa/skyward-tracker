@@ -69,14 +69,23 @@ export async function GET(req: Request) {
 
   if (!dryRun) {
     for (const row of rows) {
-      const { error: updErr } = await supabaseAdmin
-        .from('aft_documents')
-        .update({ status: 'error' })
-        .eq('id', row.id)
-        // Defense-in-depth: only flip rows still at 'processing'.
-        // If a row finished between SELECT and UPDATE, the additional
-        // status filter makes the UPDATE no-op instead of clobbering.
-        .eq('status', 'processing');
+      // Try with last_error_reason; if migration 065 hasn't applied
+      // yet, retry without the column so the status flip — the
+      // critical step — still happens.
+      const tryUpdate = async (withReason: boolean) =>
+        supabaseAdmin
+          .from('aft_documents')
+          .update(withReason
+            ? { status: 'error', last_error_reason: 'Indexing timed out before it finished. Try uploading again.' }
+            : { status: 'error' }
+          )
+          .eq('id', row.id)
+          .eq('status', 'processing');
+      let updErr = (await tryUpdate(true)).error;
+      if (updErr && ((updErr as { code?: string }).code === '42703' || (updErr as { code?: string }).code === 'PGRST204')) {
+        console.warn('[cron/sweep-stuck-processing] last_error_reason column missing — apply migration 065. Retrying without it.');
+        updErr = (await tryUpdate(false)).error;
+      }
       if (updErr) {
         console.error('[cron/sweep-stuck-processing] flip failed for', row.id, updErr.message);
         errors.push(`flip ${row.id}: ${updErr.message}`);

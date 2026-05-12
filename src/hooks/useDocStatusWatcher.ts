@@ -36,7 +36,7 @@ import { useToast } from "@/components/ToastProvider";
  *   first-sighting-silencing rule would swallow it.
  */
 
-type DocRow = { id: string; filename: string; status: string; created_at?: string };
+type DocRow = { id: string; filename: string; status: string; created_at?: string; last_error_reason?: string | null };
 
 // Module-level set of doc IDs whose first sighting should toast even
 // if the status is already terminal. Populated by the upload sites
@@ -125,6 +125,14 @@ export function useDocStatusWatcher(aircraftId: string | null | undefined): void
       const prev = seenStatuses.current.get(key);
       const isPending = pendingUploads.has(doc.id);
 
+      // Compose a specific error message when last_error_reason is
+      // populated (migration 065+). Falls back to the generic toast
+      // for older rows / when the column is null.
+      const errorToast = (filename: string, reason?: string | null) =>
+        reason
+          ? `Couldn't index "${filename}" — ${reason}`
+          : `Couldn't index "${filename}". Try uploading again.`;
+
       if (prev === undefined) {
         // First sighting in this session.
         // If the upload site registered this id as pending and the
@@ -136,7 +144,7 @@ export function useDocStatusWatcher(aircraftId: string | null | undefined): void
           if (doc.status === 'ready') {
             showSuccess(`"${doc.filename}" is indexed and searchable. Howard can reference it now.`);
           } else if (doc.status === 'error') {
-            showError(`Couldn't index "${doc.filename}". Try uploading again.`);
+            showError(errorToast(doc.filename, doc.last_error_reason));
           }
           // For 'processing', fall through to the normal recording
           // path — we'll catch the transition on a subsequent poll.
@@ -155,7 +163,7 @@ export function useDocStatusWatcher(aircraftId: string | null | undefined): void
         showSuccess(`"${doc.filename}" is indexed and searchable. Howard can reference it now.`);
       } else if (prev === 'processing' && doc.status === 'error') {
         pendingUploads.delete(doc.id);
-        showError(`Couldn't index "${doc.filename}". Try uploading again.`);
+        showError(errorToast(doc.filename, doc.last_error_reason));
       }
       seenStatuses.current.set(key, doc.status);
     }
