@@ -37,6 +37,10 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
   const [selectedEvent, setSelectedEvent] = useState<any>(null);
   const [eventLineItems, setEventLineItems] = useState<any[]>([]);
   const [eventMessages, setEventMessages] = useState<any[]>([]);
+  // squawk_id -> pictures[]. Populated in fetchEventDetail for squawk
+  // line items; lets the in-app detail view render the same photo
+  // thumbnails the mechanic sees on the portal.
+  const [squawkPhotos, setSquawkPhotos] = useState<Record<string, string[]>>({});
 
   const [mxItems, setMxItems] = useState<any[]>([]);
   const [squawks, setSquawks] = useState<any[]>([]);
@@ -90,6 +94,24 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
     if (evRes.data) setSelectedEvent(evRes.data);
     setEventLineItems(linesRes.data || []);
     setEventMessages(msgsRes.data || []);
+
+    // Side-fetch squawk pictures for any squawk line items. The portal
+    // RPC bundles these inline; the in-app fetch path historically
+    // didn't, leaving admins to dig through the original squawk record.
+    const squawkIds = (linesRes.data || []).filter((l: any) => l.squawk_id).map((l: any) => l.squawk_id);
+    if (squawkIds.length > 0) {
+      const { data: sqs } = await supabase
+        .from('aft_squawks')
+        .select('id, pictures')
+        .in('id', squawkIds);
+      const map: Record<string, string[]> = {};
+      for (const sq of (sqs || []) as any[]) {
+        if (Array.isArray(sq.pictures) && sq.pictures.length > 0) map[sq.id] = sq.pictures;
+      }
+      setSquawkPhotos(map);
+    } else {
+      setSquawkPhotos({});
+    }
   };
 
   const loadMxAndSquawks = async () => {
@@ -151,7 +173,7 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
       // from selection (the drafted-ids set would include the ghost
       // entry), and the pilot couldn't re-add the underlying mx item.
       const { data: allLines, error: linesErr } = await supabase
-        .from('aft_event_line_items').select('maintenance_item_id, squawk_id')
+        .from('aft_event_line_items').select('maintenance_item_id, squawk_id, event_id')
         .in('event_id', activeEventIds)
         .is('deleted_at', null);
       if (linesErr) {
@@ -188,9 +210,17 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
   if (!show) return null;
   if (typeof document === 'undefined') return null;
 
-  // Compute drafted item IDs for the create flow
-  const draftedMxIds = allActiveLineItems.filter(li => li.maintenance_item_id).map(li => li.maintenance_item_id);
-  const draftedSquawkIds = allActiveLineItems.filter(li => li.squawk_id).map(li => li.squawk_id);
+  // Drafted-item -> parent-event map. Lets the create flow surface
+  // "Already in draft X" links instead of dead grayed labels.
+  const draftedItemEvents: Record<string, any> = {};
+  for (const li of allActiveLineItems) {
+    const evt = events.find(e => e.id === li.event_id);
+    if (!evt) continue;
+    if (li.maintenance_item_id) draftedItemEvents[li.maintenance_item_id] = evt;
+    if (li.squawk_id) draftedItemEvents[li.squawk_id] = evt;
+  }
+  const draftedMxIds = Object.keys(draftedItemEvents);
+  const draftedSquawkIds = Object.keys(draftedItemEvents);
 
   const isDraftDetail = view === 'detail' && selectedEvent?.status === 'draft';
   const viewTitle = isDraftDetail
@@ -225,7 +255,7 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
           }}
         >
         <div className="flex min-h-full items-center justify-center p-4">
-        <div className="bg-white rounded shadow-2xl w-full max-w-lg p-5 border-t-4 border-mxOrange animate-slide-up" onClick={e => e.stopPropagation()}>
+        <div className="bg-white rounded shadow-2xl w-full max-w-lg md:max-w-2xl p-5 border-t-4 border-mxOrange animate-slide-up" onClick={e => e.stopPropagation()}>
 
           <div className="flex justify-between items-center mb-6">
             <h2 className="font-oswald text-2xl font-bold uppercase text-navy flex items-center gap-2">
@@ -239,7 +269,7 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
           )}
 
           {view === 'create' && (
-            <ServiceEventCreate {...childProps} mxItems={mxItems} squawks={squawks} draftedMxIds={draftedMxIds} draftedSquawkIds={draftedSquawkIds} preSelectedMxIds={preSelectMxItemId ? [preSelectMxItemId] : undefined} />
+            <ServiceEventCreate {...childProps} mxItems={mxItems} squawks={squawks} draftedItemEvents={draftedItemEvents} preSelectedMxIds={preSelectMxItemId ? [preSelectMxItemId] : undefined} />
           )}
 
           {/* Detail view branches on status: drafts get the editing
@@ -250,7 +280,7 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
             <ServiceEventDraftDetail {...childProps} selectedEvent={selectedEvent} eventLineItems={eventLineItems} mxItems={mxItems} squawks={squawks} />
           )}
           {view === 'detail' && selectedEvent && !isDraftDetail && (
-            <ServiceEventDetail {...childProps} selectedEvent={selectedEvent} eventLineItems={eventLineItems} eventMessages={eventMessages} fetchEventDetail={fetchEventDetail} setViewingAttachment={setViewingAttachment} />
+            <ServiceEventDetail {...childProps} selectedEvent={selectedEvent} eventLineItems={eventLineItems} eventMessages={eventMessages} squawkPhotos={squawkPhotos} fetchEventDetail={fetchEventDetail} setViewingAttachment={setViewingAttachment} />
           )}
 
           {view === 'complete' && selectedEvent && (

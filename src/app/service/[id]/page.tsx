@@ -63,6 +63,16 @@ export default function ServicePortal() {
 
   const [showDeclineConfirm, setShowDeclineConfirm] = useState(false);
   const [declineReason, setDeclineReason] = useState("");
+  // Pairs with the "Can't accommodate?" link inside the scheduling card
+  // so mechanics see the decline path on first glance instead of having
+  // to scroll past every section.
+  const declineSectionRef = useRef<HTMLDivElement | null>(null);
+  const openDeclineFlow = () => {
+    setShowDeclineConfirm(true);
+    requestAnimationFrame(() => {
+      declineSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+  };
 
   const [showReadyConfirm, setShowReadyConfirm] = useState(false);
   const [readyMessage, setReadyMessage] = useState("");
@@ -379,6 +389,7 @@ export default function ServicePortal() {
                 <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 block">Primary Contact</span>
                 <span className="font-roboto font-bold text-navy">{event.primary_contact_name || 'N/A'}</span>
                 {event.primary_contact_email && <a href={`mailto:${event.primary_contact_email}`} className="block text-xs text-info mt-1">{event.primary_contact_email}</a>}
+                {event.primary_contact_phone && <a href={`tel:${event.primary_contact_phone}`} className="block text-xs text-info">{event.primary_contact_phone}</a>}
               </div>
               <div>
                 <div className="flex items-center justify-between mb-1">
@@ -416,7 +427,10 @@ export default function ServicePortal() {
           {/* SCHEDULING ACTIONS */}
           {event.status === 'scheduling' && (
             <div className="bg-white shadow-lg rounded-sm p-6 border-t-4 border-mxOrange">
-              <h3 className="font-oswald text-lg font-bold uppercase tracking-widest text-navy mb-4 flex items-center gap-2"><Calendar size={18} className="text-mxOrange"/> Scheduling</h3>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-oswald text-lg font-bold uppercase tracking-widest text-navy flex items-center gap-2"><Calendar size={18} className="text-mxOrange"/> Scheduling</h3>
+                <button onClick={openDeclineFlow} className="text-[10px] font-bold uppercase tracking-widest text-danger hover:underline active:scale-95 transition-all">Can't accommodate?</button>
+              </div>
               
               {event.proposed_by === 'owner' && (
                 <div className="space-y-3">
@@ -710,7 +724,7 @@ export default function ServicePortal() {
 
           {/* DECLINE SERVICE */}
           {event.status !== 'complete' && event.status !== 'cancelled' && event.status !== 'ready_for_pickup' && (
-            <div className="bg-white shadow-lg rounded-sm p-6 border-t-4 border-red-200">
+            <div ref={declineSectionRef} className="bg-white shadow-lg rounded-sm p-6 border-t-4 border-red-200">
               {!showDeclineConfirm ? (
                 <button onClick={() => setShowDeclineConfirm(true)} className="w-full text-[10px] font-bold uppercase tracking-widest text-danger border border-red-200 bg-red-50 rounded py-2.5 hover:bg-red-100 active:scale-95 transition-all flex items-center justify-center gap-1.5"><XCircle size={12} /> Unable to Accommodate — Decline Service</button>
               ) : (

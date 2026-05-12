@@ -4,7 +4,7 @@ import { useState, useRef } from "react";
 import { authFetch, UPLOAD_TIMEOUT_MS } from "@/lib/authFetch";
 import { newIdempotencyKey, idempotencyHeader } from "@/lib/idempotencyClient";
 import { Wrench, AlertTriangle, Sparkles, ChevronDown, CheckSquare } from "lucide-react";
-import { PrimaryButton } from "@/components/AppButtons";
+import { PrimaryButton, SecondaryButton } from "@/components/AppButtons";
 import { ADDON_OPTIONS } from "./shared";
 import type { ServiceEventChildProps } from "./shared";
 import DateProposalSection from "./DateProposalSection";
@@ -13,10 +13,10 @@ import EmailPreview from "./EmailPreview";
 interface ServiceEventCreateProps extends ServiceEventChildProps {
   mxItems: any[];
   squawks: any[];
-  /** IDs of MX items already included in an existing draft/active event */
-  draftedMxIds?: string[];
-  /** IDs of squawks already included in an existing draft/active event */
-  draftedSquawkIds?: string[];
+  /** Map of item-id (mx item OR squawk) -> the active event it's drafted
+   * on. Drives both the "already drafted" filter on the selectable lists
+   * and the deep-link to that draft from the grayed-out card. */
+  draftedItemEvents?: Record<string, any>;
   /** MX items to pre-select when this view opens (e.g. from the
    * "projected due" banner in MaintenanceTab). */
   preSelectedMxIds?: string[];
@@ -24,8 +24,10 @@ interface ServiceEventCreateProps extends ServiceEventChildProps {
 
 export default function ServiceEventCreate({
   aircraft, mxItems, squawks, isSubmitting, setIsSubmitting, onNavigate, onRefresh, showSuccess, showError, showWarning, canManageService,
-  draftedMxIds = [], draftedSquawkIds = [], preSelectedMxIds,
+  draftedItemEvents = {}, preSelectedMxIds,
 }: ServiceEventCreateProps) {
+  const draftedMxIds = mxItems.filter(mx => draftedItemEvents[mx.id]).map(mx => mx.id);
+  const draftedSquawkIds = squawks.filter(sq => draftedItemEvents[sq.id]).map(sq => sq.id);
   const [selectedMxIds, setSelectedMxIds] = useState<string[]>(preSelectedMxIds || []);
   const [selectedSquawkIds, setSelectedSquawkIds] = useState<string[]>([]);
   const [selectedAddons, setSelectedAddons] = useState<string[]>([]);
@@ -164,17 +166,21 @@ export default function ServiceEventCreate({
         </div>
       )}
 
-      {/* Items already in a draft — shown as non-selectable for awareness */}
+      {/* Items already in a draft — clickable so the user can jump to
+          the draft they're already on instead of guessing which one. */}
       {draftedMxIds.length > 0 && (
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Already included in another draft</p>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Already in another event — tap to open</p>
           <div className="space-y-2">
-            {mxItems.filter(mx => draftedMxIds.includes(mx.id)).map(mx => (
-              <div key={mx.id} className="p-3 border border-gray-100 rounded bg-gray-50 opacity-50">
-                <span className="font-bold text-sm text-gray-400">{mx.item_name}</span>
-                <span className="block text-[10px] text-gray-400">{mx.tracking_type === 'time' ? `Due @ ${mx.due_time} hrs` : `Due ${mx.due_date}`}</span>
-              </div>
-            ))}
+            {mxItems.filter(mx => draftedMxIds.includes(mx.id)).map(mx => {
+              const evt = draftedItemEvents[mx.id];
+              return (
+                <button key={mx.id} type="button" onClick={() => evt && onNavigate('detail', evt)} className="w-full text-left p-3 border border-gray-200 rounded bg-gray-50 hover:bg-gray-100 hover:border-mxOrange active:scale-[0.99] transition-all">
+                  <span className="font-bold text-sm text-gray-500">{mx.item_name}</span>
+                  <span className="block text-[10px] text-gray-400">{mx.tracking_type === 'time' ? `Due @ ${mx.due_time} hrs` : `Due ${mx.due_date}`}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
       )}
@@ -205,13 +211,16 @@ export default function ServiceEventCreate({
 
       {draftedSquawkIds.length > 0 && (
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Squawks already in another draft</p>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Squawks already in another event — tap to open</p>
           <div className="space-y-2">
-            {squawks.filter(sq => draftedSquawkIds.includes(sq.id)).map(sq => (
-              <div key={sq.id} className="p-3 border border-gray-100 rounded bg-gray-50 opacity-50">
-                <span className="font-bold text-sm text-gray-400">{sq.description || 'No description'}</span>
-              </div>
-            ))}
+            {squawks.filter(sq => draftedSquawkIds.includes(sq.id)).map(sq => {
+              const evt = draftedItemEvents[sq.id];
+              return (
+                <button key={sq.id} type="button" onClick={() => evt && onNavigate('detail', evt)} className="w-full text-left p-3 border border-gray-200 rounded bg-gray-50 hover:bg-gray-100 hover:border-mxOrange active:scale-[0.99] transition-all">
+                  <span className="font-bold text-sm text-gray-500">{sq.description || 'No description'}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
       )}
@@ -240,9 +249,9 @@ export default function ServiceEventCreate({
       <PrimaryButton onClick={handleCreateAndSend} disabled={anyBusy}>
         {isSubmitting ? "Sending..." : "Send Work Package to Mechanic"}
       </PrimaryButton>
-      <button onClick={handleSaveAsDraft} disabled={anyBusy} className="w-full text-[10px] font-bold uppercase tracking-widest text-gray-500 hover:text-navy py-2 active:scale-95 transition-all disabled:opacity-50">
-        {isSavingDraft ? "Saving Draft..." : "Save as Draft (Don\u0027t Send Yet)"}
-      </button>
+      <SecondaryButton onClick={handleSaveAsDraft} disabled={anyBusy} className="w-full">
+        {isSavingDraft ? "Saving Draft..." : "Save Draft"}
+      </SecondaryButton>
     </div>
   );
 }
