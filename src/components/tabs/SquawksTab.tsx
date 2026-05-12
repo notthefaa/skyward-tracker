@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
-import { authFetch } from "@/lib/authFetch";
+import { authFetch, UPLOAD_TIMEOUT_MS } from "@/lib/authFetch";
 import { validateFileSizes, MAX_UPLOAD_SIZE_LABEL } from "@/lib/constants";
 import { swrKeys } from "@/lib/swrKeys";
 import type { AircraftWithMetrics, AircraftRole } from "@/lib/types";
@@ -187,8 +187,9 @@ export default function SquawksTab({
   // storage path (for undoing the upload if the squawk insert later
   // fails). Tracking the path separately avoids fragile URL parsing in
   // the cleanup path.
-  const uploadImages = async (): Promise<{ url: string; path: string }[]> => {
+  const uploadImages = async (): Promise<{ uploaded: { url: string; path: string }[]; failed: number }> => {
     const uploaded: { url: string; path: string }[] = [];
+    let failed = 0;
     const options = { maxSizeMB: 1, maxWidthOrHeight: 1920, useWebWorker: true };
     for (const file of selectedImages) {
       try {
@@ -203,16 +204,27 @@ export default function SquawksTab({
         const safeTail = String(aircraft!.tail_number || 'aircraft').replace(/[^A-Za-z0-9-]/g, '_');
         const safeName = compressedFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
         const fileName = `${safeTail}_${Date.now()}_${safeName}`;
-        const { data } = await supabase.storage.from('aft_squawk_images').upload(fileName, compressedFile);
-        if (data) {
-          const { data: publicUrlData } = supabase.storage.from('aft_squawk_images').getPublicUrl(data.path);
-          uploaded.push({ url: publicUrlData.publicUrl, path: data.path });
+        // Race the XHR-backed storage upload against UPLOAD_TIMEOUT_MS —
+        // iOS Safari (PWA) can suspend a stalled upload indefinitely,
+        // freezing the "Saving…" button. On timeout, fall through to the
+        // catch and count it as a failed image; the squawk still saves.
+        const uploadRes = await Promise.race([
+          supabase.storage.from('aft_squawk_images').upload(fileName, compressedFile),
+          new Promise<{ data: null; error: Error }>((resolve) =>
+            setTimeout(() => resolve({ data: null, error: new Error('squawk_image_upload_timeout') }), UPLOAD_TIMEOUT_MS)
+          ),
+        ]);
+        if (uploadRes.error) throw uploadRes.error;
+        if (uploadRes.data) {
+          const { data: publicUrlData } = supabase.storage.from('aft_squawk_images').getPublicUrl(uploadRes.data.path);
+          uploaded.push({ url: publicUrlData.publicUrl, path: uploadRes.data.path });
         }
       } catch (error) {
+        failed++;
         console.error("Image compression/upload failed:", error);
       }
     }
-    return uploaded;
+    return { uploaded, failed };
   };
 
   // Fire-and-forget orphan cleanup. Used when the squawk insert fails
@@ -235,8 +247,14 @@ export default function SquawksTab({
     // because the throw skipped over setIsSubmitting(false).
     // Track the freshly-uploaded storage paths so the catch branch
     // can clean them up if the squawk insert fails.
-    const uploadedThisSubmit = await uploadImages();
+    const { uploaded: uploadedThisSubmit, failed: uploadFailedCount } = await uploadImages();
     const uploadedPathsToRollback = uploadedThisSubmit.map(u => u.path);
+    if (uploadFailedCount > 0) {
+      // Surface the dropped images so the pilot isn't surprised that the
+      // squawk saved without the photos they attached. Iterating here is
+      // best-effort — the squawk write still proceeds.
+      showWarning(`${uploadFailedCount === 1 ? 'A photo' : `${uploadFailedCount} photos`} didn't upload (the network may have stalled). The squawk will save without ${uploadFailedCount === 1 ? 'it' : 'them'} — you can edit and try again.`);
+    }
     try {
       const allPictures = [...existingImages, ...uploadedThisSubmit.map(u => u.url)];
       let signatureData = null; let sigDate = null;
