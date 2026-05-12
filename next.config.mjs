@@ -16,6 +16,7 @@ const nextConfig = {
   serverExternalPackages: [
     "jspdf",
     "pdf-parse",
+    "pdf-lib",
     "openai",
     "@anthropic-ai/sdk",
     "@tavily/core",
