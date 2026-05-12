@@ -3,18 +3,12 @@ import { createHash } from 'crypto';
 import { requireAuth, requireAircraftAccess, requireAircraftAdmin, handleApiError } from '@/lib/auth';
 import { setAppUser } from '@/lib/audit';
 import { idempotency } from '@/lib/idempotency';
-import { PDFParse } from 'pdf-parse';
-import OpenAI from 'openai';
 
 // 5-minute ceiling — even though parse + embed now runs in `after()`
 // after the response is sent, Vercel keeps the function alive only
 // until maxDuration. A 20 MB POH with 1000+ chunks needs that whole
 // budget for OpenAI embeddings.
 export const maxDuration = 300;
-// pdf-parse + Buffer require Node, not the Edge runtime. Default in
-// Next 16 is Node but pin it explicitly so a future default flip can't
-// silently break this route.
-export const runtime = 'nodejs';
 
 // Window after which a non-'ready' row of the same SHA is considered
 // stale and reclaimed. MUST exceed `maxDuration` (300 s) plus a margin
@@ -23,7 +17,10 @@ export const runtime = 'nodejs';
 // large-PDF processing.
 const RECLAIM_PROCESSING_AGE_MS = 360_000; // 6 min
 
-const openai = new OpenAI();
+// OpenAI client + pdf-parse lazy-loaded inside functions that use them.
+// Module-level `new OpenAI()` was crashing the route on Vercel's
+// runtime (worked in local prod build via `next start`). Matches the
+// pattern used by /api/howard/route.ts and toolHandlers.ts.
 
 const CHUNK_SIZE = 1500; // chars (~375 tokens)
 const CHUNK_OVERLAP = 200;
@@ -61,6 +58,10 @@ function chunkTextPages(pages: Array<{ page: number | null; text: string }>): Ta
 }
 
 async function generateEmbeddings(texts: string[]): Promise<number[][]> {
+  // Lazy-instantiate so the module load doesn't depend on
+  // OPENAI_API_KEY being present at import time on Vercel's runtime.
+  const OpenAIModule = (await import('openai')).default;
+  const openai = new OpenAIModule();
   const batchSize = 100;
   const allEmbeddings: number[][] = [];
   for (let i = 0; i < texts.length; i += batchSize) {
@@ -175,6 +176,11 @@ async function indexDocumentInBackground(
       ]);
 
     try {
+      // Dynamic import — pdf-parse is heavy and was potentially
+      // contributing to Vercel runtime init failures when imported at
+      // module top. Loaded inside the after() callback now, well after
+      // the response has been sent.
+      const { PDFParse } = await import('pdf-parse');
       const parser = new PDFParse({ data: new Uint8Array(buffer) });
       const fullResult = await withTimeout(parser.getText(), PARSE_DEADLINE_MS);
       pageCount = fullResult.total || 0;
