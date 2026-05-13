@@ -69,24 +69,31 @@ export async function POST(req: Request) {
     }
 
     if (data.user) {
-      // 1. Create the Role Profile.
-      //
-      // completed_onboarding is TRUE only when the invitee is being added
-      // to an existing fleet (aircraftIds non-empty) — they shouldn't
-      // land in Howard's onboarding chat / manual form, both of which
-      // create a NEW aircraft they didn't ask for. With no aircraft
-      // pre-assigned the invitee is starting fresh, so leave the flag
-      // false: they'll land in the welcome modal and pick guided chat
-      // or form to create their own first aircraft. Tour stays false
-      // either way so the 30-second orientation still plays.
+      // 1. Create the Role Profile. Omit completed_onboarding from the
+      //    upsert so an existing user's onboarded state isn't clobbered
+      //    by a re-invite with no aircraft (the column default of false
+      //    handles the brand-new-row case). A follow-up UPDATE flips
+      //    the flag to true ONLY when the invitee is being added to an
+      //    existing fleet — those users shouldn't land in Howard's
+      //    onboarding chat / manual form, both of which create a NEW
+      //    aircraft they didn't ask for.
       const fleetMembershipPreassigned = Array.isArray(aircraftIds) && aircraftIds.length > 0;
       const { error: roleErr } = await supabaseAdmin.from('aft_user_roles').upsert({
         user_id: data.user.id,
         role: globalRole,
         email: normalizedEmail,
-        completed_onboarding: fleetMembershipPreassigned,
       });
       if (roleErr) throw roleErr;
+      if (fleetMembershipPreassigned) {
+        const { error: gateErr } = await supabaseAdmin
+          .from('aft_user_roles')
+          .update({ completed_onboarding: true })
+          .eq('user_id', data.user.id)
+          .eq('completed_onboarding', false);
+        if (gateErr) {
+          console.error('[invite] could not flip completed_onboarding for fleet-preassigned user', gateErr);
+        }
+      }
 
       // 2. Assign the Aircraft instantly. The access row NEEDS an
       //    aircraft_role — downstream gates compare it against

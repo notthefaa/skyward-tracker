@@ -89,6 +89,25 @@ export async function POST(req: Request) {
         );
       if (upsertError) throw upsertError;
 
+      // Flip completed_onboarding to true if it's still false on the
+      // target user's row. Scenario: Alex first invites via /api/invite
+      // with no aircraft (completed_onboarding=false) → later adds them
+      // to an aircraft here. Without this UPDATE the user keeps landing
+      // in HowardWelcome ("set up a new airplane") even though they
+      // already have fleet access. The .eq('completed_onboarding', false)
+      // guard ensures we only flip the bad state — never regress a
+      // user who already finished onboarding via some other path.
+      const { error: gateErr } = await supabaseAdmin
+        .from('aft_user_roles')
+        .update({ completed_onboarding: true })
+        .eq('user_id', targetUserId)
+        .eq('completed_onboarding', false);
+      if (gateErr) {
+        // Non-fatal — the access row landed, but the user may still see
+        // HowardWelcome on first sign-in. Log so this shows in monitoring.
+        console.error('[pilot-invite] could not flip completed_onboarding for existing user', gateErr);
+      }
+
       const existingBody = {
         success: true,
         message: existingAccess ? 'User role updated.' : 'User added to aircraft.',
