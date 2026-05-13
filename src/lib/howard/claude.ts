@@ -104,6 +104,12 @@ export type StreamEvent =
       affects_airworthiness: boolean;
     }
   | {
+      type: 'client_action';
+      action: 'open_logbook_scan';
+      tail: string;
+      aircraft_id: string;
+    }
+  | {
       type: 'complete';
       assistantText: string;
       toolCalls: any[] | null;
@@ -334,6 +340,18 @@ export async function* sendMessageStream(
               description: typeof parsed.description === 'string' ? parsed.description : '',
               location: typeof parsed.location === 'string' ? parsed.location : '',
               affects_airworthiness: !!parsed.affects_airworthiness,
+            };
+          }
+        } catch {}
+      } else if (block.name === 'open_logbook_scan') {
+        try {
+          const parsed = JSON.parse(result);
+          if (parsed?.success && typeof parsed?.tail === 'string' && typeof parsed?.aircraft_id === 'string') {
+            yield {
+              type: 'client_action',
+              action: 'open_logbook_scan',
+              tail: parsed.tail,
+              aircraft_id: parsed.aircraft_id,
             };
           }
         } catch {}

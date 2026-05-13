@@ -327,6 +327,17 @@ export const tools: Anthropic.Tool[] = [
     },
   },
   {
+    name: 'open_logbook_scan',
+    description: 'Navigate the app to the Maintenance tab and open the Track New Item modal so the pilot can tap "Scan from logbook" and snap a photo of a mechanic\'s logbook entry. Use when the pilot wants to scan / OCR a mechanic\'s signoff so it becomes a tracked maintenance item. Howard can\'t process images in chat. After calling, reply with ONE short line — "Opening Maintenance — tap Scan from logbook when you\'re ready." Don\'t use this for closing out an existing service event (that flow lives on the service event itself).',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        tail: { type: 'string', description: 'Aircraft tail number.' },
+      },
+      required: ['tail'],
+    },
+  },
+  {
     name: 'open_squawk_form',
     description: 'Navigate the app to the Squawks tab and open the new-squawk form pre-filled with description / location / airworthiness flag. Use when the pilot wants to report a squawk that needs a photo (Howard can\'t attach photos directly from chat, so the handoff lets them snap and attach in the form before submitting). Prefer propose_squawk when the pilot has no photo to attach. Always reply with a short line like "Opening the squawk form for you — add a photo and submit when ready" after calling this.',
     input_schema: {

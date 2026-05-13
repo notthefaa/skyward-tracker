@@ -157,6 +157,27 @@ export default function MaintenanceTab({
     setQueueCursor(0);
   }, [aircraft?.id]);
 
+  // Howard handoff: when open_logbook_scan fires, AppShell stashes a
+  // flag in sessionStorage and navigates here. Consume + clear so a
+  // tab-switch back doesn't re-open the modal. Defer the openMxForm
+  // call by a tick so it runs after the aircraft-change reset above
+  // (which lands on the same render when Howard switched tails first).
+  useEffect(() => {
+    if (!aircraft?.id) return;
+    try {
+      const raw = sessionStorage.getItem('aft_open_logbook_scan');
+      if (!raw) return;
+      sessionStorage.removeItem('aft_open_logbook_scan');
+      // Microtask so the reset effect above clears state first; otherwise
+      // openMxForm() runs before the reset and its state writes get
+      // immediately stomped.
+      setTimeout(() => openMxForm(), 0);
+    } catch {
+      // Bad JSON / sessionStorage error — no-op. The pilot still sees
+      // the Maintenance tab; they tap Track New Item themselves.
+    }
+  }, [aircraft?.id]);
+
   useModalScrollLock(showMxModal || !!confirmResendId);
 
   // ─── Separate items into active tracking vs needs-setup ───

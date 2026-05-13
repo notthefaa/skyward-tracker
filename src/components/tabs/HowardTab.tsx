@@ -438,6 +438,15 @@ export default function HowardTab({
                 },
               }));
             }
+          } else if (ev.type === 'client_action' && ev.action === 'open_logbook_scan') {
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('howard:switch-aircraft', {
+                detail: { tail: ev.tail, aircraftId: ev.aircraft_id },
+              }));
+              window.dispatchEvent(new CustomEvent('howard:open-in-app', {
+                detail: { kind: 'logbook_scan_new_item' },
+              }));
+            }
           } else if (ev.type === 'done') {
             savedAssistantMsg = ev.assistantMessage;
           } else if (ev.type === 'error') {

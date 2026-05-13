@@ -342,6 +342,15 @@ export default function AppShell({ session }: AppShellProps) {
           );
           setMxSubTab('squawks');
           navigateTab('mx');
+        } else if (detail.kind === 'logbook_scan_new_item') {
+          // Flag-only payload — MaintenanceTab opens the Track New Item
+          // modal so the pilot can tap "Scan from logbook". Auto-
+          // clicking the camera input from JS isn't reliable on iOS
+          // (the picker often needs a direct user gesture), so we
+          // stage the modal and let the pilot trigger the camera.
+          sessionStorage.setItem('aft_open_logbook_scan', JSON.stringify({}));
+          setMxSubTab('maintenance');
+          navigateTab('mx');
         }
       } catch {
         // sessionStorage write failures (private mode, quota) shouldn't

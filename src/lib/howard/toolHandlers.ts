@@ -758,6 +758,18 @@ const handlers: Record<string, ToolHandler> = {
     };
   },
 
+  open_logbook_scan: async (_params, _sb, aircraftId, ctx) => {
+    if (!aircraftId) {
+      return { error: 'tail is required.' };
+    }
+    return {
+      success: true,
+      tail: ctx.aircraftTail,
+      aircraft_id: aircraftId,
+      message: `Opening the Track New Item modal on ${ctx.aircraftTail} so the pilot can scan a logbook entry.`,
+    };
+  },
+
   open_squawk_form: async (params, sb, aircraftId, ctx) => {
     if (!aircraftId) {
       return { error: 'tail is required.' };
