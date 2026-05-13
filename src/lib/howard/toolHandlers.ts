@@ -8,6 +8,7 @@ import { isIsoDate, isIsoDateTime, parseFiniteNumber } from '@/lib/validation';
 import { getOilConsumptionStatus, hoursSinceLastOilAdd } from '@/lib/oilConsumption';
 import { NETWORK_TIMEOUT_MS, HOWARD_TOOL_TIMEOUT_MS } from '@/lib/constants';
 import { todayInZone } from '@/lib/pilotTime';
+import { getNmsBaseUrl, getNmsToken, hasNmsCredentials, invalidateNmsToken } from '@/lib/nms/auth';
 import { proposeAction, type ActionType } from './proposedActions';
 
 // Allow-list for aft_aircraft_equipment.category. Must match the
@@ -970,69 +971,113 @@ const handlers: Record<string, ToolHandler> = {
       return { error: 'At least one airport ICAO code is required.' };
     }
 
-    const clientId = process.env.FAA_NOTAM_CLIENT_ID;
-    const clientSecret = process.env.FAA_NOTAM_CLIENT_SECRET;
-    if (!clientId || !clientSecret) {
+    if (!hasNmsCredentials()) {
       return {
-        error: 'FAA NOTAM API credentials not configured on the server. NOTAMs cannot be pulled — tell the user to have the admin set FAA_NOTAM_CLIENT_ID and FAA_NOTAM_CLIENT_SECRET (from api.faa.gov) in the environment.',
+        error: 'FAA NMS API credentials not configured on the server. NOTAMs cannot be pulled — tell the user to have the admin set FAA_NMS_CLIENT_ID and FAA_NMS_CLIENT_SECRET (from the NMS onboarding email) in the environment.',
       };
     }
 
+    let token: string;
+    try {
+      token = await getNmsToken();
+    } catch (err: any) {
+      logEvent('howard_notam_auth_failed', { message: err?.message ?? 'unknown' });
+      return { error: `FAA NMS authentication failed: ${err?.message ?? 'unknown error'}` };
+    }
+
+    const baseUrl = getNmsBaseUrl();
     const airports = params.airports.map(normalizeIcao).filter(Boolean);
     const now = Date.now();
     const results: Record<string, any> = {};
 
+    const fetchNotams = (icao: string, bearer: string) => fetch(
+      `${baseUrl}/nmsapi/v1/notams?location=${encodeURIComponent(icao)}`,
+      {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${bearer}`,
+          nmsResponseFormat: 'GEOJSON',
+          Accept: 'application/json',
+        },
+        signal: AbortSignal.timeout(NETWORK_TIMEOUT_MS),
+      },
+    );
+
     await Promise.all(airports.map(async (icao: string) => {
       try {
-        const url = `https://external-api.faa.gov/notamapi/v1/notams?icaoLocation=${encodeURIComponent(icao)}&pageSize=50&sortBy=effectiveStartDate&sortOrder=Desc`;
-        const res = await fetch(url, {
-          headers: {
-            'client_id': clientId,
-            'client_secret': clientSecret,
-            'Accept': 'application/json',
-          },
-          signal: AbortSignal.timeout(NETWORK_TIMEOUT_MS),
-        });
+        let res = await fetchNotams(icao, token);
+
+        // 401 = our cached token went stale (revoked / rotated
+        // server-side). Force a refresh and retry once. After that,
+        // give up and surface the error rather than looping forever.
+        if (res.status === 401) {
+          invalidateNmsToken();
+          try {
+            token = await getNmsToken();
+          } catch (authErr: any) {
+            logEvent('howard_notam_auth_failed', { icao, message: authErr?.message ?? 'unknown' });
+            results[icao] = { error: `FAA NMS auth retry failed: ${authErr?.message ?? 'unknown error'}` };
+            return;
+          }
+          res = await fetchNotams(icao, token);
+        }
+
+        // FAA correlation ID — NAIMES asks for this when reporting
+        // issues to 7-AWA-NAIMES@faa.gov. Capture it for every
+        // response (success or failure) so failures are traceable.
+        const faaRequestId = res.headers.get('x-request-id') || 'none';
+
         if (!res.ok) {
-          results[icao] = { error: `FAA NOTAM API returned ${res.status}` };
+          logEvent('howard_notam_request_failed', { icao, status: res.status, faa_request_id: faaRequestId });
+          results[icao] = { error: `FAA NMS API returned ${res.status} (faa_request_id: ${faaRequestId})` };
           return;
         }
+
         let data: any;
         try {
           data = await res.json();
         } catch {
-          logEvent('howard_notam_parse_failed', { icao, reason: 'json' });
-          results[icao] = { error: 'FAA NOTAM API returned a non-JSON response.' };
+          logEvent('howard_notam_parse_failed', { icao, reason: 'json', faa_request_id: faaRequestId });
+          results[icao] = { error: `FAA NMS API returned a non-JSON response. (faa_request_id: ${faaRequestId})` };
           return;
         }
 
-        // The FAA NOTAM API nests payload at data.items[].properties.coreNOTAMData.notam.
-        // We've seen undocumented shape changes before — if the expected
-        // path is missing, emit a telemetry breadcrumb so we can diagnose
-        // rather than silently returning an empty list.
-        if (!data || typeof data !== 'object' || !Array.isArray(data.items)) {
+        // NMS GEOJSON shape: { status: "Success", data: { geojson: Feature[] } }.
+        // Each Feature carries `properties.coreNOTAMData.notam` with the
+        // core fields and `properties.coreNOTAMData.notamTranslation`
+        // with localized text variants. Emit a telemetry breadcrumb
+        // when the path is missing so undocumented shape drift is
+        // diagnosable rather than silently empty.
+        const features: any[] = Array.isArray(data?.data?.geojson) ? data.data.geojson : [];
+        if (!Array.isArray(data?.data?.geojson)) {
           logEvent('howard_notam_parse_failed', {
             icao,
             reason: 'shape',
+            faa_request_id: faaRequestId,
             top_keys: data && typeof data === 'object' ? Object.keys(data).slice(0, 10).join(',') : 'none',
           });
-          results[icao] = { error: 'FAA NOTAM API response was not in the expected shape.' };
+          results[icao] = { error: `FAA NMS API response was not in the expected shape. (faa_request_id: ${faaRequestId})` };
           return;
         }
-        const rawItems: any[] = data.items;
 
-        // Flatten and keep only currently-effective or imminent NOTAMs
-        // (effectiveStart <= now+24h AND effectiveEnd >= now OR null).
-        const items = rawItems
-          .map(item => {
-            const core = item?.properties?.coreNOTAMData?.notam ?? {};
-            const translation = Array.isArray(item?.properties?.coreNOTAMData?.notamTranslation)
-              ? item.properties.coreNOTAMData.notamTranslation
+        const items = features
+          .map(feature => {
+            const core = feature?.properties?.coreNOTAMData?.notam ?? {};
+            const translation = Array.isArray(feature?.properties?.coreNOTAMData?.notamTranslation)
+              ? feature.properties.coreNOTAMData.notamTranslation
               : [];
-            const formatted = translation.find((t: any) => t?.type === 'LOCAL_FORMAT')?.formattedText
-              || translation[0]?.formattedText
-              || core.text
-              || '';
+            // NMS keys: LOCAL_FORMAT carries `domestic_message`, ICAO
+            // carries `icao_message`. Prefer the pilot-readable
+            // domestic message; fall back to ICAO format; fall back
+            // to the raw `text` field on the notam itself.
+            const local = translation.find((t: any) => t?.type === 'LOCAL_FORMAT');
+            const icaoTranslation = translation.find((t: any) => t?.type === 'ICAO');
+            const formatted =
+              (typeof local?.domestic_message === 'string' ? local.domestic_message : '') ||
+              (typeof local?.formattedText === 'string' ? local.formattedText : '') ||
+              (typeof icaoTranslation?.icao_message === 'string' ? icaoTranslation.icao_message : '') ||
+              (typeof core.text === 'string' ? core.text : '') ||
+              '';
             return {
               number: typeof core.number === 'string' ? core.number : null,
               type: typeof core.type === 'string' ? core.type : null,
@@ -1041,16 +1086,16 @@ const handlers: Record<string, ToolHandler> = {
               effective_start: typeof core.effectiveStart === 'string' ? core.effectiveStart : null,
               effective_end: typeof core.effectiveEnd === 'string' ? core.effectiveEnd : null,
               icao: typeof core.icaoLocation === 'string' ? core.icaoLocation : null,
-              text: typeof formatted === 'string' ? formatted.trim() : '',
+              text: formatted.trim(),
             };
           })
           .filter(n => {
             const rawStart = n.effective_start ? new Date(n.effective_start).getTime() : 0;
             const rawEnd = n.effective_end ? new Date(n.effective_end).getTime() : Infinity;
-            // FAA returns 'PERM' for permanent NOTAMs which parses to
-            // NaN. Pre-fix the Number.isFinite gate rejected those,
-            // dropping legitimately effective NOTAMs from the result.
-            // Treat NaN start as "currently effective" (effectively 0).
+            // 'PERM' and other non-date end values parse to NaN.
+            // Treat NaN start as currently-effective and NaN end as
+            // never-expiring so legitimately active NOTAMs aren't
+            // filtered out.
             const start = Number.isFinite(rawStart) ? rawStart : 0;
             const end = Number.isFinite(rawEnd) ? rawEnd : Infinity;
             return start <= now + 24 * 3600 * 1000 && end >= now;
@@ -1064,7 +1109,7 @@ const handlers: Record<string, ToolHandler> = {
     }));
 
     return {
-      source: 'FAA NOTAM API (external-api.faa.gov/notamapi/v1) — official',
+      source: 'FAA NMS API (NOTAM Management Service) — official',
       airports,
       results,
     };

@@ -310,8 +310,9 @@ TAVILY_API_KEY=               # Howard web_search fallback
 Optional:
 
 ```env
-FAA_NOTAM_CLIENT_ID=          # Required for Howard's get_notams tool — register at api.faa.gov
-FAA_NOTAM_CLIENT_SECRET=
+FAA_NMS_CLIENT_ID=            # Required for Howard's get_notams tool — KEY from the NMS onboarding spreadsheet
+FAA_NMS_CLIENT_SECRET=        # SECRET from the same spreadsheet
+FAA_NMS_BASE_URL=             # Defaults to https://api-staging.cgifederal-aim.com. Flip to https://api-nms.aim.faa.gov for prod after FAA prod onboarding completes.
 FAA_DRS_FEED_URL=             # Override for the FAA AD feed if the default 404s
 SENTRY_DSN=                   # Server-side error + event forwarding (no-ops if absent)
 NEXT_PUBLIC_SENTRY_DSN=       # Client-side Sentry
