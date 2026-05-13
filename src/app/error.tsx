@@ -93,8 +93,13 @@ export default function Error({
         )}
 
         {/* Inline details for the curious / for support tickets. Hidden
-            by default so the average user isn't faced with a stack. */}
-        {error.message && (
+            by default so the average user isn't faced with a stack.
+            We surface BOTH message and stack — for minified React
+            errors like #300 the message alone ("Too many re-renders")
+            doesn't pin down which component is looping; the stack
+            does. Without the stack a "Show details" panel is just
+            decorative. */}
+        {(error.message || error.stack) && (
           <div className="mb-4">
             <button
               type="button"
@@ -104,8 +109,9 @@ export default function Error({
               {showDetails ? "Hide details" : "Show details"}
             </button>
             {showDetails && (
-              <pre className="mt-2 text-[10px] font-mono text-gray-600 bg-gray-50 border border-gray-200 rounded p-2 overflow-x-auto whitespace-pre-wrap break-words leading-snug max-h-32 overflow-y-auto">
+              <pre className="mt-2 text-[10px] font-mono text-gray-600 bg-gray-50 border border-gray-200 rounded p-2 overflow-x-auto whitespace-pre-wrap break-words leading-snug max-h-48 overflow-y-auto">
                 {error.message}
+                {error.stack ? `\n\n${error.stack}` : ''}
               </pre>
             )}
           </div>

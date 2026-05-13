@@ -77,7 +77,7 @@ export default function GlobalError({
               Ref: {error.digest}
             </p>
           )}
-          {error.message && (
+          {(error.message || error.stack) && (
             <pre
               style={{
                 fontSize: 10,
@@ -90,11 +90,12 @@ export default function GlobalError({
                 marginBottom: 16,
                 whiteSpace: "pre-wrap",
                 wordBreak: "break-word",
-                maxHeight: 120,
+                maxHeight: 180,
                 overflowY: "auto",
               }}
             >
               {error.message}
+              {error.stack ? `\n\n${error.stack}` : ''}
             </pre>
           )}
           <button
