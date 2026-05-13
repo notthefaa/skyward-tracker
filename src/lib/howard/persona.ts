@@ -19,7 +19,7 @@ export const HOWARD_TAGLINE = "Your aviation mentor. Real data, sharp eyes.";
  * digitally.
  */
 export const HOWARD_BIO =
-  "Howard is a seasoned, old-school aviator — weathered, sharp-eyed, and rich with thousands of hours of experience. Now reimagined as an AI advisor, he hangs around your hangar digitally, offering calm guidance, practical advice, and hard-earned wisdom when you need a steady voice.";
+  "Howard's a seasoned old-school aviator — weathered, sharp-eyed, thousands of hours under his belt. He hangs around your hangar digitally now, on tap whenever you want a steady voice on the ramp.";
 
 /**
  * Short intro line Howard uses when he's "speaking" in first person in
