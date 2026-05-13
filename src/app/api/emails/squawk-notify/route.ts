@@ -116,7 +116,7 @@ export async function POST(req: Request) {
             body: `
               ${heading('Service Request')}
               ${paragraph(`Hello ${safeMxContact || 'there'},`)}
-              ${paragraph(`A new squawk was reported for <strong>${safeTail}</strong>. Let us know when you can accommodate this aircraft to address the issue.`)}
+              ${paragraph(`A new squawk was reported for <strong>${safeTail}</strong>. Let us know when you can get it in to take a look.`)}
               ${callout(
                 keyValueBlock([
                   { label: 'Location', value: safeLocation },

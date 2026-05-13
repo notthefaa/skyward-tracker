@@ -333,7 +333,11 @@ export async function POST(req: Request) {
               : li.line_status === 'in_progress' ? '#3AB0FF'
               : li.line_status === 'deferred' ? '#525659'
               : '#F08B46';
-            return `${escapeHtml(li.item_name)} — <span style="color:${color};font-weight:700;text-transform:uppercase;font-size:11px;letter-spacing:1px;">${escapeHtml(li.line_status)}</span>`;
+            // Replace underscores so the raw enum (e.g. `in_progress`)
+            // renders as a readable badge ("IN PROGRESS") instead of
+            // leaking the DB schema into the inbox.
+            const statusLabel = String(li.line_status).replace(/_/g, ' ');
+            return `${escapeHtml(li.item_name)} — <span style="color:${color};font-weight:700;text-transform:uppercase;font-size:11px;letter-spacing:1px;">${escapeHtml(statusLabel)}</span>`;
           });
 
           if (rl.allowed) await resend.emails.send({
@@ -519,7 +523,7 @@ export async function POST(req: Request) {
               ${heading('Aircraft Ready for Pickup', 'success')}
               ${paragraph(`${safeMxName} has completed all work and your aircraft is ready.`)}
               ${safeMessage ? callout(safeMessage, { variant: 'success' }) : ''}
-              ${paragraph(`Log in to enter the logbook data from your mechanic&apos;s sign-off. That closes out the service event and resets maintenance tracking.`)}
+              ${paragraph(`Log in to enter the logbook data from your mechanic&apos;s sign-off. That closes out the service event and resets the maintenance clock for the next cycle.`)}
               ${button(appUrl, 'Enter Logbook Data', { variant: 'success' })}
             `,
             preferencesUrl: `${appUrl}#settings`,

@@ -95,7 +95,7 @@ const squawkToMechanic: Variant = {
     body: `
       ${heading('Service Request')}
       ${paragraph(`Hello Dave,`)}
-      ${paragraph(`A new squawk was reported for <strong>N205WH</strong>. Let us know when you can accommodate this aircraft to address the issue.`)}
+      ${paragraph(`A new squawk was reported for <strong>N205WH</strong>. Let us know when you can get it in to take a look.`)}
       ${callout(
         keyValueBlock([
           { label: 'Location', value: 'KSQL' },
@@ -177,7 +177,7 @@ const cronDraft: Variant = {
   label: 'Draft work package ready',
   description: 'Cron job created a draft — primary contact reviews + sends to the shop.',
   category: 'Scheduling',
-  subject: 'Action Required: Review & Send Work Package for N205WH',
+  subject: 'Maintenance Coming Due: Review Work Package for N205WH',
   from: 'Skyward Aircraft Manager <notifications@skywardsociety.com>',
   to: 'Primary contact',
   html: emailShell({
@@ -186,7 +186,7 @@ const cronDraft: Variant = {
     body: `
       ${heading('Maintenance Coming Due', 'warning')}
       ${paragraph(`Hello Alex,`)}
-      ${paragraph(`The following maintenance items are approaching for <strong>N205WH</strong>:`)}
+      ${paragraph(`The following maintenance items are coming due on <strong>N205WH</strong>:`)}
       ${callout(
         bulletList([
           `<strong>100-Hour Inspection</strong> — <span style="color:#091F3C;">due at 1247.5 hours</span>`,
@@ -221,15 +221,15 @@ const cronHeadsUp: Variant = {
     title: 'Heads Up — N205WH',
     preheader: '2 items may be coming due on N205WH. No action yet.',
     body: `
-      ${heading('Predictive Maintenance Alert', 'note')}
+      ${heading('Maintenance Forecast', 'note')}
       ${paragraph(`Hello Alex,`)}
       ${paragraph(`Based on recent flight activity, we estimate the following items for <strong>N205WH</strong> may be coming due:`)}
       ${bulletList([
         `<strong>100-Hour Inspection</strong> — projected ~42 days`,
         `<strong>Oil & Filter</strong> — projected ~38 days`,
       ])}
-      ${paragraph(`However, flight logs have been irregular (System Confidence: <strong>47%</strong>), so these estimates may shift significantly.`)}
-      ${paragraph(`No action is needed yet. We'll create a draft work package automatically when items get closer to their thresholds. You can also schedule service proactively from the Maintenance tab at any time.`)}
+      ${paragraph(`Heads up — flight logs have been irregular lately (forecast confidence: <strong>47%</strong>), so these dates may shift.`)}
+      ${paragraph(`No action needed yet. We'll draft a work package automatically once items get closer to their due dates. You can also schedule service early from the Maintenance tab any time.`)}
       ${button(APP_URL, 'Open Skyward')}
     `,
   }),
@@ -276,7 +276,7 @@ const cronPickupNudge: Variant = {
     body: `
       ${heading('Service Event Still Open', 'warning')}
       ${paragraph(`Your mechanic marked <strong>N205WH</strong> as ready for pickup more than 3 days ago, but the service event hasn't been closed yet.`)}
-      ${paragraph(`Until you enter the logbook data, maintenance tracking won't reset and the aircraft may remain blocked on the calendar. Open the app to complete the event when you get a moment.`)}
+      ${paragraph(`Until you enter the logbook data, the maintenance clock won't reset and the airplane may stay blocked on the calendar. Open the app to close it out when you get a moment.`)}
       ${button(APP_URL, 'Enter Logbook Data')}
     `,
   }),
@@ -491,7 +491,7 @@ const mechProgress: Variant = {
         `100-Hour Inspection — <span style="color:#56B94A;font-weight:700;text-transform:uppercase;font-size:11px;letter-spacing:1px;">COMPLETE</span>`,
         `Oil & Filter Change — <span style="color:#56B94A;font-weight:700;text-transform:uppercase;font-size:11px;letter-spacing:1px;">COMPLETE</span>`,
         `Left Tire Pressure Check — <span style="color:#56B94A;font-weight:700;text-transform:uppercase;font-size:11px;letter-spacing:1px;">COMPLETE</span>`,
-        `GPS Nav Database Update — <span style="color:#3AB0FF;font-weight:700;text-transform:uppercase;font-size:11px;letter-spacing:1px;">IN_PROGRESS</span>`,
+        `GPS Nav Database Update — <span style="color:#3AB0FF;font-weight:700;text-transform:uppercase;font-size:11px;letter-spacing:1px;">IN PROGRESS</span>`,
         `Pitot-Static Inspection — <span style="color:#F08B46;font-weight:700;text-transform:uppercase;font-size:11px;letter-spacing:1px;">PENDING</span>`,
       ])}
       ${button(APP_URL, 'Open Skyward')}
@@ -578,7 +578,7 @@ const mechReady: Variant = {
       ${heading('Aircraft Ready for Pickup', 'success')}
       ${paragraph(`Dave Reynolds has completed all work and your aircraft is ready.`)}
       ${callout(`All squared away. Logbook is stamped, oil is warm. You're good to fly whenever you get over here.`, { variant: 'success' })}
-      ${paragraph(`Log in to enter the logbook data from your mechanic&apos;s sign-off. That closes out the service event and resets maintenance tracking.`)}
+      ${paragraph(`Log in to enter the logbook data from your mechanic&apos;s sign-off. That closes out the service event and resets the maintenance clock for the next cycle.`)}
       ${button(APP_URL, 'Enter Logbook Data', { variant: 'success' })}
     `,
   }),

@@ -397,14 +397,14 @@ export async function GET(req: Request) {
                 from: `Skyward Aircraft Manager <${FROM_EMAIL}>`,
                 replyTo: aircraft.main_contact_email,
                 to: [aircraft.main_contact_email],
-                subject: `Action Required: Review & Send Work Package for ${safeTail}`,
+                subject: `Maintenance Coming Due: Review Work Package for ${safeTail}`,
                 html: emailShell({
                   title: `Work Package Ready — ${safeTail}`,
                   preheader: `${lineItemDescriptions.length} item${lineItemDescriptions.length > 1 ? 's' : ''} coming due on ${safeTail}. Draft work package ready for review.`,
                   body: `
                     ${heading('Maintenance Coming Due', 'warning')}
                     ${paragraph(`Hello ${safeMainContact},`)}
-                    ${paragraph(`The following maintenance item${lineItemDescriptions.length > 1 ? 's are' : ' is'} approaching for <strong>${safeTail}</strong>:`)}
+                    ${paragraph(`The following maintenance item${lineItemDescriptions.length > 1 ? 's are' : ' is'} coming due on <strong>${safeTail}</strong>:`)}
                     ${callout(bulletList(itemListHtml), { variant: 'warning' })}
                     ${paragraph(`We've prepared a <strong>draft work package</strong> for you. Open the app to:`)}
                     ${bulletList([
@@ -472,12 +472,12 @@ export async function GET(req: Request) {
               title: `Heads Up — ${safeTail}`,
               preheader: `${headsUpItems.length} item${headsUpItems.length > 1 ? 's' : ''} may be coming due on ${safeTail}. No action yet.`,
               body: `
-                ${heading('Predictive Maintenance Alert', 'note')}
+                ${heading('Maintenance Forecast', 'note')}
                 ${paragraph(`Hello ${safeMainContact},`)}
                 ${paragraph(`Based on recent flight activity, we estimate the following item${headsUpItems.length > 1 ? 's' : ''} for <strong>${safeTail}</strong> may be coming due:`)}
                 ${bulletList(itemListHtml)}
-                ${paragraph(`However, flight logs have been irregular (System Confidence: <strong>${confidenceScore}%</strong>), so ${headsUpItems.length > 1 ? 'these estimates' : 'this estimate'} may shift significantly.`)}
-                ${paragraph(`No action is needed yet. We'll create a draft work package automatically when ${headsUpItems.length > 1 ? 'items get' : 'the item gets'} closer to ${headsUpItems.length > 1 ? 'their thresholds' : 'its threshold'}. You can also schedule service proactively from the Maintenance tab at any time.`)}
+                ${paragraph(`Heads up — flight logs have been irregular lately (forecast confidence: <strong>${confidenceScore}%</strong>), so ${headsUpItems.length > 1 ? 'these dates' : 'this date'} may shift.`)}
+                ${paragraph(`No action needed yet. We'll draft a work package automatically once ${headsUpItems.length > 1 ? 'items get' : 'the item gets'} closer to ${headsUpItems.length > 1 ? 'their due dates' : 'its due date'}. You can also schedule service early from the Maintenance tab any time.`)}
                 ${button(appUrl, 'Open Skyward')}
               `,
               preferencesUrl: `${appUrl}#settings`,
@@ -722,7 +722,7 @@ export async function GET(req: Request) {
                 body: `
                   ${heading('Service Event Still Open', 'warning')}
                   ${paragraph(`Your mechanic marked <strong>${safeTail}</strong> as ready for pickup more than ${READY_PICKUP_NUDGE_DAYS} days ago, but the service event hasn't been closed yet.`)}
-                  ${paragraph(`Until you enter the logbook data, maintenance tracking won't reset and the aircraft may remain blocked on the calendar. Open the app to complete the event when you get a moment.`)}
+                  ${paragraph(`Until you enter the logbook data, the maintenance clock won't reset and the airplane may stay blocked on the calendar. Open the app to close it out when you get a moment.`)}
                   ${button(appUrl, 'Enter Logbook Data')}
                 `,
                 preferencesUrl: `${appUrl}#settings`,
