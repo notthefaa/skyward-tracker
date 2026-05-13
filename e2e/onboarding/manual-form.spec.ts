@@ -52,7 +52,8 @@ test.describe('onboarding (manual-form path)', () => {
       throw new Error(`/api/aircraft/create errored:\n${apiErrors.join('\n')}`);
     }
 
-    // Toast is the deterministic success signal.
-    await expect(page.getByText(/aircraft added to your fleet/i)).toBeVisible({ timeout: 15_000 });
+    // Toast is the deterministic success signal. Message changed from
+    // "fleet" → "hangar" during the hangar-talk copy sweep 2026-04-19.
+    await expect(page.getByText(/aircraft added to your hangar/i)).toBeVisible({ timeout: 15_000 });
   });
 });

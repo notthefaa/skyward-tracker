@@ -1,163 +1,45 @@
 "use client";
 
-import { useState, useRef } from "react";
-import dynamic from "next/dynamic";
+import { useRef } from "react";
+import { supabase } from "@/lib/supabase";
 import { authFetch, UPLOAD_TIMEOUT_MS } from "@/lib/authFetch";
+import { idempotencyHeader } from "@/lib/idempotencyClient";
+import { registerPendingUpload } from "@/hooks/useDocStatusWatcher";
 import { useToast } from "@/components/ToastProvider";
-import { validateFileSize, MAX_UPLOAD_SIZE_LABEL } from "@/lib/constants";
-import { PlaneTakeoff, LogOut, Camera, Upload } from "lucide-react";
-import { PrimaryButton } from "@/components/AppButtons";
-import { compressImage } from "@/lib/imageCompress";
-import type { Crop } from "react-image-crop";
+import { LogOut } from "lucide-react";
+import AircraftForm, { type AircraftFormPayload } from "@/components/AircraftForm";
 
-const AvatarCropper = dynamic(() => import("@/components/AvatarCropper"), { ssr: false });
-
-export default function PilotOnboarding({ 
-  session, 
-  handleLogout, 
-  onSuccess
+export default function PilotOnboarding({
+  session,
+  handleLogout,
+  onSuccess,
 }: {
-  session: any,
-  handleLogout: () => void,
-  onSuccess: () => void | Promise<void>
+  session: any;
+  handleLogout: () => void;
+  onSuccess: () => void | Promise<void>;
 }) {
   const { showError, showWarning } = useToast();
-  const [newTail, setNewTail] = useState("");
-  const [newSerial, setNewSerial] = useState("");
-  const [newModel, setNewModel] = useState("");
-  const [newType, setNewType] = useState<'Piston' | 'Turbine'>('Piston');
-  const [newAirframeTime, setNewAirframeTime] = useState("");
-  const [newEngineTime, setNewEngineTime] = useState("");
-  const [newHomeAirport, setNewHomeAirport] = useState("");
-  const [newMainContact, setNewMainContact] = useState("");
-  const [newMainContactPhone, setNewMainContactPhone] = useState(""); 
-  const [newMainContactEmail, setNewMainContactEmail] = useState(""); 
-  const [newMxContact, setNewMxContact] = useState(""); 
-  const [newMxContactPhone, setNewMxContactPhone] = useState(""); 
-  const [newMxContactEmail, setNewMxContactEmail] = useState(""); 
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const [avatarSrc, setAvatarSrc] = useState<string>("");
-  const [crop, setCrop] = useState<Crop>({ unit: '%', width: 100, height: 56.25, x: 0, y: 0 });
-  const imageRef = useRef<HTMLImageElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [isDragging, setIsDragging] = useState(false);
+  // Per-file sticky idempotency keys for the doc-upload loop. See
+  // AircraftModal for the rationale — same shape applies here for
+  // pilots who upload POH/AFM/etc. during onboarding.
+  const docIdemKeys = useRef<Map<File, string>>(new Map());
 
-  const handleFile = (file: File) => {
-    if (!file.type.startsWith('image/')) {
-      showError('Pick an image file (JPG or PNG).');
-      return;
-    }
-    const sizeError = validateFileSize(file);
-    if (sizeError) {
-      showError(sizeError);
-      return;
-    }
-    const reader = new FileReader();
-    reader.addEventListener('load', () => setAvatarSrc(reader.result?.toString() || ''));
-    reader.readAsDataURL(file);
-  };
+  const handleSubmit = async (payload: AircraftFormPayload) => {
+    const tailUpper = payload.tailNumber.toUpperCase();
+    let avatarUrl: string | null = null;
 
-  const onSelectFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      handleFile(e.target.files[0]);
-      e.target.value = '';
-    }
-  };
-
-  const onDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      handleFile(e.dataTransfer.files[0]);
-    }
-  };
-
-  const getCroppedImg = async (): Promise<File | null> => {
-    const image = imageRef.current;
-    if (!image || !crop.width || !crop.height) return null;
-    const canvas = document.createElement('canvas');
-    const scaleX = image.naturalWidth / image.width;
-    const scaleY = image.naturalHeight / image.height;
-    canvas.width = crop.width * scaleX;
-    canvas.height = crop.height * scaleY;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return null;
-    ctx.drawImage(image, crop.x * scaleX, crop.y * scaleY, crop.width * scaleX, crop.height * scaleY, 0, 0, canvas.width, canvas.height);
-    return new Promise((resolve) => {
-      canvas.toBlob((blob) => {
-        if (blob) resolve(new File([blob], 'avatar.jpg', { type: 'image/jpeg' }));
-        else resolve(null);
-      }, 'image/jpeg');
-    });
-  };
-
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-
-    // Read straight from the form's DOM rather than React state. On iOS
-    // Safari, autofill / password-manager extensions can write into a
-    // controlled input without dispatching the React-recognized event,
-    // leaving newTail = "" while the user sees their tail in the field.
-    // FormData reflects what's actually in the DOM at submit time.
-    const fd = new FormData(e.currentTarget);
-    const tailValue = ((fd.get('tail_number') as string) || '').trim();
-    const modelValue = ((fd.get('aircraft_type') as string) || '').trim();
-
-    if (!tailValue) { showError('Tail number is required.'); return; }
-    if (!modelValue) { showError('Model name is required.'); return; }
-    const parsedEngineTime = parseFloat(newEngineTime);
-    if (newEngineTime.trim() === '' || !Number.isFinite(parsedEngineTime) || parsedEngineTime < 0) {
-      showError(newType === 'Turbine'
-        ? 'Engine time (FTT) is required. Use 0 only if the aircraft is brand-new.'
-        : 'Tach time is required. Use 0 only if the engine is brand-new.');
-      return;
-    }
-
-    // noValidate disables the browser's `type="email"` format check, so
-    // an unguarded "not-an-email" string would land in the row and break
-    // MX-reminder sends downstream. Validate here.
-    const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (newMainContactEmail.trim() && !EMAIL_RE.test(newMainContactEmail.trim())) {
-      showError("Main contact email doesn't look right.");
-      return;
-    }
-    if (newMxContactEmail.trim() && !EMAIL_RE.test(newMxContactEmail.trim())) {
-      showError("MX contact email doesn't look right.");
-      return;
-    }
-
-    if (tailValue !== newTail) setNewTail(tailValue);
-    if (modelValue !== newModel) setNewModel(modelValue);
-
-    setIsSubmitting(true);
-    let avatarUrl = null;
-
-    if (avatarSrc) {
-      const croppedFile = await getCroppedImg();
+    // 1. Avatar upload (best-effort — same shape as AircraftModal).
+    if (payload.avatarChanged) {
+      const croppedFile = await payload.getCroppedAvatar();
       if (croppedFile) {
         try {
-          const compressed = await compressImage(croppedFile, { maxSizeMB: 0.2, maxWidthOrHeight: 800, useWebWorker: true });
-          const { supabase } = await import("@/lib/supabase");
-          // Extension + explicit contentType: without these, Supabase
-          // serves the object as application/octet-stream, and Firefox's
-          // OpaqueResponseBlocking refuses to render it inside <img>.
-          // Sanitize tail to match the squawk + note path normalization
-           // (59e4ba0). Storage path slashes split keys; FAA tails are
-           // constrained to alphanumerics anyway, but a dashboard-edited
-           // tail with a stray space / slash would otherwise spawn a
-           // pseudo-folder the orphan-sweeper diff can't resolve.
-          const safeTail = tailValue.toUpperCase().replace(/[^a-zA-Z0-9._-]/g, '_');
+          const safeTail = tailUpper.replace(/[^a-zA-Z0-9._-]/g, '_');
           const fileName = `${safeTail}_${Date.now()}.jpg`;
-          // Race the upload against UPLOAD_TIMEOUT_MS. supabase-js storage
-          // uses XHR with no client-side timeout, and iOS Safari (PWA in
-          // particular) can suspend a stalled upload indefinitely — that
-          // leaves the "Creating..." button stuck forever during signup.
-          // Fail-soft: drop the photo, save the aircraft, warn the user.
           const uploadRes = await Promise.race([
-            supabase.storage.from('aft_aircraft_avatars').upload(fileName, compressed, { contentType: 'image/jpeg' }),
-            new Promise<{ data: null; error: Error }>((resolve) =>
-              setTimeout(() => resolve({ data: null, error: new Error('avatar_upload_timeout') }), UPLOAD_TIMEOUT_MS)
+            supabase.storage.from('aft_aircraft_avatars').upload(fileName, croppedFile, { contentType: 'image/jpeg' }),
+            new Promise<{ data: null; error: Error }>(resolve =>
+              setTimeout(() => resolve({ data: null, error: new Error('avatar_upload_timeout') }), UPLOAD_TIMEOUT_MS),
             ),
           ]);
           if (uploadRes.error) throw uploadRes.error;
@@ -172,45 +54,148 @@ export default function PilotOnboarding({
       }
     }
 
-    const setupAirframe = newAirframeTime !== '' ? parseFloat(newAirframeTime) : null;
-    // Validation above guarantees newEngineTime parses to a finite,
-    // non-negative number — no `|| 0` fallback (it would mask NaN).
-    const setupEngine = parseFloat(newEngineTime);
+    // 2. Create the aircraft via /api/aircraft/create.
+    const setupAirframe = payload.airframeTimeRaw !== '' ? parseFloat(payload.airframeTimeRaw) : null;
+    // AircraftForm rejects blank/non-finite engineTimeRaw before
+    // onSubmit fires, so parseFloat here is safe (no NaN fallback).
+    const setupEngine = parseFloat(payload.engineTimeRaw);
 
-    const payload = {
-      tail_number: tailValue.toUpperCase(), serial_number: newSerial, aircraft_type: modelValue, engine_type: newType,
+    const apiPayload = {
+      tail_number: tailUpper,
+      serial_number: payload.serialNumber,
+      aircraft_type: payload.aircraftType,
+      engine_type: payload.engineType,
       total_airframe_time: setupAirframe != null ? setupAirframe : setupEngine,
       total_engine_time: setupEngine,
-      setup_aftt: newType === 'Turbine' ? setupAirframe : null,
-      setup_ftt: newType === 'Turbine' ? setupEngine : null,
-      setup_hobbs: newType === 'Piston' ? setupAirframe : null,
-      setup_tach: newType === 'Piston' ? setupEngine : null,
-      home_airport: newHomeAirport, main_contact: newMainContact,
-      main_contact_phone: newMainContactPhone, main_contact_email: newMainContactEmail,
-      mx_contact: newMxContact, mx_contact_phone: newMxContactPhone, mx_contact_email: newMxContactEmail,
-      avatar_url: avatarUrl, created_by: session.user.id
+      setup_aftt: payload.engineType === 'Turbine' ? setupAirframe : null,
+      setup_ftt: payload.engineType === 'Turbine' ? setupEngine : null,
+      setup_hobbs: payload.engineType === 'Piston' ? setupAirframe : null,
+      setup_tach: payload.engineType === 'Piston' ? setupEngine : null,
+      home_airport: payload.homeAirport,
+      main_contact: payload.mainContact,
+      main_contact_phone: payload.mainContactPhone,
+      main_contact_email: payload.mainContactEmail,
+      mx_contact: payload.mxContact,
+      mx_contact_phone: payload.mxContactPhone,
+      mx_contact_email: payload.mxContactEmail,
+      avatar_url: avatarUrl,
+      make: payload.make.trim() || null,
+      time_zone: payload.timeZone || 'UTC',
+      is_ifr_equipped: payload.isIfrEquipped,
+      created_by: session.user.id,
     };
 
+    let newAircraftId: string | null = null;
     try {
       const res = await authFetch('/api/aircraft/create', {
         method: 'POST',
-        body: JSON.stringify({ payload })
+        body: JSON.stringify({ payload: apiPayload }),
       });
       if (!res.ok) {
         const errData = await res.json();
         throw new Error(errData.error || "Couldn't create the aircraft.");
       }
-      // Await onSuccess so the spinner stays on through the fleet
-      // refetch + onboarding-flag flip. If we returned immediately,
-      // the button un-disables and the user may tap "Save" again
-      // while the parent is still settling — which on a slow link
-      // surfaces "tail number already exists" against their own
-      // freshly-created aircraft.
-      await onSuccess();
+      const result = await res.json();
+      newAircraftId = result.aircraft?.id || null;
     } catch (err: any) {
       showError(err.message);
+      return;
     }
-    setIsSubmitting(false);
+
+    // 3. Best-effort equipment save (skip empty rows).
+    if (newAircraftId && payload.equipmentRows.length > 0) {
+      const validRows = payload.equipmentRows.filter(r => r.name.trim());
+      if (validRows.length > 0) {
+        try {
+          const res = await authFetch('/api/equipment', {
+            method: 'POST',
+            body: JSON.stringify({
+              aircraftId: newAircraftId,
+              bulk: validRows.map(r => ({
+                name: r.name.trim(),
+                category: 'avionics',
+                make: r.make.trim() || null,
+                serial: r.serial.trim() || null,
+              })),
+            }),
+          });
+          if (!res.ok) showWarning('Aircraft saved but some equipment failed to save.');
+        } catch {
+          showWarning('Aircraft saved but equipment entries could not be saved.');
+        }
+      }
+    }
+
+    // 4. Best-effort docs upload (same direct-to-storage flow as the
+    //    modal — bypasses Vercel's 4.5 MB inbound body cap).
+    if (newAircraftId && payload.docFiles.length > 0) {
+      const failures: string[] = [];
+      for (const df of payload.docFiles) {
+        try {
+          const signRes = await authFetch('/api/documents/signed-upload-url', {
+            method: 'POST',
+            body: JSON.stringify({
+              aircraftId: newAircraftId,
+              filename: df.file.name,
+              size: df.file.size,
+            }),
+          });
+          if (!signRes.ok) { failures.push(df.file.name); continue; }
+          const { token, storagePath } = await signRes.json();
+
+          const uploadRes = await Promise.race([
+            supabase.storage
+              .from('aft_aircraft_documents')
+              .uploadToSignedUrl(storagePath, token, df.file, { contentType: 'application/pdf' }),
+            new Promise<{ data: null; error: Error }>(resolve =>
+              setTimeout(() => resolve({ data: null, error: new Error('storage_upload_timeout') }), UPLOAD_TIMEOUT_MS),
+            ),
+          ]);
+          if (uploadRes.error) { failures.push(df.file.name); continue; }
+
+          let idemKey = docIdemKeys.current.get(df.file);
+          if (!idemKey) {
+            idemKey = crypto.randomUUID();
+            docIdemKeys.current.set(df.file, idemKey);
+          }
+          const res = await authFetch('/api/documents', {
+            method: 'POST',
+            body: JSON.stringify({
+              aircraftId: newAircraftId,
+              docType: df.docType,
+              storagePath,
+              filename: df.file.name,
+            }),
+            headers: idempotencyHeader(idemKey),
+            timeoutMs: UPLOAD_TIMEOUT_MS,
+          });
+          if (!res.ok) { failures.push(df.file.name); continue; }
+          try {
+            const body = await res.json();
+            if (body?.document?.id) registerPendingUpload(body.document.id);
+          } catch { /* swallow — toast lifecycle is best-effort */ }
+        } catch (err: any) {
+          console.error('[onboarding] doc upload threw:', df.file.name, err?.message || err);
+          failures.push(df.file.name);
+        }
+      }
+      if (failures.length > 0) {
+        const total = payload.docFiles.length;
+        const succeeded = total - failures.length;
+        const failedList = failures.join(', ');
+        if (succeeded === 0) {
+          showWarning(`Aircraft saved, but none of the ${total} document(s) uploaded (${failedList}). Retry from the Documents tab.`);
+        } else {
+          showWarning(`Aircraft saved with ${succeeded}/${total} document(s). Failed: ${failedList}. Retry the rest from the Documents tab.`);
+        }
+      }
+    }
+
+    // 5. Await onSuccess so the "Saving..." spinner stays through the
+    //    parent's fleet refetch + onboarding-flag flip. Without the
+    //    await, a quick second tap surfaces a duplicate-tail error
+    //    against the user's own freshly-created aircraft.
+    await onSuccess();
   };
 
   return (
@@ -229,63 +214,12 @@ export default function PilotOnboarding({
             <h2 className="font-oswald text-3xl font-bold uppercase tracking-widest text-navy mb-2">Set Up Your Aircraft</h2>
             <p className="text-sm text-gray-500 font-roboto">Start with the airplane&apos;s basics. Once it&apos;s set up, flight logs and maintenance tracking kick in.</p>
           </div>
-          <form onSubmit={handleSubmit} noValidate className="space-y-4">
-            <div
-              className={`border-2 border-dashed rounded p-4 text-center transition-colors ${isDragging ? 'border-mxOrange bg-orange-50' : 'border-gray-300 bg-gray-50'} ${!avatarSrc ? 'cursor-pointer' : ''}`}
-              onDragOver={e => { e.preventDefault(); if (!avatarSrc) setIsDragging(true); }}
-              onDragLeave={() => setIsDragging(false)}
-              onDrop={!avatarSrc ? onDrop : undefined}
-              onClick={() => { if (!avatarSrc) fileInputRef.current?.click(); }}
-            >
-              {!avatarSrc ? (
-                <>
-                  <Camera size={32} className="mx-auto text-gray-400 mb-2" />
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-navy mb-1">Add Aircraft Photo</p>
-                  <p className="text-[10px] text-gray-400 flex items-center justify-center gap-1"><Upload size={10} /> Click or drag & drop (Max {MAX_UPLOAD_SIZE_LABEL})</p>
-                  <input ref={fileInputRef} type="file" accept="image/*" onChange={onSelectFile} className="hidden" />
-                </>
-              ) : (
-                <>
-                  <label className="text-[10px] font-bold uppercase tracking-widest text-navy block mb-2">Adjust Photo Alignment</label>
-                  <div className="w-full flex justify-center bg-black rounded overflow-hidden" style={{ aspectRatio: '16/9' }}>
-                    <AvatarCropper
-                      ref={imageRef}
-                      src={avatarSrc}
-                      crop={crop}
-                      onCropChange={c => setCrop(c)}
-                      aspect={16 / 9}
-                      imgClassName="max-h-[200px] object-contain"
-                    />
-                  </div>
-                </>
-              )}
-              {avatarSrc && <button type="button" onClick={() => setAvatarSrc("")} className="text-[10px] uppercase text-red-500 font-bold mt-2 hover:underline">Choose Different Photo</button>}
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Tail Number</label><input name="tail_number" type="text" required value={newTail} onChange={e => setNewTail(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 uppercase focus:border-mxOrange outline-none bg-white" /></div>
-              <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Serial Num</label><input type="text" value={newSerial} onChange={e => setNewSerial(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 uppercase focus:border-mxOrange outline-none bg-white" /></div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Model Name</label><input name="aircraft_type" type="text" required value={newModel} onChange={e => setNewModel(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none bg-white" /></div>
-              <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Engine Type</label><select value={newType} onChange={e => setNewType(e.target.value as any)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none bg-white"><option value="Piston">Piston</option><option value="Turbine">Turbine</option></select></div>
-            </div>
-            <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Home Airport</label><input type="text" value={newHomeAirport} onChange={e => setNewHomeAirport(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 uppercase focus:border-mxOrange outline-none bg-white" placeholder="ICAO" /></div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Main Contact</label><input type="text" value={newMainContact} onChange={e => setNewMainContact(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none bg-white" /></div>
-              <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Phone</label><input type="tel" value={newMainContactPhone} onChange={e => setNewMainContactPhone(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none bg-white" /></div>
-              <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Email</label><input type="email" value={newMainContactEmail} onChange={e => setNewMainContactEmail(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none bg-white" /></div>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">MX Contact</label><input type="text" value={newMxContact} onChange={e => setNewMxContact(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none bg-white" /></div>
-              <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">MX Phone</label><input type="tel" value={newMxContactPhone} onChange={e => setNewMxContactPhone(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none bg-white" /></div>
-              <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">MX Email</label><input type="email" value={newMxContactEmail} onChange={e => setNewMxContactEmail(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none bg-white" /></div>
-            </div>
-            <div className="grid grid-cols-2 gap-4 border-t border-gray-200 pt-4 mt-2">
-              <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Current {newType === 'Turbine' ? 'AFTT' : 'Hobbs'} (Opt)</label><input type="number" inputMode="decimal" step="0.1" value={newAirframeTime} onChange={e => setNewAirframeTime(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none bg-white" placeholder={`Leave blank if no ${newType === 'Turbine' ? 'AFTT' : 'Hobbs'} meter`} /></div>
-              <div><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Current {newType === 'Turbine' ? 'FTT' : 'Tach'} *</label><input type="number" inputMode="decimal" step="0.1" required value={newEngineTime} onChange={e => setNewEngineTime(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm mt-1 focus:border-mxOrange outline-none bg-white" /></div>
-            </div>
-            <div className="pt-4"><PrimaryButton disabled={isSubmitting}>{isSubmitting ? "Creating..." : "Save and start using Skyward"}</PrimaryButton></div>
-          </form>
+          <AircraftForm
+            mode="create"
+            onSubmit={handleSubmit}
+            submitLabel="Save and start using Skyward"
+            submittingLabel="Creating..."
+          />
         </div>
       </div>
     </div>
