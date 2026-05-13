@@ -479,3 +479,340 @@ describe('executeAction — onboarding_setup', () => {
       .rejects.toThrow(/already exists/i);
   });
 });
+
+// ─── Phase 1 + 2 + 3 — Howard action-taker executors ──────
+//
+// These cover the inline-insert / multi-step executors with the
+// most custom logic. flight_log / vor_check / oil_log / tire_check /
+// squawk all delegate straight to submit* helpers in submissions.ts
+// (which have their own unit tests in submissions.test.ts), so a
+// dedicated test here would just re-exercise those — skipped.
+
+describe('executeAction — mx_item (Phase 1)', () => {
+  it('rejects when item_name is missing', async () => {
+    const { sb } = makeSb({});
+    const action = baseAction({
+      action_type: 'mx_item',
+      payload: { tracking_type: 'time', time_interval: 100 },
+    });
+    await expect(executeAction(sb, action, 'user-1')).rejects.toThrow(/item_name/i);
+  });
+
+  it('rejects time-tracking without time_interval', async () => {
+    const { sb } = makeSb({});
+    const action = baseAction({
+      action_type: 'mx_item',
+      payload: { item_name: 'Oil change', tracking_type: 'time' },
+    });
+    await expect(executeAction(sb, action, 'user-1')).rejects.toThrow(/time_interval/i);
+  });
+
+  it('rejects date-tracking without date_interval_days', async () => {
+    const { sb } = makeSb({});
+    const action = baseAction({
+      action_type: 'mx_item',
+      payload: { item_name: 'Annual', tracking_type: 'date' },
+    });
+    await expect(executeAction(sb, action, 'user-1')).rejects.toThrow(/date_interval_days/i);
+  });
+
+  it('computes due_time from last_completed_time + time_interval', async () => {
+    const { sb, calls } = makeSb({
+      aft_maintenance_items: (op) => {
+        if (op === 'insert') return { data: { id: 'mx-new' }, error: null };
+        return { data: null, error: null };
+      },
+    });
+    const action = baseAction({
+      action_type: 'mx_item',
+      required_role: 'admin',
+      payload: {
+        item_name: '100hr Oil Change',
+        tracking_type: 'time',
+        time_interval: 100,
+        last_completed_time: 1200,
+        is_required: true,
+      },
+    });
+    const result = await executeAction(sb, action, 'user-1');
+    expect(result).toEqual({ recordId: 'mx-new', recordTable: 'aft_maintenance_items' });
+    const insert = calls.find(c => c.op === 'insert');
+    expect(insert!.payload).toMatchObject({
+      aircraft_id: 'ac-1',
+      item_name: '100hr Oil Change',
+      tracking_type: 'time',
+      time_interval: 100,
+      last_completed_time: 1200,
+      due_time: 1300,
+      is_required: true,
+    });
+  });
+
+  it('computes due_date from last_completed_date + date_interval_days', async () => {
+    const { sb, calls } = makeSb({
+      aft_maintenance_items: (op) => {
+        if (op === 'insert') return { data: { id: 'mx-2' }, error: null };
+        return { data: null, error: null };
+      },
+    });
+    const action = baseAction({
+      action_type: 'mx_item',
+      required_role: 'admin',
+      payload: {
+        item_name: 'Annual Inspection',
+        tracking_type: 'date',
+        date_interval_days: 365,
+        last_completed_date: '2026-01-15',
+      },
+    });
+    await executeAction(sb, action, 'user-1');
+    const insert = calls.find(c => c.op === 'insert');
+    expect(insert!.payload).toMatchObject({
+      tracking_type: 'date',
+      date_interval_days: 365,
+      last_completed_date: '2026-01-15',
+      due_date: '2027-01-15',
+    });
+  });
+});
+
+describe('executeAction — reservation_cancel (Phase 2 + 3a)', () => {
+  it('rejects when reservation belongs to a different aircraft', async () => {
+    const { sb } = makeSb({
+      aft_reservations: (op) => {
+        if (op === 'select') {
+          return { data: { id: 'res-1', aircraft_id: 'ac-other', user_id: 'user-1', status: 'confirmed' }, error: null };
+        }
+        return { data: null, error: null };
+      },
+    });
+    const action = baseAction({
+      action_type: 'reservation_cancel',
+      payload: { reservation_id: 'res-1' },
+    });
+    await expect(executeAction(sb, action, 'user-1')).rejects.toThrow(/not found/i);
+  });
+
+  it('rejects when reservation already cancelled', async () => {
+    const { sb } = makeSb({
+      aft_reservations: (op) => {
+        if (op === 'select') {
+          return { data: { id: 'res-1', aircraft_id: 'ac-1', user_id: 'user-1', status: 'cancelled' }, error: null };
+        }
+        return { data: null, error: null };
+      },
+    });
+    const action = baseAction({
+      action_type: 'reservation_cancel',
+      payload: { reservation_id: 'res-1' },
+    });
+    await expect(executeAction(sb, action, 'user-1')).rejects.toThrow(/already cancelled/i);
+  });
+
+  it("rejects a non-owner who isn't an admin", async () => {
+    const { sb } = makeSb({
+      aft_reservations: (op) => {
+        if (op === 'select') {
+          return { data: { id: 'res-1', aircraft_id: 'ac-1', user_id: 'someone-else', status: 'confirmed' }, error: null };
+        }
+        return { data: null, error: null };
+      },
+      aft_user_roles: () => ({ data: { role: 'pilot' }, error: null }),
+      aft_user_aircraft_access: () => ({ data: { aircraft_role: 'pilot' }, error: null }),
+    });
+    const action = baseAction({
+      action_type: 'reservation_cancel',
+      payload: { reservation_id: 'res-1' },
+    });
+    await expect(executeAction(sb, action, 'user-1')).rejects.toThrow(/own reservations/i);
+  });
+
+  it('updates with status=confirmed guard so a concurrent PUT cannot ride through', async () => {
+    const { sb, calls } = makeSb({
+      aft_reservations: (op, ctx) => {
+        if (op === 'select') {
+          return { data: { id: 'res-1', aircraft_id: 'ac-1', user_id: 'user-1', start_time: new Date().toISOString(), status: 'confirmed' }, error: null };
+        }
+        if (op === 'update') {
+          // count:exact returns the row count; our mock returns 1.
+          return { data: null, error: null, count: 1 };
+        }
+        return { data: null, error: null };
+      },
+      // Fan-out reads return empty so the email helper is a no-op.
+      aft_aircraft: () => ({ data: { tail_number: 'N123' }, error: null }),
+      aft_user_aircraft_access: () => ({ data: [], error: null }),
+    });
+    const action = baseAction({
+      action_type: 'reservation_cancel',
+      payload: { reservation_id: 'res-1', reason: 'weather' },
+    });
+    await executeAction(sb, action, 'user-1');
+    const updateCall = calls.find(c => c.op === 'update' && c.table === 'aft_reservations');
+    expect(updateCall).toBeDefined();
+    expect(updateCall!.payload).toMatchObject({ status: 'cancelled', notes: 'weather' });
+    const eqFilters = updateCall!.filters.eq || [];
+    expect(eqFilters).toContainEqual(['status', 'confirmed']);
+    expect(eqFilters).toContainEqual(['aircraft_id', 'ac-1']);
+  });
+});
+
+describe('executeAction — squawk_defer (Phase 2)', () => {
+  it('rejects when category is not one of MEL/CDL/NEF/MDL', async () => {
+    const { sb } = makeSb({
+      aft_squawks: () => ({ data: { id: 'sq-1', aircraft_id: 'ac-1', deleted_at: null, status: 'open', is_deferred: false }, error: null }),
+    });
+    const action = baseAction({
+      action_type: 'squawk_defer',
+      required_role: 'admin',
+      payload: { squawk_id: 'sq-1', deferral_category: 'BOGUS', deferral_procedures_completed: true },
+    });
+    await expect(executeAction(sb, action, 'user-1')).rejects.toThrow(/MEL.*CDL.*NEF.*MDL/);
+  });
+
+  it('rejects when procedures_completed is false', async () => {
+    const { sb } = makeSb({
+      aft_squawks: () => ({ data: { id: 'sq-1', aircraft_id: 'ac-1', deleted_at: null, status: 'open', is_deferred: false }, error: null }),
+    });
+    const action = baseAction({
+      action_type: 'squawk_defer',
+      required_role: 'admin',
+      payload: { squawk_id: 'sq-1', deferral_category: 'MEL', deferral_procedures_completed: false },
+    });
+    await expect(executeAction(sb, action, 'user-1')).rejects.toThrow(/91\.213/);
+  });
+
+  it('rejects when squawk is already deferred', async () => {
+    const { sb } = makeSb({
+      aft_squawks: () => ({ data: { id: 'sq-1', aircraft_id: 'ac-1', deleted_at: null, status: 'open', is_deferred: true }, error: null }),
+    });
+    const action = baseAction({
+      action_type: 'squawk_defer',
+      required_role: 'admin',
+      payload: { squawk_id: 'sq-1', deferral_category: 'MEL', deferral_procedures_completed: true, mel_number: '27-1-1' },
+    });
+    await expect(executeAction(sb, action, 'user-1')).rejects.toThrow(/already deferred/i);
+  });
+
+  it('writes only the category-matching number field, not the others', async () => {
+    const { sb, calls } = makeSb({
+      aft_squawks: (op) => {
+        if (op === 'select') {
+          return { data: { id: 'sq-1', aircraft_id: 'ac-1', deleted_at: null, status: 'open', is_deferred: false }, error: null };
+        }
+        if (op === 'update') return { data: null, error: null };
+        return { data: null, error: null };
+      },
+    });
+    const action = baseAction({
+      action_type: 'squawk_defer',
+      required_role: 'admin',
+      payload: {
+        squawk_id: 'sq-1',
+        deferral_category: 'MEL',
+        deferral_procedures_completed: true,
+        mel_number: '27-1-1',
+        // Adversarial: pilot includes a CDL number too. Should NOT land.
+        cdl_number: 'should-not-land',
+      },
+    });
+    await executeAction(sb, action, 'user-1');
+    const updateCall = calls.find(c => c.op === 'update');
+    expect(updateCall).toBeDefined();
+    expect(updateCall!.payload).toMatchObject({
+      is_deferred: true,
+      deferral_category: 'MEL',
+      deferral_procedures_completed: true,
+      mel_number: '27-1-1',
+    });
+    expect(updateCall!.payload.cdl_number).toBeUndefined();
+    expect(updateCall!.payload.nef_number).toBeUndefined();
+    expect(updateCall!.payload.mdl_number).toBeUndefined();
+  });
+});
+
+describe('executeAction — pilot_invite (Phase 2) — existing-user path', () => {
+  it("rejects when the user already has the requested role", async () => {
+    const { sb } = makeSb({
+      aft_user_roles: () => ({ data: [{ user_id: 'existing-user', email: 'alex@example.com' }], error: null }),
+      aft_user_aircraft_access: () => ({ data: { aircraft_role: 'admin' }, error: null }),
+    });
+    const action = baseAction({
+      action_type: 'pilot_invite',
+      required_role: 'admin',
+      payload: { email: 'alex@example.com', aircraft_role: 'admin' },
+    });
+    await expect(executeAction(sb, action, 'admin-user')).rejects.toThrow(/already has/i);
+  });
+
+  it('upserts access on the on_conflict (user_id, aircraft_id) constraint', async () => {
+    const upsertCalls: any[] = [];
+    const { sb } = makeSb({
+      aft_user_roles: () => ({ data: [{ user_id: 'existing-user', email: 'alex@example.com' }], error: null }),
+      aft_user_aircraft_access: (op, ctx) => {
+        if (op === 'select') return { data: { aircraft_role: 'pilot' }, error: null };
+        if (op === 'upsert') {
+          upsertCalls.push({ payload: ctx.payload, opts: ctx.upsertOpts });
+          return { data: null, error: null };
+        }
+        return { data: null, error: null };
+      },
+    });
+    const action = baseAction({
+      action_type: 'pilot_invite',
+      required_role: 'admin',
+      payload: { email: 'alex@example.com', aircraft_role: 'admin' },
+    });
+    const result = await executeAction(sb, action, 'admin-user');
+    expect(result.recordTable).toBe('aft_user_aircraft_access');
+    expect(upsertCalls).toHaveLength(1);
+    expect(upsertCalls[0].payload).toMatchObject({
+      user_id: 'existing-user',
+      aircraft_id: 'ac-1',
+      aircraft_role: 'admin',
+    });
+    expect(upsertCalls[0].opts).toEqual({ onConflict: 'user_id,aircraft_id' });
+  });
+});
+
+describe('executeAction — aircraft_update (Phase 2)', () => {
+  it('rejects when payload has no recognized fields', async () => {
+    const { sb } = makeSb({});
+    const action = baseAction({
+      action_type: 'aircraft_update',
+      required_role: 'admin',
+      payload: {},
+    });
+    await expect(executeAction(sb, action, 'user-1')).rejects.toThrow(/no fields/i);
+  });
+
+  it('uppercases home_airport, lowercases emails, drops empty strings to null', async () => {
+    const { sb, calls } = makeSb({
+      aft_aircraft: (op) => {
+        if (op === 'update') return { data: null, error: null };
+        return { data: null, error: null };
+      },
+    });
+    const action = baseAction({
+      action_type: 'aircraft_update',
+      required_role: 'admin',
+      payload: {
+        home_airport: '  kdal  ',
+        main_contact_email: '  Alice@Example.com  ',
+        mx_contact: '',
+        is_ifr_equipped: true,
+        time_zone: 'America/Denver',
+      },
+    });
+    await executeAction(sb, action, 'user-1');
+    const updateCall = calls.find(c => c.op === 'update' && c.table === 'aft_aircraft');
+    expect(updateCall).toBeDefined();
+    expect(updateCall!.payload).toEqual({
+      home_airport: 'KDAL',
+      main_contact_email: 'alice@example.com',
+      mx_contact: null,
+      is_ifr_equipped: true,
+      time_zone: 'America/Denver',
+    });
+  });
+});
