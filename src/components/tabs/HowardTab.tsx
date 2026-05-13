@@ -412,6 +412,32 @@ export default function HowardTab({
                 detail: { tail: ev.tail, aircraftId: ev.aircraft_id },
               }));
             }
+          } else if (ev.type === 'client_action' && ev.action === 'open_documents_uploader') {
+            // Howard called open_documents_uploader — switch tail
+            // first (if different), then ask AppShell to navigate to
+            // Documents tab with the upload-form pre-fill.
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('howard:switch-aircraft', {
+                detail: { tail: ev.tail, aircraftId: ev.aircraft_id },
+              }));
+              window.dispatchEvent(new CustomEvent('howard:open-in-app', {
+                detail: { kind: 'documents_upload', docType: ev.doc_type },
+              }));
+            }
+          } else if (ev.type === 'client_action' && ev.action === 'open_squawk_form') {
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('howard:switch-aircraft', {
+                detail: { tail: ev.tail, aircraftId: ev.aircraft_id },
+              }));
+              window.dispatchEvent(new CustomEvent('howard:open-in-app', {
+                detail: {
+                  kind: 'squawk_new',
+                  description: ev.description,
+                  location: ev.location,
+                  affectsAirworthiness: ev.affects_airworthiness,
+                },
+              }));
+            }
           } else if (ev.type === 'done') {
             savedAssistantMsg = ev.assistantMessage;
           } else if (ev.type === 'error') {

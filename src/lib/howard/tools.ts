@@ -311,6 +311,36 @@ export const tools: Anthropic.Tool[] = [
     },
   },
   {
+    name: 'open_documents_uploader',
+    description: 'Navigate the app to the Documents tab and scroll the upload form into view, optionally pre-selecting the document type. Use when the pilot wants to upload a document (POH, AFM, MEL, SOP, Registration, Airworthiness Certificate, W&B, etc.) — Howard can\'t accept file uploads in chat, so the handoff opens the form they need. Always reply with a short line like "Opening Documents — pick the file when you\'re ready" after calling this.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        tail: { type: 'string', description: 'Aircraft tail number the document belongs to.' },
+        doc_type: {
+          type: 'string',
+          enum: ['POH', 'AFM', 'Supplement', 'MEL', 'SOP', 'Registration', 'Airworthiness Certificate', 'Weight and Balance', 'Other'],
+          description: 'Document type to pre-select on the form. Optional — defaults to POH if omitted.',
+        },
+      },
+      required: ['tail'],
+    },
+  },
+  {
+    name: 'open_squawk_form',
+    description: 'Navigate the app to the Squawks tab and open the new-squawk form pre-filled with description / location / airworthiness flag. Use when the pilot wants to report a squawk that needs a photo (Howard can\'t attach photos directly from chat, so the handoff lets them snap and attach in the form before submitting). Prefer propose_squawk when the pilot has no photo to attach. Always reply with a short line like "Opening the squawk form for you — add a photo and submit when ready" after calling this.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        tail: { type: 'string', description: 'Aircraft tail number.' },
+        description: { type: 'string', description: 'Pre-fill the description field. Copy the pilot\'s wording.' },
+        location: { type: 'string', description: 'Pre-fill the location (ICAO or "hangar").' },
+        affects_airworthiness: { type: 'boolean', description: 'Pre-tick the grounding checkbox if the pilot said it grounds the airplane. Defaults to false.' },
+      },
+      required: ['tail'],
+    },
+  },
+  {
     name: 'propose_reservation',
     description: 'Propose a new reservation (booking) for the named aircraft. The user must tap Confirm on the card before anything is written. Use when the user asks to book, schedule, or reserve the aircraft.',
     input_schema: {

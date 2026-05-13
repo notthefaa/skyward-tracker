@@ -315,12 +315,47 @@ export default function AppShell({ session }: AppShellProps) {
       if (typeof tail !== 'string' || !tail) return;
       setActiveTail(tail);
     };
+    // Handoff pattern: Howard recognizes an intent the chat can't
+    // fulfill (file upload, photo attach) and asks AppShell to open
+    // the right form pre-filled. We persist the pre-fill on
+    // sessionStorage so the destination tab consumes it on mount —
+    // matches the existing aft_howard_prefill convention used by
+    // HowardWelcome / AircraftModal.
+    const handleHowardOpenInApp = (e: Event) => {
+      const detail = (e as CustomEvent).detail as { kind?: string; [k: string]: any } | undefined;
+      if (!detail?.kind) return;
+      try {
+        if (detail.kind === 'documents_upload') {
+          sessionStorage.setItem(
+            'aft_open_documents_upload',
+            JSON.stringify({ docType: detail.docType || 'POH' }),
+          );
+          navigateTab('documents');
+        } else if (detail.kind === 'squawk_new') {
+          sessionStorage.setItem(
+            'aft_open_squawk_new',
+            JSON.stringify({
+              description: detail.description || '',
+              location: detail.location || '',
+              affectsAirworthiness: !!detail.affectsAirworthiness,
+            }),
+          );
+          setMxSubTab('squawks');
+          navigateTab('mx');
+        }
+      } catch {
+        // sessionStorage write failures (private mode, quota) shouldn't
+        // block navigation — destination tab will just render with no
+        // pre-fill, the pilot can type manually.
+      }
+    };
     window.addEventListener('aft:navigate-howard', handleNavigateHoward);
     window.addEventListener('aft:navigate-howard-usage', handleNavigateHowardUsage);
     window.addEventListener('aft:mx-ads-nav', handleMxAdsNav);
     window.addEventListener('aft:more-nav', handleMoreNav);
     window.addEventListener('aft:open-features-guide', handleOpenFeaturesGuide);
     window.addEventListener('howard:switch-aircraft', handleHowardSwitch);
+    window.addEventListener('howard:open-in-app', handleHowardOpenInApp);
     return () => {
       window.removeEventListener('aft:navigate-howard', handleNavigateHoward);
       window.removeEventListener('aft:navigate-howard-usage', handleNavigateHowardUsage);
@@ -328,6 +363,7 @@ export default function AppShell({ session }: AppShellProps) {
       window.removeEventListener('aft:more-nav', handleMoreNav);
       window.removeEventListener('aft:open-features-guide', handleOpenFeaturesGuide);
       window.removeEventListener('howard:switch-aircraft', handleHowardSwitch);
+      window.removeEventListener('howard:open-in-app', handleHowardOpenInApp);
     };
   }, [navigateTab]);
 

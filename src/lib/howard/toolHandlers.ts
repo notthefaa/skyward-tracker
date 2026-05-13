@@ -735,6 +735,52 @@ const handlers: Record<string, ToolHandler> = {
     };
   },
 
+  // Handoff tools — Howard recognizes an intent the chat can't
+  // directly fulfill (file/photo upload) and asks the app to open
+  // the right form. claude.ts inspects the result + emits a
+  // client_action SSE event; AppShell navigates + sessionStorage'd
+  // pre-fill is consumed by the destination tab on mount.
+
+  open_documents_uploader: async (params, sb, aircraftId, ctx) => {
+    if (!aircraftId) {
+      return { error: 'tail is required.' };
+    }
+    const DOC_TYPES = ['POH', 'AFM', 'Supplement', 'MEL', 'SOP', 'Registration', 'Airworthiness Certificate', 'Weight and Balance', 'Other'];
+    if (params.doc_type && !DOC_TYPES.includes(params.doc_type)) {
+      return { error: `doc_type must be one of: ${DOC_TYPES.join(', ')}` };
+    }
+    return {
+      success: true,
+      tail: ctx.aircraftTail,
+      aircraft_id: aircraftId,
+      doc_type: params.doc_type || 'POH',
+      message: `Opening Documents on ${ctx.aircraftTail} so the pilot can pick a file.`,
+    };
+  },
+
+  open_squawk_form: async (params, sb, aircraftId, ctx) => {
+    if (!aircraftId) {
+      return { error: 'tail is required.' };
+    }
+    // Length-cap pre-fill strings — Claude can hand back giant
+    // narratives that won't fit the form's character cap.
+    const description = typeof params.description === 'string'
+      ? params.description.trim().slice(0, 2000)
+      : '';
+    const location = typeof params.location === 'string'
+      ? params.location.trim().slice(0, 100)
+      : '';
+    return {
+      success: true,
+      tail: ctx.aircraftTail,
+      aircraft_id: aircraftId,
+      description,
+      location,
+      affects_airworthiness: !!params.affects_airworthiness,
+      message: `Opening the new-squawk form on ${ctx.aircraftTail} so the pilot can attach a photo and submit.`,
+    };
+  },
+
   // ─── Write tools (propose-confirm) ─────────────────────────
 
   propose_reservation: async (params, sb, _aircraftId, ctx) => {

@@ -154,6 +154,37 @@ export default function SquawksTab({
     setResolveNote("");
   };
 
+  // Howard handoff: when open_squawk_form fires, AppShell stashes
+  // pre-fill on sessionStorage + navigates here. Consume + clear so a
+  // tab-switch back doesn't re-trigger the modal. Run on aircraft
+  // change so a switch_active_aircraft followed by open_squawk_form
+  // (Howard's tail-mismatch flow) re-applies the pre-fill on the
+  // right tail.
+  useEffect(() => {
+    if (!aircraft?.id) return;
+    try {
+      const raw = sessionStorage.getItem('aft_open_squawk_new');
+      if (!raw) return;
+      sessionStorage.removeItem('aft_open_squawk_new');
+      const data = JSON.parse(raw) as { description?: string; location?: string; affectsAirworthiness?: boolean };
+      setEditingId(null);
+      setLocation(data.location || "");
+      setDescription(data.description || "");
+      setAffectsAirworthiness(!!data.affectsAirworthiness);
+      setIsDeferred(false);
+      setStatus('open');
+      setExistingImages([]);
+      setSelectedImages([]);
+      setMel(""); setCdl(""); setNef(""); setMdl(""); setMelControl(""); setCategory("");
+      setProcCompleted(false); setFullName(""); setCertNum(""); setNotifyMx(false);
+      if (sigCanvas.current) sigCanvas.current.clear();
+      submitIdemKeyRef.current = null;
+      setShowModal(true);
+    } catch {
+      // Bad JSON / sessionStorage error — no-op.
+    }
+  }, [aircraft?.id]);
+
   const openForm = (squawk: any = null) => {
     if (squawk) {
       setEditingId(squawk.id); setLocation(squawk.location || ""); setDescription(squawk.description || ""); 

@@ -62,6 +62,34 @@ export default function DocumentsTab({
     uploadIdemKeyRef.current = null;
   }, [aircraft?.id]);
 
+  // Howard handoff: when Howard's open_documents_uploader tool fires,
+  // AppShell stashes a pre-fill payload in sessionStorage and
+  // navigates here. Consume + clear so a later tab-switch back doesn't
+  // re-apply the stale pre-fill. The setTimeout defers the scroll
+  // until after the layout settles — without it the upload form is
+  // still being mounted and scrollIntoView lands on the wrong y-offset.
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem('aft_open_documents_upload');
+      if (!raw) return;
+      sessionStorage.removeItem('aft_open_documents_upload');
+      const data = JSON.parse(raw) as { docType?: string };
+      if (data.docType && DOC_TYPES.some(t => t.value === data.docType)) {
+        setDocType(data.docType as DocType);
+      }
+      setTimeout(() => {
+        const el = document.querySelector('input[type="file"][accept="application/pdf"]');
+        if (el instanceof HTMLElement) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 120);
+    } catch {
+      // Bad JSON / sessionStorage error — no-op. The pilot still sees
+      // the Documents tab; they just have to scroll + pick docType
+      // themselves.
+    }
+  }, [aircraft?.id]);
+
   const { data, mutate } = useSWR(
     aircraft ? swrKeys.docs(aircraft.id) : null,
     async () => {

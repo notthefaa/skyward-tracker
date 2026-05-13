@@ -88,6 +88,22 @@ export type StreamEvent =
       aircraft_id: string;
     }
   | {
+      type: 'client_action';
+      action: 'open_documents_uploader';
+      tail: string;
+      aircraft_id: string;
+      doc_type: string;
+    }
+  | {
+      type: 'client_action';
+      action: 'open_squawk_form';
+      tail: string;
+      aircraft_id: string;
+      description: string;
+      location: string;
+      affects_airworthiness: boolean;
+    }
+  | {
       type: 'complete';
       assistantText: string;
       toolCalls: any[] | null;
@@ -293,6 +309,34 @@ export async function* sendMessageStream(
           // skip the side-effect, the tool error path will still surface
           // in Howard's reply.
         }
+      } else if (block.name === 'open_documents_uploader') {
+        try {
+          const parsed = JSON.parse(result);
+          if (parsed?.success && typeof parsed?.tail === 'string' && typeof parsed?.aircraft_id === 'string') {
+            yield {
+              type: 'client_action',
+              action: 'open_documents_uploader',
+              tail: parsed.tail,
+              aircraft_id: parsed.aircraft_id,
+              doc_type: typeof parsed.doc_type === 'string' ? parsed.doc_type : 'POH',
+            };
+          }
+        } catch {}
+      } else if (block.name === 'open_squawk_form') {
+        try {
+          const parsed = JSON.parse(result);
+          if (parsed?.success && typeof parsed?.tail === 'string' && typeof parsed?.aircraft_id === 'string') {
+            yield {
+              type: 'client_action',
+              action: 'open_squawk_form',
+              tail: parsed.tail,
+              aircraft_id: parsed.aircraft_id,
+              description: typeof parsed.description === 'string' ? parsed.description : '',
+              location: typeof parsed.location === 'string' ? parsed.location : '',
+              affects_airworthiness: !!parsed.affects_airworthiness,
+            };
+          }
+        } catch {}
       }
       toolResultBlocks.push({
         type: 'tool_result',
