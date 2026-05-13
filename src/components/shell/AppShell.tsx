@@ -380,6 +380,24 @@ export default function AppShell({ session }: AppShellProps) {
   const { aircraftStatus, groundedReason, checkGroundedStatus } = useGroundedStatus(allAircraftList, activeTail);
   const currentAircraftRole = useAircraftRole(activeTail, allAircraftList, allAccessRecords, session);
 
+  // Watch the active aircraft's docs for status='processing' → 'ready'
+  // transitions and surface a toast. Mounted here in AppShell so the
+  // notification fires even when the user has navigated away from the
+  // documents tab (which is the whole point of the fire-and-forget
+  // upload shape).
+  //
+  // CRITICAL: this hook MUST run on every render, including the
+  // onboarding-path early returns below. Previously it was placed
+  // AFTER the `if (needsOnboarding) return <HowardWelcome />` branch,
+  // which meant new users (the only group with `completedOnboarding=
+  // false`) hit "Rendered fewer hooks than expected" — render N had
+  // the hook (initial loading state, fall-through), render N+1 had
+  // the early return and skipped it. React fatally bailed and
+  // production surfaced it as the minified `#300` error boundary.
+  // Existing users never tripped this because their
+  // `completedOnboarding=true` made the early return unreachable.
+  useDocStatusWatcher(allAircraftList.find(a => a.tail_number === activeTail)?.id || null);
+
   // Grounded-banner refresh — ProposedActionCard fires aft:refresh-grounded
   // after any confirmed write that may affect airworthiness. The grounded
   // status comes from direct Supabase queries (not SWR), so the per-
@@ -1207,13 +1225,6 @@ export default function AppShell({ session }: AppShellProps) {
   }
   const selectedAircraftData = allAircraftList.find(a => a.tail_number === activeTail) || null;
   const showFleetButton = aircraftList.length > 1;
-
-  // Watch the active aircraft's docs for status='processing' → 'ready'
-  // transitions and surface a toast. Mounted here in AppShell so the
-  // notification fires even when the user has navigated away from the
-  // documents tab (which is the whole point of the fire-and-forget
-  // upload shape).
-  useDocStatusWatcher(selectedAircraftData?.id || null);
 
   return (
     <div className="flex flex-col bg-neutral-100 w-full min-h-screen relative">
