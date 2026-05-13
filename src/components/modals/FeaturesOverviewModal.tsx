@@ -56,7 +56,7 @@ const SECTIONS: Section[] = [
         icon: Plane, accent: '#091F3C',
         name: "Hangar view",
         blurb: "Every tail side-by-side when you've got more than one airplane. Green, orange, red — pick the one you need.",
-        where: "Home icon (double-tap with 2+ aircraft)",
+        where: "Tap Home again with 2+ aircraft to switch between Summary and Hangar",
       },
       {
         icon: CalendarDays, accent: '#56B94A',

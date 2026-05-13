@@ -114,7 +114,7 @@ const STEPS: Step[] = [
     title: "Meet Howard — your aviation mentor",
     lead: "The orange button is me. I sit on top of everything you just saw — ask me anything, I pull real data instead of guessing.",
     bullets: [
-      { icon: Wrench, text: "Airworthiness reads: I check your equipment, MX, squawks, and ADs against 91.205, 91.411, 91.413, and 91.207 — and cite the specific reg keeping the airplane on the ground." },
+      { icon: Wrench, text: "Airworthiness reads: I check your equipment, MX, squawks, and ADs against 91.205, 91.207, 91.411, 91.413, and 91.417 — and cite the specific reg keeping the airplane on the ground." },
       { icon: Calendar, text: "Flight briefings with official METARs, TAFs, NOTAMs, PIREPs — decoded into plain English. Source is NOAA AWC and the FAA, never guesswork." },
       { icon: FolderOpen, text: "Search inside your own documents — ask \"what's the Vne?\" and I'll find it in your POH and cite the page." },
       { icon: PenLine, text: "Pull flight history, squawk details, maintenance status, fuel trends — anything on the aircraft's record." },

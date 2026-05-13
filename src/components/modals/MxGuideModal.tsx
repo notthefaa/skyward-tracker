@@ -61,7 +61,7 @@ export default function MxGuideModal({ show, onClose }: MxGuideModalProps) {
                   { label: 'Draft', desc: 'You\u2019ve built a work package, or we auto-drafted one when items got close to due', color: 'bg-mxOrange' },
                   { label: 'Scheduling', desc: 'Sent to your mechanic \u2014 waiting on proposed dates and how long the work will take', color: 'bg-gray-500' },
                   { label: 'Confirmed', desc: 'You and your mechanic agreed on a date. We automatically cancel reservations that overlap the service window.', color: 'bg-info' },
-                  { label: 'In Progress', desc: 'Mechanic is working on the aircraft', color: 'bg-[#56B94A]' },
+                  { label: 'In Service', desc: 'Mechanic is working on the aircraft', color: 'bg-[#56B94A]' },
                   { label: 'Ready for Pickup', desc: 'All work is done \u2014 mechanic has signaled the airplane is ready', color: 'bg-[#56B94A]' },
                   { label: 'Complete', desc: 'You entered the logbook data. Tracking resets for the next interval.', color: 'bg-navy' },
                 ].map((s) => (
@@ -162,7 +162,7 @@ export default function MxGuideModal({ show, onClose }: MxGuideModalProps) {
             <div className="bg-gray-50 rounded p-4 border border-gray-200">
               <p className="text-[10px] font-bold uppercase tracking-widest text-navy mb-2">Heads-up reminders</p>
               <p className="text-sm text-gray-600 font-roboto">
-                Separate from the auto-scheduler, we email the primary contact heads-up reminders at three configurable points (e.g., 30 days, 15 days, 5 days out). These don't draft anything or take action — they're just a nudge. Global admins set the thresholds from Admin → System Tools → Maintenance Triggers.
+                Separate from the auto-scheduler, we email the primary contact heads-up reminders at three configurable points. Date-based items use days out (e.g., 30 / 15 / 5 days); hour-based items use engine hours remaining (e.g., 30 / 15 / 5 hrs). These don't draft anything or take action — they're just a nudge. Global admins set the thresholds from Admin → System Tools → Maintenance Triggers.
               </p>
             </div>
           </div>
