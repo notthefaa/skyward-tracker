@@ -179,7 +179,7 @@ function describePayload(action: ProposedAction): React.ReactNode {
         <div className="text-xs text-gray-600 space-y-0.5">
           <div><span className="font-bold uppercase tracking-widest text-[9px] text-gray-500">Reservation: </span><span className="font-mono">{p.reservation_id?.slice(0, 8)}…</span></div>
           {p.reason && <div><span className="font-bold uppercase tracking-widest text-[9px] text-gray-500">Reason: </span>{p.reason}</div>}
-          <p className="text-[10px] text-gray-500 pt-1 italic">Other pilots won&apos;t get an email — they&apos;ll see the slot disappear on the calendar.</p>
+          <p className="text-[10px] text-gray-500 pt-1 italic">Other assigned pilots get a cancellation email (unless they&apos;ve muted that notification).</p>
         </div>
       );
     case 'squawk_defer':

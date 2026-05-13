@@ -26,6 +26,7 @@ import {
   validateSquawkInput,
   submitSquawk,
 } from '@/lib/submissions';
+import { sendReservationCancelledEmail } from '@/lib/reservationCancel';
 
 export type ActionType =
   | 'reservation'
@@ -959,10 +960,7 @@ export async function executeAction(
       }
       // Status='confirmed' guard mirrors the DELETE route — a concurrent
       // PUT can't slip a stale cancel onto a row whose new times just
-      // landed. The email fan-out the route does is intentionally
-      // skipped here for the MVP — Howard's chat reply tells the user
-      // the slot opened up, and other pilots see it disappear from the
-      // calendar on next refresh. Adding email fan-out is a Phase 3 task.
+      // landed.
       const { error: cancelErr, count: cancelCount } = await sb
         .from('aft_reservations')
         .update(
@@ -978,6 +976,22 @@ export async function executeAction(
       if (cancelErr) throw cancelErr;
       if (cancelCount === 0) {
         throw new Error('Reservation could not be cancelled (already cancelled or modified).');
+      }
+      // Re-read the full reservation row so the email helper has the
+      // booker's stored timezone + pilot_name. The earlier read only
+      // pulled id/aircraft_id/user_id/status for the permission gate.
+      const { data: fullRes } = await sb
+        .from('aft_reservations')
+        .select('id, aircraft_id, user_id, start_time, end_time, time_zone, pilot_name')
+        .eq('id', p.reservation_id)
+        .maybeSingle();
+      if (fullRes) {
+        // Fail-soft: the helper logs internally if it can't fan out.
+        // The cancellation itself already counted, so we don't undo it
+        // on a transient Resend blip.
+        await sendReservationCancelledEmail(sb, fullRes as any, {
+          excludeUserId: userId,
+        });
       }
       return { recordId: p.reservation_id, recordTable: 'aft_reservations' };
     }

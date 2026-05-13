@@ -15,6 +15,7 @@ import {
   zonedDateEndAsUtc,
 } from '@/lib/dateFormat';
 import { emailShell, heading, paragraph, callout, bulletList, button, keyValueBlock } from '@/lib/email/layout';
+import { sendReservationCancelledEmail } from '@/lib/reservationCancel';
 
 const resend = new Resend(env.RESEND_API_KEY);
 const FROM_EMAIL = 'notifications@skywardsociety.com';
@@ -752,75 +753,15 @@ export async function DELETE(req: Request) {
       return NextResponse.json(racedBody);
     }
 
-    // Notify other assigned users — throw on each read so a blip
-    // doesn't silently drop the cancellation notification fan-out.
-    const { data: aircraft, error: acReadErr } = await supabaseAdmin
-      .from('aft_aircraft')
-      .select('tail_number')
-      .eq('id', reservation.aircraft_id)
-      .single();
-    if (acReadErr) throw acReadErr;
-
-    const { data: assignedUsers, error: assignedErr } = await supabaseAdmin
-      .from('aft_user_aircraft_access')
-      .select('user_id')
-      .eq('aircraft_id', reservation.aircraft_id)
-      .neq('user_id', user.id);
-    if (assignedErr) throw assignedErr;
-
-    if (assignedUsers && assignedUsers.length > 0 && aircraft) {
-      const userIds = assignedUsers.map(u => u.user_id);
-
-      const { data: mutedUsers, error: mutedErr } = await supabaseAdmin
-        .from('aft_notification_preferences')
-        .select('user_id')
-        .in('user_id', userIds)
-        .eq('notification_type', 'reservation_cancelled')
-        .eq('enabled', false);
-      if (mutedErr) throw mutedErr;
-
-      const mutedIds = new Set((mutedUsers || []).map(u => u.user_id));
-      const notifyIds = userIds.filter(id => !mutedIds.has(id));
-
-      if (notifyIds.length > 0) {
-        const { data: notifyUsers, error: notifyUsersErr } = await supabaseAdmin
-          .from('aft_user_roles')
-          .select('email')
-          .in('user_id', notifyIds);
-        if (notifyUsersErr) throw notifyUsersErr;
-
-        const emails = (notifyUsers || []).map(u => u.email).filter(Boolean) as string[];
-
-        if (emails.length > 0) {
-          // Prefer the booker's stored zone so an admin in a different zone
-          // cancelling on someone's behalf still shows the original local time.
-          const displayTz = safeTimeZone(reservation.time_zone || tz);
-          const startStr = formatInTimeZone(reservation.start_time, displayTz);
-
-          // Sanitize user-provided values
-          const safeTail = escapeHtml(aircraft.tail_number);
-          const safePilotName = escapeHtml(reservation.pilot_name);
-
-          const appUrl = getAppUrl(req);
-          await resend.emails.send({
-            from: `Skyward Aircraft Manager <${FROM_EMAIL}>`,
-            to: emails,
-            subject: `${safeTail} Reservation Cancelled: ${formatShortDateInTimeZone(reservation.start_time, displayTz)}`,
-            html: emailShell({
-              title: `${safeTail} Reservation Cancelled`,
-              preheader: `Reservation on ${safeTail} for ${startStr} has been cancelled.`,
-              body: `
-                ${heading('Reservation Cancelled', 'danger')}
-                ${paragraph(`A reservation for <strong>${safeTail}</strong> on <strong>${startStr}</strong> has been cancelled.`)}
-                ${safePilotName ? paragraph(`Originally booked by: ${safePilotName}`) : ''}
-                ${button(appUrl, 'Open Skyward')}
-              `,
-              preferencesUrl: `${appUrl}#settings`,
-            }),
-          });
-        }
-      }
-    }
+    // Notify other assigned pilots. Fan-out is fail-soft inside the
+    // helper — if the email send fails, the cancellation itself still
+    // counted (we already flipped the row above). Log + carry on so we
+    // don't surface a 500 for what's effectively a successful cancel.
+    await sendReservationCancelledEmail(supabaseAdmin, reservation as any, {
+      excludeUserId: user.id,
+      req,
+      fallbackTimeZone: tz,
+    });
 
     const responseBody = { success: true };
     await idem.save(200, responseBody);
