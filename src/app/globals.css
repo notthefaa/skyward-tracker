@@ -148,6 +148,15 @@ main {
   overflow-y: auto !important;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
+  /* `items-center` from the Tailwind class list centers the card in
+     this now-constrained box. For tall modals (AircraftModal on
+     mobile is the worst case), centering a card taller than the
+     box overflows it symmetrically above AND below the box — and
+     scrollTop can't go negative, so the upper half (avatar + tail
+     + serial + make fields) becomes unreachable. `safe` falls back
+     to flex-start when the child overflows, keeping the top edge
+     reachable. Short modals still center normally. */
+  align-items: safe center !important;
 }
 
 /* Hide scrollbar for nav tray */
