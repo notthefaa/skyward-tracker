@@ -52,7 +52,7 @@ export default function MxGuideModal({ show, onClose }: MxGuideModalProps) {
         return (
           <div className="space-y-4">
             <p className="text-sm text-gray-600 font-roboto leading-relaxed">
-              Skyward tracks each maintenance item all the way through a service event with your mechanic. Here's how an event moves through the system:
+              Skyward tracks every maintenance item from the moment it's due, through the trip to the shop, all the way to the signoff. Here's how an event moves from your hand to your mechanic and back:
             </p>
             <div className="bg-gray-50 rounded p-4 border border-gray-200">
               <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-3">Service Event Lifecycle</p>
@@ -86,7 +86,7 @@ export default function MxGuideModal({ show, onClose }: MxGuideModalProps) {
         return (
           <div className="space-y-4">
             <p className="text-sm text-gray-600 font-roboto leading-relaxed">
-              Each maintenance item is tracked by engine hours, calendar dates, or both. When you complete an item, we recalculate the next due point automatically.
+              Each maintenance item is tracked by engine hours, calendar dates, or both. Close one out and we recalculate the next due date or hour mark on the spot.
             </p>
             <div className="bg-blue-50 rounded p-4 border border-blue-200">
               <p className="text-[10px] font-bold uppercase tracking-widest text-info mb-2 flex items-center gap-2"><Clock size={14} /> Time-Based Tracking</p>
@@ -150,7 +150,7 @@ export default function MxGuideModal({ show, onClose }: MxGuideModalProps) {
               <ul className="text-sm text-gray-600 font-roboto space-y-2">
                 <li className="flex items-start gap-2"><span className="text-mxOrange font-bold shrink-0">•</span> <strong>80% confidence or higher:</strong> We draft a work package and email the primary contact to review and send it.</li>
                 <li className="flex items-start gap-2"><span className="text-mxOrange font-bold shrink-0">•</span> <strong>Below 80%:</strong> We send a heads-up email only — no draft. You schedule manually from the Maintenance tab when you're ready.</li>
-                <li className="flex items-start gap-2"><span className="text-mxOrange font-bold shrink-0">•</span> <strong>Hard cutoffs:</strong> Date-based items always fire at the configured day threshold. Time-based items fire at the configured hour threshold. Both ignore the confidence score.</li>
+                <li className="flex items-start gap-2"><span className="text-mxOrange font-bold shrink-0">•</span> <strong>Hard cutoffs:</strong> Date-based items always fire at the day threshold you set. Time-based items fire at the hour threshold. Both ignore the confidence score.</li>
               </ul>
             </div>
             <div className="bg-blue-50 rounded p-4 border border-blue-200">
@@ -162,7 +162,7 @@ export default function MxGuideModal({ show, onClose }: MxGuideModalProps) {
             <div className="bg-gray-50 rounded p-4 border border-gray-200">
               <p className="text-[10px] font-bold uppercase tracking-widest text-navy mb-2">Heads-up reminders</p>
               <p className="text-sm text-gray-600 font-roboto">
-                Separate from the auto-scheduler, we email the primary contact heads-up reminders at three configurable points. Date-based items use days out (e.g., 30 / 15 / 5 days); hour-based items use engine hours remaining (e.g., 30 / 15 / 5 hrs). These don't draft anything or take action — they're just a nudge. Global admins set the thresholds from Admin → System Tools → Maintenance Triggers.
+                Separate from the auto-scheduler, we email the primary contact heads-up reminders at three thresholds you set. Date-based items use days out (e.g., 30 / 15 / 5 days); hour-based items use engine hours remaining (e.g., 30 / 15 / 5 hrs). These don't draft anything or take action — they're just a nudge. Global admins set the thresholds from Admin → System Tools → Maintenance Triggers.
               </p>
             </div>
           </div>
@@ -233,16 +233,16 @@ export default function MxGuideModal({ show, onClose }: MxGuideModalProps) {
         return (
           <div className="space-y-4">
             <p className="text-sm text-gray-600 font-roboto leading-relaxed">
-              Once your mechanic marks the airplane ready, you finish the event by entering the logbook data from their sign-off. This is the step that resets maintenance tracking for the next interval.
+              Once your mechanic marks the airplane ready, you close out the event by entering the logbook data from their sign-off. This is the step that resets the maintenance clock for the next cycle.
             </p>
             <div className="bg-green-50 rounded p-4 border border-green-200">
               <p className="text-[10px] font-bold uppercase tracking-widest text-success mb-3 flex items-center gap-2"><CheckCircle size={14} /> What happens when you complete an event</p>
               <ul className="text-sm text-gray-600 font-roboto space-y-3">
                 <li className="flex items-start gap-2"><span className="text-success font-bold shrink-0">1.</span> <span><strong>You enter logbook data</strong> for each item: completion date, engine time at completion, mechanic name, certificate number, and work description.</span></li>
-                <li className="flex items-start gap-2"><span className="text-success font-bold shrink-0">2.</span> <span><strong>Time-based items reset:</strong> Last-completed time updates to the logbook value, and we recalculate the next due time using the interval you set.</span></li>
-                <li className="flex items-start gap-2"><span className="text-success font-bold shrink-0">3.</span> <span><strong>Date-based items reset:</strong> Last-completed date updates, and we recalculate the next due date from the logbook date + interval.</span></li>
-                <li className="flex items-start gap-2"><span className="text-success font-bold shrink-0">4.</span> <span><strong>Squawks auto-resolve:</strong> Any squawks included in the work package are marked resolved, with a link back to which service event fixed them.</span></li>
-                <li className="flex items-start gap-2"><span className="text-success font-bold shrink-0">5.</span> <span><strong>Reminder flags clear:</strong> All reminder and auto-scheduling flags reset, so the cycle starts over for the next interval.</span></li>
+                <li className="flex items-start gap-2"><span className="text-success font-bold shrink-0">2.</span> <span><strong>Time-based items reset:</strong> We update the last-completed time to the engine reading you entered, then count forward by the interval to find the next due point.</span></li>
+                <li className="flex items-start gap-2"><span className="text-success font-bold shrink-0">3.</span> <span><strong>Date-based items reset:</strong> Last-completed date updates to the logbook date, and we count forward by the interval to find the next due date.</span></li>
+                <li className="flex items-start gap-2"><span className="text-success font-bold shrink-0">4.</span> <span><strong>Squawks auto-resolve:</strong> Any squawks included in the work package get marked resolved, with a link back to the service event that fixed them.</span></li>
+                <li className="flex items-start gap-2"><span className="text-success font-bold shrink-0">5.</span> <span><strong>Reminders reset:</strong> All reminder and auto-scheduling flags clear, so the cycle starts fresh for the next interval.</span></li>
               </ul>
             </div>
             <div className="bg-blue-50 rounded p-4 border border-blue-200">
@@ -286,7 +286,7 @@ export default function MxGuideModal({ show, onClose }: MxGuideModalProps) {
               <p className="text-[10px] font-bold uppercase tracking-widest text-danger mb-2 flex items-center gap-2"><Calendar size={14} /> What we handle automatically</p>
               <ul className="text-sm text-gray-600 font-roboto space-y-2">
                 <li className="flex items-start gap-2"><span className="text-danger font-bold shrink-0">•</span> We find every confirmed reservation that overlaps the service window (confirmed start date through estimated completion).</li>
-                <li className="flex items-start gap-2"><span className="text-danger font-bold shrink-0">•</span> Each overlapping reservation gets cancelled.</li>
+                <li className="flex items-start gap-2"><span className="text-danger font-bold shrink-0">•</span> We cancel each overlapping reservation.</li>
                 <li className="flex items-start gap-2"><span className="text-danger font-bold shrink-0">•</span> Every affected pilot gets an email listing their cancelled booking(s) and the maintenance dates, so they can rebook for after the service.</li>
               </ul>
             </div>
@@ -323,7 +323,7 @@ export default function MxGuideModal({ show, onClose }: MxGuideModalProps) {
               </ul>
             </div>
             <div className="bg-gray-50 rounded p-4 border border-gray-200">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-navy mb-3">All pilots on the airplane (operational awareness)</p>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-navy mb-3">All pilots on the airplane (ramp awareness)</p>
               <p className="text-sm text-gray-600 font-roboto mb-3">
                 Every pilot with access to the aircraft gets operational alerts — except whoever did the thing:
               </p>
