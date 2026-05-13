@@ -543,7 +543,7 @@ export default function FleetSchedule({
                             className="p-3 flex items-center gap-2 cursor-pointer hover:bg-gray-50"
                           >
                             <Wrench size={14} className="text-gray-400 shrink-0" />
-                            <span className="text-xs font-bold text-navy font-roboto truncate">{m.label}</span>
+                            <span className="text-xs font-bold text-navy font-roboto truncate min-w-0 flex-1">{m.label}</span>
                           </div>
                         ))}
                       </div>
