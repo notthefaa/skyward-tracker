@@ -40,7 +40,12 @@ export type ActionType =
   | 'squawk'
   | 'vor_check'
   | 'oil_log'
-  | 'tire_check';
+  | 'tire_check'
+  // Phase 2 — admin / coordination actions:
+  | 'reservation_cancel'
+  | 'squawk_defer'
+  | 'pilot_invite'
+  | 'aircraft_update';
 
 export type RequiredRole = 'access' | 'admin';
 
@@ -211,6 +216,61 @@ export interface TireCheckPayload {
   occurred_at?: string;
 }
 
+// Phase 2 — admin / coordination payloads.
+
+export interface ReservationCancelPayload {
+  reservation_id: string;
+  /** Optional reason — saved on the row + included in the cancellation
+   * email fan-out so other pilots see why the slot opened up. */
+  reason?: string;
+}
+
+export interface SquawkDeferPayload {
+  squawk_id: string;
+  /** One of: MEL, CDL, NEF, MDL. */
+  deferral_category: string;
+  /** Numbers identifying the deferral document section. Only the
+   * category's matching field is meaningful — others stay empty. */
+  mel_number?: string;
+  cdl_number?: string;
+  nef_number?: string;
+  mdl_number?: string;
+  mel_control_number?: string;
+  /** Required by §91.213 — PIC asserts they completed the deferral
+   * procedures (gate items, placards, etc.). */
+  deferral_procedures_completed: boolean;
+  /** Optional: PIC name + cert for the signoff record. Howard fills
+   * from per-request context when available. */
+  full_name?: string;
+  certificate_number?: string;
+}
+
+export interface PilotInvitePayload {
+  email: string;
+  /** Per-aircraft role on the named aircraft. Note: existing
+   * /api/pilot-invite accepts 'admin' | 'pilot'; we keep the same
+   * surface so the executor can delegate behavior. */
+  aircraft_role: 'admin' | 'pilot';
+}
+
+/**
+ * Allowlist of aircraft profile fields Howard can update via chat.
+ * Excludes anything that affects calculations (tail_number, engine_type,
+ * setup/total times, avatar) — those have their own surfaces and
+ * carry too much blast radius for a one-tap confirm.
+ */
+export interface AircraftUpdatePayload {
+  home_airport?: string;
+  time_zone?: string;
+  is_ifr_equipped?: boolean;
+  main_contact?: string;
+  main_contact_phone?: string;
+  main_contact_email?: string;
+  mx_contact?: string;
+  mx_contact_phone?: string;
+  mx_contact_email?: string;
+}
+
 const ROLE_BY_TYPE: Record<ActionType, RequiredRole> = {
   reservation: 'access',
   mx_schedule: 'admin',
@@ -231,6 +291,14 @@ const ROLE_BY_TYPE: Record<ActionType, RequiredRole> = {
   vor_check: 'access',
   oil_log: 'access',
   tire_check: 'access',
+  // Phase 2. reservation_cancel uses 'access' because the executor
+  // handles the own-vs-admin gate itself (same as the route): a pilot
+  // can always cancel their own slot; admins can cancel anyone's.
+  // squawk_defer / pilot_invite / aircraft_update are admin-gated.
+  reservation_cancel: 'access',
+  squawk_defer: 'admin',
+  pilot_invite: 'admin',
+  aircraft_update: 'admin',
 };
 
 export function requiredRoleFor(type: ActionType): RequiredRole {
@@ -304,6 +372,23 @@ export function summarize(type: ActionType, payload: any, aircraftTail: string):
         p.right_main_psi != null ? `R ${p.right_main_psi}` : null,
       ].filter(Boolean).join(' · ');
       return `Log tire PSI on ${aircraftTail}: ${readings || 'no readings'}`;
+    }
+    case 'reservation_cancel': {
+      const p = payload as ReservationCancelPayload;
+      return `Cancel reservation on ${aircraftTail}${p.reason ? ` — ${p.reason.slice(0, 60)}` : ''}`;
+    }
+    case 'squawk_defer': {
+      const p = payload as SquawkDeferPayload;
+      return `Defer squawk on ${aircraftTail} under ${p.deferral_category}`;
+    }
+    case 'pilot_invite': {
+      const p = payload as PilotInvitePayload;
+      return `Invite ${p.email} to ${aircraftTail} (${p.aircraft_role})`;
+    }
+    case 'aircraft_update': {
+      const p = payload as AircraftUpdatePayload;
+      const changed = Object.entries(p).filter(([, v]) => v !== undefined).map(([k]) => k.replace(/_/g, ' '));
+      return `Update ${aircraftTail}: ${changed.join(', ') || 'no fields'}`;
     }
   }
 }
@@ -826,6 +911,248 @@ export async function executeAction(
       });
       const result = await submitTireCheck(sb as any, userId, action.aircraft_id!, input);
       return { recordId: result.id, recordTable: 'aft_tire_checks' };
+    }
+
+    // ── Phase 2: admin / coordination actions ─────────────────
+
+    case 'reservation_cancel': {
+      const p = action.payload as ReservationCancelPayload;
+      // Re-verify the reservation still exists, belongs to this
+      // aircraft, and isn't already cancelled. The propose-time gate
+      // catches the common path; this catches the propose-then-someone-
+      // else-cancels-first race.
+      const { data: res, error: resErr } = await sb
+        .from('aft_reservations')
+        .select('id, aircraft_id, user_id, status')
+        .eq('id', p.reservation_id)
+        .maybeSingle();
+      if (resErr) throw resErr;
+      if (!res || res.aircraft_id !== action.aircraft_id) {
+        throw new Error('Reservation not found on this aircraft.');
+      }
+      if (res.status === 'cancelled') {
+        throw new Error('Reservation was already cancelled.');
+      }
+      // Permission: own reservation OR aircraft admin OR global admin.
+      // The propose handler enforces the same gate up front; re-check
+      // at execute time so a mid-window role revocation can't ride
+      // through a stale proposal.
+      const isOwner = res.user_id === userId;
+      if (!isOwner) {
+        const { data: callerRole } = await sb
+          .from('aft_user_roles')
+          .select('role')
+          .eq('user_id', userId)
+          .maybeSingle();
+        const isGlobalAdmin = callerRole?.role === 'admin';
+        if (!isGlobalAdmin) {
+          const { data: callerAccess } = await sb
+            .from('aft_user_aircraft_access')
+            .select('aircraft_role')
+            .eq('user_id', userId)
+            .eq('aircraft_id', action.aircraft_id)
+            .maybeSingle();
+          if (!callerAccess || callerAccess.aircraft_role !== 'admin') {
+            throw new Error('You can only cancel your own reservations.');
+          }
+        }
+      }
+      // Status='confirmed' guard mirrors the DELETE route — a concurrent
+      // PUT can't slip a stale cancel onto a row whose new times just
+      // landed. The email fan-out the route does is intentionally
+      // skipped here for the MVP — Howard's chat reply tells the user
+      // the slot opened up, and other pilots see it disappear from the
+      // calendar on next refresh. Adding email fan-out is a Phase 3 task.
+      const { error: cancelErr, count: cancelCount } = await sb
+        .from('aft_reservations')
+        .update(
+          {
+            status: 'cancelled',
+            ...(p.reason ? { notes: p.reason.slice(0, 500) } : {}),
+          },
+          { count: 'exact' },
+        )
+        .eq('id', p.reservation_id)
+        .eq('aircraft_id', action.aircraft_id)
+        .eq('status', 'confirmed');
+      if (cancelErr) throw cancelErr;
+      if (cancelCount === 0) {
+        throw new Error('Reservation could not be cancelled (already cancelled or modified).');
+      }
+      return { recordId: p.reservation_id, recordTable: 'aft_reservations' };
+    }
+
+    case 'squawk_defer': {
+      const p = action.payload as SquawkDeferPayload;
+      // Mirror the route's read gate: squawk exists, belongs to this
+      // aircraft, not soft-deleted, not already resolved or deferred.
+      const { data: sq, error: sqErr } = await sb
+        .from('aft_squawks')
+        .select('id, aircraft_id, deleted_at, status, is_deferred')
+        .eq('id', p.squawk_id)
+        .maybeSingle();
+      if (sqErr) throw sqErr;
+      if (!sq || sq.aircraft_id !== action.aircraft_id || sq.deleted_at) {
+        throw new Error('Squawk not found on this aircraft.');
+      }
+      if (sq.status === 'resolved') {
+        throw new Error('Squawk is already resolved — can\'t defer a closed issue.');
+      }
+      if (sq.is_deferred) {
+        throw new Error('Squawk is already deferred. Edit from the Squawks tab if details need updating.');
+      }
+      const category = p.deferral_category;
+      const VALID_CATS = ['MEL', 'CDL', 'NEF', 'MDL'];
+      if (!VALID_CATS.includes(category)) {
+        throw new Error(`deferral_category must be one of: ${VALID_CATS.join(', ')}.`);
+      }
+      if (!p.deferral_procedures_completed) {
+        throw new Error('Deferral procedures must be completed per §91.213 before deferring. Confirm with the PIC.');
+      }
+      const updateRow: Record<string, any> = {
+        is_deferred: true,
+        deferral_category: category,
+        deferral_procedures_completed: true,
+        // affects_airworthiness stays true — the airplane is still
+        // operating under a deferral, just legally. The grounding
+        // calculus accounts for is_deferred separately.
+      };
+      // Only stamp the matching number field for the chosen category.
+      // Empty strings on the other fields would clobber prior values
+      // if the squawk had been touched before; using null keeps the
+      // intent explicit.
+      if (category === 'MEL') updateRow.mel_number = (p.mel_number || '').slice(0, 50);
+      if (category === 'CDL') updateRow.cdl_number = (p.cdl_number || '').slice(0, 50);
+      if (category === 'NEF') updateRow.nef_number = (p.nef_number || '').slice(0, 50);
+      if (category === 'MDL') updateRow.mdl_number = (p.mdl_number || '').slice(0, 50);
+      if (p.mel_control_number) updateRow.mel_control_number = String(p.mel_control_number).slice(0, 50);
+      if (p.full_name) updateRow.full_name = String(p.full_name).slice(0, 100);
+      if (p.certificate_number) updateRow.certificate_number = String(p.certificate_number).slice(0, 50);
+      const { error: updErr } = await sb
+        .from('aft_squawks')
+        .update(updateRow)
+        .eq('id', p.squawk_id)
+        .eq('aircraft_id', action.aircraft_id)
+        .is('deleted_at', null);
+      if (updErr) throw updErr;
+      return { recordId: p.squawk_id, recordTable: 'aft_squawks' };
+    }
+
+    case 'pilot_invite': {
+      const p = action.payload as PilotInvitePayload;
+      // Mirror /api/pilot-invite's two-path logic so an admin inviting
+      // via Howard gets the same outcome as the AdminModals form.
+      const emailLc = p.email.toLowerCase().trim();
+      const { data: existingUsers, error: exErr } = await sb
+        .from('aft_user_roles')
+        .select('user_id, email')
+        .eq('email', emailLc);
+      if (exErr) throw exErr;
+
+      if (existingUsers && existingUsers.length > 0) {
+        const targetUserId = existingUsers[0].user_id;
+        // No-op when the user already has the requested role — avoid
+        // a confusing "invited!" toast when nothing changed.
+        const { data: existingAccess } = await sb
+          .from('aft_user_aircraft_access')
+          .select('aircraft_role')
+          .eq('user_id', targetUserId)
+          .eq('aircraft_id', action.aircraft_id)
+          .maybeSingle();
+        if (existingAccess && existingAccess.aircraft_role === p.aircraft_role) {
+          throw new Error('This pilot already has the requested access on this aircraft.');
+        }
+        const { error: upErr } = await sb
+          .from('aft_user_aircraft_access')
+          .upsert(
+            { user_id: targetUserId, aircraft_id: action.aircraft_id, aircraft_role: p.aircraft_role },
+            { onConflict: 'user_id,aircraft_id' },
+          );
+        if (upErr) throw upErr;
+        return { recordId: targetUserId, recordTable: 'aft_user_aircraft_access' };
+      }
+
+      // New-user path: invite via Supabase Auth, then upsert role + access.
+      // The auth client supports `inviteUserByEmail` on the admin namespace.
+      const sbAdmin = sb as any;
+      const appOrigin = process.env.NEXT_PUBLIC_APP_URL || 'https://track.skywardsociety.com';
+      const { data: inviteData, error: inviteErr } = await sbAdmin.auth.admin.inviteUserByEmail(emailLc, {
+        redirectTo: `${appOrigin}/update-password`,
+      });
+      if (inviteErr) {
+        const status = (inviteErr as any).status;
+        const msg = (inviteErr as any).message || '';
+        if (status === 429 || /rate limit/i.test(msg)) {
+          throw new Error('Supabase Auth invite rate limit hit. Wait a few minutes and retry.');
+        }
+        throw inviteErr;
+      }
+      if (!inviteData?.user?.id) {
+        throw new Error('Invite succeeded but no user ID was returned. Retry.');
+      }
+      const targetUserId = inviteData.user.id;
+      const { error: roleErr } = await sb.from('aft_user_roles').upsert({
+        user_id: targetUserId,
+        role: 'pilot',
+        email: emailLc,
+        completed_onboarding: true,
+      });
+      if (roleErr) throw roleErr;
+      const { error: accessErr } = await sb
+        .from('aft_user_aircraft_access')
+        .upsert(
+          { user_id: targetUserId, aircraft_id: action.aircraft_id, aircraft_role: p.aircraft_role },
+          { onConflict: 'user_id,aircraft_id' },
+        );
+      if (accessErr) throw accessErr;
+      return { recordId: targetUserId, recordTable: 'aft_user_aircraft_access' };
+    }
+
+    case 'aircraft_update': {
+      const p = action.payload as AircraftUpdatePayload;
+      // Only the allowlisted fields actually land in the UPDATE — even
+      // if a malicious payload smuggles in `tail_number` or `engine_type`
+      // (which would break the calculation pipeline), the destructure
+      // below drops it. Mirror AircraftModal's basePayload conventions:
+      // ICAO uppercased, empty strings become null.
+      const updateRow: Record<string, any> = {};
+      if (p.home_airport !== undefined) {
+        const ha = String(p.home_airport).trim().toUpperCase();
+        updateRow.home_airport = ha || null;
+      }
+      if (p.time_zone !== undefined) {
+        updateRow.time_zone = String(p.time_zone).trim() || 'UTC';
+      }
+      if (p.is_ifr_equipped !== undefined) {
+        updateRow.is_ifr_equipped = !!p.is_ifr_equipped;
+      }
+      if (p.main_contact !== undefined) {
+        updateRow.main_contact = String(p.main_contact).trim() || null;
+      }
+      if (p.main_contact_phone !== undefined) {
+        updateRow.main_contact_phone = String(p.main_contact_phone).trim() || null;
+      }
+      if (p.main_contact_email !== undefined) {
+        updateRow.main_contact_email = String(p.main_contact_email).trim().toLowerCase() || null;
+      }
+      if (p.mx_contact !== undefined) {
+        updateRow.mx_contact = String(p.mx_contact).trim() || null;
+      }
+      if (p.mx_contact_phone !== undefined) {
+        updateRow.mx_contact_phone = String(p.mx_contact_phone).trim() || null;
+      }
+      if (p.mx_contact_email !== undefined) {
+        updateRow.mx_contact_email = String(p.mx_contact_email).trim().toLowerCase() || null;
+      }
+      if (Object.keys(updateRow).length === 0) {
+        throw new Error('No fields to update.');
+      }
+      const { error: updErr } = await sb
+        .from('aft_aircraft')
+        .update(updateRow)
+        .eq('id', action.aircraft_id);
+      if (updErr) throw updErr;
+      return { recordId: action.aircraft_id!, recordTable: 'aft_aircraft' };
     }
   }
 }

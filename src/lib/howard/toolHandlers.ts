@@ -1036,6 +1036,140 @@ const handlers: Record<string, ToolHandler> = {
     return makeProposal(sb, ctx, 'tire_check', params);
   },
 
+  // ─── Phase 2: admin / coordination ─────────────────────────
+
+  propose_reservation_cancel: async (params, sb, aircraftId, ctx) => {
+    if (!params.reservation_id || typeof params.reservation_id !== 'string') {
+      return { error: 'reservation_id is required (UUID from get_reservations).' };
+    }
+    // Re-verify ownership/admin before proposing. Same gate the
+    // executor applies, surfaced earlier so the pilot doesn't get a
+    // misleading "I prepared that for you" message followed by an
+    // execute-time permission denial.
+    const { data: reservation, error: resErr } = await sb
+      .from('aft_reservations')
+      .select('id, aircraft_id, user_id, status, deleted_at')
+      .eq('id', params.reservation_id)
+      .maybeSingle();
+    if (resErr) throw resErr;
+    if (!reservation || reservation.aircraft_id !== aircraftId) {
+      return { error: 'Reservation not found on this aircraft.' };
+    }
+    if (reservation.status === 'cancelled') {
+      return { error: 'Reservation is already cancelled.' };
+    }
+    if (reservation.user_id !== ctx.userId) {
+      // Caller isn't the booker — need aircraft-admin or global admin.
+      const { data: role } = await sb.from('aft_user_roles').select('role').eq('user_id', ctx.userId).maybeSingle();
+      const isGlobalAdmin = role?.role === 'admin';
+      if (!isGlobalAdmin) {
+        const { data: access } = await sb
+          .from('aft_user_aircraft_access')
+          .select('aircraft_role')
+          .eq('user_id', ctx.userId)
+          .eq('aircraft_id', aircraftId)
+          .maybeSingle();
+        if (!access || access.aircraft_role !== 'admin') {
+          return { error: 'You can only cancel your own reservations. Ask an aircraft admin to cancel this one.' };
+        }
+      }
+    }
+    if (typeof params.reason === 'string') params.reason = params.reason.trim().slice(0, 500);
+    return makeProposal(sb, ctx, 'reservation_cancel', params);
+  },
+
+  propose_squawk_defer: async (params, sb, aircraftId, ctx) => {
+    if (!params.squawk_id || typeof params.squawk_id !== 'string') {
+      return { error: 'squawk_id is required (UUID from get_squawks).' };
+    }
+    const VALID_CATS = ['MEL', 'CDL', 'NEF', 'MDL'];
+    if (!VALID_CATS.includes(params.deferral_category)) {
+      return { error: `deferral_category must be one of: ${VALID_CATS.join(', ')}.` };
+    }
+    if (params.deferral_procedures_completed !== true) {
+      return { error: 'deferral_procedures_completed must be true — the PIC confirms §91.213 procedures are complete before deferring.' };
+    }
+    // Validate squawk belongs to aircraft + isn't already deferred/closed.
+    const { data: sq, error: sqErr } = await sb
+      .from('aft_squawks')
+      .select('id, aircraft_id, deleted_at, status, is_deferred')
+      .eq('id', params.squawk_id)
+      .maybeSingle();
+    if (sqErr) throw sqErr;
+    if (!sq || sq.aircraft_id !== aircraftId || sq.deleted_at) {
+      return { error: 'Squawk not found on this aircraft.' };
+    }
+    if (sq.status === 'resolved') {
+      return { error: 'Squawk is already resolved — can\'t defer a closed issue.' };
+    }
+    if (sq.is_deferred) {
+      return { error: 'Squawk is already deferred. Edit it from the Squawks tab if details need updating.' };
+    }
+    // Sanitize string fields.
+    const STR_FIELDS = ['mel_number', 'cdl_number', 'nef_number', 'mdl_number', 'mel_control_number', 'full_name', 'certificate_number'] as const;
+    for (const f of STR_FIELDS) {
+      if (typeof params[f] === 'string') params[f] = params[f].trim().slice(0, 100);
+    }
+    // Require the matching number for the chosen category.
+    const numField = `${params.deferral_category.toLowerCase()}_number`;
+    if (!params[numField] || typeof params[numField] !== 'string' || !params[numField].trim()) {
+      return { error: `${numField} is required when deferral_category is ${params.deferral_category}.` };
+    }
+    return makeProposal(sb, ctx, 'squawk_defer', params);
+  },
+
+  propose_pilot_invite: async (params, sb, _aircraftId, ctx) => {
+    const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!params.email || typeof params.email !== 'string' || !EMAIL_RE.test(params.email.trim())) {
+      return { error: 'Valid email address is required.' };
+    }
+    if (params.aircraft_role !== 'pilot' && params.aircraft_role !== 'admin') {
+      return { error: 'aircraft_role must be "pilot" or "admin".' };
+    }
+    params.email = params.email.trim().toLowerCase().slice(0, 200);
+    return makeProposal(sb, ctx, 'pilot_invite', params);
+  },
+
+  propose_aircraft_update: async (params, sb, _aircraftId, ctx) => {
+    // Drop the routing `tail` field — it's resolved into aircraftId
+    // by the executeTool wrapper and isn't part of the payload.
+    const { tail: _tail, ...rest } = params;
+    // Allowlist drop unknown fields before they reach the executor —
+    // even though the executor destructure stops them, this also makes
+    // the proposed-action card show only legitimate changes.
+    const ALLOWED = new Set([
+      'home_airport', 'time_zone', 'is_ifr_equipped',
+      'main_contact', 'main_contact_phone', 'main_contact_email',
+      'mx_contact', 'mx_contact_phone', 'mx_contact_email',
+    ]);
+    const filtered: Record<string, any> = {};
+    let changed = 0;
+    for (const k of Object.keys(rest)) {
+      if (!ALLOWED.has(k)) continue;
+      const v = (rest as Record<string, any>)[k];
+      if (v === undefined) continue;
+      filtered[k] = v;
+      changed++;
+    }
+    if (changed === 0) {
+      return { error: 'At least one updatable field must be provided. Allowed: ' + Array.from(ALLOWED).join(', ') };
+    }
+    // Validate emails if present — noValidate-style autofill drift is
+    // not a risk here, but Claude can fabricate "alex@" or "@example".
+    const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    for (const f of ['main_contact_email', 'mx_contact_email']) {
+      if (typeof filtered[f] === 'string' && filtered[f].trim() && !EMAIL_RE.test(filtered[f].trim())) {
+        return { error: `${f} doesn't look like a valid email.` };
+      }
+    }
+    // Length-cap user-visible strings to avoid surprises at the DB.
+    const STR_FIELDS = ['home_airport', 'time_zone', 'main_contact', 'main_contact_phone', 'main_contact_email', 'mx_contact', 'mx_contact_phone', 'mx_contact_email'] as const;
+    for (const f of STR_FIELDS) {
+      if (typeof filtered[f] === 'string') filtered[f] = filtered[f].trim().slice(0, 200);
+    }
+    return makeProposal(sb, ctx, 'aircraft_update', filtered);
+  },
+
   propose_onboarding_setup: async (params, sb, _aircraftId, ctx) => {
     const profile = params?.profile;
     const aircraft = params?.aircraft;

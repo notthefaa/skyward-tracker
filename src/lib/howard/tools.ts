@@ -533,6 +533,73 @@ export const tools: Anthropic.Tool[] = [
     },
   },
   {
+    name: 'propose_reservation_cancel',
+    description: 'Propose cancelling a reservation on the named aircraft. User confirms before the slot is released. The pilot can always cancel their own reservation; cancelling someone else\'s requires aircraft-admin or global admin. Resolve reservation_id by calling get_reservations first — never invent an ID. Email fan-out to other pilots is intentionally NOT sent from this path; the calendar refreshes automatically. Tell the pilot if they want everyone notified, they should cancel from the Calendar tab.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        tail: { type: 'string', description: 'Aircraft tail number.' },
+        reservation_id: { type: 'string', description: 'UUID of the reservation from get_reservations.' },
+        reason: { type: 'string', description: 'Optional short reason (saved to the reservation notes).' },
+      },
+      required: ['tail', 'reservation_id'],
+    },
+  },
+  {
+    name: 'propose_squawk_defer',
+    description: 'Propose deferring an open squawk under MEL/CDL/NEF/MDL. User confirms before the deferral lands. Admin-only. PIC must confirm the deferral procedures (§91.213) have been completed — never propose with deferral_procedures_completed=false. Resolve squawk_id with get_squawks first. Only one of mel_number / cdl_number / nef_number / mdl_number is meaningful (match deferral_category).',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        tail: { type: 'string', description: 'Aircraft tail number.' },
+        squawk_id: { type: 'string', description: 'UUID of the open squawk from get_squawks.' },
+        deferral_category: { type: 'string', enum: ['MEL', 'CDL', 'NEF', 'MDL'], description: 'Deferral document type.' },
+        mel_number: { type: 'string', description: 'MEL item number (e.g. "27-1-1"). Only when category=MEL.' },
+        cdl_number: { type: 'string', description: 'CDL item number. Only when category=CDL.' },
+        nef_number: { type: 'string', description: 'NEF item number. Only when category=NEF.' },
+        mdl_number: { type: 'string', description: 'MDL item number. Only when category=MDL.' },
+        mel_control_number: { type: 'string', description: 'Optional aircraft-specific control number.' },
+        deferral_procedures_completed: { type: 'boolean', description: 'PIC confirms §91.213 deferral procedures (placards, electrical isolation, etc.) are complete. Must be true to defer.' },
+        full_name: { type: 'string', description: 'PIC full name for the deferral signoff (Howard fills from per-request context).' },
+        certificate_number: { type: 'string', description: 'PIC certificate number for the signoff.' },
+      },
+      required: ['tail', 'squawk_id', 'deferral_category', 'deferral_procedures_completed'],
+    },
+  },
+  {
+    name: 'propose_pilot_invite',
+    description: 'Propose inviting a pilot by email to the named aircraft. Admin-only. If the email matches a user already in the system, they get access added/upgraded; otherwise Supabase Auth sends an invite link. aircraft_role is "pilot" for read+log access or "admin" for full edit + invite power on this tail.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        tail: { type: 'string', description: 'Aircraft tail number.' },
+        email: { type: 'string', description: 'Pilot email address.' },
+        aircraft_role: { type: 'string', enum: ['pilot', 'admin'], description: 'Per-aircraft role. Defaults to "pilot" if the user is unsure.' },
+      },
+      required: ['tail', 'email', 'aircraft_role'],
+    },
+  },
+  {
+    name: 'propose_aircraft_update',
+    description: 'Propose updating profile fields on the named aircraft. Admin-only. Only safe-to-change profile fields are accepted: home_airport, time_zone, is_ifr_equipped, main/mx contact name+phone+email. Anything else (tail_number, engine_type, meter readings) must be done from the Aircraft modal in the UI. At least one field must be provided.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        tail: { type: 'string', description: 'Aircraft tail number.' },
+        home_airport: { type: 'string', description: 'ICAO identifier (uppercased).' },
+        time_zone: { type: 'string', description: 'IANA timezone (e.g. "America/New_York"). Affects MX-reminder day math and Howard\'s briefing context.' },
+        is_ifr_equipped: { type: 'boolean', description: 'IFR-equipped flag. Shapes Howard\'s briefing tone.' },
+        main_contact: { type: 'string', description: 'Primary contact name (runs the airplane, gets MX reminders).' },
+        main_contact_phone: { type: 'string' },
+        main_contact_email: { type: 'string', description: 'Primary contact email (CC\'d on work-package + mechanic emails).' },
+        mx_contact: { type: 'string', description: 'Mechanic name.' },
+        mx_contact_phone: { type: 'string' },
+        mx_contact_email: { type: 'string', description: 'Mechanic email (gets work packages and squawk notifications).' },
+      },
+      required: ['tail'],
+    },
+  },
+  {
     name: 'propose_equipment_entry',
     description: 'Propose adding an equipment record for the named aircraft. User confirms before the record is inserted. Admin-only. Use during initial aircraft setup or when the user describes a newly-installed piece of equipment.',
     input_schema: {

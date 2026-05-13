@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useSWRConfig } from "swr";
 import { authFetch } from "@/lib/authFetch";
 import { newIdempotencyKey, idempotencyHeader } from "@/lib/idempotencyClient";
-import { CheckCircle, X, Loader2, Sparkles, Calendar, FileText, Wrench, Plane, AlertTriangle, RefreshCw, UserPlus, PenLine, Clock, Droplet, Circle } from "lucide-react";
+import { CheckCircle, X, Loader2, Sparkles, Calendar, FileText, Wrench, Plane, AlertTriangle, RefreshCw, UserPlus, PenLine, Clock, Droplet, Circle, CalendarOff, ShieldOff, Settings } from "lucide-react";
 import type { ProposedAction } from "@/lib/howard/proposedActions";
 import { matchesAircraft } from "@/lib/swrKeys";
 
@@ -26,6 +26,10 @@ function actionIcon(type: string) {
   if (type === 'vor_check') return Clock;
   if (type === 'oil_log') return Droplet;
   if (type === 'tire_check') return Circle;
+  if (type === 'reservation_cancel') return CalendarOff;
+  if (type === 'squawk_defer') return ShieldOff;
+  if (type === 'pilot_invite') return UserPlus;
+  if (type === 'aircraft_update') return Settings;
   return Sparkles;
 }
 
@@ -170,6 +174,47 @@ function describePayload(action: ProposedAction): React.ReactNode {
           {p.notes && <div><span className="font-bold uppercase tracking-widest text-[9px] text-gray-500">Notes: </span>{p.notes}</div>}
         </div>
       );
+    case 'reservation_cancel':
+      return (
+        <div className="text-xs text-gray-600 space-y-0.5">
+          <div><span className="font-bold uppercase tracking-widest text-[9px] text-gray-500">Reservation: </span><span className="font-mono">{p.reservation_id?.slice(0, 8)}…</span></div>
+          {p.reason && <div><span className="font-bold uppercase tracking-widest text-[9px] text-gray-500">Reason: </span>{p.reason}</div>}
+          <p className="text-[10px] text-gray-500 pt-1 italic">Other pilots won&apos;t get an email — they&apos;ll see the slot disappear on the calendar.</p>
+        </div>
+      );
+    case 'squawk_defer':
+      return (
+        <div className="text-xs text-gray-600 space-y-0.5">
+          <div><span className="font-bold uppercase tracking-widest text-[9px] text-gray-500">Category: </span>{p.deferral_category}</div>
+          {p.mel_number && <div><span className="font-bold uppercase tracking-widest text-[9px] text-gray-500">MEL #: </span>{p.mel_number}</div>}
+          {p.cdl_number && <div><span className="font-bold uppercase tracking-widest text-[9px] text-gray-500">CDL #: </span>{p.cdl_number}</div>}
+          {p.nef_number && <div><span className="font-bold uppercase tracking-widest text-[9px] text-gray-500">NEF #: </span>{p.nef_number}</div>}
+          {p.mdl_number && <div><span className="font-bold uppercase tracking-widest text-[9px] text-gray-500">MDL #: </span>{p.mdl_number}</div>}
+          {p.mel_control_number && <div><span className="font-bold uppercase tracking-widest text-[9px] text-gray-500">Control #: </span>{p.mel_control_number}</div>}
+          {p.full_name && <div><span className="font-bold uppercase tracking-widest text-[9px] text-gray-500">PIC: </span>{p.full_name}{p.certificate_number ? ` · ${p.certificate_number}` : ''}</div>}
+          <div className="pt-1 flex flex-wrap gap-1">
+            <span className="text-[8.5px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-info/10 text-info border border-info/20">§91.213 procedures completed</span>
+          </div>
+        </div>
+      );
+    case 'pilot_invite':
+      return (
+        <div className="text-xs text-gray-600 space-y-0.5">
+          <div><span className="font-bold uppercase tracking-widest text-[9px] text-gray-500">Email: </span>{p.email}</div>
+          <div><span className="font-bold uppercase tracking-widest text-[9px] text-gray-500">Role on this tail: </span>{p.aircraft_role === 'admin' ? 'Aircraft admin' : 'Pilot'}</div>
+        </div>
+      );
+    case 'aircraft_update':
+      return (
+        <div className="text-xs text-gray-600 space-y-0.5">
+          {Object.entries(p as Record<string, any>).map(([k, v]) => (
+            <div key={k}>
+              <span className="font-bold uppercase tracking-widest text-[9px] text-gray-500">{k.replace(/_/g, ' ')}: </span>
+              {typeof v === 'boolean' ? (v ? 'Yes' : 'No') : String(v) || '(cleared)'}
+            </div>
+          ))}
+        </div>
+      );
     case 'onboarding_setup': {
       const profile = p.profile || {};
       const ac = p.aircraft || {};
@@ -227,9 +272,12 @@ export default function ProposedActionCard({ action, onChange }: Props) {
   // an explicit "as PIC I take responsibility for this" re-click so the
   // pilot doesn't tap Confirm on autopilot after 30 Howard messages.
   // Squawk resolution can un-ground the plane; MX schedule sends an
-  // email to the mechanic — both deserve the gate. Reservations, notes,
-  // equipment adds, and onboarding skip it.
-  const requiresPicAck = action.action_type === 'squawk_resolve' || action.action_type === 'mx_schedule';
+  // email to the mechanic; squawk_defer is a PIC assertion under
+  // §91.213 — all deserve the gate. Reservations, notes, equipment
+  // adds, logging, profile edits, and onboarding skip it.
+  const requiresPicAck = action.action_type === 'squawk_resolve'
+    || action.action_type === 'mx_schedule'
+    || action.action_type === 'squawk_defer';
 
   // When Howard's action lands (reservation, note, squawk_resolve,
   // mx_schedule, equipment), the side-effects touch tabs scoped to
@@ -365,6 +413,8 @@ export default function ProposedActionCard({ action, onChange }: Props) {
               <p className="text-xs text-navy mb-2 leading-snug">
                 {action.action_type === 'squawk_resolve'
                   ? 'Resolving this squawk can clear a grounding condition. As PIC, you are confirming the issue is actually fixed and the aircraft is safe to fly.'
+                  : action.action_type === 'squawk_defer'
+                  ? 'Deferring this squawk lets the airplane operate with an outstanding discrepancy. As PIC, you are confirming the §91.213 deferral procedures (placards, electrical isolation, etc.) are complete and the deferral is legal.'
                   : 'Sending this work package emails the mechanic on file. As PIC, you are confirming the items, date, and contact are correct.'}
               </p>
               <div className="flex gap-2">

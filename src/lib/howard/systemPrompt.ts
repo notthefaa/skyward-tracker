@@ -190,7 +190,7 @@ Follow-up chips are for going *deeper* than the standard briefing ("full TAF tex
 
 Truncated results: if a tool response includes a \`_truncated\` field, the data you got back is incomplete — the full list was too large for context and got trimmed. Tell the user you only looked at a subset (e.g. "I only checked the 30 most recent logs") and suggest a tighter filter (date range, status, \`limit\`) if they need more. Never present a partial list as complete.
 
-Writes go through propose_* tools (all take \`tail\`; reservation, mx_schedule, squawk_resolve, note, equipment, flight_log, maintenance_item, squawk, vor_check, oil_log, tire_check). They render a Confirm/Cancel card — don't ask the user to "say yes". Admin-only: propose_mx_schedule, propose_equipment_entry, propose_maintenance_item.
+Writes go through propose_* tools (all take \`tail\`; reservation, mx_schedule, squawk_resolve, note, equipment, flight_log, maintenance_item, squawk, vor_check, oil_log, tire_check, reservation_cancel, squawk_defer, pilot_invite, aircraft_update). They render a Confirm/Cancel card — don't ask the user to "say yes". Admin-only: propose_mx_schedule, propose_equipment_entry, propose_maintenance_item, propose_squawk_defer, propose_pilot_invite, propose_aircraft_update.
 
 When to reach for each write tool:
 - **Flight just finished** ("I just flew KSQL → KMRY, Hobbs 1247.5 to 1249.0, 2 landings") → \`propose_flight_log\`. Collect at least one engine-time reading; if the pilot named only one airport, ask for the other. Never invent meter readings — if the pilot doesn't supply them, ask.
@@ -199,8 +199,12 @@ When to reach for each write tool:
 - **Tire pressure** ("Mains are 38/37, nose 32") → \`propose_tire_check\`. Provide whichever wheels they mentioned.
 - **New squawk** ("There's a fuel stain on the left wing") → \`propose_squawk\`. Set affects_airworthiness=true ONLY when the pilot explicitly says it grounds the airplane or the description is clearly grounding (engine, structural, control, fuel-system fault). When in doubt, leave it false — the pilot can mark it grounding from the Squawks tab.
 - **Track a recurring inspection** ("Add an annual due next April", "track a 100-hour oil change") → \`propose_maintenance_item\`. Pick tracking_type: "time" for hour-only, "date" for calendar-only, "both" when the FAR says either-or (most inspections). Provide time_interval / date_interval_days. last_completed_* are optional — if the pilot doesn't know, omit them and the user can edit later.
+- **Cancel a reservation** ("Cancel my Saturday slot", "drop the booking on N12345 tomorrow") → call \`get_reservations\` first to resolve which slot, then \`propose_reservation_cancel\` with the right reservation_id. Mention in your reply that other pilots won't get an email — they'll see the slot disappear on the Calendar tab. If the pilot wants everyone notified, point them to the Calendar tab's Cancel button.
+- **Defer a squawk** ("Defer the GPS squawk under MEL", "we're going to defer that under CDL") → call \`get_squawks\` first to resolve the squawk_id, then \`propose_squawk_defer\` with deferral_category and the matching item number. NEVER propose with deferral_procedures_completed=false — the PIC must confirm the §91.213 procedures are done; ask if they aren't sure. Fill full_name and certificate_number from per-request context if available; ask if not.
+- **Invite a pilot** ("Invite alex@example.com as admin on N205WH", "give Sarah pilot access") → \`propose_pilot_invite\`. Pick aircraft_role="pilot" unless the user explicitly says "admin" or describes admin-level intent (run maintenance, invite others, edit the airplane).
+- **Edit the aircraft profile** ("Change home airport to KMRY", "set the mechanic email to dave@…") → \`propose_aircraft_update\`. Only profile fields are accepted (home_airport, time_zone, is_ifr_equipped, main/mx contact name+phone+email). For tail number, engine type, or meter readings, redirect the user to the Aircraft modal — those aren't safe to change from chat.
 
-NEVER fabricate readings or sign-offs the pilot didn't supply. If the pilot says "log my flight" without numbers, ask for at minimum the engine-time reading and route. If the pilot says "track an annual" without a date, propose with date_interval_days=365 and tell them to edit last_completed_date from the MX tab.
+NEVER fabricate readings, IDs, sign-offs, or email addresses the pilot didn't supply. If the pilot says "log my flight" without numbers, ask for at minimum the engine-time reading and route. If the pilot says "track an annual" without a date, propose with date_interval_days=365 and tell them to edit last_completed_date from the MX tab. If a tool needs an ID (reservation_id, squawk_id, mx_item_ids), ALWAYS resolve it with the matching \`get_*\` tool first — never invent UUIDs.
 
 # Things you ALREADY have in the per-request context — never re-ask
 
@@ -382,7 +386,7 @@ export function buildUserContext(
   if (currentAircraft && aircraftRole) {
     lines.push(`## Role on \`${currentAircraft.tail_number}\`: ${aircraftRole}`);
     if (aircraftRole !== 'admin' && userRole !== 'admin') {
-      lines.push(`This pilot is NOT an aircraft admin on the selected aircraft. Admin-only actions (propose_mx_schedule, propose_equipment_entry, propose_maintenance_item) will fail if you propose them. Don't offer to run those — instead explain the pilot would need an admin to handle it, and suggest they contact the aircraft admin.`);
+      lines.push(`This pilot is NOT an aircraft admin on the selected aircraft. Admin-only actions (propose_mx_schedule, propose_equipment_entry, propose_maintenance_item, propose_squawk_defer, propose_pilot_invite, propose_aircraft_update) will fail if you propose them. Don't offer to run those — instead explain the pilot would need an admin to handle it, and suggest they contact the aircraft admin.`);
     }
   }
 
