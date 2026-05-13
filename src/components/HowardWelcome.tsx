@@ -36,6 +36,13 @@ export default function HowardWelcome({
       className="fixed inset-0 z-[9999] flex items-center justify-center p-4 md:p-8 overflow-y-auto"
       style={{
         background: 'linear-gradient(135deg, #091F3C 0%, #1a3a5c 50%, #091F3C 100%)',
+        // `safe center` so the welcome card doesn't trap its top half
+        // (logo + heading) above scrollTop=0 on small phones where the
+        // card (bio + 2 buttons + disclaimer ≈ 660px) exceeds the
+        // viewport. This isn't covered by the global modal CSS in
+        // globals.css because the outer doesn't use `animate-fade-in`
+        // or `modal-overlay`.
+        alignItems: 'safe center',
       }}
     >
       <div className="relative w-full max-w-lg bg-cream shadow-2xl rounded-lg border-t-4 border-brandOrange animate-slide-up overflow-hidden">

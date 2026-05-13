@@ -254,7 +254,12 @@ export default function ServiceEventModal({ aircraft, show, onClose, onRefresh, 
             WebkitOverflowScrolling: 'touch',
           }}
         >
-        <div className="flex min-h-full items-center justify-center p-4">
+        {/* `safe center` so a tall create-event form doesn't overflow
+            its top half above the absolute scroll viewport (the outer
+            wraps with custom top/bottom insets instead of `min-h-full`
+            direct-child, so the global modal safe-center CSS in
+            globals.css doesn't apply here). */}
+        <div className="flex min-h-full items-center justify-center p-4" style={{ alignItems: 'safe center' }}>
         <div className="bg-white rounded shadow-2xl w-full max-w-lg md:max-w-2xl p-5 border-t-4 border-mxOrange animate-slide-up" onClick={e => e.stopPropagation()}>
 
           <div className="flex justify-between items-center mb-6">
