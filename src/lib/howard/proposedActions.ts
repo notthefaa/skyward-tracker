@@ -14,6 +14,18 @@
 // =============================================================
 
 import type { SupabaseClient } from '@supabase/supabase-js';
+import {
+  validateFlightLogInput,
+  submitFlightLog,
+  validateVorCheckInput,
+  submitVorCheck,
+  validateOilLogInput,
+  submitOilLog,
+  validateTireCheckInput,
+  submitTireCheck,
+  validateSquawkInput,
+  submitSquawk,
+} from '@/lib/submissions';
 
 export type ActionType =
   | 'reservation'
@@ -21,7 +33,14 @@ export type ActionType =
   | 'squawk_resolve'
   | 'note'
   | 'equipment'
-  | 'onboarding_setup';
+  | 'onboarding_setup'
+  // Phase 1 Howard-as-action-taker additions:
+  | 'flight_log'
+  | 'mx_item'
+  | 'squawk'
+  | 'vor_check'
+  | 'oil_log'
+  | 'tire_check';
 
 export type RequiredRole = 'access' | 'admin';
 
@@ -122,6 +141,76 @@ export interface EquipmentPayload {
   notes?: string;
 }
 
+// Phase 1 — Howard-as-action-taker payloads. Each mirrors the
+// corresponding `validate*Input` in `@/lib/submissions.ts` so the
+// executor can pass the payload straight through the existing
+// validator → atomic-submit pipeline.
+
+export interface FlightLogPayload {
+  pod?: string;
+  poa?: string;
+  initials: string;
+  ftt?: number;
+  tach?: number;
+  aftt?: number;
+  hobbs?: number;
+  landings?: number;
+  engine_cycles?: number;
+  fuel_gallons?: number;
+  trip_reason?: string;
+  pax_info?: string;
+  occurred_at?: string;
+}
+
+export interface MaintenanceItemPayload {
+  item_name: string;
+  tracking_type: 'time' | 'date' | 'both';
+  // time-based fields
+  last_completed_time?: number;
+  time_interval?: number;
+  // date-based fields
+  last_completed_date?: string;
+  date_interval_days?: number;
+  // common
+  is_required?: boolean;
+  far_reference?: string;
+  notes?: string;
+}
+
+export interface SquawkPayload {
+  description: string;
+  location?: string;
+  affects_airworthiness?: boolean;
+  initials: string;
+  occurred_at?: string;
+}
+
+export interface VorCheckPayload {
+  check_type: string;
+  station: string;
+  bearing_error: number;
+  initials: string;
+  occurred_at?: string;
+}
+
+export interface OilLogPayload {
+  oil_qty: number;
+  oil_added?: number;
+  engine_hours: number;
+  initials: string;
+  notes?: string;
+  occurred_at?: string;
+}
+
+export interface TireCheckPayload {
+  nose_psi?: number;
+  left_main_psi?: number;
+  right_main_psi?: number;
+  initials: string;
+  notes?: string;
+  occurred_at?: string;
+}
+
 const ROLE_BY_TYPE: Record<ActionType, RequiredRole> = {
   reservation: 'access',
   mx_schedule: 'admin',
@@ -132,6 +221,16 @@ const ROLE_BY_TYPE: Record<ActionType, RequiredRole> = {
   // the executor hard-codes the caller as the new aircraft's admin.
   // `access` here means "don't try to resolve per-aircraft role."
   onboarding_setup: 'access',
+  // Phase 1 additions. Logging (flight, ops checks, squawks) is open
+  // to any pilot with aircraft access — same as the corresponding tab
+  // routes. Adding a tracked MX item is an owner concern (it shapes
+  // the airworthiness calculus + auto-scheduling), so admin-only.
+  flight_log: 'access',
+  mx_item: 'admin',
+  squawk: 'access',
+  vor_check: 'access',
+  oil_log: 'access',
+  tire_check: 'access',
 };
 
 export function requiredRoleFor(type: ActionType): RequiredRole {
@@ -167,6 +266,44 @@ export function summarize(type: ActionType, payload: any, aircraftTail: string):
       const p = payload as OnboardingSetupPayload;
       const acLabel = [p.aircraft.make, p.aircraft.model].filter(Boolean).join(' ') || p.aircraft.tail_number;
       return `Set up ${p.profile.full_name} (${p.profile.initials}) + register ${p.aircraft.tail_number} (${acLabel})`;
+    }
+    case 'flight_log': {
+      const p = payload as FlightLogPayload;
+      const route = (p.pod || p.poa) ? `${p.pod || '?'} → ${p.poa || '?'}` : 'flight';
+      const meter = p.tach != null ? `Tach ${p.tach}` : p.ftt != null ? `FTT ${p.ftt}` : p.hobbs != null ? `Hobbs ${p.hobbs}` : '';
+      return `Log ${route} on ${aircraftTail}${meter ? ` (${meter})` : ''}`;
+    }
+    case 'mx_item': {
+      const p = payload as MaintenanceItemPayload;
+      const interval = p.tracking_type === 'date'
+        ? `every ${p.date_interval_days ?? '?'} days`
+        : p.tracking_type === 'time'
+        ? `every ${p.time_interval ?? '?'} hrs`
+        : `${p.time_interval ?? '?'} hrs / ${p.date_interval_days ?? '?'} days`;
+      return `Track ${p.item_name} on ${aircraftTail} (${interval})`;
+    }
+    case 'squawk': {
+      const p = payload as SquawkPayload;
+      const grounded = p.affects_airworthiness ? ' [GROUNDED]' : '';
+      return `Report squawk on ${aircraftTail}${grounded}: ${p.description.slice(0, 60)}`;
+    }
+    case 'vor_check': {
+      const p = payload as VorCheckPayload;
+      return `Log VOR check on ${aircraftTail} at ${p.station} (${p.check_type}, ${p.bearing_error}° error)`;
+    }
+    case 'oil_log': {
+      const p = payload as OilLogPayload;
+      const added = p.oil_added != null && p.oil_added > 0 ? ` +${p.oil_added} qt` : '';
+      return `Log oil on ${aircraftTail}: ${p.oil_qty} qt @ ${p.engine_hours} hrs${added}`;
+    }
+    case 'tire_check': {
+      const p = payload as TireCheckPayload;
+      const readings = [
+        p.nose_psi != null ? `N ${p.nose_psi}` : null,
+        p.left_main_psi != null ? `L ${p.left_main_psi}` : null,
+        p.right_main_psi != null ? `R ${p.right_main_psi}` : null,
+      ].filter(Boolean).join(' · ');
+      return `Log tire PSI on ${aircraftTail}: ${readings || 'no readings'}`;
     }
   }
 }
@@ -560,6 +697,135 @@ export async function executeAction(
       }
 
       return { recordId: eventId, recordTable: 'aft_maintenance_events' };
+    }
+
+    // ── Phase 1: logging actions ──────────────────────────────
+    // Each delegates to the existing `submit*` helper in
+    // submissions.ts so the validation, atomic insert, RLS bypass,
+    // and audit hooks match exactly what the web/companion routes
+    // produce. Howard's payload is shaped to be a valid input to
+    // the corresponding validator.
+
+    case 'flight_log': {
+      const p = action.payload as FlightLogPayload;
+      const input = validateFlightLogInput(p);
+      // No aircraftUpdate — log_flight_atomic self-derives totals
+      // from the latest-by-occurred_at log, which is the path the
+      // Insert Missing Flight Log admin tool already relies on so
+      // out-of-order replays don't poison the rolling totals.
+      const result = await submitFlightLog(sb as any, userId, action.aircraft_id!, input, {});
+      if (!result.logId) {
+        throw new Error('Flight log insert returned no id.');
+      }
+      return { recordId: result.logId, recordTable: 'aft_flight_logs' };
+    }
+
+    case 'mx_item': {
+      const p = action.payload as MaintenanceItemPayload;
+      // Mirror the same validation that /api/maintenance-items POST
+      // applies — tracking_type discrimination + numeric/date field
+      // sanitization. The route's validateMxItemRow isn't exported,
+      // so this is a close inline equivalent. Keep in sync.
+      if (!p.item_name || typeof p.item_name !== 'string' || !p.item_name.trim()) {
+        throw new Error('item_name is required.');
+      }
+      if (p.tracking_type !== 'time' && p.tracking_type !== 'date' && p.tracking_type !== 'both') {
+        throw new Error('tracking_type must be "time", "date", or "both".');
+      }
+      const row: Record<string, any> = {
+        aircraft_id: action.aircraft_id,
+        item_name: p.item_name.trim().slice(0, 200),
+        tracking_type: p.tracking_type,
+        is_required: p.is_required ?? true,
+        automate_scheduling: true,
+        created_by: userId,
+      };
+      if (p.tracking_type === 'time' || p.tracking_type === 'both') {
+        if (typeof p.time_interval !== 'number' || p.time_interval <= 0) {
+          throw new Error('time_interval (hours) is required for time-based tracking.');
+        }
+        row.time_interval = p.time_interval;
+        if (typeof p.last_completed_time === 'number' && p.last_completed_time >= 0) {
+          row.last_completed_time = p.last_completed_time;
+          row.due_time = p.last_completed_time + p.time_interval;
+        }
+      }
+      if (p.tracking_type === 'date' || p.tracking_type === 'both') {
+        if (typeof p.date_interval_days !== 'number' || p.date_interval_days <= 0) {
+          throw new Error('date_interval_days is required for date-based tracking.');
+        }
+        row.date_interval_days = Math.trunc(p.date_interval_days);
+        if (p.last_completed_date) {
+          row.last_completed_date = p.last_completed_date;
+          // Compute due_date = last_completed_date + interval. Cast to
+          // ms then back to ISO YYYY-MM-DD so DB-side gets a clean
+          // calendar date.
+          const ms = Date.parse(`${p.last_completed_date}T00:00:00Z`);
+          if (Number.isFinite(ms)) {
+            const due = new Date(ms + p.date_interval_days * 86_400_000);
+            row.due_date = due.toISOString().slice(0, 10);
+          }
+        }
+      }
+      if (p.far_reference) row.far_reference = String(p.far_reference).trim().slice(0, 50);
+      if (p.notes) row.notes = String(p.notes).trim().slice(0, 1000);
+      const { data, error } = await sb.from('aft_maintenance_items').insert(row).select('id').single();
+      if (error) throw error;
+      return { recordId: data.id, recordTable: 'aft_maintenance_items' };
+    }
+
+    case 'squawk': {
+      const p = action.payload as SquawkPayload;
+      // submitSquawk uses a wide allowlist + strips protected fields;
+      // shape Howard's payload into what it expects.
+      const input = validateSquawkInput({
+        description: p.description,
+        location: p.location || null,
+        affects_airworthiness: !!p.affects_airworthiness,
+        initials: p.initials,
+        // Pictures path stays empty — Howard can't upload files via
+        // chat. Field-team adds photos from the Squawks tab post-hoc
+        // if needed. submitSquawk's pictures-bucket validator is happy
+        // with an unset/empty pictures field.
+        occurred_at: p.occurred_at || null,
+      });
+      const result = await submitSquawk(sb as any, userId, action.aircraft_id!, input);
+      return { recordId: result.id, recordTable: 'aft_squawks' };
+    }
+
+    case 'vor_check': {
+      const p = action.payload as VorCheckPayload;
+      const input = validateVorCheckInput(p);
+      const result = await submitVorCheck(sb as any, userId, action.aircraft_id!, input);
+      return { recordId: result.id, recordTable: 'aft_vor_checks' };
+    }
+
+    case 'oil_log': {
+      const p = action.payload as OilLogPayload;
+      const input = validateOilLogInput({
+        oil_qty: p.oil_qty,
+        oil_added: p.oil_added ?? null,
+        engine_hours: p.engine_hours,
+        initials: p.initials,
+        notes: p.notes ?? null,
+        occurred_at: p.occurred_at ?? null,
+      });
+      const result = await submitOilLog(sb as any, userId, action.aircraft_id!, input);
+      return { recordId: result.id, recordTable: 'aft_oil_logs' };
+    }
+
+    case 'tire_check': {
+      const p = action.payload as TireCheckPayload;
+      const input = validateTireCheckInput({
+        nose_psi: p.nose_psi ?? null,
+        left_main_psi: p.left_main_psi ?? null,
+        right_main_psi: p.right_main_psi ?? null,
+        initials: p.initials,
+        notes: p.notes ?? null,
+        occurred_at: p.occurred_at ?? null,
+      });
+      const result = await submitTireCheck(sb as any, userId, action.aircraft_id!, input);
+      return { recordId: result.id, recordTable: 'aft_tire_checks' };
     }
   }
 }

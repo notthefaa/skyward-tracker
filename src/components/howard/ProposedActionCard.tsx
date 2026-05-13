@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useSWRConfig } from "swr";
 import { authFetch } from "@/lib/authFetch";
 import { newIdempotencyKey, idempotencyHeader } from "@/lib/idempotencyClient";
-import { CheckCircle, X, Loader2, Sparkles, Calendar, FileText, Wrench, Plane, AlertTriangle, RefreshCw, UserPlus } from "lucide-react";
+import { CheckCircle, X, Loader2, Sparkles, Calendar, FileText, Wrench, Plane, AlertTriangle, RefreshCw, UserPlus, PenLine, Clock, Droplet, Circle } from "lucide-react";
 import type { ProposedAction } from "@/lib/howard/proposedActions";
 import { matchesAircraft } from "@/lib/swrKeys";
 
@@ -18,8 +18,14 @@ function actionIcon(type: string) {
   if (type === 'note') return FileText;
   if (type === 'mx_schedule') return Wrench;
   if (type === 'squawk_resolve') return AlertTriangle;
+  if (type === 'squawk') return AlertTriangle;
   if (type === 'equipment') return Plane;
   if (type === 'onboarding_setup') return UserPlus;
+  if (type === 'flight_log') return PenLine;
+  if (type === 'mx_item') return Wrench;
+  if (type === 'vor_check') return Clock;
+  if (type === 'oil_log') return Droplet;
+  if (type === 'tire_check') return Circle;
   return Sparkles;
 }
 
@@ -68,6 +74,99 @@ function describePayload(action: ProposedAction): React.ReactNode {
           {p.proposed_date && <div><span className="font-bold uppercase tracking-widest text-[9px] text-gray-500">Proposed: </span>{p.proposed_date}</div>}
           <div><span className="font-bold uppercase tracking-widest text-[9px] text-gray-500">Items: </span>{(p.mx_item_ids?.length || 0)} MX · {(p.squawk_ids?.length || 0)} squawks</div>
           {p.addon_services?.length > 0 && <div><span className="font-bold uppercase tracking-widest text-[9px] text-gray-500">Add-ons: </span>{p.addon_services.join(', ')}</div>}
+          {p.notes && <div><span className="font-bold uppercase tracking-widest text-[9px] text-gray-500">Notes: </span>{p.notes}</div>}
+        </div>
+      );
+    case 'flight_log': {
+      const meters = [
+        p.tach != null ? `Tach ${p.tach}` : null,
+        p.ftt != null ? `FTT ${p.ftt}` : null,
+        p.hobbs != null ? `Hobbs ${p.hobbs}` : null,
+        p.aftt != null ? `AFTT ${p.aftt}` : null,
+      ].filter(Boolean).join(' · ');
+      return (
+        <div className="text-xs text-gray-600 space-y-0.5">
+          <div><span className="font-bold uppercase tracking-widest text-[9px] text-gray-500">Pilot: </span>{p.initials}</div>
+          {(p.pod || p.poa) && <div><span className="font-bold uppercase tracking-widest text-[9px] text-gray-500">Route: </span>{p.pod || '?'} → {p.poa || '?'}</div>}
+          {meters && <div><span className="font-bold uppercase tracking-widest text-[9px] text-gray-500">Meters: </span>{meters}</div>}
+          {(p.landings != null || p.engine_cycles != null) && (
+            <div>
+              <span className="font-bold uppercase tracking-widest text-[9px] text-gray-500">Counts: </span>
+              {[p.landings != null ? `${p.landings} landings` : null, p.engine_cycles != null && p.engine_cycles > 0 ? `${p.engine_cycles} cycles` : null].filter(Boolean).join(' · ')}
+            </div>
+          )}
+          {p.fuel_gallons != null && <div><span className="font-bold uppercase tracking-widest text-[9px] text-gray-500">Fuel after: </span>{p.fuel_gallons} gal</div>}
+          {p.trip_reason && <div><span className="font-bold uppercase tracking-widest text-[9px] text-gray-500">Purpose: </span>{p.trip_reason}</div>}
+          {p.occurred_at && <div><span className="font-bold uppercase tracking-widest text-[9px] text-gray-500">When: </span>{new Date(p.occurred_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</div>}
+        </div>
+      );
+    }
+    case 'mx_item': {
+      const interval = p.tracking_type === 'date'
+        ? `every ${p.date_interval_days} days`
+        : p.tracking_type === 'time'
+        ? `every ${p.time_interval} hrs`
+        : `every ${p.time_interval} hrs or ${p.date_interval_days} days (whichever first)`;
+      return (
+        <div className="text-xs text-gray-600 space-y-0.5">
+          <div><span className="font-bold uppercase tracking-widest text-[9px] text-gray-500">Item: </span>{p.item_name}</div>
+          <div><span className="font-bold uppercase tracking-widest text-[9px] text-gray-500">Interval: </span>{interval}</div>
+          {(p.last_completed_time != null || p.last_completed_date) && (
+            <div>
+              <span className="font-bold uppercase tracking-widest text-[9px] text-gray-500">Last done: </span>
+              {[p.last_completed_time != null ? `${p.last_completed_time} hrs` : null, p.last_completed_date].filter(Boolean).join(' · ')}
+            </div>
+          )}
+          {p.far_reference && <div><span className="font-bold uppercase tracking-widest text-[9px] text-gray-500">Reg: </span>{p.far_reference}</div>}
+          <div className="flex flex-wrap gap-1 pt-1">
+            {p.is_required !== false && <span className="text-[8.5px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-danger/10 text-danger border border-danger/20">Required</span>}
+            {p.is_required === false && <span className="text-[8.5px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-gray-200 text-gray-600 border border-gray-300">Advisory</span>}
+          </div>
+        </div>
+      );
+    }
+    case 'squawk':
+      return (
+        <div className="text-xs text-gray-600 space-y-0.5">
+          <div className="text-gray-700 whitespace-pre-wrap border-l-2 border-gray-300 pl-2">{p.description}</div>
+          {p.location && <div><span className="font-bold uppercase tracking-widest text-[9px] text-gray-500">Where: </span>{p.location}</div>}
+          <div><span className="font-bold uppercase tracking-widest text-[9px] text-gray-500">Reporter: </span>{p.initials}</div>
+          {p.affects_airworthiness && (
+            <div className="pt-1">
+              <span className="text-[8.5px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-danger/10 text-danger border border-danger/20">Grounding</span>
+            </div>
+          )}
+        </div>
+      );
+    case 'vor_check':
+      return (
+        <div className="text-xs text-gray-600 space-y-0.5">
+          <div><span className="font-bold uppercase tracking-widest text-[9px] text-gray-500">Check: </span>{p.check_type} @ {p.station}</div>
+          <div><span className="font-bold uppercase tracking-widest text-[9px] text-gray-500">Error: </span>{p.bearing_error}°</div>
+          <div><span className="font-bold uppercase tracking-widest text-[9px] text-gray-500">Pilot: </span>{p.initials}</div>
+        </div>
+      );
+    case 'oil_log':
+      return (
+        <div className="text-xs text-gray-600 space-y-0.5">
+          <div><span className="font-bold uppercase tracking-widest text-[9px] text-gray-500">Dipstick: </span>{p.oil_qty} qt at {p.engine_hours} hrs</div>
+          {p.oil_added != null && p.oil_added > 0 && <div><span className="font-bold uppercase tracking-widest text-[9px] text-gray-500">Added: </span>{p.oil_added} qt</div>}
+          <div><span className="font-bold uppercase tracking-widest text-[9px] text-gray-500">Pilot: </span>{p.initials}</div>
+          {p.notes && <div><span className="font-bold uppercase tracking-widest text-[9px] text-gray-500">Notes: </span>{p.notes}</div>}
+        </div>
+      );
+    case 'tire_check':
+      return (
+        <div className="text-xs text-gray-600 space-y-0.5">
+          <div>
+            <span className="font-bold uppercase tracking-widest text-[9px] text-gray-500">PSI: </span>
+            {[
+              p.nose_psi != null ? `Nose ${p.nose_psi}` : null,
+              p.left_main_psi != null ? `Left ${p.left_main_psi}` : null,
+              p.right_main_psi != null ? `Right ${p.right_main_psi}` : null,
+            ].filter(Boolean).join(' · ')}
+          </div>
+          <div><span className="font-bold uppercase tracking-widest text-[9px] text-gray-500">Pilot: </span>{p.initials}</div>
           {p.notes && <div><span className="font-bold uppercase tracking-widest text-[9px] text-gray-500">Notes: </span>{p.notes}</div>}
         </div>
       );

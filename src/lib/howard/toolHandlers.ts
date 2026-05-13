@@ -855,6 +855,187 @@ const handlers: Record<string, ToolHandler> = {
     return makeProposal(sb, ctx, 'equipment', params);
   },
 
+  // ─── Phase 1: chat-native logging ──────────────────────────
+
+  propose_flight_log: async (params, sb, _aircraftId, ctx) => {
+    if (!params.initials || typeof params.initials !== 'string') {
+      return { error: 'initials is required.' };
+    }
+    // Require at least one engine-time reading so the executor's
+    // log_flight_atomic call has something to anchor against. Tach +
+    // FTT are the canonical engine-time readings (piston vs turbine);
+    // either covers both engine-type paths.
+    const hasMeter = ['tach', 'ftt', 'hobbs', 'aftt'].some(k => {
+      const v = params[k];
+      return typeof v === 'number' && Number.isFinite(v) && v >= 0;
+    });
+    if (!hasMeter) {
+      return { error: 'At least one engine-time reading (tach, ftt, hobbs, or aftt) is required.' };
+    }
+    // Sanity-bound the numerics — Claude can hallucinate 9999.99 from
+    // an OCR'd hobbs value. submitFlightLog's validateFlightLogInput
+    // rejects non-finite/negative but does not cap upper bound; cap
+    // here so an absurd reading doesn't poison the aircraft totals
+    // (10000 hrs is more than any GA airframe will ever see).
+    const NUM_FIELDS = ['tach', 'ftt', 'hobbs', 'aftt', 'landings', 'engine_cycles', 'fuel_gallons'] as const;
+    for (const f of NUM_FIELDS) {
+      const v = params[f];
+      if (v !== undefined && v !== null && v !== '') {
+        const n = Number(v);
+        if (!Number.isFinite(n) || n < 0) {
+          return { error: `${f} must be a non-negative finite number.` };
+        }
+        if (f === 'tach' || f === 'ftt' || f === 'hobbs' || f === 'aftt') {
+          if (n > 100000) return { error: `${f} is implausibly large.` };
+        }
+        params[f] = n;
+      }
+    }
+    if (params.occurred_at && !isIsoDateTime(params.occurred_at)) {
+      return { error: 'occurred_at must be a full ISO datetime with timezone if provided.' };
+    }
+    params.initials = String(params.initials).trim().toUpperCase().slice(0, 3);
+    if (typeof params.pod === 'string') params.pod = params.pod.trim().toUpperCase().slice(0, 8);
+    if (typeof params.poa === 'string') params.poa = params.poa.trim().toUpperCase().slice(0, 8);
+    if (typeof params.trip_reason === 'string') params.trip_reason = params.trip_reason.trim().slice(0, 100);
+    if (typeof params.pax_info === 'string') params.pax_info = params.pax_info.trim().slice(0, 500);
+    return makeProposal(sb, ctx, 'flight_log', params);
+  },
+
+  propose_maintenance_item: async (params, sb, _aircraftId, ctx) => {
+    if (!params.item_name || typeof params.item_name !== 'string' || !params.item_name.trim()) {
+      return { error: 'item_name is required.' };
+    }
+    if (params.tracking_type !== 'time' && params.tracking_type !== 'date' && params.tracking_type !== 'both') {
+      return { error: 'tracking_type must be "time", "date", or "both".' };
+    }
+    if (params.tracking_type === 'time' || params.tracking_type === 'both') {
+      const n = parseFiniteNumber(params.time_interval, { min: 0 });
+      if (n === undefined || n === null || n <= 0) {
+        return { error: 'time_interval (hours) must be a positive number for time-based or both-based tracking.' };
+      }
+      params.time_interval = n;
+      if (params.last_completed_time !== undefined && params.last_completed_time !== null) {
+        const lct = parseFiniteNumber(params.last_completed_time, { min: 0 });
+        if (lct === undefined) return { error: 'last_completed_time must be a non-negative number if provided.' };
+        params.last_completed_time = lct;
+      }
+    }
+    if (params.tracking_type === 'date' || params.tracking_type === 'both') {
+      const n = parseFiniteNumber(params.date_interval_days, { min: 0 });
+      if (n === undefined || n === null || n <= 0) {
+        return { error: 'date_interval_days must be a positive number for date-based or both-based tracking.' };
+      }
+      params.date_interval_days = Math.trunc(n);
+      if (params.last_completed_date != null && params.last_completed_date !== '') {
+        if (!isIsoDate(params.last_completed_date)) {
+          return { error: 'last_completed_date must be a YYYY-MM-DD date if provided.' };
+        }
+      }
+    }
+    params.item_name = params.item_name.trim().slice(0, 200);
+    if (typeof params.far_reference === 'string') params.far_reference = params.far_reference.trim().slice(0, 50);
+    if (typeof params.notes === 'string') params.notes = params.notes.trim().slice(0, 1000);
+    return makeProposal(sb, ctx, 'mx_item', params);
+  },
+
+  propose_squawk: async (params, sb, _aircraftId, ctx) => {
+    if (!params.description || typeof params.description !== 'string' || !params.description.trim()) {
+      return { error: 'description is required.' };
+    }
+    if (!params.initials || typeof params.initials !== 'string') {
+      return { error: 'initials is required.' };
+    }
+    if (params.occurred_at && !isIsoDateTime(params.occurred_at)) {
+      return { error: 'occurred_at must be a full ISO datetime with timezone if provided.' };
+    }
+    params.description = params.description.trim().slice(0, 2000);
+    if (typeof params.location === 'string') params.location = params.location.trim().slice(0, 100);
+    params.initials = String(params.initials).trim().toUpperCase().slice(0, 3);
+    params.affects_airworthiness = !!params.affects_airworthiness;
+    return makeProposal(sb, ctx, 'squawk', params);
+  },
+
+  propose_vor_check: async (params, sb, _aircraftId, ctx) => {
+    const VOR_TYPES = new Set(['VOT', 'Ground Checkpoint', 'Airborne Checkpoint', 'Dual VOR']);
+    if (!params.check_type || !VOR_TYPES.has(params.check_type)) {
+      return { error: `check_type must be one of: ${Array.from(VOR_TYPES).join(', ')}.` };
+    }
+    if (!params.station || typeof params.station !== 'string' || !params.station.trim()) {
+      return { error: 'station is required.' };
+    }
+    const err = parseFiniteNumber(params.bearing_error);
+    if (err === undefined || err === null) {
+      return { error: 'bearing_error must be a finite number (degrees, signed).' };
+    }
+    if (Math.abs(err) > 30) {
+      return { error: 'bearing_error is implausibly large (more than 30°). Re-confirm with the pilot.' };
+    }
+    params.bearing_error = err;
+    if (!params.initials || typeof params.initials !== 'string') {
+      return { error: 'initials is required.' };
+    }
+    params.station = params.station.trim().slice(0, 50);
+    params.initials = String(params.initials).trim().toUpperCase().slice(0, 3);
+    if (params.occurred_at && !isIsoDateTime(params.occurred_at)) {
+      return { error: 'occurred_at must be a full ISO datetime with timezone if provided.' };
+    }
+    return makeProposal(sb, ctx, 'vor_check', params);
+  },
+
+  propose_oil_log: async (params, sb, _aircraftId, ctx) => {
+    const qty = parseFiniteNumber(params.oil_qty, { min: 0 });
+    if (qty === undefined || qty === null) {
+      return { error: 'oil_qty (pre-add dipstick reading in quarts) is required.' };
+    }
+    const hrs = parseFiniteNumber(params.engine_hours, { min: 0 });
+    if (hrs === undefined || hrs === null) {
+      return { error: 'engine_hours is required.' };
+    }
+    if (!params.initials || typeof params.initials !== 'string') {
+      return { error: 'initials is required.' };
+    }
+    if (qty > 20) return { error: 'oil_qty looks implausibly high (more than 20 qt). Re-confirm with the pilot.' };
+    params.oil_qty = qty;
+    params.engine_hours = hrs;
+    if (params.oil_added !== undefined && params.oil_added !== null && params.oil_added !== '') {
+      const added = parseFiniteNumber(params.oil_added, { min: 0 });
+      if (added === undefined) return { error: 'oil_added must be a non-negative number if provided.' };
+      params.oil_added = added;
+    }
+    params.initials = String(params.initials).trim().toUpperCase().slice(0, 3);
+    if (typeof params.notes === 'string') params.notes = params.notes.trim().slice(0, 500);
+    if (params.occurred_at && !isIsoDateTime(params.occurred_at)) {
+      return { error: 'occurred_at must be a full ISO datetime with timezone if provided.' };
+    }
+    return makeProposal(sb, ctx, 'oil_log', params);
+  },
+
+  propose_tire_check: async (params, sb, _aircraftId, ctx) => {
+    if (!params.initials || typeof params.initials !== 'string') {
+      return { error: 'initials is required.' };
+    }
+    const fields = ['nose_psi', 'left_main_psi', 'right_main_psi'] as const;
+    let any = false;
+    for (const f of fields) {
+      if (params[f] === undefined || params[f] === null || params[f] === '') continue;
+      const n = parseFiniteNumber(params[f], { min: 0 });
+      if (n === undefined) return { error: `${f} must be a non-negative number if provided.` };
+      if (n !== null && n > 200) return { error: `${f} is implausibly high (more than 200 PSI).` };
+      params[f] = n;
+      any = true;
+    }
+    if (!any) {
+      return { error: 'At least one of nose_psi / left_main_psi / right_main_psi must be provided.' };
+    }
+    params.initials = String(params.initials).trim().toUpperCase().slice(0, 3);
+    if (typeof params.notes === 'string') params.notes = params.notes.trim().slice(0, 500);
+    if (params.occurred_at && !isIsoDateTime(params.occurred_at)) {
+      return { error: 'occurred_at must be a full ISO datetime with timezone if provided.' };
+    }
+    return makeProposal(sb, ctx, 'tire_check', params);
+  },
+
   propose_onboarding_setup: async (params, sb, _aircraftId, ctx) => {
     const profile = params?.profile;
     const aircraft = params?.aircraft;
