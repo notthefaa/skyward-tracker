@@ -39,7 +39,7 @@ const STEPS: Step[] = [
     hero: BookOpen,
     eyebrow: "Intro",
     title: "You're in. Let's look around.",
-    lead: "Seven quick stops — under a minute. Each one walks you through what you can do in that part of the app.",
+    lead: "Seven quick stops — under a minute. By the end you'll know where everything lives.",
     bullets: [],
   },
   {
@@ -61,10 +61,10 @@ const STEPS: Step[] = [
     hero: PenLine,
     eyebrow: "Step 2 of 7",
     title: "Log — record what just happened",
-    lead: "Two kinds of log entries live here.",
+    lead: "Where the flight goes once you're back on the ramp.",
     bullets: [
-      { icon: PenLine, text: "Flight log: times, route, fuel, landings. Totals on the aircraft update automatically." },
-      { icon: PenLine, text: "Ops checks: VOR (30-day validity), oil, and tire pressures — each tracked so you know when they're due." },
+      { icon: PenLine, text: "Flight log: times, route, fuel, landings. The airplane's totals stay in sync across every pilot on the tail." },
+      { icon: PenLine, text: "Ops checks: VOR every 30 days, oil consumption, tire pressures — tracked alongside your hours so you see what's coming due." },
     ],
   },
   {
@@ -85,7 +85,7 @@ const STEPS: Step[] = [
     hero: Wrench,
     eyebrow: "Step 4 of 7",
     title: "Maintenance — what's due, what's broken, what's scheduled",
-    lead: "Four areas under one tab.",
+    lead: "Everything that keeps the airplane legal and in the air.",
     bullets: [
       { icon: Wrench, text: "Maintenance items: track by hours, by date, or both — whichever comes first." },
       { icon: MessageSquare, text: "Squawks: log issues with photos. Flag one as airworthiness-affecting and it grounds the airplane." },
@@ -127,11 +127,11 @@ const STEPS: Step[] = [
     hero: Settings,
     eyebrow: "Step 7 of 7",
     title: "Settings & pilots",
-    lead: "Your profile, your pilots, and the full feature guide.",
+    lead: "Your ratings, your reminders, your pilots — set it once and the app follows your lead.",
     bullets: [
-      { icon: Settings, text: "Set your FAA ratings so the app (and Howard) match the level of detail you need." },
-      { icon: MessageSquare, text: "Maintenance reminder thresholds — choose how early you get heads-up emails on upcoming inspections." },
-      { icon: Users, text: "Admins: invite pilots and control access per aircraft." },
+      { icon: Settings, text: "Set your FAA ratings so the app — and Howard — match the level of detail you need." },
+      { icon: MessageSquare, text: "Maintenance reminder thresholds — choose how early you get heads-up emails before things come due." },
+      { icon: Users, text: "Admins: invite pilots by email and grant access aircraft-by-aircraft." },
       { icon: BookOpen, text: "Features Guide: the full walkthrough, by task, any time you want it." },
     ],
   },
