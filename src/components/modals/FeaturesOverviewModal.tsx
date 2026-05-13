@@ -44,24 +44,24 @@ type Section = {
 const SECTIONS: Section[] = [
   {
     title: "Hangar basics",
-    subtitle: "The airplane and where it stands right now",
+    subtitle: "Your airplane and where it stands right now",
     cards: [
       {
         icon: Home, accent: '#091F3C',
         name: "Summary",
-        blurb: "Status at a glance — is the airplane good to go, or is there maintenance to address? Current Hobbs/Tach, fuel, next inspection, and any open squawks. Header runs green, orange, or red so you know before you walk out to the ramp.",
+        blurb: "Status at a glance. Current Hobbs and Tach, fuel on board, what's coming due next, anything open in the squawk book — the airplane's whole picture on one screen. The header runs green, orange, or red so you know how the airplane is before you walk out to the ramp.",
         where: "Home icon in the nav",
       },
       {
         icon: Plane, accent: '#091F3C',
         name: "Hangar view",
-        blurb: "Every tail side-by-side when you've got more than one airplane. Green, orange, red — pick the one you need.",
+        blurb: "Every airplane side-by-side when you've got more than one. Status colors at a glance, and a tap drops you straight into Summary for the one you're flying today.",
         where: "Tap Home again with 2+ aircraft to switch between Summary and Hangar",
       },
       {
         icon: CalendarDays, accent: '#56B94A',
         name: "Hangar Schedule",
-        blurb: "Every booking on every airplane on one calendar — month, week, or day. Filter to the tails you actually fly. Tap a date and you drop into that airplane's calendar.",
+        blurb: "Your whole fleet on one calendar — month, week, or day. Filter to the tails you actually fly. Tap any date and you drop right into that airplane's own calendar.",
         where: "Home → Schedule (with 2+ aircraft)",
       },
     ],
@@ -73,61 +73,61 @@ const SECTIONS: Section[] = [
       {
         icon: PenLine, accent: '#3AB0FF',
         name: "Flight log",
-        blurb: "Hobbs, Tach, AFTT, FTT, route, fuel, landings, engine cycles. If two pilots close out a flight at the same time, the numbers still come out right.",
+        blurb: "Hobbs, Tach, AFTT, FTT, route, fuel, landings, engine cycles — everything that belongs on the line, in one place. Two pilots can close out a flight at the same time and the airplane's totals still come out right.",
         where: "Log → Flight",
       },
       {
         icon: CheckSquare, accent: '#56B94A',
         name: "Ops Checks",
-        blurb: "VOR check every 30 days per §91.171, oil burn trending across your engine hours, tire PSI. All three on one dashboard. Oil dial turns orange, then red, as the hours between top-offs shrink — Howard flags it if consumption starts climbing.",
+        blurb: "VOR, oil, tires — the three pre-flight checks that keep you legal and catch a sick engine before it bites. Oil consumption trends right alongside your hours, the VOR clock counts down to the next 30-day check, and Howard speaks up the moment burn rate starts climbing.",
         where: "Log → Ops Checks",
       },
       {
         icon: Send, accent: '#3AB0FF',
         name: "Log It — ramp companion",
-        blurb: "Lightweight sister app for logging on the go. Flights, VOR, oil, tire, squawks — all five live on your phone's home screen. Works without signal: entries hold with their real timestamps and flush when you're back in range, so a late upload doesn't fake a fresh compliance clock.",
+        blurb: "A lightweight companion app for the ramp. Flights, VOR, oil, tires, squawks — five quick logs, one tap from your phone's home screen. Works without signal too: entries hold their real timestamps and flush when you're back in range, so a late upload never fakes a fresh compliance clock.",
         where: "Log It button in the header",
       },
     ],
   },
   {
     title: "Maintenance",
-    subtitle: "Tracking, the shop visit, the signoff",
+    subtitle: "Tracking what's due, the trip to the shop, the signoff",
     cards: [
       {
         icon: Wrench, accent: '#F08B46',
         name: "Maintenance items",
-        blurb: "Track by hours, by calendar, or whichever comes first. Start from an FAA inspection template or build your own list. You'll get an email before anything comes due.",
+        blurb: "Track everything that comes due — annual, 100-hour, oil change, transponder cert, prop overhaul — by hours, by calendar, or whichever hits first. Start from an FAA inspection template or build your own list. We'll email you ahead of time, with the lead times you pick.",
         where: "MX → Maintenance",
       },
       {
         icon: AlertTriangle, accent: '#CE3732',
         name: "Squawks",
-        blurb: "Write up a squawk with photos. Mark it airworthiness-affecting and the airplane grounds — Howard, the summary, and the hangar view all show it. Deferring under MEL, CDL, NEF, or MDL? Log the category and procedures so the signoff stays with the squawk. When the shop fixes it, the squawk links back to the service event that closed it.",
+        blurb: "Write up any discrepancy with photos. Mark it airworthiness-affecting and the airplane shows grounded — Summary, Hangar, and Howard all reflect it. Deferring under MEL, CDL, NEF, or MDL? Log the category and procedures so the deferral story stays with the squawk. When the shop signs it off, the fix links back to the service event that closed it.",
         where: "MX → Squawks",
       },
       {
         icon: ClipboardList, accent: '#0EA5E9',
         name: "Service events",
-        blurb: "Bundle MX items and squawks into one trip to the shop. Your mechanic gets an email with a portal link — no account, no app. They propose dates, upload photos, comment, and sign off line by line. You confirm from the app. If a pilot had the airplane booked during that window, they get an email that says why.",
+        blurb: "Bundle MX items and squawks into one trip to the shop. Your mechanic gets an email with a portal link — no account, no app to install. They propose dates, share photos, comment, and sign off line by line; you confirm from the app. If a pilot had the airplane booked during the maintenance window, they get a heads-up email explaining what moved and why.",
         where: "MX → Service",
       },
       {
         icon: ShieldAlert, accent: '#7C3AED',
         name: "Airworthiness Directives",
-        blurb: "Every AD on the airplane with compliance status — overdue, due soon, or compliant. Skyward checks the FAA's DRS feed every night for new issues. Export a 91.417(b) log for your IA when it's time for the annual.",
+        blurb: "Every AD that applies to your airplane, with compliance status front and center — overdue, due soon, or compliant. We check the FAA's DRS feed nightly so a new issuance doesn't catch you cold. Export a 91.417(b) log for your IA when annual rolls around.",
         where: "MX → ADs",
       },
       {
         icon: Gauge, accent: '#F08B46',
         name: "Equipment list",
-        blurb: "Every installed piece with make, model, serial, and the certification dates the FAA cares about. Transponder (§91.413), altimeter & pitot-static (§91.411), ELT (§91.207) — let one lapse and the airplane shows grounded.",
+        blurb: "Every installed piece — make, model, serial — plus the certification dates the FAA actually cares about. Transponder, altimeter and pitot-static, ELT, all tracked against the regs that govern them (§91.413, §91.411, §91.207). Let one lapse and the airplane shows grounded before you walk out to fly it.",
         where: "More → Equipment",
       },
       {
         icon: Camera, accent: '#0EA5E9',
         name: "Logbook scan",
-        blurb: "Snap a photo of the mechanic's logbook entry and Skyward reads it — completion date, engine time, signoff, and which work it covers. Use it when you're closing out a service event, or when an old entry needs to become a tracked item. You confirm the details before anything saves.",
+        blurb: "Snap a photo of a mechanic's logbook entry and Skyward reads it — completion date, engine time, signoff, and which work it covered. Use it to close out a service event, or to bring an old entry forward as a tracked item. You confirm the details before anything saves.",
         where: "MX → Maintenance (Track New Item or Complete Event)",
       },
     ],
@@ -139,85 +139,85 @@ const SECTIONS: Section[] = [
       {
         icon: Calendar, accent: '#56B94A',
         name: "Calendar",
-        blurb: "Confirmed service dates block the calendar. Book a recurring slot — weekly, custom weekdays, whatever cadence fits. If maintenance bumps a pilot off the airplane, they get an email that explains what moved and why. Howard can book a slot for you in chat.",
+        blurb: "Book the airplane the way you actually fly — a single slot or a recurring weekly pattern on whatever weekdays fit. Confirmed service dates block the calendar so nobody books over a shop visit, and if a pilot gets bumped by maintenance, they get an email explaining what changed. Howard can book a slot for you right from chat.",
         where: "Calendar icon in nav",
       },
       {
         icon: MessageSquare, accent: '#525659',
         name: "Notes",
-        blurb: "A message board that stays with the airplane — nothing scrolls off into a group text. Attach photos. The next pilot sees what's new before they fly.",
+        blurb: "A message board that lives with the airplane — no group texts, no buried threads. Post a note, attach a photo, and the next pilot sees it before they walk out to fly.",
         where: "More → Notes",
       },
       {
         icon: Users, accent: '#091F3C',
         name: "Pilots & access",
-        blurb: "Invite a pilot by email — they get a link, no app store. Grant access by aircraft. Promote to admin when they should own the numbers. Global admins see the whole fleet.",
+        blurb: "Invite a pilot by email and they're flying in minutes — no app store, no signup hassle. Grant access aircraft-by-aircraft, promote to admin when someone should own the numbers, and global admins see the whole fleet.",
         where: "Settings → cog → Users / Access",
       },
       {
         icon: Plane, accent: '#525659',
         name: "Aircraft profile",
-        blurb: "The airplane's vitals — make, model, serial, year, IFR-equipped, home airport, and the timezone the airplane lives in. Two emails matter: the primary contact who runs maintenance, and the mechanic. Howard reads the IFR flag and the timezone so briefings and date math match how you actually fly.",
+        blurb: "The airplane's vitals in one place — make, model, serial, year, home base, timezone, IFR-equipped or not. Two emails matter most: the primary contact who runs the airplane and the mechanic who works on it. Howard reads the IFR flag and the timezone so briefings and reminders match how you actually fly.",
         where: "Summary → Edit (or tail dropdown → Edit)",
       },
     ],
   },
   {
     title: "Howard + Tools",
-    subtitle: "Howard, weather, documents, and your airworthiness check",
+    subtitle: "Your AI mentor, official weather, your documents, the airworthiness call",
     cards: [
       {
         icon: MessageSquare, accent: '#e6651b',
         name: "Howard",
-        blurb: "Orange button on every screen. Ask whether the airplane's airworthy, pull a briefing (METARs, TAFs, NOTAMs, PIREPs straight from NOAA and FAA), decode a METAR, look up an AD, search your own documents. When Howard wants to act — book a flight, close a squawk, schedule the shop — he shows you a card. You tap Confirm. Your chat history stays with your account, and the usage panel inside the Howard tab shows what he's been working on.",
-        where: "Orange floating button, any screen",
+        blurb: "Your seasoned hangar mentor, one tap away on every screen. Ask whether the airplane's airworthy. Pull a briefing for any route. Decode a METAR, look up an AD, search inside your own documents. When Howard's ready to take action — book a flight, close a squawk, send the airplane to the shop — he hands you a card to confirm before anything happens. Your chat history follows you to whatever device you sign in on next.",
+        where: "Howard's button — bottom-right, every screen",
       },
       {
         icon: CloudSun, accent: '#e6651b',
         name: "Flight briefing",
-        blurb: "NOAA weather (METARs, TAFs, SIGMETs, AIRMETs, PIREPs) and FAA NOTAMs straight from the official feeds — nothing scraped, nothing stale. Howard reads the METAR in plain English and calls out what matters.",
+        blurb: "Official weather (METARs, TAFs, SIGMETs, AIRMETs, PIREPs) and NOTAMs, straight from NOAA and the FAA — nothing scraped, nothing stale. Howard reads the report in plain English and calls out the parts that matter for your flight.",
         where: "Howard → Flight briefing",
       },
       {
         icon: FolderOpen, accent: '#7C3AED',
         name: "Documents",
-        blurb: "Upload POH, AFM, MEL, SOPs, registration, W&B. Every file gets a fingerprint so you know it hasn't been swapped. Ask Howard 'What's the Vne?' and he reads your POH to answer.",
+        blurb: "Upload your POH, AFM, MEL, SOPs, registration, weight and balance — every file safely stored and instantly searchable. Ask Howard a question — \"what's the Vne?\" — and he reads your POH and cites the page back to you.",
         where: "More → Documents",
       },
       {
         icon: ShieldCheck, accent: '#56B94A',
         name: "Airworthiness check",
-        blurb: "Ask Howard if the airplane's airworthy. He checks §91.205, §91.411, §91.413, §91.207, and §91.417 against your equipment dates, MX items, open squawks, and AD compliance — then tells you whether you're good, and if not, which reg is in the way.",
-        where: "Howard → 'Is my aircraft airworthy?'",
+        blurb: "Ask Howard \"is my airplane airworthy?\" and he reads your equipment dates, MX items, open squawks, and AD compliance against the regs that matter — §91.205, §91.411, §91.413, §91.207, §91.417 — then tells you whether you're good to fly, or which reg is standing in the way.",
+        where: "Howard → \"Is my aircraft airworthy?\"",
       },
       {
         icon: Settings, accent: '#091F3C',
         name: "Profile & ratings",
-        blurb: "Howard talks to you the way you fly. A student gets more explanation; a CPL or CFI gets the short version. Set your certs once and the tone follows.",
+        blurb: "Howard talks to you the way you fly. Student pilot? He explains more, gives the long version. CPL or CFI? You get the short, direct read. Set your certs and ratings once and the tone follows you everywhere.",
         where: "Settings → cog",
       },
       {
         icon: Bell, accent: '#F08B46',
         name: "Notifications",
-        blurb: "Emails as MX items come due — you pick the lead time (30, 15, 5 days or hours out). New squawks, new notes, and reservation alerts also land in your inbox. Each kind toggles on or off independently.",
+        blurb: "Email reminders before MX items come due — you pick the lead times (30, 15, 5 days or hours out). New squawks, fresh notes, and reservation changes all land in your inbox too, and each kind toggles on or off on its own.",
         where: "Settings → cog → Notifications",
       },
       {
         icon: BarChart3, accent: '#0EA5E9',
         name: "Howard Usage",
-        blurb: "Howard runs on a real model with real cost. The Usage tab shows how many messages you've sent, the tokens in and out, and a running cost estimate. Daily activity bars so you can see when you've leaned on him.",
+        blurb: "Howard runs on a real model with real cost. The Usage tab shows your message count, the tokens in and out, and a running cost estimate — with daily activity bars so you can see when you've leaned on him most.",
         where: "Howard tab → Usage",
       },
       {
         icon: Lock, accent: '#525659',
         name: "Account",
-        blurb: "Change your password by email, or close the account. Deleting walks you through what's about to leave with you — aircraft you own, your access on shared aircraft, the rest of your data. You type DELETE before any of it happens.",
+        blurb: "Change your password by email, or close out your account entirely. Deleting walks you through exactly what leaves with you — aircraft you own, your access on shared aircraft, the rest of your data — and you type DELETE before any of it actually happens.",
         where: "Settings → cog",
       },
       {
         icon: Smartphone, accent: '#091F3C',
         name: "Install as app",
-        blurb: "Add Skyward to your home screen from the browser share menu. Full-screen, its own icon, no app store. Works on iPhone, Android, and desktop.",
+        blurb: "Add Skyward to your home screen from your browser's share menu — full-screen, its own icon, no app store. Works on iPhone, Android, and desktop, sitting right next to everything else you fly with.",
         where: "Browser share menu → Add to Home Screen",
       },
     ],
@@ -281,7 +281,7 @@ export default function FeaturesOverviewModal({
           <p className="font-roboto text-sm text-navy leading-snug">
             <span className="font-bold">Here's the whole hangar.</span>{' '}
             <span className="text-gray-600">
-              Every tool in the app, grouped by what you're doing with it. Tap the orange button any time if you'd rather just ask me.
+              Every tool in the app, grouped by how you'll use it. Prefer to talk it out? Tap my button — bottom-right of every screen — any time.
             </span>
           </p>
         </div>
@@ -339,7 +339,7 @@ export default function FeaturesOverviewModal({
           {/* Footer — friendly close line */}
           <div className="pt-2 pb-1 text-center">
             <p className="text-[11px] font-roboto text-gray-400">
-              Anything unclear? Tap the orange button and ask.
+              Anything unclear? Tap Howard — bottom-right — and ask.
             </p>
           </div>
         </div>
