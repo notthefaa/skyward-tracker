@@ -61,7 +61,7 @@ export default function GlobalError({
             Something broke
           </h1>
           <p style={{ fontSize: 14, lineHeight: 1.6, margin: "0 0 16px" }}>
-            The app hit an unrecoverable error. Reload the page to start over.
+            The app hit an unrecoverable error. Hard-reload to fetch a fresh bundle.
           </p>
           {error.digest && (
             <p
@@ -70,15 +70,47 @@ export default function GlobalError({
                 textTransform: "uppercase",
                 letterSpacing: 1,
                 color: "#9CA3AF",
-                marginBottom: 16,
+                marginBottom: 12,
                 fontFamily: "ui-monospace, monospace",
               }}
             >
               Ref: {error.digest}
             </p>
           )}
+          {error.message && (
+            <pre
+              style={{
+                fontSize: 10,
+                fontFamily: "ui-monospace, monospace",
+                color: "#525659",
+                background: "#F9FAFB",
+                border: "1px solid #E5E7EB",
+                borderRadius: 4,
+                padding: 8,
+                marginBottom: 16,
+                whiteSpace: "pre-wrap",
+                wordBreak: "break-word",
+                maxHeight: 120,
+                overflowY: "auto",
+              }}
+            >
+              {error.message}
+            </pre>
+          )}
           <button
-            onClick={reset}
+            onClick={() => {
+              // Bust browser/SW cache by appending a cache-buster.
+              // `reset()` alone in a global-error rarely helps — the
+              // root layout already crashed, re-mounting it just
+              // re-throws.
+              try {
+                const url = new URL(window.location.href);
+                url.searchParams.set('_recover', String(Date.now()));
+                window.location.replace(url.toString());
+              } catch {
+                window.location.reload();
+              }
+            }}
             style={{
               width: "100%",
               background: "#091F3C",
@@ -93,7 +125,7 @@ export default function GlobalError({
               cursor: "pointer",
             }}
           >
-            Reload
+            Hard Reload
           </button>
         </div>
       </body>
