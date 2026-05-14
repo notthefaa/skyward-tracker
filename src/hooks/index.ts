@@ -7,3 +7,4 @@ export { useBodyScrollOverride } from './useBodyScrollOverride';
 export { useResumeFromBackground } from './useResumeFromBackground';
 export { useHowardSessionLifecycle } from './useHowardSessionLifecycle';
 export { useTabHistory } from './useTabHistory';
+export { useAircraftRevalidator } from './useAircraftRevalidator';
