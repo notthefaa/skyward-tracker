@@ -7,6 +7,8 @@ import { validateVorCheckInput, submitVorCheck } from '@/lib/submissions';
 import { requireAircraftAccessCoded } from '@/lib/submissionAuth';
 import { checkSubmitRateLimit } from '@/lib/submitRateLimit';
 
+export const dynamic = 'force-dynamic';
+
 /**
  * GET /api/vor-checks?aircraftId=...&page=N&pageSize=10
  *   OR  ?aircraftId=...&latest=1

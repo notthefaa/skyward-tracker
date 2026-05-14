@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { requireAuth, handleApiError } from '@/lib/auth';
 
+export const dynamic = 'force-dynamic';
+
 // GET /api/howard/actions?threadId=xxx — list all proposed actions for a thread
 export async function GET(req: Request) {
   try {

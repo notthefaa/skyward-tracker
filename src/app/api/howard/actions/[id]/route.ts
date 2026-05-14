@@ -4,6 +4,8 @@ import { setAppUser } from '@/lib/audit';
 import { idempotency } from '@/lib/idempotency';
 import { executeAction, type ProposedAction } from '@/lib/howard/proposedActions';
 
+export const dynamic = 'force-dynamic';
+
 // POST /api/howard/actions/[id] — confirm and execute a proposed action
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {

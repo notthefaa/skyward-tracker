@@ -3,6 +3,8 @@ import { createAdminClient } from '@/lib/auth';
 import { logError } from '@/lib/requestId';
 import { env } from '@/lib/env';
 
+export const dynamic = 'force-dynamic';
+
 // Small ceiling — this cron just runs an UPDATE, no embedding work.
 export const maxDuration = 60;
 export const runtime = 'nodejs';

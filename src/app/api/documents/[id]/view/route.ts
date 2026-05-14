@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { requireAuth, requireAircraftAccess, handleApiError } from '@/lib/auth';
 
+export const dynamic = 'force-dynamic';
+
 export const runtime = 'nodejs';
 
 /**

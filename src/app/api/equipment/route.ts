@@ -4,6 +4,8 @@ import { setAppUser } from '@/lib/audit';
 import { idempotency } from '@/lib/idempotency';
 import { stripProtectedFields } from '@/lib/validation';
 
+export const dynamic = 'force-dynamic';
+
 // GET — list equipment for an aircraft
 export async function GET(req: Request) {
   try {

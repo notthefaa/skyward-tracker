@@ -4,6 +4,8 @@ import { setAppUser } from '@/lib/audit';
 import { idempotency } from '@/lib/idempotency';
 import { stripProtectedFields, validatePicturesForBucket } from '@/lib/validation';
 
+export const dynamic = 'force-dynamic';
+
 /**
  * GET /api/notes?aircraftId=...
  *

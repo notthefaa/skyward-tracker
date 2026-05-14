@@ -3,6 +3,8 @@ import { createAdminClient } from '@/lib/auth';
 import { logError } from '@/lib/requestId';
 import { env } from '@/lib/env';
 
+export const dynamic = 'force-dynamic';
+
 // 5 minute ceiling — a fleet with thousands of docs would otherwise let
 // the next scheduled tick overlap. The work is naturally idempotent
 // (re-running can only catch more orphans), so a Vercel kill mid-run

@@ -4,6 +4,8 @@ import { setAppUser } from '@/lib/audit';
 import { idempotency } from '@/lib/idempotency';
 import { pickAllowedFields, parseFiniteNumber, isIsoDate } from '@/lib/validation';
 
+export const dynamic = 'force-dynamic';
+
 // Columns a client may set when creating / updating a maintenance item.
 // Schema-owned fields (reminder_*_sent, mx_schedule_sent, deleted_*,
 // created_*) are deliberately excluded so a malicious admin can't

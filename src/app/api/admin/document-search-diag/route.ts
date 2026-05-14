@@ -3,6 +3,8 @@ import { createAdminClient } from '@/lib/auth';
 import { env } from '@/lib/env';
 import OpenAI from 'openai';
 
+export const dynamic = 'force-dynamic';
+
 export const maxDuration = 30;
 
 /**

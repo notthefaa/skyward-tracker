@@ -11,6 +11,8 @@ import { getAppUrl } from '@/lib/email/appUrl';
 import { loadMutedRecipients, isRecipientMuted } from '@/lib/notificationMutes';
 import { READY_PICKUP_NUDGE_DAYS } from '@/lib/email/cronConstants';
 
+export const dynamic = 'force-dynamic';
+
 // Cap the cron at 5 minutes so a slow Resend round can't let the next
 // scheduled invocation overlap and double-send reminders. Vercel will
 // hard-kill at this boundary; the per-aircraft work is already

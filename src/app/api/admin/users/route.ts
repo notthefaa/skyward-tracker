@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { requireAuth, handleApiError } from '@/lib/auth';
 
+export const dynamic = 'force-dynamic';
+
 /** List all users with their aircraft assignments */
 export async function GET(req: Request) {
   try {

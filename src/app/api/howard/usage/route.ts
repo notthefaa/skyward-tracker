@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { requireAuth, handleApiError } from '@/lib/auth';
 
+export const dynamic = 'force-dynamic';
+
 // Claude Haiku 4.5 pricing (USD per million tokens)
 const PRICE_PER_MTOK = {
   input: 1,

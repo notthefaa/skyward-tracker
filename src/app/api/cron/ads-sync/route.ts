@@ -4,6 +4,8 @@ import { logError } from '@/lib/requestId';
 import { syncAdsForAircraft } from '@/lib/drs';
 import { env } from '@/lib/env';
 
+export const dynamic = 'force-dynamic';
+
 export const maxDuration = 300; // Vercel cron — up to 5 min
 
 // Vercel cron hits this endpoint on schedule. Secured by CRON_SECRET

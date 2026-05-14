@@ -6,6 +6,8 @@ import { idempotency } from '@/lib/idempotency';
 import { ocrPdfWithClaude } from '@/lib/documents/ocr';
 import OpenAI from 'openai';
 
+export const dynamic = 'force-dynamic';
+
 // 5-minute ceiling — even though parse + embed now runs in `after()`
 // after the response is sent, Vercel keeps the function alive only
 // until maxDuration. A 20 MB POH with 1000+ chunks needs that whole

@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { requireAuth, requireAircraftAccess, handleApiError } from '@/lib/auth';
 
+export const dynamic = 'force-dynamic';
+
 // GET — 91.417(b) AD compliance report as CSV
 // Query: ?aircraftId=xxx&format=csv
 // Includes: all ADs (including superseded + complied) with full audit trail.

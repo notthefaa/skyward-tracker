@@ -3,6 +3,8 @@ import { requireAuth, requireAircraftAccess, requireAircraftAdmin, handleApiErro
 import { setAppUser } from '@/lib/audit';
 import { stripProtectedFields } from '@/lib/validation';
 
+export const dynamic = 'force-dynamic';
+
 // GET — list ADs for an aircraft
 export async function GET(req: Request) {
   try {

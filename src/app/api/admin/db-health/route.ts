@@ -9,6 +9,8 @@ import {
 } from '@/lib/constants';
 import { ORPHAN_SWEEP_MIN_AGE_MS, shouldDeferOrphanSweep } from '@/lib/orphanSweeper';
 
+export const dynamic = 'force-dynamic';
+
 /**
  * Lists ALL files in a storage bucket using pagination.
  * Supabase limits `.list()` to 1000 items, so we page through.

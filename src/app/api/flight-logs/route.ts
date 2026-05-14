@@ -10,6 +10,8 @@ import {
 import { requireAircraftAccessCoded } from '@/lib/submissionAuth';
 import { checkSubmitRateLimit } from '@/lib/submitRateLimit';
 
+export const dynamic = 'force-dynamic';
+
 /**
  * GET /api/flight-logs?aircraftId=...&page=N&pageSize=10
  *   OR  ?aircraftId=...&neighbor=prev|next&pivotOccurred=...&pivotCreated=...

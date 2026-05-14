@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { requireAuth, handleApiError } from '@/lib/auth';
 
+export const dynamic = 'force-dynamic';
+
 /** Get deletion impact preview — shows what will be deleted */
 export async function GET(req: Request) {
   try {
