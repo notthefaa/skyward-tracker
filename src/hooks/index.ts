@@ -5,3 +5,4 @@ export { useAircraftRole } from './useAircraftRole';
 export { usePullToRefresh } from './usePullToRefresh';
 export { useBodyScrollOverride } from './useBodyScrollOverride';
 export { useResumeFromBackground } from './useResumeFromBackground';
+export { useHowardSessionLifecycle } from './useHowardSessionLifecycle';
