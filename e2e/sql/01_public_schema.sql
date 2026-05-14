@@ -1415,6 +1415,7 @@ CREATE TABLE public.aft_howard_messages (
     cache_create_tokens integer,
     model text,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
+    archived_at timestamp with time zone,
     CONSTRAINT aft_chuck_messages_role_check CHECK ((role = ANY (ARRAY['user'::text, 'assistant'::text])))
 );
 
@@ -2406,6 +2407,13 @@ CREATE INDEX idx_flight_logs_live ON public.aft_flight_logs USING btree (aircraf
 --
 
 CREATE INDEX idx_howard_messages_thread ON public.aft_howard_messages USING btree (thread_id, created_at);
+
+
+--
+-- Name: idx_aft_howard_messages_thread_active; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_aft_howard_messages_thread_active ON public.aft_howard_messages USING btree (thread_id, created_at) WHERE (archived_at IS NULL);
 
 
 --

@@ -28,6 +28,7 @@ import {
   button,
   sectionHeading,
 } from '@/lib/email/layout';
+import { READY_PICKUP_NUDGE_DAYS } from '@/lib/email/cronConstants';
 
 const APP_URL = 'https://track.skywardsociety.com';
 const PORTAL_URL = 'https://track.skywardsociety.com/service/sample-token-abc123';
@@ -83,7 +84,7 @@ const noteNew: Variant = {
 
 const squawkToMechanic: Variant = {
   slug: 'squawk-to-mechanic',
-  label: 'Squawk reported (to mechanic)',
+  label: 'Squawk reported (to mechanic, grounded)',
   description: 'Fired only when reporter checked "Notify MX?" — red accent for grounding squawks.',
   category: 'Squawk',
   subject: 'Service Request: N205WH Squawk',
@@ -114,7 +115,7 @@ const squawkToMechanic: Variant = {
 
 const squawkInternal: Variant = {
   slug: 'squawk-internal',
-  label: 'Squawk reported (internal)',
+  label: 'Squawk reported (internal, grounded)',
   description: 'Hangar-wide heads-up to every other assigned pilot. Grounding squawks get the danger palette.',
   category: 'Squawk',
   subject: 'New Squawk: N205WH',
@@ -133,6 +134,67 @@ const squawkInternal: Variant = {
           { label: 'Description', value: 'Engine oil streaking down left side of cowling. Appears to be coming from the quick-drain area.' },
         ]),
         { variant: 'danger', label: 'Squawk Details' },
+      )}
+      ${button(APP_URL, 'Open Skyward')}
+    `,
+    preferencesUrl: `${APP_URL}#settings`,
+  }),
+};
+
+// --- 3b. Squawk to mechanic (non-grounded / monitor) -----
+
+const squawkToMechanicMonitor: Variant = {
+  slug: 'squawk-to-mechanic-monitor',
+  label: 'Squawk reported (to mechanic, monitor)',
+  description: 'Non-grounding variant — warning palette, "Monitor" status badge.',
+  category: 'Squawk',
+  subject: 'Service Request: N205WH Squawk',
+  from: 'Skyward Operations <notifications@skywardsociety.com>',
+  to: 'Mechanic (+CC primary contact)',
+  html: emailShell({
+    title: 'Service Request: N205WH',
+    preheader: 'New squawk on N205WH — monitor and schedule when able.',
+    body: `
+      ${heading('Service Request')}
+      ${paragraph(`Hello Dave,`)}
+      ${paragraph(`A new squawk was reported for <strong>N205WH</strong>. Let us know when you can get it in to take a look.`)}
+      ${callout(
+        keyValueBlock([
+          { label: 'Location', value: 'KSQL' },
+          { label: 'Status', value: 'Monitor' },
+          { label: 'Description', value: 'Right brake pedal soft on initial taxi — bleeds out after a few pumps. Not affecting stopping power, but worth a look at the next inspection.' },
+        ]),
+        { variant: 'warning', label: 'Squawk Details' },
+      )}
+      ${button(SQUAWK_URL, 'View Full Report')}
+      ${SIGNATURE_MX}
+    `,
+  }),
+};
+
+// --- 3c. Squawk internal (non-grounded / monitor) --------
+
+const squawkInternalMonitor: Variant = {
+  slug: 'squawk-internal-monitor',
+  label: 'Squawk reported (internal, monitor)',
+  description: 'Non-grounding internal alert — warning palette, "Grounded: No".',
+  category: 'Squawk',
+  subject: 'New Squawk: N205WH',
+  from: 'Skyward Alerts <notifications@skywardsociety.com>',
+  to: 'All assigned pilots (minus reporter)',
+  html: emailShell({
+    title: 'New Squawk: N205WH',
+    preheader: 'AG reported a squawk on N205WH.',
+    body: `
+      ${heading('New Squawk', 'warning')}
+      ${paragraph(`A new squawk was reported on <strong>N205WH</strong> by <strong>AG</strong>.`)}
+      ${callout(
+        keyValueBlock([
+          { label: 'Location', value: 'KSQL' },
+          { label: 'Grounded', value: 'No' },
+          { label: 'Description', value: 'Right brake pedal soft on initial taxi — bleeds out after a few pumps. Not affecting stopping power.' },
+        ]),
+        { variant: 'warning', label: 'Squawk Details' },
       )}
       ${button(APP_URL, 'Open Skyward')}
     `,
@@ -265,17 +327,17 @@ const cronReminder: Variant = {
 const cronPickupNudge: Variant = {
   slug: 'cron-pickup-nudge',
   label: 'Ready-for-pickup nudge',
-  description: 'Fires after 3 days when a service event is stuck in ready_for_pickup.',
+  description: `Fires after ${READY_PICKUP_NUDGE_DAYS} days when a service event is stuck in ready_for_pickup.`,
   category: 'Scheduling',
   subject: 'Reminder: N205WH Awaiting Logbook Entry',
   from: 'Skyward Aircraft Manager <notifications@skywardsociety.com>',
   to: 'Primary contact',
   html: emailShell({
     title: 'Awaiting Logbook Entry — N205WH',
-    preheader: "N205WH has been ready for pickup for 3+ days. Logbook entry needed to close the event.",
+    preheader: `N205WH has been ready for pickup for ${READY_PICKUP_NUDGE_DAYS}+ days. Logbook entry needed to close the event.`,
     body: `
       ${heading('Service Event Still Open', 'warning')}
-      ${paragraph(`Your mechanic marked <strong>N205WH</strong> as ready for pickup more than 3 days ago, but the service event hasn't been closed yet.`)}
+      ${paragraph(`Your mechanic marked <strong>N205WH</strong> as ready for pickup more than ${READY_PICKUP_NUDGE_DAYS} days ago, but the service event hasn't been closed yet.`)}
       ${paragraph(`Until you enter the logbook data, the maintenance clock won't reset and the airplane may stay blocked on the calendar. Open the app to close it out when you get a moment.`)}
       ${button(APP_URL, 'Enter Logbook Data')}
     `,
@@ -396,7 +458,7 @@ const ownerCancel: Variant = {
   to: 'Mechanic (+CC primary)',
   html: emailShell({
     title: 'Service Cancelled',
-    preheader: 'Alex cancelled the pending service event.',
+    preheader: 'Alex Gornakov cancelled the pending service event — nothing more to do on your end.',
     body: `
       ${heading('Service Event Cancelled', 'danger')}
       ${paragraph(`Hello Dave,`)}
@@ -568,7 +630,7 @@ const mechReady: Variant = {
   label: 'Aircraft ready for pickup',
   description: 'All work complete — owner needs to enter logbook data to close.',
   category: 'Mechanic Portal',
-  subject: 'Aircraft Ready for Pickup',
+  subject: 'Ready for Pickup: N205WH',
   from: 'Skyward Operations <notifications@skywardsociety.com>',
   to: 'Primary contact',
   html: emailShell({
@@ -580,6 +642,36 @@ const mechReady: Variant = {
       ${callout(`All squared away. Logbook is stamped, oil is warm. You're good to fly whenever you get over here.`, { variant: 'success' })}
       ${paragraph(`Log in to enter the logbook data from your mechanic&apos;s sign-off. That closes out the service event and resets the maintenance clock for the next cycle.`)}
       ${button(APP_URL, 'Enter Logbook Data', { variant: 'success' })}
+    `,
+  }),
+};
+
+// --- 21b. Owner added items to active work package -------
+
+const addItemsToMechanic: Variant = {
+  slug: 'add-items-to-mechanic',
+  label: 'Owner added items to active work package',
+  description: 'Owner appended MX items / squawks / add-ons to a live service event — mechanic gets a throttled heads-up.',
+  category: 'Mechanic Portal',
+  subject: 'Added to N205WH: 3 new items',
+  from: 'Skyward Operations <notifications@skywardsociety.com>',
+  to: 'Mechanic (+ replyTo primary contact)',
+  html: emailShell({
+    title: 'Updated Work Package — N205WH',
+    preheader: '3 new items added to N205WH.',
+    body: `
+      ${heading('Updated Work Package')}
+      ${paragraph(`Hello Dave,`)}
+      ${paragraph(`The owner added 3 items to the work package for <strong>N205WH</strong> (Cessna 182T).`)}
+      ${sectionHeading('New items', 'note')}
+      ${bulletList([
+        'Left tire low — keeps dropping pressure, please investigate',
+        'GPS nav database out of date',
+        'Pitot-static system inspection',
+      ])}
+      ${callout('Open the portal to see the full updated work package and reply if anything is unworkable.', { variant: 'info' })}
+      ${button(PORTAL_URL, 'Open Service Portal')}
+      ${paragraph('— Alex Gornakov')}
     `,
   }),
 };
@@ -760,7 +852,9 @@ const mxConflictCancel: Variant = {
 export const variants: Variant[] = [
   noteNew,
   squawkToMechanic,
+  squawkToMechanicMonitor,
   squawkInternal,
+  squawkInternalMonitor,
   mxScheduleManual,
   cronDraft,
   cronHeadsUp,
@@ -779,6 +873,7 @@ export const variants: Variant[] = [
   mechSuggest,
   mechDecline,
   mechReady,
+  addItemsToMechanic,
   mechFiles,
   reservationSingle,
   reservationRecurring,

@@ -9,6 +9,7 @@ import { FLIGHT_DATA_LOOKBACK_DAYS, MX_AGGREGATION_WINDOW_DAYS } from '@/lib/con
 import { emailShell, heading, paragraph, callout, bulletList, button } from '@/lib/email/layout';
 import { getAppUrl } from '@/lib/email/appUrl';
 import { loadMutedRecipients, isRecipientMuted } from '@/lib/notificationMutes';
+import { READY_PICKUP_NUDGE_DAYS } from '@/lib/email/cronConstants';
 
 // Cap the cron at 5 minutes so a slow Resend round can't let the next
 // scheduled invocation overlap and double-send reminders. Vercel will
@@ -54,10 +55,8 @@ async function flushFlagUpdates(
   flagUpdates.length = 0;
 }
 
-// How many days to let an event sit in ready_for_pickup before nudging
-// the primary contact. The cron will re-nudge at the same cadence until
-// the owner closes the event.
-const READY_PICKUP_NUDGE_DAYS = 3;
+// READY_PICKUP_NUDGE_DAYS lives in lib/email/cronConstants so the dev
+// email preview can mirror the real cadence without drifting.
 // Marker string we embed in the nudge message row so we can avoid
 // re-nudging on every cron tick without needing a new DB column.
 const READY_PICKUP_NUDGE_MARKER = '[NUDGE:ready_for_pickup]';

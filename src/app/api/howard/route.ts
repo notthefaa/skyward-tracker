@@ -40,11 +40,16 @@ async function loadUserFleet(supabaseAdmin: any, userId: string) {
 }
 
 // DELETE — clear the current user's Howard thread
-// Only the messages are deleted; the thread row is kept so proposed
-// actions (which have ON DELETE CASCADE on thread_id) survive as an
-// audit trail of what Howard proposed vs. what the user accepted.
-// message_id on each proposed_action goes NULL via its FK's ON DELETE
-// SET NULL, which is fine — the payload and summary are self-contained.
+// Soft-archive (archived_at = now()) rather than hard delete. The chat
+// surface filters archived_at IS NULL so the user gets a fresh thread
+// next time they open Howard, but the Usage page (which reads token
+// columns off aft_howard_messages) still sees the full 30-day window.
+// Hard-delete used to make Usage look empty for any pilot who'd been
+// idle longer than 30 min — see migration 068.
+//
+// The thread row stays so proposed actions (which have ON DELETE
+// CASCADE on thread_id) survive as an audit trail of what Howard
+// proposed vs. what the user accepted.
 export async function DELETE(req: Request) {
   try {
     const { user, supabaseAdmin } = await requireAuth(req);
@@ -58,13 +63,15 @@ export async function DELETE(req: Request) {
 
     if (!thread) return NextResponse.json({ success: true, cleared: 0 });
 
-    // Use count: 'exact' so a silent zero-row delete (RLS misconfig,
-    // service-role key missing, etc.) surfaces instead of letting the
-    // UI show an optimistic-empty state that snaps back on reload.
+    // Only flip rows that aren't already archived. count: 'exact' so a
+    // silent zero-row update (RLS misconfig, service-role key missing,
+    // etc.) surfaces instead of letting the UI show an optimistic-empty
+    // state that snaps back on reload.
     const { error: delErr, count } = await supabaseAdmin
       .from('aft_howard_messages')
-      .delete({ count: 'exact' })
-      .eq('thread_id', thread.id);
+      .update({ archived_at: new Date().toISOString() }, { count: 'exact' })
+      .eq('thread_id', thread.id)
+      .is('archived_at', null);
     if (delErr) throw delErr;
 
     const { error: bumpErr } = await supabaseAdmin
@@ -95,10 +102,14 @@ export async function GET(req: Request) {
       return NextResponse.json({ thread: null, messages: [] });
     }
 
+    // Filter out archived rows so a soft-wiped thread reads as empty
+    // to the chat surface. The Usage page counts ALL rows regardless
+    // of archived_at — that's why we soft-archive instead of hard delete.
     const { data: messages, error: messagesErr } = await supabaseAdmin
       .from('aft_howard_messages')
       .select('*')
       .eq('thread_id', thread.id)
+      .is('archived_at', null)
       .order('created_at', { ascending: true });
     if (messagesErr) throw messagesErr;
 
@@ -151,11 +162,13 @@ export async function POST(req: Request) {
 
     // Load conversation history. Throw on error so we don't silently
     // hand Claude an empty history (which makes the model lose context
-    // and start repeating earlier turns).
+    // and start repeating earlier turns). Skip archived rows so a
+    // soft-wiped thread starts the model on a clean slate.
     const { data: history, error: historyErr } = await supabaseAdmin
       .from('aft_howard_messages')
       .select('*')
       .eq('thread_id', thread.id)
+      .is('archived_at', null)
       .order('created_at', { ascending: true });
     if (historyErr) throw historyErr;
 
