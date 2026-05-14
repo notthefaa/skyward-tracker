@@ -20,7 +20,14 @@ export const HOWARD_MODEL = 'claude-haiku-4-5-20251001';
 // truncating when he genuinely needs more).
 const MAX_OUTPUT_TOKENS = 2000;
 const MAX_TOOL_ROUNDS = 3;
-const CONTEXT_WINDOW = 10;
+// 30 messages = ~15 turns, comfortably wider than the longest onboarding
+// path (kickoff → tail → make/model → engine → IFR → airport → meters →
+// confirm). At 10, an onboarding user who answered "I don't have the
+// Hobbs/Tach" caused Howard to lose the earliest user turns — including
+// the tail number — and the next assistant message looped back to
+// asking for the tail. Bumping the window is cheap (Haiku, terse turns)
+// and fixes the loop without prompt surgery.
+const CONTEXT_WINDOW = 30;
 // Hard cap per Anthropic round — if the stream never emits or finishes
 // by this deadline, we abort cleanly and let the caller surface a
 // timeout message. 45s is comfortably longer than a normal round
