@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase, abortInFlightSupabaseReads } from "@/lib/supabase";
 import { authFetch, onAuthFetchUnauthorized, abortAllInFlightAuthFetches } from "@/lib/authFetch";
 import { recoveryReload } from "@/lib/iosRecovery";
-import { useFleetData, useRealtimeSync, useGroundedStatus, useAircraftRole, usePullToRefresh, useResumeFromBackground, useHowardSessionLifecycle } from "@/hooks";
+import { useFleetData, useRealtimeSync, useGroundedStatus, useAircraftRole, usePullToRefresh, useResumeFromBackground, useHowardSessionLifecycle, useTabHistory } from "@/hooks";
 import { useDocStatusWatcher } from "@/hooks/useDocStatusWatcher";
 import { useModalScrollLock } from "@/hooks/useModalScrollLock";
 import { NETWORK_TIMEOUT_MS } from "@/lib/constants";
@@ -219,13 +219,7 @@ export default function AppShell({ session }: AppShellProps) {
   // taps a reservation there so CalendarTab opens on the right date/view.
   const [calendarInitialDate, setCalendarInitialDate] = useState<Date | null>(null);
   const [calendarInitialView, setCalendarInitialView] = useState<'month' | 'week' | 'day' | null>(null);
-  const [activeTab, setActiveTab] = useState<AppTab>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = sessionStorage.getItem('aft_active_tab');
-      if (saved && ['fleet','summary','times','calendar','mx','notes','howard','howard-usage','documents','equipment','ads','more'].includes(saved)) return saved as AppTab;
-    }
-    return 'fleet';
-  });
+  const { activeTab, setActiveTab, navigateTab } = useTabHistory('fleet');
   const [unreadNotes, setUnreadNotes] = useState(0);
   const [showAdminMenu, setShowAdminMenu] = useState(false);
   const [showLogItModal, setShowLogItModal] = useState(false);
@@ -238,38 +232,7 @@ export default function AppShell({ session }: AppShellProps) {
   const [editingAircraftId, setEditingAircraftId] = useState<string | null>(null);
   const [showTailDropdown, setShowTailDropdown] = useState(false);
 
-  // ─── Tab History (supports browser back button + UI back arrow) ───
-  const tabHistoryRef = useRef<AppTab[]>([]);
-  const isPopStateRef = useRef(false);
-
-  /** Navigate to a tab while maintaining history for back navigation */
-  const navigateTab = useCallback((tab: AppTab) => {
-    setActiveTab(prev => {
-      if (prev !== tab) {
-        tabHistoryRef.current.push(prev);
-        // Keep history bounded
-        if (tabHistoryRef.current.length > 20) tabHistoryRef.current.shift();
-        // Push browser history entry so the native back button works
-        try { window.history.pushState({ tab }, '', ''); } catch (e) {}
-      }
-      return tab;
-    });
-  }, []);
-
-  // Listen for browser back button (popstate)
-  useEffect(() => {
-    const handlePopState = () => {
-      const prev = tabHistoryRef.current.pop();
-      if (prev) {
-        isPopStateRef.current = true;
-        setActiveTab(prev);
-      }
-    };
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
-  }, []);
-
-  // Listen for cross-app "Ask Howard" button clicks
+  // ─── Cross-app navigation events (Ask Howard, MX/ADs nav, etc.) ───
   useEffect(() => {
     const handleNavigateHoward = () => {
       setExpandedNav(null);
