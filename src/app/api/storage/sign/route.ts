@@ -224,7 +224,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ signed });
   } catch (error) {
-    return handleApiError(error);
+    return handleApiError(error, req);
   }
 }
 

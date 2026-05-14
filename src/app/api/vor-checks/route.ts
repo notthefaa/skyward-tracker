@@ -125,5 +125,5 @@ export async function DELETE(req: Request) {
     if (deleteErr) throw deleteErr;
     if (!deleted) return NextResponse.json({ error: 'VOR check not found for this aircraft.' }, { status: 404 });
     return NextResponse.json({ success: true });
-  } catch (error) { return handleApiError(error); }
+  } catch (error) { return handleApiError(error, req); }
 }

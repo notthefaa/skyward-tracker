@@ -110,6 +110,6 @@ export async function DELETE(req: Request) {
 
     return NextResponse.json({ success: true, tailNumber: aircraft.tail_number });
   } catch (error) {
-    return handleApiError(error);
+    return handleApiError(error, req);
   }
 }

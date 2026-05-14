@@ -90,6 +90,6 @@ export async function GET(req: Request) {
       range_days: 30,
     });
   } catch (error) {
-    return handleApiError(error);
+    return handleApiError(error, req);
   }
 }

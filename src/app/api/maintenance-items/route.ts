@@ -151,7 +151,7 @@ export async function POST(req: Request) {
     const ok = { success: true };
     await idem.save(200, ok);
     return NextResponse.json(ok);
-  } catch (error) { return handleApiError(error); }
+  } catch (error) { return handleApiError(error, req); }
 }
 
 // PUT — update maintenance item (aircraft admin only)
@@ -215,7 +215,7 @@ export async function PUT(req: Request) {
     const ok = { success: true };
     await idem.save(200, ok);
     return NextResponse.json(ok);
-  } catch (error) { return handleApiError(error); }
+  } catch (error) { return handleApiError(error, req); }
 }
 
 // DELETE — soft-delete maintenance item (aircraft admin only)
@@ -256,5 +256,5 @@ export async function DELETE(req: Request) {
     const ok = { success: true };
     await idem.save(200, ok);
     return NextResponse.json(ok);
-  } catch (error) { return handleApiError(error); }
+  } catch (error) { return handleApiError(error, req); }
 }

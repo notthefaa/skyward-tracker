@@ -89,7 +89,7 @@ export async function POST(req: Request) {
     const body = { success: true, noteId: inserted?.id };
     await idem.save(200, body);
     return NextResponse.json(body);
-  } catch (error) { return handleApiError(error); }
+  } catch (error) { return handleApiError(error, req); }
 }
 
 // PUT — edit note (author or aircraft admin).
@@ -142,7 +142,7 @@ export async function PUT(req: Request) {
     const ok = { success: true };
     await idem.save(200, ok);
     return NextResponse.json(ok);
-  } catch (error) { return handleApiError(error); }
+  } catch (error) { return handleApiError(error, req); }
 }
 
 // DELETE — soft-delete note (author or aircraft admin).
@@ -189,5 +189,5 @@ export async function DELETE(req: Request) {
     const ok = { success: true };
     await idem.save(200, ok);
     return NextResponse.json(ok);
-  } catch (error) { return handleApiError(error); }
+  } catch (error) { return handleApiError(error, req); }
 }

@@ -33,5 +33,5 @@ export async function POST(req: Request) {
     if (updateErr) throw updateErr;
 
     return NextResponse.json({ success: true });
-  } catch (error) { return handleApiError(error); }
+  } catch (error) { return handleApiError(error, req); }
 }

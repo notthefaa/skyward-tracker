@@ -17,5 +17,5 @@ export async function GET(req: Request) {
       .order('created_at', { ascending: true });
     if (error) throw error;
     return NextResponse.json({ actions: data || [] });
-  } catch (error) { return handleApiError(error); }
+  } catch (error) { return handleApiError(error, req); }
 }

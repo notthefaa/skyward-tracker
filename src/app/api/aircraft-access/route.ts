@@ -136,7 +136,7 @@ export async function PUT(req: Request) {
     await idem.save(200, ok);
     return NextResponse.json(ok);
   } catch (error) {
-    return handleApiError(error);
+    return handleApiError(error, req);
   }
 }
 
@@ -259,6 +259,6 @@ export async function DELETE(req: Request) {
     await idem.save(200, ok);
     return NextResponse.json(ok);
   } catch (error) {
-    return handleApiError(error);
+    return handleApiError(error, req);
   }
 }

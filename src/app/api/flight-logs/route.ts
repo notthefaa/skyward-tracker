@@ -164,7 +164,7 @@ export async function PUT(req: Request) {
     const okBody = { success: true };
     await idem.save(200, okBody);
     return NextResponse.json(okBody);
-  } catch (error) { return handleApiError(error); }
+  } catch (error) { return handleApiError(error, req); }
 }
 
 // DELETE — soft-delete flight log (admin only). Aircraft totals self-
@@ -188,5 +188,5 @@ export async function DELETE(req: Request) {
     }
 
     return NextResponse.json({ success: true });
-  } catch (error) { return handleApiError(error); }
+  } catch (error) { return handleApiError(error, req); }
 }

@@ -36,5 +36,5 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: result.error, ...result }, { status: 502 });
     }
     return NextResponse.json(result);
-  } catch (error) { return handleApiError(error); }
+  } catch (error) { return handleApiError(error, req); }
 }

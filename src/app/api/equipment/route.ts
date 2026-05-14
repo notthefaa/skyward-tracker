@@ -27,7 +27,7 @@ export async function GET(req: Request) {
     const { data, error } = await q;
     if (error) throw error;
     return NextResponse.json({ equipment: data || [] });
-  } catch (error) { return handleApiError(error); }
+  } catch (error) { return handleApiError(error, req); }
 }
 
 // POST — create equipment (aircraft admin only)
@@ -78,7 +78,7 @@ export async function POST(req: Request) {
     const body = { equipment: data };
     await idem.save(200, body);
     return NextResponse.json(body);
-  } catch (error) { return handleApiError(error); }
+  } catch (error) { return handleApiError(error, req); }
 }
 
 // PUT — update equipment (aircraft admin only)
@@ -142,7 +142,7 @@ export async function PUT(req: Request) {
     const ok = { success: true };
     await idem.save(200, ok);
     return NextResponse.json(ok);
-  } catch (error) { return handleApiError(error); }
+  } catch (error) { return handleApiError(error, req); }
 }
 
 // DELETE — soft-delete equipment (aircraft admin only)
@@ -174,5 +174,5 @@ export async function DELETE(req: Request) {
     const ok = { success: true };
     await idem.save(200, ok);
     return NextResponse.json(ok);
-  } catch (error) { return handleApiError(error); }
+  } catch (error) { return handleApiError(error, req); }
 }

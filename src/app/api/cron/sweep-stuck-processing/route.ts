@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/auth';
+import { logError } from '@/lib/requestId';
 import { env } from '@/lib/env';
 
 // Small ceiling — this cron just runs an UPDATE, no embedding work.
@@ -55,7 +56,7 @@ export async function GET(req: Request) {
     .is('deleted_at', null);
 
   if (selectErr) {
-    console.error('[cron/sweep-stuck-processing] SELECT failed:', selectErr.message);
+    logError('[cron/sweep-stuck-processing] SELECT failed', selectErr, { route: 'cron/sweep-stuck-processing' });
     return NextResponse.json(
       { error: 'SELECT failed', detail: selectErr.message },
       { status: 500 },
@@ -87,7 +88,10 @@ export async function GET(req: Request) {
         updErr = (await tryUpdate(false)).error;
       }
       if (updErr) {
-        console.error('[cron/sweep-stuck-processing] flip failed for', row.id, updErr.message);
+        logError('[cron/sweep-stuck-processing] flip failed', updErr, {
+          route: 'cron/sweep-stuck-processing',
+          extra: { documentId: row.id },
+        });
         errors.push(`flip ${row.id}: ${updErr.message}`);
         continue;
       }
@@ -98,7 +102,10 @@ export async function GET(req: Request) {
       if (oldPath) {
         const { error: rmErr } = await supabaseAdmin.storage.from('aft_aircraft_documents').remove([oldPath]);
         if (rmErr) {
-          console.error('[cron/sweep-stuck-processing] storage remove failed for', oldPath, rmErr.message);
+          logError('[cron/sweep-stuck-processing] storage remove failed', rmErr, {
+            route: 'cron/sweep-stuck-processing',
+            extra: { documentId: row.id, path: oldPath },
+          });
           errors.push(`storage ${row.id}: ${rmErr.message}`);
         } else {
           storageCleaned++;
@@ -112,7 +119,10 @@ export async function GET(req: Request) {
         .delete()
         .eq('document_id', row.id);
       if (chunkErr) {
-        console.error('[cron/sweep-stuck-processing] chunk delete failed for', row.id, chunkErr.message);
+        logError('[cron/sweep-stuck-processing] chunk delete failed', chunkErr, {
+          route: 'cron/sweep-stuck-processing',
+          extra: { documentId: row.id },
+        });
         errors.push(`chunks ${row.id}: ${chunkErr.message}`);
       }
     }

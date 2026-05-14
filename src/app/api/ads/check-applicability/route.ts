@@ -178,5 +178,5 @@ export async function POST(req: Request) {
       parsed,
       fromCache,
     });
-  } catch (error) { return handleApiError(error); }
+  } catch (error) { return handleApiError(error, req); }
 }

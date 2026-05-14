@@ -115,7 +115,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       }
       return NextResponse.json({ error: execErr?.message || 'Execution failed' }, { status: 500 });
     }
-  } catch (error) { return handleApiError(error); }
+  } catch (error) { return handleApiError(error, req); }
 }
 
 // DELETE /api/howard/actions/[id] — cancel a pending proposal
@@ -158,7 +158,7 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
     const responseBody = { success: true };
     await idem.save(200, responseBody);
     return NextResponse.json(responseBody);
-  } catch (error) { return handleApiError(error); }
+  } catch (error) { return handleApiError(error, req); }
 }
 
 // GET /api/howard/actions/[id] — fetch a single action (for the UI card)
@@ -177,5 +177,5 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     if (action.user_id !== user.id) return NextResponse.json({ error: 'Not your action.' }, { status: 403 });
 
     return NextResponse.json({ action });
-  } catch (error) { return handleApiError(error); }
+  } catch (error) { return handleApiError(error, req); }
 }

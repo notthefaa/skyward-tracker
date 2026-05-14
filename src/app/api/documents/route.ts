@@ -346,7 +346,7 @@ export async function GET(req: Request) {
       .order('created_at', { ascending: false });
 
     return NextResponse.json({ documents: docs || [] });
-  } catch (error) { return handleApiError(error); }
+  } catch (error) { return handleApiError(error, req); }
 }
 
 // POST — register a PDF document that's already in Supabase Storage.
@@ -603,5 +603,5 @@ export async function DELETE(req: Request) {
       .eq('aircraft_id', aircraftId);
     if (docDelErr) throw docDelErr;
     return NextResponse.json({ success: true });
-  } catch (error) { return handleApiError(error); }
+  } catch (error) { return handleApiError(error, req); }
 }

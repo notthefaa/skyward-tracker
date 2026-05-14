@@ -85,6 +85,6 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ success: true, aircraft: newAircraft });
   } catch (error) {
-    return handleApiError(error);
+    return handleApiError(error, req);
   }
 }

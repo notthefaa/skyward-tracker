@@ -45,10 +45,10 @@ async function flushFlagUpdates(
         .update(flags)
         .in('id', batch);
       if (flagErr) {
-        console.error(
-          `[cron/mx-reminders] flag-flip failed (batch of ${batch.length}, flags=${flagsJson}):`,
-          flagErr.message,
-        );
+        logError('[cron/mx-reminders] flag-flip failed', flagErr, {
+          route: 'cron/mx-reminders',
+          extra: { batchSize: batch.length, flags: flagsJson },
+        });
       }
     }
   }
@@ -337,7 +337,10 @@ export async function GET(req: Request) {
           .select()
           .single();
         if (draftErr) {
-          console.error(`[cron/mx-reminders] failed to create draft for ${aircraft.tail_number}:`, draftErr.message);
+          logError('[cron/mx-reminders] failed to create draft', draftErr, {
+            route: 'cron/mx-reminders',
+            extra: { tail: aircraft.tail_number },
+          });
         }
 
         if (draftEvent) {
@@ -355,7 +358,10 @@ export async function GET(req: Request) {
           }));
           const { error: linesInsertErr } = await supabaseAdmin.from('aft_event_line_items').insert(lineItems);
           if (linesInsertErr) {
-            console.error(`[cron/mx-reminders] line-item insert failed for ${aircraft.tail_number}, rolling back draft:`, linesInsertErr.message);
+            logError('[cron/mx-reminders] line-item insert failed, rolling back draft', linesInsertErr, {
+              route: 'cron/mx-reminders',
+              extra: { tail: aircraft.tail_number, draftEventId: draftEvent.id },
+            });
             await supabaseAdmin.from('aft_maintenance_events').delete().eq('id', draftEvent.id);
           } else {
 
@@ -419,7 +425,10 @@ export async function GET(req: Request) {
               });
             } catch (err: any) {
               emailOk = false;
-              console.error(`[cron/mx-reminders] scheduling email failed for ${aircraft.tail_number}:`, err?.message || err);
+              logError('[cron/mx-reminders] scheduling email failed', err, {
+                route: 'cron/mx-reminders',
+                extra: { tail: aircraft.tail_number },
+              });
             }
           }
 
@@ -488,7 +497,10 @@ export async function GET(req: Request) {
             flagUpdates.push({ id: e.mx.id, flags: { primary_heads_up_sent: true } });
           }
         } catch (err: any) {
-          console.error(`[cron/mx-reminders] heads-up email failed for ${aircraft.tail_number}:`, err?.message || err);
+          logError('[cron/mx-reminders] heads-up email failed', err, {
+            route: 'cron/mx-reminders',
+            extra: { tail: aircraft.tail_number },
+          });
         }
       }
 
@@ -612,7 +624,10 @@ export async function GET(req: Request) {
             });
           } catch (err: any) {
             reminderEmailOk = false;
-            console.error(`[cron/mx-reminders] internal reminder email failed for ${aircraft.tail_number} / ${mx.item_name}:`, err?.message || err);
+            logError('[cron/mx-reminders] internal reminder email failed', err, {
+              route: 'cron/mx-reminders',
+              extra: { tail: aircraft.tail_number, item: mx.item_name },
+            });
           }
         }
 
@@ -629,8 +644,10 @@ export async function GET(req: Request) {
       // flags persisted — no duplicate sends next tick.
       await flushFlagUpdates(supabaseAdmin, flagUpdates);
       } catch (acErr: any) {
-        console.error(`[cron/mx-reminders] aircraft ${aircraft?.tail_number ?? aircraft?.id ?? '?'} failed:`, acErr?.message || acErr);
-        logError('[cron/mx-reminders] aircraft failed', acErr, { route: 'cron/mx-reminders', extra: { tail: aircraft?.tail_number ?? '?', aircraftId: aircraft?.id ?? '?' } });
+        logError('[cron/mx-reminders] aircraft failed', acErr, {
+          route: 'cron/mx-reminders',
+          extra: { tail: aircraft?.tail_number ?? '?', aircraftId: aircraft?.id ?? '?' },
+        });
       }
     }
 
@@ -742,13 +759,17 @@ export async function GET(req: Request) {
                 message: `${READY_PICKUP_NUDGE_MARKER} Reminder sent to primary contact — aircraft awaiting logbook entry.`,
               } as any);
             if (markerErr) {
-              console.error(
-                `[cron/mx-reminders] pickup nudge marker insert failed for event ${ev.id} — next tick will re-send the email:`,
-                markerErr.message,
+              logError(
+                '[cron/mx-reminders] pickup nudge marker insert failed — next tick will re-send the email',
+                markerErr,
+                { route: 'cron/mx-reminders', extra: { eventId: ev.id } },
               );
             }
           } catch (err: any) {
-            console.error(`[cron/mx-reminders] pickup nudge email failed for event ${ev.id}:`, err?.message || err);
+            logError('[cron/mx-reminders] pickup nudge email failed', err, {
+              route: 'cron/mx-reminders',
+              extra: { eventId: ev.id },
+            });
           }
         }
       }
@@ -762,6 +783,6 @@ export async function GET(req: Request) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    return handleApiError(error);
+    return handleApiError(error, req);
   }
 }

@@ -82,6 +82,6 @@ export async function POST(req: Request) {
     await idem.save(200, okBody);
     return NextResponse.json(okBody);
   } catch (error) {
-    return handleApiError(error);
+    return handleApiError(error, req);
   }
 }

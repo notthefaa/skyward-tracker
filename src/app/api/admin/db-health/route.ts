@@ -97,7 +97,7 @@ export async function GET(req: Request) {
     for (const { table, count } of countResults) counts[table] = count;
     return NextResponse.json({ table_row_counts: counts });
   } catch (error) {
-    return handleApiError(error);
+    return handleApiError(error, req);
   }
 }
 
@@ -376,6 +376,6 @@ export async function POST(req: Request) {
       table_row_counts: counts,
     });
   } catch (error) {
-    return handleApiError(error);
+    return handleApiError(error, req);
   }
 }

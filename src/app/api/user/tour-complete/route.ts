@@ -13,5 +13,5 @@ export async function POST(req: Request) {
       .eq('user_id', user.id);
     if (error) throw error;
     return NextResponse.json({ success: true });
-  } catch (error) { return handleApiError(error); }
+  } catch (error) { return handleApiError(error, req); }
 }

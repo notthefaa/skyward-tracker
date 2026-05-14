@@ -116,6 +116,6 @@ Be precise with numbers — don't round. If handwriting is ambiguous, pick the m
 
     return NextResponse.json({ fields, raw_text: rawText });
   } catch (error) {
-    return handleApiError(error);
+    return handleApiError(error, req);
   }
 }

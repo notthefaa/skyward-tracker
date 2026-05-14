@@ -77,6 +77,6 @@ export async function DELETE(req: Request) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    return handleApiError(error);
+    return handleApiError(error, req);
   }
 }

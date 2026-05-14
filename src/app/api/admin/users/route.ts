@@ -34,7 +34,7 @@ export async function GET(req: Request) {
 
     return NextResponse.json({ users: result });
   } catch (error) {
-    return handleApiError(error);
+    return handleApiError(error, req);
   }
 }
 
@@ -65,6 +65,6 @@ export async function PUT(req: Request) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    return handleApiError(error);
+    return handleApiError(error, req);
   }
 }

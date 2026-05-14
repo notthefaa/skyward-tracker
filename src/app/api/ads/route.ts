@@ -27,7 +27,7 @@ export async function GET(req: Request) {
     const { data, error } = await q;
     if (error) throw error;
     return NextResponse.json({ ads: data || [] });
-  } catch (error) { return handleApiError(error); }
+  } catch (error) { return handleApiError(error, req); }
 }
 
 // POST — create AD manually (aircraft admin only)
@@ -59,7 +59,7 @@ export async function POST(req: Request) {
       throw error;
     }
     return NextResponse.json({ ad: data });
-  } catch (error) { return handleApiError(error); }
+  } catch (error) { return handleApiError(error, req); }
 }
 
 // PUT — update AD (aircraft admin only). Used to log compliance.
@@ -83,7 +83,7 @@ export async function PUT(req: Request) {
       .eq('aircraft_id', aircraftId);
     if (error) throw error;
     return NextResponse.json({ success: true });
-  } catch (error) { return handleApiError(error); }
+  } catch (error) { return handleApiError(error, req); }
 }
 
 // DELETE — soft-delete AD (aircraft admin only)
@@ -102,5 +102,5 @@ export async function DELETE(req: Request) {
       .eq('aircraft_id', aircraftId);
     if (error) throw error;
     return NextResponse.json({ success: true });
-  } catch (error) { return handleApiError(error); }
+  } catch (error) { return handleApiError(error, req); }
 }

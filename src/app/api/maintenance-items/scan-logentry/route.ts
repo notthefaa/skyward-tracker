@@ -156,6 +156,6 @@ Rules:
 
     return NextResponse.json({ items, raw_text: rawText });
   } catch (error) {
-    return handleApiError(error);
+    return handleApiError(error, req);
   }
 }

@@ -160,5 +160,5 @@ export async function DELETE(req: Request) {
     const ok = { success: true };
     await idem.save(200, ok);
     return NextResponse.json(ok);
-  } catch (error) { return handleApiError(error); }
+  } catch (error) { return handleApiError(error, req); }
 }

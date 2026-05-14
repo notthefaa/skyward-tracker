@@ -81,7 +81,7 @@ export async function DELETE(req: Request) {
     if (bumpErr) throw bumpErr;
 
     return NextResponse.json({ success: true, cleared: count ?? 0 });
-  } catch (error) { return handleApiError(error); }
+  } catch (error) { return handleApiError(error, req); }
 }
 
 // GET — load the current user's thread + messages + fleet
@@ -114,7 +114,7 @@ export async function GET(req: Request) {
     if (messagesErr) throw messagesErr;
 
     return NextResponse.json({ thread, messages: messages || [] });
-  } catch (error) { return handleApiError(error); }
+  } catch (error) { return handleApiError(error, req); }
 }
 
 // POST — send a message to Howard (streamed SSE response)
@@ -498,5 +498,5 @@ export async function POST(req: Request) {
         'X-Accel-Buffering': 'no',
       },
     });
-  } catch (error) { return handleApiError(error); }
+  } catch (error) { return handleApiError(error, req); }
 }

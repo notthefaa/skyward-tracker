@@ -76,5 +76,5 @@ export async function GET(req: Request) {
         'Content-Disposition': `attachment; filename="${aircraft.tail_number}_AD_Compliance_${new Date().toISOString().slice(0, 10)}.csv"`,
       },
     });
-  } catch (error) { return handleApiError(error); }
+  } catch (error) { return handleApiError(error, req); }
 }

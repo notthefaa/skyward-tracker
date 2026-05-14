@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/auth';
+import { logError } from '@/lib/requestId';
 import { env } from '@/lib/env';
 
 // 5 minute ceiling — a fleet with thousands of docs would otherwise let
@@ -58,7 +59,7 @@ export async function GET(req: Request) {
       .select('file_url')
       .range(docOffset, docOffset + SELECT_PAGE_SIZE - 1);
     if (docsErr) {
-      console.error('[cron/sweep-document-orphans] failed to load docs:', docsErr);
+      logError('[cron/sweep-document-orphans] failed to load docs', docsErr, { route: 'cron/sweep-document-orphans' });
       return NextResponse.json(
         { error: 'Failed to load docs', detail: docsErr.message },
         { status: 500 },
@@ -91,7 +92,7 @@ export async function GET(req: Request) {
       .from(BUCKET)
       .list('', { limit: LIST_PAGE_SIZE, offset: listOffset });
     if (listErr) {
-      console.error('[cron/sweep-document-orphans] list failed:', listErr);
+      logError('[cron/sweep-document-orphans] list failed', listErr, { route: 'cron/sweep-document-orphans' });
       return NextResponse.json(
         { error: 'List failed', detail: listErr.message, scanned, found_orphans: orphansToDelete.length },
         { status: 500 },
@@ -119,8 +120,10 @@ export async function GET(req: Request) {
   // If we loaded zero document rows but the bucket has more than a few
   // objects, something's wrong. Refuse the run.
   if (knownLoadedRows === 0 && scanned > 5) {
-    console.error(
-      `[cron/sweep-document-orphans] aborting: loaded 0 doc rows but scanned ${scanned} storage objects — refusing to delete.`,
+    logError(
+      '[cron/sweep-document-orphans] aborting: loaded 0 doc rows but bucket has objects — refusing to delete',
+      new Error('zero doc rows / non-empty bucket'),
+      { route: 'cron/sweep-document-orphans', extra: { scanned } },
     );
     return NextResponse.json(
       {
@@ -140,7 +143,7 @@ export async function GET(req: Request) {
       const batch = orphansToDelete.slice(i, i + DELETE_BATCH_SIZE);
       const { error: rmErr } = await supabaseAdmin.storage.from(BUCKET).remove(batch);
       if (rmErr) {
-        console.error('[cron/sweep-document-orphans] remove batch failed:', rmErr.message);
+        logError('[cron/sweep-document-orphans] remove batch failed', rmErr, { route: 'cron/sweep-document-orphans' });
         deleteErrors.push(rmErr.message);
       } else {
         deleted += batch.length;

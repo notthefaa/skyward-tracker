@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/auth';
+import { logError } from '@/lib/requestId';
 import { syncAdsForAircraft } from '@/lib/drs';
 import { env } from '@/lib/env';
 
@@ -23,7 +24,7 @@ export async function GET(req: Request) {
   if (fleetErr) {
     // Don't return success when we never even loaded the fleet — the cron
     // dashboard would otherwise show green while no aircraft was synced.
-    console.error('[cron/ads-sync] failed to load fleet', fleetErr);
+    logError('[cron/ads-sync] failed to load fleet', fleetErr, { route: 'cron/ads-sync' });
     return NextResponse.json({ error: 'Failed to load fleet', detail: fleetErr.message }, { status: 500 });
   }
   if (!aircraft || aircraft.length === 0) {
@@ -41,6 +42,10 @@ export async function GET(req: Request) {
       const r = await syncAdsForAircraft(supabaseAdmin, ac);
       results.push({ tail: (ac as any).tail_number || ac.id, ...r });
     } catch (err: any) {
+      logError('[cron/ads-sync] aircraft sync failed', err, {
+        route: 'cron/ads-sync',
+        extra: { tail: (ac as any).tail_number || ac.id },
+      });
       results.push({
         tail: (ac as any).tail_number || ac.id,
         inserted: 0,
@@ -65,6 +70,8 @@ export async function GET(req: Request) {
   // next operator reads the response. Log them so Vercel captures them
   // in the cron run output / log drain.
   if (totals.errors > 0) {
+    // Per-aircraft failures already went to Sentry inside the loop; this
+    // is just the cron-summary log line for the Vercel run dashboard.
     const failures = results.filter(r => r.error).map(r => `${r.tail}: ${r.error}`);
     console.error(`[cron/ads-sync] ${totals.errors} aircraft failed to sync:`, failures);
   }
