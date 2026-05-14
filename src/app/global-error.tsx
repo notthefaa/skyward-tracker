@@ -7,8 +7,9 @@
 // Must include its own <html>/<body>.
 // =============================================================
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import * as Sentry from "@sentry/nextjs";
+import { openSupportEmail } from "@/lib/support";
 
 export default function GlobalError({
   error,
@@ -17,9 +18,26 @@ export default function GlobalError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  const [supportCopied, setSupportCopied] = useState(false);
+
   useEffect(() => {
     Sentry.captureException(error);
   }, [error]);
+
+  const emailSupport = async () => {
+    try {
+      const { copiedToClipboard } = await openSupportEmail({
+        error: { message: error.message, stack: error.stack, digest: error.digest },
+      });
+      if (copiedToClipboard) {
+        setSupportCopied(true);
+        setTimeout(() => setSupportCopied(false), 4000);
+      }
+    } catch {
+      // never throws in practice — guard so the global-error
+      // boundary can't crash itself.
+    }
+  };
 
   return (
     <html lang="en">
@@ -128,6 +146,38 @@ export default function GlobalError({
           >
             Hard Reload
           </button>
+          <button
+            onClick={emailSupport}
+            style={{
+              width: "100%",
+              background: "white",
+              color: "#F08B46",
+              fontWeight: 700,
+              fontSize: 14,
+              textTransform: "uppercase",
+              letterSpacing: 1,
+              padding: "12px 16px",
+              border: "1px solid rgba(240,139,70,0.4)",
+              borderRadius: 8,
+              cursor: "pointer",
+              marginTop: 8,
+            }}
+          >
+            Email Support
+          </button>
+          {supportCopied && (
+            <p
+              style={{
+                fontSize: 10,
+                color: "#525659",
+                textAlign: "center",
+                marginTop: 6,
+                marginBottom: 0,
+              }}
+            >
+              Error details copied to your clipboard — paste into the email if anything&apos;s missing.
+            </p>
+          )}
         </div>
       </body>
     </html>

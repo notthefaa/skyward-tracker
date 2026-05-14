@@ -22,6 +22,7 @@
 
 import { useEffect, useState } from "react";
 import * as Sentry from "@sentry/nextjs";
+import { openSupportEmail } from "@/lib/support";
 
 export default function Error({
   error,
@@ -31,10 +32,30 @@ export default function Error({
   reset: () => void;
 }) {
   const [showDetails, setShowDetails] = useState(false);
+  const [supportCopied, setSupportCopied] = useState(false);
 
   useEffect(() => {
     Sentry.captureException(error);
   }, [error]);
+
+  // Open the user's mail client with subject + body + stack pre-filled.
+  // We also stash the full body on the clipboard before opening because
+  // some mail clients truncate long mailto bodies; if that happens the
+  // user can paste back in to recover.
+  const emailSupport = async () => {
+    try {
+      const { copiedToClipboard } = await openSupportEmail({
+        error: { message: error.message, stack: error.stack, digest: error.digest },
+      });
+      if (copiedToClipboard) {
+        setSupportCopied(true);
+        setTimeout(() => setSupportCopied(false), 4000);
+      }
+    } catch {
+      // openSupportEmail never throws in practice, but if it ever
+      // does we don't want the error boundary to crash itself.
+    }
+  };
 
   // Hard reload — busts the browser HTTP cache by appending a
   // cache-buster query to the current URL. `location.reload()` alone
@@ -138,6 +159,17 @@ export default function Error({
               Sign Out
             </button>
           </div>
+          <button
+            onClick={emailSupport}
+            className="w-full bg-white border border-brandOrange/40 text-brandOrange font-oswald text-sm font-bold uppercase tracking-widest py-3 rounded-lg active:scale-95 transition-transform hover:bg-brandOrange/5"
+          >
+            Email Support
+          </button>
+          {supportCopied && (
+            <p className="text-[10px] text-center text-gray-500 mt-1">
+              Error details copied to your clipboard — paste into the email if anything's missing.
+            </p>
+          )}
         </div>
       </div>
     </div>
