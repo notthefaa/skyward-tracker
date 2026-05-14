@@ -13,9 +13,9 @@ import dynamic from "next/dynamic";
 import type { AircraftWithMetrics, AppTab, LogSubTab, MxSubTab } from "@/lib/types";
 import {
   Wrench, AlertTriangle, FileText, LogOut,
-  ChevronDown, Home, LayoutGrid, Warehouse, Send, ShieldCheck, X, Share, Copy, WifiOff, Loader2, Calendar, Settings,
+  ChevronDown, Home, Warehouse, Send, ShieldCheck, Calendar, Settings,
   MoreHorizontal, FolderOpen, ShieldAlert,
-  ListChecks, PenLine, Plane, BarChart3, Gauge, CheckSquare, Plus,
+  ListChecks, PenLine, Plane, Gauge, CheckSquare, Plus,
 } from "lucide-react";
 import { HowardIcon } from "@/components/shell/TrayIcons";
 
@@ -28,6 +28,7 @@ const AdminModals = dynamic(() => import("@/components/modals/AdminModals"));
 const SettingsModal = dynamic(() => import("@/components/modals/SettingsModal"));
 const FeaturesOverviewModal = dynamic(() => import("@/components/modals/FeaturesOverviewModal"));
 const PullIndicator = dynamic(() => import("@/components/PullIndicator"));
+const LogItModal = dynamic(() => import("@/components/shell/LogItModal"));
 import { SummarySkeleton, FleetSkeleton, TabSkeleton } from "@/components/Skeletons";
 const SummaryTab = dynamic(() => import("@/components/tabs/SummaryTab"), { loading: () => <SummarySkeleton /> });
 const LogRouter = dynamic(() => import("@/components/tabs/LogRouter"), { loading: () => <TabSkeleton /> });
@@ -94,7 +95,6 @@ export default function AppShell({ session }: AppShellProps) {
   const revalidateAircraftCache = useAircraftRevalidator(globalMutate);
 
   // ─── Navigation State ───
-  const companionUrl = process.env.NEXT_PUBLIC_COMPANION_URL || "https://skyward-logit.vercel.app/";
   const [activeTail, setActiveTail] = useState<string>("");
   // First-time onboarding path selection. null = show welcome modal;
   // 'guided' = Howard chat flow; 'form' = classic PilotOnboarding.
@@ -634,16 +634,6 @@ export default function AppShell({ session }: AppShellProps) {
     navigateTab('summary');
   };
 
-  const handleCopyQuickLink = () => {
-    if (navigator.clipboard?.writeText) {
-      navigator.clipboard.writeText(companionUrl)
-        .then(() => showSuccess("Link copied! Open your phone's browser, paste the link, and Add to Home Screen."))
-        .catch(() => showInfo("Couldn't copy automatically — copy this link: " + companionUrl));
-    } else {
-      showInfo("Couldn't copy automatically — copy this link: " + companionUrl);
-    }
-  };
-
   const handleLogout = async () => {
     dataFetchTriggeredRef.current = false;
     setActiveTab('fleet');
@@ -814,19 +804,7 @@ export default function AppShell({ session }: AppShellProps) {
         showSuccess(wasEditing ? `${t} updated.` : `${t} added to your hangar.`);
       }} />}
 
-      {showLogItModal && (
-        <div className="fixed inset-0 bg-black/80 z-[10000] overflow-y-auto animate-fade-in" style={{ overscrollBehavior: 'contain' }} onClick={() => setShowLogItModal(false)}>
-          <div className="flex min-h-full items-center justify-center p-4">
-          <div role="dialog" aria-label="Install Log It companion app" className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 border-t-8 border-info animate-slide-up relative" onClick={e => e.stopPropagation()}>
-            <button onClick={() => setShowLogItModal(false)} aria-label="Close" className="absolute top-4 right-4 text-gray-400 hover:text-danger"><X size={24}/></button>
-            <h3 className="font-oswald text-2xl font-bold uppercase tracking-widest text-navy mb-4">Install Log It</h3>
-            <p className="text-sm text-gray-600 font-roboto mb-4 leading-relaxed">Companion app for logging from the ramp — flights, VOR, oil, tire, squawks. Works without signal and flushes when you&apos;re back in range.</p>
-            <ol className="text-left text-sm text-gray-600 font-roboto mb-8 space-y-2 max-w-xs mx-auto list-decimal pl-4"><li>Tap below to copy the link.</li><li>Open it in your phone&apos;s browser.</li><li>Use the Share menu <Share size={14} className="inline text-blue-500 mb-1"/> to add it to your home screen.</li></ol>
-            <button onClick={handleCopyQuickLink} className="w-full bg-info text-white font-oswald text-xl font-bold uppercase tracking-widest py-4 rounded-xl shadow-lg active:scale-95 transition-transform flex items-center justify-center gap-2"><Copy size={20} /> Copy App Link</button>
-          </div>
-          </div>
-        </div>
-      )}
+      <LogItModal open={showLogItModal} onClose={() => setShowLogItModal(false)} />
 
       <header role="banner" className="fixed top-0 left-0 right-0 bg-navy text-white shadow-md z-[9999]" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
         <div className="max-w-3xl mx-auto px-4 py-2 flex justify-between items-center w-full min-h-[52px]">
