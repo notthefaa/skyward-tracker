@@ -1,4 +1,4 @@
--- 073_flight_log_first_flight_zero_unset.sql
+-- 074_flight_log_first_flight_zero_unset.sql
 --
 -- Two fixes to log_flight_atomic, both surfaced by the same field
 -- report: pilot tries to log their first flight on a piston tach-only

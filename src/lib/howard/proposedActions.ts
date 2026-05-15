@@ -654,7 +654,7 @@ export async function executeAction(
       // log_flight_atomic's first-flight sanity fallback otherwise
       // reads a stale setup_hobbs=0 on a piston tach-only aircraft and
       // anchors the 24hr delta check against 0 instead of setup_tach.
-      // See migration 073 for the matching DB-side nullif fix.
+      // See migration 074 for the matching DB-side nullif fix.
       const isTurb = p.aircraft.engine_type === 'Turbine';
       aircraftRow.setup_aftt  = isTurb ? (p.aircraft.setup_aftt  ?? null) : null;
       aircraftRow.setup_ftt   = isTurb ? (p.aircraft.setup_ftt   ?? null) : null;
