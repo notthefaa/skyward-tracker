@@ -434,11 +434,16 @@ describe('executeAction — onboarding_setup', () => {
     expect(profileGateUpdate!.payload).toMatchObject({ completed_onboarding: true });
 
     // Aircraft insert normalized tail + home airport to uppercase and
-    // seeded total_* from setup_*.
+    // seeded total_* from setup_*. aircraft_type follows the form
+    // convention (just the model, not "make + model") so the Model
+    // field doesn't double-up the make when the pilot later edits.
     const aircraftInsert = calls.find(c => c.table === 'aft_aircraft' && c.op === 'insert');
     expect(aircraftInsert!.payload).toMatchObject({
       tail_number: 'N12345',
       created_by: 'user-new',
+      make: 'Cessna',
+      model: '172N',
+      aircraft_type: '172N',
       engine_type: 'Piston',
       is_ifr_equipped: true,
       home_airport: 'KDAL',
@@ -455,6 +460,44 @@ describe('executeAction — onboarding_setup', () => {
       aircraft_id: 'ac-new',
       aircraft_role: 'admin',
     });
+  });
+
+  it('falls back to make when model is missing, then to engine_type when both are missing', async () => {
+    let lastAircraftType: string | null = null;
+    const makeSetup = (sb: any) => sb;
+    const run = async (aircraft: Record<string, any>) => {
+      lastAircraftType = null;
+      const { sb } = makeSb({
+        aft_user_roles: () => ({ data: null, error: null }),
+        aft_aircraft: (op, ctx) => {
+          if (op === 'insert') {
+            lastAircraftType = ctx.payload.aircraft_type;
+            return { data: { id: 'ac-x', tail_number: ctx.payload.tail_number }, error: null };
+          }
+          return { data: null, error: null };
+        },
+        aft_user_aircraft_access: () => ({ data: null, error: null }),
+      });
+      makeSetup(sb);
+      await executeAction(sb, baseAction({
+        action_type: 'onboarding_setup',
+        aircraft_id: null,
+        payload: {
+          profile: { full_name: 'Jane', initials: 'J' },
+          aircraft: { tail_number: 'N1', engine_type: 'Piston', is_ifr_equipped: false, ...aircraft },
+        },
+      }), 'user-x');
+    };
+
+    // Make-only — fall back to the make string. (Edge case: pilot
+    // typed "Cessna" but couldn't recall the model number.)
+    await run({ make: 'Cessna' });
+    expect(lastAircraftType).toBe('Cessna');
+
+    // Neither make nor model — generic placeholder keyed off engine
+    // type so the NOT NULL constraint never blows up the INSERT.
+    await run({});
+    expect(lastAircraftType).toBe('Piston aircraft');
   });
 
   it('surfaces a friendly error on duplicate tail number', async () => {

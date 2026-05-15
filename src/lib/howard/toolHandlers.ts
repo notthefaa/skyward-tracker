@@ -1249,6 +1249,15 @@ const handlers: Record<string, ToolHandler> = {
       return { error: 'aircraft.tail_number must be 2-10 alphanumeric characters (e.g. "N123AB").' };
     }
     aircraft.tail_number = normalizedTail;
+    // Strict engine_type check — Claude can pass synonyms ("Turboprop",
+    // "Jet", "Rotax") that the old `=== 'Turbine' ? : 'Piston'` coerce
+    // silently misclassified. The DB CHECK constraint
+    // (aft_aircraft_engine_type_check) only allows 'Piston' or 'Turbine',
+    // so anything else needs to be bounced here with a clear message
+    // rather than a generic 500 at INSERT time.
+    if (aircraft.engine_type !== 'Piston' && aircraft.engine_type !== 'Turbine') {
+      return { error: 'aircraft.engine_type must be exactly "Piston" or "Turbine" (turboprops count as Turbine).' };
+    }
     if (typeof aircraft.is_ifr_equipped !== 'boolean') {
       return { error: 'aircraft.is_ifr_equipped must be true or false — ask if unknown.' };
     }
@@ -1264,6 +1273,22 @@ const handlers: Record<string, ToolHandler> = {
     if (setupAftt === undefined || setupFtt === undefined || setupHobbs === undefined || setupTach === undefined) {
       return { error: 'setup_aftt, setup_ftt, setup_hobbs, and setup_tach must each be a finite number ≥ 0 if provided.' };
     }
+    // Cross-check meters against engine_type. The executor seeds
+    // total_airframe_time / total_engine_time from whichever meters
+    // arrived; if Claude passes setup_aftt (a turbine field) on a
+    // piston aircraft, total_airframe_time gets seeded from the wrong
+    // reading and the pilot's first flight log appears to jump 1000+
+    // hours when the real hobbs lands. Reject the mismatch with a
+    // clear message so Claude re-asks instead of saving garbage.
+    if (aircraft.engine_type === 'Turbine') {
+      if (setupHobbs !== null || setupTach !== null) {
+        return { error: 'Turbine aircraft use setup_aftt and setup_ftt — drop setup_hobbs / setup_tach.' };
+      }
+    } else {
+      if (setupAftt !== null || setupFtt !== null) {
+        return { error: 'Piston aircraft use setup_hobbs and setup_tach — drop setup_aftt / setup_ftt.' };
+      }
+    }
     // Normalize into the payload shape the executor expects.
     const payload = {
       profile: {
@@ -1277,7 +1302,7 @@ const handlers: Record<string, ToolHandler> = {
         tail_number: String(aircraft.tail_number).toUpperCase().trim(),
         make: aircraft.make ? String(aircraft.make).trim() : undefined,
         model: aircraft.model ? String(aircraft.model).trim() : undefined,
-        engine_type: aircraft.engine_type === 'Turbine' ? 'Turbine' : 'Piston',
+        engine_type: aircraft.engine_type,
         is_ifr_equipped: !!aircraft.is_ifr_equipped,
         home_airport: aircraft.home_airport ? String(aircraft.home_airport).toUpperCase().trim() : undefined,
         setup_aftt: setupAftt ?? undefined,

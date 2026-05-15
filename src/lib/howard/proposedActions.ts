@@ -608,13 +608,14 @@ export async function executeAction(
       const make = p.aircraft.make?.trim() || '';
       const model = p.aircraft.model?.trim() || '';
       // aircraft_type is the legacy "Model" string (NOT NULL on the
-      // table, predates the make/model split). The manual form takes
-      // it as a single field; Howard collects make + model separately
-      // and we synthesize it here. Fall back to engine_type so the
-      // INSERT never violates the NOT NULL — leaving this empty before
-      // the fix bounced every Howard-onboarded user with a 500.
-      const aircraftType = [make, model].filter(Boolean).join(' ').trim()
-        || `${p.aircraft.engine_type} aircraft`;
+      // table, predates the make/model split). AircraftForm /
+      // AircraftModal / PilotOnboarding all write `aircraft_type =
+      // model` (just the model name, not "make model"). Mirror that
+      // convention so a Howard-onboarded pilot doesn't see "Cessna
+      // 172N" duplicated in the Model field when they later edit via
+      // the form. Fall back to make, then to a generic placeholder so
+      // the NOT NULL constraint never blows up.
+      const aircraftType = model || make || `${p.aircraft.engine_type} aircraft`;
       const aircraftRow: Record<string, any> = {
         tail_number: tailNorm,
         aircraft_type: aircraftType,
