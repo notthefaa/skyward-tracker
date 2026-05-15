@@ -648,21 +648,26 @@ export async function executeAction(
       // Setup meters — match AircraftModal's "setup_*" convention.
       // total_* columns seed from setup_* so live totals start accurate
       // before the first flight log lands.
-      if (p.aircraft.setup_aftt != null) {
-        aircraftRow.setup_aftt = p.aircraft.setup_aftt;
-        aircraftRow.total_airframe_time = p.aircraft.setup_aftt;
+      //
+      // The unused-meter pair for this engine type is pinned to NULL
+      // (not left absent) so the schema's DEFAULT 0 doesn't sneak in.
+      // log_flight_atomic's first-flight sanity fallback otherwise
+      // reads a stale setup_hobbs=0 on a piston tach-only aircraft and
+      // anchors the 24hr delta check against 0 instead of setup_tach.
+      // See migration 073 for the matching DB-side nullif fix.
+      const isTurb = p.aircraft.engine_type === 'Turbine';
+      aircraftRow.setup_aftt  = isTurb ? (p.aircraft.setup_aftt  ?? null) : null;
+      aircraftRow.setup_ftt   = isTurb ? (p.aircraft.setup_ftt   ?? null) : null;
+      aircraftRow.setup_hobbs = isTurb ? null : (p.aircraft.setup_hobbs ?? null);
+      aircraftRow.setup_tach  = isTurb ? null : (p.aircraft.setup_tach  ?? null);
+
+      if (p.aircraft.setup_aftt != null) aircraftRow.total_airframe_time = p.aircraft.setup_aftt;
+      if (p.aircraft.setup_ftt  != null) aircraftRow.total_engine_time   = p.aircraft.setup_ftt;
+      if (p.aircraft.setup_hobbs != null && aircraftRow.total_airframe_time == null) {
+        aircraftRow.total_airframe_time = p.aircraft.setup_hobbs;
       }
-      if (p.aircraft.setup_ftt != null) {
-        aircraftRow.setup_ftt = p.aircraft.setup_ftt;
-        aircraftRow.total_engine_time = p.aircraft.setup_ftt;
-      }
-      if (p.aircraft.setup_hobbs != null) {
-        aircraftRow.setup_hobbs = p.aircraft.setup_hobbs;
-        if (aircraftRow.total_airframe_time == null) aircraftRow.total_airframe_time = p.aircraft.setup_hobbs;
-      }
-      if (p.aircraft.setup_tach != null) {
-        aircraftRow.setup_tach = p.aircraft.setup_tach;
-        if (aircraftRow.total_engine_time == null) aircraftRow.total_engine_time = p.aircraft.setup_tach;
+      if (p.aircraft.setup_tach != null && aircraftRow.total_engine_time == null) {
+        aircraftRow.total_engine_time = p.aircraft.setup_tach;
       }
 
       const { data: created, error: acErr } = await sb
