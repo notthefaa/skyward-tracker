@@ -119,6 +119,9 @@ export interface OnboardingSetupPayload {
     engine_type: 'Piston' | 'Turbine';
     is_ifr_equipped: boolean;
     home_airport?: string;
+    /** IANA timezone forwarded from the pilot's browser via ToolContext.
+     * Optional — falls back to the column default ('UTC') if absent. */
+    time_zone?: string;
     // Setup-time meters — airframe + engine baselines at the moment of
     // onboarding. Distinct from the live `total_*_time` columns.
     setup_aftt?: number;
@@ -626,6 +629,11 @@ export async function executeAction(
       if (make) aircraftRow.make = make;
       if (model) aircraftRow.model = model;
       if (p.aircraft.home_airport) aircraftRow.home_airport = p.aircraft.home_airport.toUpperCase().trim();
+      // time_zone is forwarded from the pilot's browser via Howard's
+      // tool ctx (see propose_onboarding_setup handler). Without it
+      // the column default kicks in ('UTC') and Howard quotes Zulu
+      // times in every briefing until the pilot edits the aircraft.
+      if (p.aircraft.time_zone) aircraftRow.time_zone = p.aircraft.time_zone;
       // Setup meters — match AircraftModal's "setup_*" convention.
       // total_* columns seed from setup_* so live totals start accurate
       // before the first flight log lands.

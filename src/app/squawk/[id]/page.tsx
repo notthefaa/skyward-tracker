@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabase";
 import { useBodyScrollOverride } from "@/hooks/useBodyScrollOverride";
 import { fetchSignedUrlsWithToken } from "@/hooks/useSignedUrls";
 import { AlertTriangle, X, Image, MapPin } from "lucide-react";
+import { formatAircraftType } from "@/lib/aircraftDisplay";
 
 export default function SquawkViewer() {
   const params = useParams();
@@ -116,7 +117,7 @@ export default function SquawkViewer() {
             <div className={`${isGrounded ? 'bg-danger' : 'bg-[#091F3C]'} p-6 text-white flex justify-between items-center`}>
               <div>
                 <h2 className="font-oswald text-3xl font-bold uppercase leading-none">{aircraft?.tail_number || 'N/A'}</h2>
-                <p className="text-xs font-bold uppercase tracking-widest mt-1 opacity-90">{aircraft?.aircraft_type || ''}</p>
+                <p className="text-xs font-bold uppercase tracking-widest mt-1 opacity-90">{formatAircraftType(aircraft)}</p>
               </div>
               <div className="text-right">
                 <span className="text-[10px] font-bold uppercase tracking-widest block mb-1">Status</span>

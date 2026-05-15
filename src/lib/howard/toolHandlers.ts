@@ -30,6 +30,11 @@ export interface ToolContext {
   aircraftTail: string;
   /** Optional hint: aircraft currently selected in the UI. */
   currentTail?: string | null;
+  /** IANA timezone reported by the pilot's browser. Forwarded into
+   * propose_onboarding_setup so the new aircraft's time_zone is set
+   * accurately on first save — saves the pilot from fighting Zulu
+   * briefings until they think to edit the aircraft profile. */
+  timeZone?: string;
 }
 
 type ToolHandler = (params: any, sb: SupabaseClient, aircraftId: string, ctx: ToolContext) => Promise<any>;
@@ -1305,6 +1310,12 @@ const handlers: Record<string, ToolHandler> = {
         engine_type: aircraft.engine_type,
         is_ifr_equipped: !!aircraft.is_ifr_equipped,
         home_airport: aircraft.home_airport ? String(aircraft.home_airport).toUpperCase().trim() : undefined,
+        // Browser-reported IANA zone passed in via ctx — saves a
+        // round-trip with the pilot and avoids leaving every Howard-
+        // onboarded aircraft on the column default ('UTC'), which
+        // shows Zulu times in Howard briefings until the pilot finds
+        // and edits the time-zone picker.
+        time_zone: typeof ctx.timeZone === 'string' && ctx.timeZone ? ctx.timeZone : undefined,
         setup_aftt: setupAftt ?? undefined,
         setup_ftt: setupFtt ?? undefined,
         setup_hobbs: setupHobbs ?? undefined,

@@ -169,6 +169,7 @@ export async function* sendMessageStream(
     aircraftId: '',
     aircraftTail: '',
     currentTail: currentAircraft?.tail_number || null,
+    timeZone,
   };
 
   const messages: Anthropic.MessageParam[] = conversationHistory

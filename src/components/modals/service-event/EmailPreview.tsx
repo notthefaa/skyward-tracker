@@ -1,6 +1,7 @@
 "use client";
 
 import { X } from "lucide-react";
+import { formatAircraftType } from "@/lib/aircraftDisplay";
 
 interface EmailPreviewProps {
   aircraft: any;
@@ -40,7 +41,7 @@ export default function EmailPreview({ aircraft, mxItems, squawks, selectedAddon
       </div>
       <div className="border-t border-gray-200 pt-3 space-y-3">
         <p className="text-navy">Hello {aircraft.mx_contact || ''},</p>
-        <p className="text-gray-600">We&apos;d like to schedule service for <strong>{aircraft.tail_number}</strong> ({aircraft.aircraft_type}).</p>
+        <p className="text-gray-600">We&apos;d like to schedule service for <strong>{aircraft.tail_number}</strong> ({formatAircraftType(aircraft)}).</p>
         {proposedDate && <p className="text-navy font-bold">Requested Service Date: {proposedDate}</p>}
         {!proposedDate && <p className="text-gray-500">No preferred date on our end — propose dates that work for your shop.</p>}
         {allMx.length > 0 && <div><p className="text-[10px] font-bold uppercase tracking-widest text-mxOrange mb-1">Maintenance Items Due</p>{allMx.map((m, i) => <p key={i} className="text-navy ml-3">• <strong>{m.name}</strong>{m.desc ? ` — ${m.desc}` : ''}</p>)}</div>}

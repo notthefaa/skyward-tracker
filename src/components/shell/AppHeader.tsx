@@ -2,6 +2,7 @@
 
 import { ChevronDown, Warehouse, Send, ShieldCheck, Settings, LogOut } from "lucide-react";
 import type { AircraftWithMetrics, AircraftStatus, AppTab } from "@/lib/types";
+import { formatAircraftType } from "@/lib/aircraftDisplay";
 
 // Fixed top header. Holds the tail-number-with-status-dot button, the
 // aircraft-switch dropdown, and the right-side button bar (Hangar,
@@ -94,7 +95,7 @@ export default function AppHeader({
                       >
                         <div>
                           <span className={`font-oswald font-bold uppercase text-sm ${a.tail_number === activeTail ? 'text-info' : 'text-navy'}`}>{a.tail_number}</span>
-                          <span className="block text-[10px] text-gray-400 uppercase tracking-widest">{a.aircraft_type}</span>
+                          <span className="block text-[10px] text-gray-400 uppercase tracking-widest">{formatAircraftType(a)}</span>
                         </div>
                         {a.tail_number === activeTail && <div className="w-2 h-2 rounded-full bg-info shrink-0" />}
                       </button>

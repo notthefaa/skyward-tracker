@@ -9,6 +9,7 @@ import dynamic from "next/dynamic";
 import { PlaneTakeoff, Wrench, AlertTriangle, Droplet, Clock, Warehouse, Calendar } from "lucide-react";
 import { FleetSkeleton } from "@/components/Skeletons";
 import { AircraftAvatarImg } from "@/components/AircraftAvatarImg";
+import { formatAircraftType } from "@/lib/aircraftDisplay";
 
 const FleetSchedule = dynamic(() => import("@/components/tabs/FleetSchedule"));
 
@@ -212,7 +213,7 @@ export default function FleetSummary({
                   {ac.avatar_url ? <AircraftAvatarImg publicUrl={ac.avatar_url} alt="Avatar" width={48} height={48} loading="lazy" className="w-12 h-12 object-cover rounded-full border-2 border-white shadow-sm" /> : <div className="w-12 h-12 rounded-full bg-slateGray flex items-center justify-center text-white shadow-sm"><PlaneTakeoff size={20}/></div>}
                   <div>
                     <h3 className="font-oswald text-2xl font-bold text-navy leading-none uppercase">{ac.tail_number}</h3>
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mt-1">{ac.aircraft_type}</p>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mt-1">{formatAircraftType(ac)}</p>
                   </div>
                 </div>
                 <div className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-widest text-white shadow-inner ${statusColor}`}>

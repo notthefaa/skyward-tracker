@@ -317,7 +317,17 @@ export function buildUserContext(
   } else {
     lines.push("## User's hangar");
     for (const a of userAircraft) {
-      const parts = [a.tail_number, a.aircraft_type].filter(Boolean);
+      // Render "Make Model" together so Howard sees "Cessna 172N"
+      // not just "172N" — the aircraft_type column carries only
+      // the model after the post-onboarding shape fix. Same helper
+      // the display layer uses, lifted inline to avoid coupling
+      // server-side prompt assembly to a client-targeted file.
+      const make = ((a as any).make || '').trim();
+      const model = ((a as any).model || a.aircraft_type || '').trim();
+      const typeLabel = make && model && !model.toLowerCase().startsWith(make.toLowerCase() + ' ')
+        ? `${make} ${model}`
+        : (model || make);
+      const parts = [a.tail_number, typeLabel].filter(Boolean);
       if ((a as any).engine_type) parts.push((a as any).engine_type);
       parts.push(ifrLabel(a));
       lines.push(`- ${parts.join(' · ')}`);

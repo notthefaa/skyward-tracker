@@ -8,6 +8,7 @@ import { useToast } from "@/components/ToastProvider";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { useModalScrollLock } from "@/hooks/useModalScrollLock";
 import { friendlyPgError } from "@/lib/pgErrors";
+import { formatAircraftType } from "@/lib/aircraftDisplay";
 import type { AircraftWithMetrics, SystemSettings, AppTab, AppRole, AircraftRole } from "@/lib/types";
 import type { FleetIndexEntry } from "@/hooks/useFleetData";
 
@@ -622,7 +623,7 @@ export default function AdminModals({
               ) : (
                 globalFleetList.filter(ac => ac.tail_number.includes(globalFleetSearch)).map(ac => (
                   <button key={ac.id} onClick={() => handleSelectGlobalAircraft(ac)} disabled={isSelectingAircraft === ac.id} className="w-full bg-gray-50 border border-gray-200 p-3 rounded text-left flex justify-between items-center hover:border-navy hover:bg-blue-50 transition-colors active:scale-95 disabled:opacity-50">
-                    <div><span className="font-oswald text-lg font-bold text-navy uppercase block leading-none">{ac.tail_number}</span><span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1 block">{ac.aircraft_type}</span></div>
+                    <div><span className="font-oswald text-lg font-bold text-navy uppercase block leading-none">{ac.tail_number}</span><span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1 block">{formatAircraftType(ac)}</span></div>
                     {isSelectingAircraft === ac.id ? <Loader2 size={18} className="text-navy animate-spin" /> : <ChevronRight size={18} className="text-gray-400" />}
                   </button>
                 ))
@@ -728,7 +729,7 @@ export default function AdminModals({
                           <label key={ac.id} className="flex items-center gap-3 cursor-pointer">
                             <input type="checkbox" checked={hasAccess} onChange={() => toggleAccess(ac.id, hasAccess)} className="w-4 h-4 text-navy border-gray-300 rounded" />
                             <span className="font-bold text-sm text-navy uppercase">{ac.tail_number}</span>
-                            <span className="text-[10px] text-gray-500 uppercase">{ac.aircraft_type}</span>
+                            <span className="text-[10px] text-gray-500 uppercase">{formatAircraftType(ac)}</span>
                           </label>
                         );
                       })}

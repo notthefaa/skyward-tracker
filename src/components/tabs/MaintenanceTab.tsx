@@ -16,6 +16,7 @@ import type { AircraftWithMetrics, SystemSettings, AircraftRole, MxSubTab } from
 import useSWR from "swr";
 import { Wrench, Trash2, Plus, X, Edit2, Calendar, Send, ExternalLink, ChevronRight, HelpCircle, AlertTriangle, Download, Layers, Settings, ClipboardList, ShieldAlert, Camera, Loader2, CheckCircle } from "lucide-react";
 import { toLocalYmd } from "@/lib/dateFormat";
+import { formatAircraftType } from "@/lib/aircraftDisplay";
 import { PrimaryButton } from "@/components/AppButtons";
 import { useModalScrollLock } from "@/hooks/useModalScrollLock";
 import SquawksTab from "@/components/tabs/SquawksTab";
@@ -238,7 +239,7 @@ export default function MaintenanceTab({
       doc.setFont("helvetica", "bold"); doc.setFontSize(18);
       doc.text(`Maintenance History - ${aircraft.tail_number}`, 14, y); y += 8;
       doc.setFontSize(10); doc.setFont("helvetica", "normal");
-      doc.text(`${aircraft.aircraft_type} | SN: ${aircraft.serial_number || 'N/A'} | Generated ${new Date().toLocaleDateString()}`, 14, y); y += 15;
+      doc.text(`${formatAircraftType(aircraft)} | SN: ${aircraft.serial_number || 'N/A'} | Generated ${new Date().toLocaleDateString()}`, 14, y); y += 15;
 
       for (const ev of completedEvents) {
         if (y > 240) { doc.addPage(); y = 20; }

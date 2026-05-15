@@ -13,6 +13,7 @@ import {
   Upload, FileText, Paperclip, Loader2, RefreshCw
 } from "lucide-react";
 import { useToast } from "@/components/ToastProvider";
+import { formatAircraftType } from "@/lib/aircraftDisplay";
 
 const whiteBg = { backgroundColor: '#ffffff' } as const;
 
@@ -377,7 +378,7 @@ export default function ServicePortal() {
             <div className="bg-[#091F3C] p-6 text-white flex justify-between items-center">
               <div>
                 <h2 className="font-oswald text-3xl font-bold uppercase leading-none">{aircraft.tail_number}</h2>
-                <p className="text-xs font-bold uppercase tracking-widest mt-1 opacity-90">{aircraft.aircraft_type} • SN: {aircraft.serial_number || 'N/A'}</p>
+                <p className="text-xs font-bold uppercase tracking-widest mt-1 opacity-90">{formatAircraftType(aircraft)} • SN: {aircraft.serial_number || 'N/A'}</p>
               </div>
               <div className="text-right">
                 <span className="text-[10px] font-bold uppercase tracking-widest block mb-1">Status</span>

@@ -18,6 +18,7 @@ import { AircraftAvatarImg } from "@/components/AircraftAvatarImg";
 import { ModalPortal } from "@/components/ModalPortal";
 import { todayInZone } from "@/lib/pilotTime";
 import { newIdempotencyKey, idempotencyHeader } from "@/lib/idempotencyClient";
+import { formatAircraftType } from "@/lib/aircraftDisplay";
 
 export default function SummaryTab({
   aircraft, setActiveTab, onNavigateToSquawks, role, aircraftRole, onDeleteAircraft, sysSettings, onEditAircraft, refreshData, session, aircraftStatus, userInitials
@@ -480,7 +481,7 @@ export default function SummaryTab({
           )}
           <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent flex flex-col justify-end p-4 md:p-6 pointer-events-none">
             <h2 className="font-oswald text-4xl md:text-5xl font-bold text-white uppercase leading-none mb-1">{aircraft.tail_number}</h2>
-            <p className="text-xs md:text-sm text-gray-200 font-bold uppercase tracking-widest">{aircraft.aircraft_type} • SN: {aircraft.serial_number || 'N/A'}</p>
+            <p className="text-xs md:text-sm text-gray-200 font-bold uppercase tracking-widest">{formatAircraftType(aircraft)} • SN: {aircraft.serial_number || 'N/A'}</p>
           </div>
         </div>
 

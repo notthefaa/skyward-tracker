@@ -8,6 +8,7 @@ import { env } from '@/lib/env';
 import { escapeHtml } from '@/lib/sanitize';
 import { emailShell, heading, paragraph, callout, sectionHeading, bulletList, button } from '@/lib/email/layout';
 import { getAppUrl } from '@/lib/email/appUrl';
+import { formatAircraftType } from '@/lib/aircraftDisplay';
 
 const resend = new Resend(env.RESEND_API_KEY);
 const FROM_EMAIL = 'notifications@skywardsociety.com';
@@ -232,7 +233,7 @@ export async function POST(req: Request) {
 
       // Sanitize all user-provided values
       const safeTail = escapeHtml(aircraft.tail_number);
-      const safeType = escapeHtml(aircraft.aircraft_type);
+      const safeType = escapeHtml(formatAircraftType(aircraft));
       const safeMxContact = escapeHtml(aircraft.mx_contact);
       const safeMainContact = escapeHtml(aircraft.main_contact || 'Skyward Operations');
       const safeMainPhone = escapeHtml(aircraft.main_contact_phone);

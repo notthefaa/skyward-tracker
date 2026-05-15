@@ -8,6 +8,7 @@ import { env } from '@/lib/env';
 import { escapeHtml } from '@/lib/sanitize';
 import { emailShell, heading, paragraph, callout, sectionHeading, bulletList, button } from '@/lib/email/layout';
 import { getAppUrl } from '@/lib/email/appUrl';
+import { formatAircraftType } from '@/lib/aircraftDisplay';
 
 const resend = new Resend(env.RESEND_API_KEY);
 const FROM_EMAIL = 'notifications@skywardsociety.com';
@@ -170,9 +171,9 @@ export async function POST(req: Request) {
         emailSkippedReason = 'rate_limited';
       } else {
         const { data: aircraft } = await supabaseAdmin
-          .from('aft_aircraft').select('tail_number, aircraft_type, main_contact, main_contact_email').eq('id', event.aircraft_id).single();
+          .from('aft_aircraft').select('tail_number, aircraft_type, make, model, main_contact, main_contact_email').eq('id', event.aircraft_id).single();
         const safeTail = escapeHtml(aircraft?.tail_number || '');
-        const safeType = escapeHtml(aircraft?.aircraft_type || '');
+        const safeType = escapeHtml(formatAircraftType(aircraft));
         const safeMxContact = escapeHtml(event.mx_contact_name || '');
         const safeMainContact = escapeHtml(aircraft?.main_contact || 'Skyward Operations');
 

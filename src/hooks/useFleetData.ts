@@ -26,6 +26,7 @@ export interface FleetIndexEntry {
   id: string;
   tail_number: string;
   aircraft_type: string;
+  make?: string | null;
 }
 
 export function useFleetData() {
@@ -116,7 +117,7 @@ export function useFleetData() {
 
     const { data, error } = await supabase
       .from('aft_aircraft')
-      .select('id, tail_number, aircraft_type')
+      .select('id, tail_number, aircraft_type, make')
       .is('deleted_at', null)
       .order('tail_number');
 
