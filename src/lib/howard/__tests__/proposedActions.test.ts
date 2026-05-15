@@ -62,7 +62,19 @@ function makeSb(handlers: Record<string, (op: string, ctx: any) => any>) {
     };
     return chain;
   };
-  return { sb: { from } as any, calls };
+  // onboarding_setup reads the user's email via auth.admin.getUserById
+  // so pilot-invite's dedupe-by-email scan doesn't treat a
+  // Howard-onboarded user as new. Stub a fixed email; tests that care
+  // about the email value can read it via the upsert payload.
+  const auth = {
+    admin: {
+      getUserById: (_id: string) => Promise.resolve({
+        data: { user: { id: _id, email: `${_id}@example.test` } },
+        error: null,
+      }),
+    },
+  };
+  return { sb: { from, auth } as any, calls };
 }
 
 function baseAction(overrides: Partial<ProposedAction> = {}): ProposedAction {

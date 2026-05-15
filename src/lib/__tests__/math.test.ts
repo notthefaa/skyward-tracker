@@ -662,3 +662,94 @@ describe('computeMxDueState', () => {
     expect(s.daysLeft).toBe(45);
   });
 });
+
+// ---------------------------------------------------------------
+// Burn-rate cadence invariance (v4 regression guard)
+// ---------------------------------------------------------------
+// v3 multiplied activeRate by activityRatio = distinct-flight-days /
+// 90, which under-predicted batch loggers by 3-14× — a real safety
+// bug because MX "Due in N days" stayed green well past real deadlines.
+// v4's burn rate is EWMA-weighted hours / EWMA-weighted calendar days
+// in the observed-history window, so logging cadence doesn't move the
+// answer.
+
+describe('burn-rate cadence invariance (v4)', () => {
+  // Same aircraft, same 5 hrs/week of real usage over a 90-day span,
+  // expressed two ways: 3 short flights/week vs. one batched entry/week.
+  // The predicted burn rate must come out within ~10% of each other.
+  it('diligent vs weekly-batched logging yields the same burn rate', () => {
+    const startTach = 1000;
+    const now = Date.now();
+
+    // Generate the per-flight schedule first, then sort oldest→newest,
+    // then accumulate tach in that order so it stays monotonic.
+    type Leg = { daysAgo: number; hours: number };
+    const diligentLegs: Leg[] = [];
+    for (let week = 0; week < 13; week++) {
+      for (let f = 0; f < 3; f++) {
+        diligentLegs.push({ daysAgo: week * 7 + f * 2, hours: 5 / 3 });
+      }
+    }
+    const weeklyLegs: Leg[] = [];
+    for (let week = 0; week < 13; week++) {
+      weeklyLegs.push({ daysAgo: week * 7, hours: 5 });
+    }
+
+    const toLogs = (legs: Leg[]) => {
+      // Sort oldest first (largest daysAgo first).
+      const sorted = [...legs].sort((a, b) => b.daysAgo - a.daysAgo);
+      let tach = startTach;
+      return sorted.map(leg => {
+        tach += leg.hours;
+        const ts = new Date(now - leg.daysAgo * MS_PER_DAY).toISOString();
+        return {
+          aircraft_id: 'p', tach: Number(tach.toFixed(2)), ftt: null,
+          occurred_at: ts, created_at: ts,
+        };
+      });
+    };
+
+    const diligentLogs = toLogs(diligentLegs);
+    const weeklyLogs = toLogs(weeklyLegs);
+
+    // Sanity: both series cover ~the same total hours.
+    const dTotal = diligentLogs[diligentLogs.length - 1].tach! - startTach;
+    const wTotal = weeklyLogs[weeklyLogs.length - 1].tach! - startTach;
+    expect(Math.abs(dTotal - wTotal)).toBeLessThan(0.5);
+
+    const plane = makePlane({ total_engine_time: diligentLogs[diligentLogs.length - 1].tach });
+    const diligent = computeMetrics(plane, diligentLogs);
+    const weekly = computeMetrics(plane, weeklyLogs);
+
+    // Within 15% of each other. v3 had ~3× gap here.
+    const delta = Math.abs(diligent.burnRate - weekly.burnRate);
+    const avg = (diligent.burnRate + weekly.burnRate) / 2;
+    expect(delta / avg).toBeLessThan(0.15);
+
+    // And both reflect the real ~0.7 hrs/day usage, not the v3
+    // under-estimate (~0.1-0.3 hrs/day).
+    expect(diligent.burnRate).toBeGreaterThan(0.4);
+    expect(weekly.burnRate).toBeGreaterThan(0.4);
+  });
+
+  it('parked aircraft outside the lookback window reads as zero burn rate', () => {
+    // Old flights 200-250 days ago, nothing recent. v4's lookback caps
+    // at MAX_LOOKBACK_DAYS=180 so these events drop out entirely.
+    const now = Date.now();
+    const logs = [
+      {
+        aircraft_id: 'p', tach: 1000, ftt: null,
+        occurred_at: new Date(now - 250 * MS_PER_DAY).toISOString(),
+        created_at: new Date(now - 250 * MS_PER_DAY).toISOString(),
+      },
+      {
+        aircraft_id: 'p', tach: 1005, ftt: null,
+        occurred_at: new Date(now - 200 * MS_PER_DAY).toISOString(),
+        created_at: new Date(now - 200 * MS_PER_DAY).toISOString(),
+      },
+    ];
+    const plane = makePlane({ total_engine_time: 1005 });
+    const result = computeMetrics(plane, logs);
+    expect(result.burnRate).toBe(0);
+  });
+});

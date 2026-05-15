@@ -1,12 +1,18 @@
 // =============================================================
-// PREDICTIVE MAINTENANCE ENGINE v3
+// PREDICTIVE MAINTENANCE ENGINE v4
 //
 // Designed for operational accuracy in a maintenance shop context.
 //
 // Key design decisions:
-// - Burn rate is computed on ACTIVE DAYS ONLY (days the plane actually flew),
-//   then combined with an activity ratio (what % of days have flights) to
-//   produce the calendar burn rate. This correctly handles idle gaps.
+// - Burn rate is EWMA-weighted hours flown divided by EWMA-weighted
+//   calendar days in the observed history window (capped at
+//   MAX_LOOKBACK_DAYS). This produces the same answer regardless of
+//   whether the pilot logs each flight separately or batches a week's
+//   hours into one entry — both record the same total hours over the
+//   same calendar span, so the predicted daily rate matches. (v3 used
+//   activeRate × activityRatio, which under-predicted by 3-14× for
+//   pilots who batched their log entries — a safety bug because MX
+//   "Due in N days" text trended green long after the deadline.)
 // - Variance is measured on 7-day rolling windows of hours accumulated,
 //   not per-flight increments. This avoids penalizing legitimate patterns
 //   like mixed short hops and long repositioning flights.
@@ -123,74 +129,70 @@ function extractFlightEvents(
 }
 
 // ---------------------------------------------------------------
-// BURN RATE: Active-days weighted average
+// BURN RATE: EWMA hours / EWMA calendar days
 // ---------------------------------------------------------------
 
 /**
- * Computes the exponentially-weighted burn rate using active-day weighting.
+ * Computes a calendar-day burn rate (hours per day) that is invariant
+ * to the pilot's logging cadence.
  *
- * Two metrics:
+ *   calendarRate = Σ(hoursFlown_i × w_i) / Σ(w_d)
  *
- * 1. activeRate: How fast the plane burns hours when it IS flying
- *    (weighted average of hoursFlown / daysSincePrev, gaps > 14 days
- *    capped so they don't dilute).
+ * where:
+ *   w_i = 2^(-daysAgo_i / BURN_RATE_HALF_LIFE)   for each flight event
+ *   w_d = 2^(-d / BURN_RATE_HALF_LIFE)           for each calendar day
+ *                                                 in the lookback window
  *
- * 2. activityRatio: What fraction of the last 90 days had at least
- *    one flight. This is a strict flight-day count — gaps between
- *    flights don't get counted as "in rotation" because that
- *    overstates utilization for sporadic aircraft. A plane that
- *    flew on 10 separate days in the last 90 has activityRatio ≈
- *    0.11, which correctly shows up as a low calendar rate.
+ * Lookback is bounded by min(oldest-observed-event-days, MAX_LOOKBACK_DAYS)
+ * so a fresh aircraft with two weeks of history isn't penalized by 180
+ * days of zero-data in the denominator, and a mature aircraft uses the
+ * full window.
  *
- * calendarBurnRate = activeRate * activityRatio
+ * Two pilots flying the same aircraft the same total hours over the
+ * same calendar span produce the same burnRate regardless of whether
+ * they logged 3 flights/week or 1 batched entry/week — the numerator
+ * and denominator both depend on calendar time, not on event count.
+ * (The v3 formula multiplied by an `activityRatio = distinct-flight-days
+ * / 90` term that punished batched loggers by 3-14×, a safety regression
+ * because MX "Due in N days" trended green past real deadlines.)
  */
-function computeBurnRate(events: FlightEvent[]): {
-  calendarRate: number;
-  activeRate: number;
-  activityRatio: number;
-} {
+function computeBurnRate(events: FlightEvent[]): { calendarRate: number } {
   if (events.length === 0) {
-    return { calendarRate: 0, activeRate: 0, activityRatio: 0 };
+    return { calendarRate: 0 };
   }
 
-  // --- Active rate (exponentially weighted) ---
-  let weightedHours = 0;
-  let weightedActiveDays = 0;
+  // Events are sorted ascending by occurred_at — events[0] has the
+  // LARGEST daysAgo. Each event's daysSincePrev points to the gap
+  // before it, so the oldest log's timestamp is at
+  // (events[0].daysAgo + events[0].daysSincePrev) days ago.
+  const oldestEvt = events[0];
+  const oldestLogDaysAgo = oldestEvt.daysAgo + oldestEvt.daysSincePrev;
+  const lookbackDays = Math.min(
+    Math.ceil(oldestLogDaysAgo) + 1,
+    MAX_LOOKBACK_DAYS,
+  );
 
+  // Numerator: EWMA-weighted hours within the lookback window.
+  let weightedHours = 0;
   for (const evt of events) {
+    if (evt.daysAgo >= MAX_LOOKBACK_DAYS) continue;
     const weight = Math.pow(2, -evt.daysAgo / BURN_RATE_HALF_LIFE);
     weightedHours += evt.hoursFlown * weight;
-    // Cap the gap at 14 days — longer gaps represent idle periods, not slow flying
-    const activeDays = Math.min(evt.daysSincePrev, 14);
-    weightedActiveDays += activeDays * weight;
   }
 
-  const activeRate = weightedActiveDays > 0 ? weightedHours / weightedActiveDays : 0;
+  // Denominator: EWMA-weighted calendar days in the lookback window.
+  // Closed-form via geometric series: Σ r^d for d=0..(N-1) where
+  // r = 2^(-1/HALF_LIFE). r is constant per process, but recompute
+  // here so future tweaks to HALF_LIFE flow through automatically.
+  const r = Math.pow(2, -1 / BURN_RATE_HALF_LIFE);
+  // (1 - r^N) / (1 - r) — handles r=1 edge case via the if.
+  const totalDayWeight = r === 1
+    ? lookbackDays
+    : (1 - Math.pow(r, lookbackDays)) / (1 - r);
 
-  // --- Activity ratio (last 90 days) ---
-  // Count DISTINCT days that had at least one flight. The old logic
-  // filled days between flights which overstated activity — a plane
-  // that flew once on day 0 and once on day 30 would mark all 30
-  // intermediate days as "active," inflating the ratio to 33% on an
-  // aircraft that was parked 93% of the month. Strict flight-day
-  // count is the operationally honest metric.
-  const now = Date.now();
-  const ninetyDaysAgo = now - (90 * MS_PER_DAY);
-  const recentEvents = events.filter(e => e.timestamp >= ninetyDaysAgo);
+  const calendarRate = totalDayWeight > 0 ? weightedHours / totalDayWeight : 0;
 
-  let activityRatio = 0;
-  if (recentEvents.length > 0) {
-    const activeDaySet = new Set<number>();
-    for (const evt of recentEvents) {
-      const flightDay = Math.floor((now - evt.timestamp) / MS_PER_DAY);
-      if (flightDay >= 0 && flightDay < 90) activeDaySet.add(flightDay);
-    }
-    activityRatio = activeDaySet.size / 90;
-  }
-
-  const calendarRate = activeRate * activityRatio;
-
-  return { calendarRate, activeRate, activityRatio };
+  return { calendarRate };
 }
 
 // ---------------------------------------------------------------
