@@ -480,7 +480,7 @@ export const tools: Anthropic.Tool[] = [
         landings: { type: 'number', description: 'Landing count for the flight.' },
         engine_cycles: { type: 'number', description: 'Turbine only — engine cycles for the flight.' },
         fuel_gallons: { type: 'number', description: 'Optional fuel-state-after gallons.' },
-        trip_reason: { type: 'string', description: 'Optional purpose code (e.g. Training, XC, Proficiency).' },
+        trip_reason: { type: 'string', description: 'Optional purpose code. Must be one of: PE (Personal Entertainment), BE (Business Entertainment), MX (Maintenance), T (Training), ADJ (Adjustment — book-keeping entry to true up meters; expect 0 landings).' },
         pax_info: { type: 'string', description: 'Optional passenger info string.' },
         occurred_at: { type: 'string', description: 'ISO datetime the flight actually ended. Omit to default to now.' },
       },

@@ -606,6 +606,7 @@ export default function TimesTab({
               <li><strong className="text-info w-8 inline-block">BE:</strong> Business Entertainment</li>
               <li><strong className="text-info w-8 inline-block">MX:</strong> Maintenance</li>
               <li><strong className="text-info w-8 inline-block">T:</strong> Training</li>
+              <li><strong className="text-info w-12 inline-block">ADJ:</strong> Adjustment (book-keeping; 0 landings OK)</li>
             </ul>
           </div>
           </div>
@@ -664,7 +665,7 @@ export default function TimesTab({
               <div className={`grid ${isTurbine ? 'grid-cols-2' : 'grid-cols-1'} gap-4`}>
                 <div>
                   <div className="flex items-center justify-between mb-1 h-4"><label className="text-[10px] font-bold uppercase tracking-widest text-navy">Landings <span className="text-danger">*</span></label></div>
-                  <input type="number" min="0" style={whiteBg} required value={logLandings} onChange={e=>setLogLandings(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-info outline-none bg-white" placeholder="0 for ferry / reposition" />
+                  <input type="number" min="0" style={whiteBg} required value={logLandings} onChange={e=>setLogLandings(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm focus:border-info outline-none bg-white" placeholder="0 for ferry / reposition / adjustment" />
                 </div>
                 {isTurbine && (
                   <div>
@@ -699,7 +700,7 @@ export default function TimesTab({
                     <label className="text-[10px] font-bold uppercase tracking-widest text-navy">Reason (Opt)</label>
                     <button type="button" onClick={() => setShowLegend(true)} className="text-[10px] text-info hover:text-blue-600 flex items-center gap-1 font-bold uppercase"><Info size={10} /> Legend</button>
                   </div>
-                  <select value={logReason} onChange={e=>setLogReason(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm bg-white focus:border-info outline-none"><option value="">Select...</option><option value="PE">PE</option><option value="BE">BE</option><option value="MX">MX</option><option value="T">T</option></select>
+                  <select value={logReason} onChange={e=>setLogReason(e.target.value)} className="w-full border border-gray-300 rounded p-3 text-sm bg-white focus:border-info outline-none"><option value="">Select...</option><option value="PE">PE</option><option value="BE">BE</option><option value="MX">MX</option><option value="T">T</option><option value="ADJ">ADJ</option></select>
                 </div>
               </div>
 

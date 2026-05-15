@@ -1394,7 +1394,7 @@ CREATE TABLE public.aft_flight_logs (
     deleted_at timestamp with time zone,
     deleted_by uuid,
     occurred_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT aft_flight_logs_trip_reason_check CHECK (((trip_reason = ANY (ARRAY['PE'::text, 'BE'::text, 'MX'::text, 'T'::text, ''::text])) OR (trip_reason IS NULL)))
+    CONSTRAINT aft_flight_logs_trip_reason_check CHECK (((trip_reason = ANY (ARRAY['PE'::text, 'BE'::text, 'MX'::text, 'T'::text, 'ADJ'::text, ''::text])) OR (trip_reason IS NULL)))
 );
 
 

@@ -1003,6 +1003,7 @@ export default function AdminModals({
                         <option value="BE">BE</option>
                         <option value="MX">MX</option>
                         <option value="T">T</option>
+                        <option value="ADJ">ADJ</option>
                       </select>
                     </div>
                   </div>
