@@ -12,6 +12,7 @@ import { friendlyPgError } from "@/lib/pgErrors";
 import type { AircraftWithMetrics } from "@/lib/types";
 import { X } from "lucide-react";
 import AircraftForm, { type AircraftFormPayload } from "@/components/AircraftForm";
+import { parseSetupMeters } from "@/lib/aircraftSetup";
 
 export default function AircraftModal({
   session,
@@ -113,12 +114,16 @@ export default function AircraftModal({
     }
 
     // 2. Assemble the base payload + time fields.
-    const setupAirframe = payload.airframeTimeRaw !== '' ? parseFloat(payload.airframeTimeRaw) : null;
+    // parseSetupMeters also coerces a solo airframe-0 to null when
+    // the engine reading is positive — see helper for the rationale.
     // Engine time is validated to be a finite non-negative number by
     // AircraftForm before onSubmit fires (when fields aren't locked).
     // For edit-with-flight-logs the field is disabled and we keep the
     // existing setup_* values via the latest-log path below.
-    const setupEngine = payload.engineTimeRaw !== '' ? parseFloat(payload.engineTimeRaw) : null;
+    const { setupAirframe, setupEngine } = parseSetupMeters(
+      payload.airframeTimeRaw,
+      payload.engineTimeRaw,
+    );
 
     const basePayload: Record<string, any> = {
       tail_number: tailUpper,

@@ -8,6 +8,7 @@ import { registerPendingUpload } from "@/hooks/useDocStatusWatcher";
 import { useToast } from "@/components/ToastProvider";
 import { LogOut } from "lucide-react";
 import AircraftForm, { type AircraftFormPayload } from "@/components/AircraftForm";
+import { parseSetupMeters } from "@/lib/aircraftSetup";
 
 export default function PilotOnboarding({
   session,
@@ -55,10 +56,15 @@ export default function PilotOnboarding({
     }
 
     // 2. Create the aircraft via /api/aircraft/create.
-    const setupAirframe = payload.airframeTimeRaw !== '' ? parseFloat(payload.airframeTimeRaw) : null;
+    // parseSetupMeters also coerces a solo airframe-0 to null when
+    // the engine reading is positive — see helper for the rationale.
     // AircraftForm rejects blank/non-finite engineTimeRaw before
-    // onSubmit fires, so parseFloat here is safe (no NaN fallback).
-    const setupEngine = parseFloat(payload.engineTimeRaw);
+    // onSubmit fires, so setupEngine is guaranteed numeric here.
+    const { setupAirframe, setupEngine: setupEngineMaybeNull } = parseSetupMeters(
+      payload.airframeTimeRaw,
+      payload.engineTimeRaw,
+    );
+    const setupEngine = setupEngineMaybeNull as number;
 
     const apiPayload = {
       tail_number: tailUpper,

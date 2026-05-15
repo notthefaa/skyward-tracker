@@ -27,6 +27,7 @@ import {
   submitSquawk,
 } from '@/lib/submissions';
 import { sendReservationCancelledEmail } from '@/lib/reservationCancel';
+import { normalizeSetupMeters } from '@/lib/aircraftSetup';
 
 export type ActionType =
   | 'reservation'
@@ -649,26 +650,38 @@ export async function executeAction(
       // total_* columns seed from setup_* so live totals start accurate
       // before the first flight log lands.
       //
-      // The unused-meter pair for this engine type is pinned to NULL
-      // (not left absent) so the schema's DEFAULT 0 doesn't sneak in.
-      // log_flight_atomic's first-flight sanity fallback otherwise
-      // reads a stale setup_hobbs=0 on a piston tach-only aircraft and
-      // anchors the 24hr delta check against 0 instead of setup_tach.
-      // See migration 074 for the matching DB-side nullif fix.
+      // Two guards before the row goes into aft_aircraft:
+      //
+      //   1. Pin the unused-meter pair for this engine type to NULL
+      //      (not left absent) so the schema's DEFAULT 0 doesn't sneak
+      //      in. log_flight_atomic's first-flight sanity fallback
+      //      otherwise reads a stale setup_hobbs=0 on a piston
+      //      tach-only aircraft and anchors the 24hr delta check
+      //      against 0 instead of setup_tach. See migration 074 for
+      //      the matching DB-side nullif fix.
+      //
+      //   2. normalizeSetupMeters coerces a solo airframe-0 to null
+      //      when the engine is positive — same form-side coerce
+      //      AircraftModal applies. Catches the pilot saying "no
+      //      hobbs" to Howard and Claude lowering that into
+      //      setup_hobbs: 0.
       const isTurb = p.aircraft.engine_type === 'Turbine';
-      aircraftRow.setup_aftt  = isTurb ? (p.aircraft.setup_aftt  ?? null) : null;
-      aircraftRow.setup_ftt   = isTurb ? (p.aircraft.setup_ftt   ?? null) : null;
-      aircraftRow.setup_hobbs = isTurb ? null : (p.aircraft.setup_hobbs ?? null);
-      aircraftRow.setup_tach  = isTurb ? null : (p.aircraft.setup_tach  ?? null);
+      const { setupAirframe: setupAirNorm, setupEngine: setupEngNorm } = normalizeSetupMeters(
+        isTurb ? (p.aircraft.setup_aftt ?? null) : (p.aircraft.setup_hobbs ?? null),
+        isTurb ? (p.aircraft.setup_ftt  ?? null) : (p.aircraft.setup_tach  ?? null),
+      );
+      aircraftRow.setup_aftt  = isTurb ? setupAirNorm : null;
+      aircraftRow.setup_ftt   = isTurb ? setupEngNorm : null;
+      aircraftRow.setup_hobbs = isTurb ? null : setupAirNorm;
+      aircraftRow.setup_tach  = isTurb ? null : setupEngNorm;
 
-      if (p.aircraft.setup_aftt != null) aircraftRow.total_airframe_time = p.aircraft.setup_aftt;
-      if (p.aircraft.setup_ftt  != null) aircraftRow.total_engine_time   = p.aircraft.setup_ftt;
-      if (p.aircraft.setup_hobbs != null && aircraftRow.total_airframe_time == null) {
-        aircraftRow.total_airframe_time = p.aircraft.setup_hobbs;
-      }
-      if (p.aircraft.setup_tach != null && aircraftRow.total_engine_time == null) {
-        aircraftRow.total_engine_time = p.aircraft.setup_tach;
-      }
+      // total_* seed: airframe stays NULL when there's no airframe
+      // meter — don't mirror tach into airframe (Tach ≠ Hobbs), the
+      // first flight log will derive the right total via the
+      // log_flight_atomic latest-log coalesce chain. Same posture as
+      // PilotOnboarding.
+      if (setupAirNorm != null) aircraftRow.total_airframe_time = setupAirNorm;
+      if (setupEngNorm != null) aircraftRow.total_engine_time   = setupEngNorm;
 
       const { data: created, error: acErr } = await sb
         .from('aft_aircraft')
