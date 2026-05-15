@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { tavily } from '@tavily/core';
 import OpenAI from 'openai';
 import { computeAirworthinessStatus } from '@/lib/airworthiness';
+import { computeMetrics, processMxItem } from '@/lib/math';
 import { syncAdsForAircraft } from '@/lib/drs';
 import { logEvent } from '@/lib/requestId';
 import { isIsoDate, isIsoDateTime, parseFiniteNumber } from '@/lib/validation';
@@ -163,18 +164,63 @@ const handlers: Record<string, ToolHandler> = {
 
   get_maintenance_items: async (params, sb, aircraftId) => {
     const limit = clampLimit(params.limit, 25, 100);
-    let query = sb.from('aft_maintenance_items')
+    let itemsQ = sb.from('aft_maintenance_items')
       .select('*')
       .eq('aircraft_id', aircraftId)
       .is('deleted_at', null)
       .order('due_date', { ascending: true })
       .order('due_time', { ascending: true })
       .limit(limit);
-    if (params.tracking_type) query = query.eq('tracking_type', params.tracking_type);
-    if (params.required_only) query = query.eq('is_required', true);
-    const { data, error } = await query;
-    if (error) return { error: error.message };
-    return { count: (data || []).length, items: data };
+    if (params.tracking_type) itemsQ = itemsQ.eq('tracking_type', params.tracking_type);
+    if (params.required_only) itemsQ = itemsQ.eq('is_required', true);
+
+    // Enrich each row with the same burnRate-derived projection the
+    // MaintenanceTab UI shows, so Howard doesn't quote raw "due in 50
+    // hours" while the screen reads "due in 50 hrs (~71 days)". Without
+    // this Howard improvises a days-estimate (or omits one), and
+    // pilots get inconsistent urgency framing across surfaces. Logs
+    // sorted ascending by occurred_at (computeMetrics contract).
+    const [itemsRes, acRes, logsRes] = await Promise.all([
+      itemsQ,
+      sb.from('aft_aircraft')
+        .select('total_engine_time, engine_type, time_zone')
+        .eq('id', aircraftId).maybeSingle(),
+      sb.from('aft_flight_logs')
+        .select('aircraft_id, ftt, tach, created_at, occurred_at')
+        .eq('aircraft_id', aircraftId)
+        .is('deleted_at', null)
+        .order('occurred_at', { ascending: true })
+        .limit(500),
+    ]);
+
+    if (itemsRes.error) return { error: itemsRes.error.message };
+    const rows = itemsRes.data || [];
+    const aircraft = acRes.data;
+    const logs = (logsRes.data || []) as any[];
+
+    let enriched = rows;
+    if (aircraft) {
+      const { burnRate, burnRateLow, burnRateHigh } = computeMetrics(aircraft, logs);
+      enriched = rows.map((row: any) => {
+        const p = processMxItem(
+          row,
+          aircraft.total_engine_time ?? 0,
+          burnRate,
+          burnRateLow,
+          burnRateHigh,
+          aircraft.time_zone ?? null,
+        );
+        return {
+          ...row,
+          due_text: p.dueText,
+          is_expired: p.isExpired,
+          hours_remaining: p.remaining,
+          projected_days: Number.isFinite(p.projectedDays) ? p.projectedDays : null,
+        };
+      });
+    }
+
+    return { count: enriched.length, items: enriched };
   },
 
   get_service_events: async (params, sb, aircraftId) => {
