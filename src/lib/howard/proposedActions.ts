@@ -585,10 +585,21 @@ export async function executeAction(
       // where the trigger hasn't landed) wouldn't have one — UPDATE
       // would silently no-op and leave completed_onboarding=false,
       // bouncing the user back into onboarding next render.
+      //
+      // Include `email` so pilot-invite's dedupe-by-email lookup
+      // (which scans aft_user_roles.email) doesn't see this user as
+      // "new" and create a second auth row. The classic-form path
+      // already writes email here via /api/user/onboarding-complete;
+      // the Howard path was missing it.
+      let userEmail: string | null = null;
+      const { data: userInfo, error: userErr } = await sb.auth.admin.getUserById(userId);
+      if (userErr) throw userErr;
+      userEmail = userInfo?.user?.email ?? null;
       const profileFields: Record<string, any> = {
         user_id: userId,
         full_name: p.profile.full_name.trim(),
         initials: p.profile.initials.toUpperCase().slice(0, 3),
+        email: userEmail,
         // NOTE: completed_onboarding is intentionally NOT flipped here.
         // We flip it only after the aircraft + access rows land
         // successfully — otherwise a partial failure (e.g. dup-tail

@@ -340,12 +340,13 @@ export async function GET(req: Request) {
     if (!aircraftId) return NextResponse.json({ error: 'Aircraft ID required.' }, { status: 400 });
     await requireAircraftAccess(supabaseAdmin, user.id, aircraftId);
 
-    const { data: docs } = await supabaseAdmin
+    const { data: docs, error } = await supabaseAdmin
       .from('aft_documents')
       .select('*')
       .eq('aircraft_id', aircraftId)
       .is('deleted_at', null)
       .order('created_at', { ascending: false });
+    if (error) throw error;
 
     return NextResponse.json({ documents: docs || [] });
   } catch (error) { return handleApiError(error, req); }

@@ -195,6 +195,12 @@ export default function SummaryTab({
     setQlCycles("1");
     setQlReason("");
     setQlInitials(userInitials || "");
+    // Mint a fresh idempotency key per modal-open. Without this, a
+    // closed-then-reopened modal would reuse the key from the prior
+    // attempt — if the first POST cached a non-network failure, the
+    // retry with legitimately different values would replay the
+    // cached failure instead of hitting the RPC.
+    quickLogIdemKeyRef.current = null;
     setShowQuickLogModal(true);
   };
 

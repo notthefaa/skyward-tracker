@@ -65,7 +65,12 @@ export default function PilotOnboarding({
       serial_number: payload.serialNumber,
       aircraft_type: payload.aircraftType,
       engine_type: payload.engineType,
-      total_airframe_time: setupAirframe != null ? setupAirframe : setupEngine,
+      // Don't fall back to setupEngine — Tach ≠ Hobbs on piston aircraft
+      // and FTT ≠ AFTT on turbines (engine time excludes ground-time the
+      // airframe accumulates). Mirroring engine→airframe seeds a wrong
+      // total that drifts on every subsequent log diff. AircraftModal
+      // sends the bare value; match that.
+      total_airframe_time: setupAirframe,
       total_engine_time: setupEngine,
       setup_aftt: payload.engineType === 'Turbine' ? setupAirframe : null,
       setup_ftt: payload.engineType === 'Turbine' ? setupEngine : null,

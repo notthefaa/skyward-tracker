@@ -171,9 +171,20 @@ export async function PUT(req: Request) {
 
 // DELETE — soft-delete flight log (admin only). Aircraft totals self-
 // derive from the remaining latest-by-occurred_at log after the delete.
+//
+// Idempotency: a double-tap on Delete or an iOS-suspended retry would
+// otherwise hit the RPC twice; the second call raises P0001 "Flight log
+// is already deleted" and the user sees an error toast despite the
+// first call succeeding. Cache the success response so retries replay
+// it cleanly. Same pattern as PUT.
 export async function DELETE(req: Request) {
   try {
     const { user, supabaseAdmin } = await requireAuth(req);
+
+    const idem = idempotency(supabaseAdmin, user.id, req, 'flight-logs/DELETE');
+    const cached = await idem.check();
+    if (cached) return cached;
+
     const { logId, aircraftId, aircraftUpdate } = await req.json();
     if (!logId || !aircraftId) return NextResponse.json({ error: 'Log ID and Aircraft ID required.' }, { status: 400 });
     await requireAircraftAdmin(supabaseAdmin, user.id, aircraftId);
@@ -189,6 +200,8 @@ export async function DELETE(req: Request) {
       return NextResponse.json({ error: friendlyPgError(rpcErr) }, { status });
     }
 
-    return NextResponse.json({ success: true });
+    const okBody = { success: true };
+    await idem.save(200, okBody);
+    return NextResponse.json(okBody);
   } catch (error) { return handleApiError(error, req); }
 }
