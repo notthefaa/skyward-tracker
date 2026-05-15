@@ -58,9 +58,18 @@ export default function UpdatePassword() {
       }
 
       // 2. Standard Fallback Check
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-         setSession(session);
+      // Bound against an 8s timer — iOS resume with a wedged GoTrue
+      // lock can hang getSession() indefinitely, leaving the user on
+      // the verifying spinner with no way out. Mirror the pattern in
+      // service/[id]/page.tsx. On miss, fall through to the
+      // onAuthStateChange subscription below which fires when the
+      // GoTrue thread eventually unsticks.
+      const sessionResult = await Promise.race([
+        supabase.auth.getSession().then(r => ({ ok: true as const, data: r.data })),
+        new Promise<{ ok: false }>(resolve => setTimeout(() => resolve({ ok: false }), 8000)),
+      ]);
+      if (sessionResult.ok && sessionResult.data.session) {
+         setSession(sessionResult.data.session);
       }
       setIsVerifying(false);
     };

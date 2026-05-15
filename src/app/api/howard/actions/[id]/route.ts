@@ -70,21 +70,42 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     // Attribute subsequent writes to the user via the audit trigger.
     await setAppUser(supabaseAdmin, user.id);
 
-    // Run the side-effect first, then record the outcome as a single
-    // status flip. The old flow marked `confirmed` up front (for audit
-    // intent) and relied on a second update to set `executed` or
-    // `failed`. That left a failure window: if the second update
-    // failed the row stayed stuck in `confirmed` — neither retryable
-    // nor visibly failed. Single-flip avoids the stuck state; the
-    // confirm timestamp is still recorded via confirmed_at on success.
+    // ATOMIC CLAIM. Two devices (phone + laptop) tapping Confirm on
+    // the same card each mint their own X-Idempotency-Key, so the
+    // idempotency check above doesn't dedupe them. Without the claim,
+    // both pass the `status === 'pending'` check higher up, both run
+    // executeAction, and the user ends up with two squawks / two
+    // notes / two equipment rows. Race-condition double-write.
+    //
+    // The claim is a single UPDATE atomically transitioning the row
+    // from pending|failed → confirmed. Postgres MVCC serializes the
+    // two UPDATEs; one returns the row, the other returns zero rows
+    // and gets 409. The losing device sees "Action already claimed
+    // by another device." and bails.
+    //
+    // status='confirmed' is the intent marker; the old comment
+    // warning about stuck-confirmed (after this comment block) is
+    // accepted as the lesser evil — double-write is irrecoverable
+    // (duplicate user-visible rows in the DB), stuck-confirmed is
+    // admin-recoverable + the side-effect did actually happen.
+    const { data: claimed, error: claimErr } = await supabaseAdmin
+      .from('aft_proposed_actions')
+      .update({ status: 'confirmed', confirmed_at: new Date().toISOString(), confirmed_by: user.id })
+      .eq('id', id)
+      .in('status', ['pending', 'failed'])
+      .select('id')
+      .maybeSingle();
+    if (claimErr) throw claimErr;
+    if (!claimed) {
+      return NextResponse.json({ error: 'Action already claimed by another device or already resolved.' }, { status: 409 });
+    }
+
     try {
       const result = await executeAction(supabaseAdmin, action as ProposedAction, user.id);
       const { error: updateErr } = await supabaseAdmin
         .from('aft_proposed_actions')
         .update({
           status: 'executed',
-          confirmed_at: new Date().toISOString(),
-          confirmed_by: user.id,
           executed_at: new Date().toISOString(),
           executed_record_id: result.recordId,
           executed_record_table: result.recordTable,

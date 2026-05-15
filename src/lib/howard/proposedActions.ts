@@ -1103,6 +1103,29 @@ export async function executeAction(
             { onConflict: 'user_id,aircraft_id' },
           );
         if (upErr) throw upErr;
+
+        // Flip completed_onboarding to true if it's still false. An
+        // existing user invited via /api/invite first (no aircraft,
+        // completed_onboarding=false) who then gets Howard-added to
+        // an aircraft here would otherwise keep bouncing back into
+        // HowardWelcome on sign-in. Matches /api/pilot-invite's
+        // pattern (route.ts:100-108). Guard on `completed_onboarding=false`
+        // so we only flip the bad state, never regress a user who
+        // already finished onboarding through some other path.
+        // feedback_invite_completed_onboarding_invariant requires this.
+        const { error: gateErr } = await sb
+          .from('aft_user_roles')
+          .update({ completed_onboarding: true })
+          .eq('user_id', targetUserId)
+          .eq('completed_onboarding', false);
+        if (gateErr) {
+          // Non-fatal — access landed, user may see HowardWelcome on
+          // first sign-in. Log via console (matches the reference
+          // route's pattern; the executor doesn't have logError in
+          // scope at this depth).
+          console.error('[howard/pilot_invite] could not flip completed_onboarding for existing user', gateErr);
+        }
+
         return { recordId: targetUserId, recordTable: 'aft_user_aircraft_access' };
       }
 

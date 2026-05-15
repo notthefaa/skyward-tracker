@@ -28,7 +28,7 @@ export async function GET(
 
     const { data: aircraft, error: acErr } = await supabaseAdmin
       .from('aft_aircraft')
-      .select('id, tail_number, total_engine_time, is_ifr_equipped, is_for_hire')
+      .select('id, tail_number, total_engine_time, is_ifr_equipped, is_for_hire, time_zone')
       .eq('id', id)
       .is('deleted_at', null)
       .single();
@@ -75,6 +75,12 @@ export async function GET(
         total_engine_time: aircraft.total_engine_time,
         is_ifr_equipped: (aircraft as any).is_ifr_equipped,
         is_for_hire: (aircraft as any).is_for_hire,
+        // Pass the aircraft's IANA zone so isDateExpiredInZone compares
+        // due dates against the pilot's calendar, not UTC. Without this
+        // a Pacific-time pilot opening the app at 8pm local sees a
+        // tomorrow-dated ELT/altimeter/transponder check marked
+        // expired four hours early — flipping the grounding verdict.
+        time_zone: (aircraft as any).time_zone ?? null,
       },
       equipment: (eqRes.data || []) as any,
       mxItems: mxRes.data || [],

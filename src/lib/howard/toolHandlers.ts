@@ -692,7 +692,7 @@ const handlers: Record<string, ToolHandler> = {
   check_airworthiness: async (_params, sb, aircraftId) => {
     const [acRes, eqRes, mxRes, sqRes, adRes] = await Promise.all([
       sb.from('aft_aircraft')
-        .select('id, tail_number, total_engine_time, is_ifr_equipped, is_for_hire')
+        .select('id, tail_number, total_engine_time, is_ifr_equipped, is_for_hire, time_zone')
         .eq('id', aircraftId).maybeSingle(),
       sb.from('aft_aircraft_equipment').select('*')
         .eq('aircraft_id', aircraftId).is('deleted_at', null).is('removed_at', null),

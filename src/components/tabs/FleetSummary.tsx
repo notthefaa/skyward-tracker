@@ -139,6 +139,13 @@ export default function FleetSummary({
             total_engine_time: ac.total_engine_time,
             is_ifr_equipped: (ac as any).is_ifr_equipped,
             is_for_hire: (ac as any).is_for_hire,
+            // Pilot-zone "today" so per-card verdict matches what
+            // the airworthiness route + Howard's check_airworthiness
+            // return. useFleetData's select('*') already includes
+            // time_zone; without forwarding it the verdict here
+            // silently defaults to UTC and disagrees with the
+            // header dot + Howard for non-UTC operators.
+            time_zone: (ac as any).time_zone ?? null,
           },
           equipment: acEq as any,
           mxItems: activeItems,

@@ -212,6 +212,16 @@ export function computeAirworthinessStatus(input: Inputs): AirworthinessVerdict 
     for (const ad of input.ads) {
       if (ad.deleted_at || ad.is_superseded || !ad.affects_airworthiness) continue;
       if (ad.applicability_status === 'does_not_apply') continue;
+
+      // review_required = the system literally doesn't know if this
+      // AD applies (regex couldn't resolve the serial range, Haiku
+      // drill-down was inconclusive). Surface that ambiguity as a
+      // warning so the pilot resolves it via /api/ads/check-applicability
+      // — never silently ground on it. The pre-fix path treated
+      // review_required identical to applies for date/time
+      // expiry, grounding aircraft for ADs that may not even apply.
+      // Grounding now requires either an explicit 'applies' or a
+      // legacy NULL (pre-mig-038 rows where the column didn't exist).
       const timeExpired =
         ad.next_due_time != null && (input.aircraft.total_engine_time || 0) >= ad.next_due_time;
       const dateExpired = isDateExpired(ad.next_due_date);
@@ -219,6 +229,18 @@ export function computeAirworthinessStatus(input: Inputs): AirworthinessVerdict 
         ad.applicability_status === 'applies' &&
         ad.next_due_date == null &&
         ad.next_due_time == null;
+
+      if (ad.applicability_status === 'review_required') {
+        if (timeExpired || dateExpired) {
+          findings.push({
+            severity: 'warning',
+            citation: '91.403',
+            message: `AD ${ad.ad_number} — applicability unresolved AND compliance window passed. Run a drill-down check, then log compliance if it applies.`,
+          });
+        }
+        continue;
+      }
+
       if (timeExpired || dateExpired || noComplianceLogged) {
         findings.push({
           severity: 'grounded',

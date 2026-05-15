@@ -375,7 +375,7 @@ export async function syncAdsForAircraft(
 
   const { data: existing } = await sb
     .from('aft_airworthiness_directives')
-    .select('id, ad_number, sync_hash, source, last_complied_date, last_complied_time, next_due_date, next_due_time')
+    .select('id, ad_number, sync_hash, source, last_complied_date, last_complied_time, next_due_date, next_due_time, applicability_status')
     .eq('aircraft_id', aircraft.id)
     .is('deleted_at', null);
 
@@ -388,6 +388,7 @@ export async function syncAdsForAircraft(
     last_complied_time: number | null;
     next_due_date: string | null;
     next_due_time: number | null;
+    applicability_status: 'applies' | 'does_not_apply' | 'review_required' | null;
   };
   const existingRows = (existing || []) as ExistingAd[];
   const existingByNumber = new Map<string, ExistingAd>();
@@ -432,20 +433,37 @@ export async function syncAdsForAircraft(
       else skipped += 1;
     } else if (current.sync_hash !== raw.source_hash) {
       if (current.source === 'drs_sync') {
+        // Refresh AD content fields from the new feed payload. Do NOT
+        // overwrite applicability when something more authoritative
+        // than the regex has already set it: the /api/ads/check-applicability
+        // route writes Haiku drill-down decisions that reason about
+        // engine variants, prop serials, and equipment combinations
+        // the regex can't see, and a pilot-flipped applicability is
+        // a deliberate human call. Preserving those means an AD text
+        // amendment doesn't silently revert a $50-of-Haiku-tokens
+        // decision back to the regex's review_required output.
+        //
+        // Only re-run regex when current.applicability_status IS NULL
+        // (e.g., legacy rows from before mig 038, or a row that's
+        // never had any verdict). The regex result is captured in
+        // `verdict` already; just gate the columns we write.
+        const updateRow: Record<string, any> = {
+          subject: raw.subject,
+          amendment: raw.amendment,
+          applicability: raw.applicability,
+          source_url: raw.source_url,
+          effective_date: raw.effective_date,
+          synced_at: now,
+          sync_hash: raw.source_hash,
+        };
+        if (current.applicability_status == null) {
+          updateRow.applicability_status = verdict.status;
+          updateRow.applicability_reason = verdict.reason;
+          updateRow.applicability_checked_at = now;
+        }
         const { error } = await sb
           .from('aft_airworthiness_directives')
-          .update({
-            subject: raw.subject,
-            amendment: raw.amendment,
-            applicability: raw.applicability,
-            source_url: raw.source_url,
-            effective_date: raw.effective_date,
-            synced_at: now,
-            sync_hash: raw.source_hash,
-            applicability_status: verdict.status,
-            applicability_reason: verdict.reason,
-            applicability_checked_at: now,
-          })
+          .update(updateRow)
           .eq('id', current.id);
         if (!error) updated += 1;
         else skipped += 1;
@@ -453,17 +471,25 @@ export async function syncAdsForAircraft(
         skipped += 1;
       }
     } else {
-      // Same content hash but recheck applicability in case the
-      // aircraft's serial/TC/equipment changed since last sync.
-      const { error } = await sb
-        .from('aft_airworthiness_directives')
-        .update({
-          applicability_status: verdict.status,
-          applicability_reason: verdict.reason,
-          applicability_checked_at: now,
-        })
-        .eq('id', current.id);
-      if (!error) skipped += 1;
+      // Same content hash. Backfill applicability if NULL (legacy
+      // pre-mig-038 rows that never got a regex verdict); never
+      // overwrite an existing value — see comment in the hash-changed
+      // branch above. The pre-fix behavior re-ran the regex every
+      // sync and clobbered Haiku drill-down + pilot decisions on the
+      // tick after they were made.
+      if (current.applicability_status == null) {
+        const { error } = await sb
+          .from('aft_airworthiness_directives')
+          .update({
+            applicability_status: verdict.status,
+            applicability_reason: verdict.reason,
+            applicability_checked_at: now,
+          })
+          .eq('id', current.id);
+        if (!error) skipped += 1;
+      } else {
+        skipped += 1;
+      }
     }
   }
 
