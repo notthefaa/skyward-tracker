@@ -72,6 +72,15 @@ const EMPTY_FLEET_SUGGESTIONS = [
  * sees Howard speak first without seeing a prompt they didn't type. */
 export const ONBOARDING_KICKOFF_MARKER = "Start the setup conversation.";
 
+/** Hidden user message sent AFTER the user confirms the
+ * onboarding_setup card. Triggers Howard's scripted closer (see
+ * HOWARD_ONBOARDING_APPENDIX) so the pilot gets an explicit "here's
+ * what I saved" acknowledgement before AppShell tears down the
+ * onboarding overlay. Filtered from the visible transcript — only
+ * Howard's reply is shown. The literal string must stay in lockstep
+ * with the system prompt. */
+export const ONBOARDING_CLOSER_MARKER = "Setup complete. The user is in.";
+
 /** Howard can end a reply with a fenced ```chips block (one suggestion
  * per line) when his question has a small natural answer set. The
  * client strips the fence from the rendered markdown and renders the
@@ -176,13 +185,17 @@ export default function HowardTab({
     { revalidateOnFocus: false, revalidateOnReconnect: false, revalidateIfStale: false }
   );
 
-  // Filter the onboarding kickoff marker ("Start the setup conversation.")
-  // out of the rendered transcript. Howard needs it in his context to
-  // trigger the scripted greeting, but the user didn't actually type it
-  // and it'd read weird as the first visible bubble.
+  // Filter the onboarding kickoff + closer markers ("Start the setup
+  // conversation." / "Setup complete. The user is in.") out of the
+  // rendered transcript. Howard needs them in his context to trigger
+  // the scripted greeting + closer; the pilot never typed them and
+  // they'd read weird as visible bubbles.
   const rawMessages = data?.messages || [];
   const messages = rawMessages.filter(
-    (m: any) => !(m.role === 'user' && m.content === ONBOARDING_KICKOFF_MARKER),
+    (m: any) => !(
+      m.role === 'user' &&
+      (m.content === ONBOARDING_KICKOFF_MARKER || m.content === ONBOARDING_CLOSER_MARKER)
+    ),
   );
   const threadId = data?.thread?.id;
 
@@ -646,25 +659,51 @@ export default function HowardTab({
     handleSend(ONBOARDING_KICKOFF_MARKER);
   }, [onboardingMode, userId, data, rawMessages.length, handleSend]);
 
-  // Watch for an executed onboarding_setup action — that's the signal
-  // AppShell needs to exit onboarding state and refetch the fleet. Fire
-  // onOnboardingComplete exactly once when we first see it land.
+  // Two-step handoff once the onboarding_setup action lands as
+  // 'executed':
+  //   1. Send the hidden ONBOARDING_CLOSER_MARKER so Howard fires his
+  //      scripted "here's what I saved + here's what to explore"
+  //      closer. Without this trigger the system-prompt instruction
+  //      to greet the user post-confirm never fires, the chat just
+  //      ends, and the pilot can't tell whether anything was saved.
+  //   2. Once Howard's reply finishes streaming (isSending=false),
+  //      call onOnboardingComplete so AppShell refetches the fleet
+  //      and tears down the onboarding overlay.
+  const onboardingCloserSentRef = useRef(false);
   const onboardingCompleteFiredRef = useRef(false);
+
   useEffect(() => {
     if (!onboardingMode || !onOnboardingComplete) return;
-    if (onboardingCompleteFiredRef.current) return;
+    if (onboardingCloserSentRef.current) return;
+    // Wait for any in-flight Howard reply to settle so handleSend's
+    // isSending guard doesn't silently no-op the closer.
+    if (isSending) return;
     const executed = (actionsData?.actions || []).find(
       (a: any) => a.action_type === 'onboarding_setup' && a.status === 'executed',
     );
-    if (executed) {
-      onboardingCompleteFiredRef.current = true;
-      // Small delay lets Howard's closing message render first before
-      // AppShell tears down the onboarding surface.
-      setTimeout(() => {
-        onOnboardingComplete();
-      }, 500);
-    }
-  }, [onboardingMode, onOnboardingComplete, actionsData]);
+    if (!executed) return;
+    // Reload-safety: if a closer trigger already sits in the thread
+    // (a prior tab landed the executed action but didn't finish the
+    // handoff), skip re-sending — the closer reply is already on file.
+    const alreadySent = rawMessages.some(
+      (m: any) => m.role === 'user' && m.content === ONBOARDING_CLOSER_MARKER,
+    );
+    onboardingCloserSentRef.current = true;
+    if (!alreadySent) handleSend(ONBOARDING_CLOSER_MARKER);
+  }, [onboardingMode, onOnboardingComplete, actionsData, rawMessages, isSending, handleSend]);
+
+  useEffect(() => {
+    if (!onboardingMode || !onOnboardingComplete) return;
+    if (!onboardingCloserSentRef.current) return;
+    if (onboardingCompleteFiredRef.current) return;
+    if (isSending) return;
+    onboardingCompleteFiredRef.current = true;
+    // Small delay lets Howard's final markdown chunk paint before
+    // AppShell unmounts the overlay.
+    setTimeout(() => {
+      onOnboardingComplete();
+    }, 600);
+  }, [onboardingMode, onOnboardingComplete, isSending]);
 
   // Reset the guard when we leave the awaiting state so a later
   // conversation can trigger the auto-confirm again.
