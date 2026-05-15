@@ -69,6 +69,17 @@ export async function POST(req: Request) {
     if (event.status === 'cancelled') {
       return NextResponse.json({ error: 'This service was cancelled and the portal link is no longer active.' }, { status: 403 });
     }
+    // Complete events are terminal — only `comment` is allowed within
+    // the PORTAL_EXPIRY_DAYS read window (mechanic dropping a follow-up
+    // note). Without this guard a forwarded link recipient could
+    // propose_date / suggest_item / decline / mark_ready / update_lines
+    // on a closed-out event, sending the owner contradictory emails
+    // and inserting orphan line items after the logbook was already
+    // entered. This is the terminal-state mirror of the cancelled
+    // guard above.
+    if (event.status === 'complete' && action !== 'comment') {
+      return NextResponse.json({ error: 'This service event is complete and only comments are accepted.' }, { status: 403 });
+    }
     if (isPortalLinkExpired(event)) {
       return NextResponse.json({ error: 'This service portal link has expired.' }, { status: 403 });
     }
@@ -130,10 +141,14 @@ export async function POST(req: Request) {
 
       const estCompletion = computeEstimatedCompletion(proposedDate, serviceDurationDays);
 
-      // Re-check deleted_at on the UPDATE so a concurrent owner cancel
-      // landing between our select and write can't be silently undone.
-      // count: 'exact' lets us detect 0-row updates from the concurrent
-      // cancel and stop before sending the schedule email.
+      // Re-check status + deleted_at on the UPDATE so a concurrent
+      // owner cancel landing between our select and write can't be
+      // silently undone. The deleted_at filter alone is insufficient —
+      // owner-action's cancel sets status='cancelled' WITHOUT touching
+      // deleted_at (mig 053 fix only added the deleted_at check), so a
+      // race with cancel would otherwise still 200 here and re-email
+      // the owner about a service they just walked away from. Also
+      // blocks complete events (terminal-state mirror).
       const { error: propUpdErr, count: propUpdCount } = await supabaseAdmin
         .from('aft_maintenance_events')
         .update({
@@ -143,7 +158,9 @@ export async function POST(req: Request) {
           estimated_completion: estCompletion,
         }, { count: 'exact' })
         .eq('id', event.id)
-        .is('deleted_at', null);
+        .is('deleted_at', null)
+        .neq('status', 'cancelled')
+        .neq('status', 'complete');
       if (propUpdErr) throw propUpdErr;
       if (propUpdCount === 0) {
         return NextResponse.json({ error: 'This event was cancelled by the owner.' }, { status: 409 });
@@ -201,7 +218,9 @@ export async function POST(req: Request) {
           estimated_completion: estCompletion,
         }, { count: 'exact' })
         .eq('id', event.id)
-        .is('deleted_at', null);
+        .is('deleted_at', null)
+        .neq('status', 'cancelled')
+        .neq('status', 'complete');
       if (confUpdErr) throw confUpdErr;
       if (confUpdCount === 0) {
         return NextResponse.json({ error: 'This event was cancelled by the owner.' }, { status: 409 });
@@ -369,7 +388,9 @@ export async function POST(req: Request) {
         .from('aft_maintenance_events')
         .update(updatePayload, { count: 'exact' })
         .eq('id', event.id)
-        .is('deleted_at', null);
+        .is('deleted_at', null)
+        .neq('status', 'cancelled')
+        .neq('status', 'complete');
       if (estUpdErr) throw estUpdErr;
       if (estUpdCount === 0) {
         return NextResponse.json({ error: 'This event was cancelled by the owner.' }, { status: 409 });
@@ -448,7 +469,9 @@ export async function POST(req: Request) {
           mechanic_notes: message || 'Declined by maintenance provider.',
         }, { count: 'exact' })
         .eq('id', event.id)
-        .is('deleted_at', null);
+        .is('deleted_at', null)
+        .neq('status', 'cancelled')
+        .neq('status', 'complete');
       if (declUpdErr) throw declUpdErr;
       if (declUpdCount === 0) {
         return NextResponse.json({ error: 'This event was already cancelled.' }, { status: 409 });
@@ -487,14 +510,20 @@ export async function POST(req: Request) {
       // authoritatively here (instead of letting the cron infer from
       // message ordering) avoids the suggest_item-before-mark_ready
       // ambiguity that made the nudge fire days early.
+      //
+      // .in('status', [...]) restricts to live working states. Without
+      // this a second mark_ready click (or a forwarded-link recipient)
+      // would re-fire ready_at + send the owner a duplicate "Ready for
+      // Pickup" email AND re-anchor the cron's Phase 5 nudge window.
       const { error: rdyUpdErr, count: rdyUpdCount } = await supabaseAdmin
         .from('aft_maintenance_events')
         .update({ status: 'ready_for_pickup', ready_at: new Date().toISOString() }, { count: 'exact' })
         .eq('id', event.id)
-        .is('deleted_at', null);
+        .is('deleted_at', null)
+        .in('status', ['confirmed', 'in_progress']);
       if (rdyUpdErr) throw rdyUpdErr;
       if (rdyUpdCount === 0) {
-        return NextResponse.json({ error: 'This event was cancelled by the owner.' }, { status: 409 });
+        return NextResponse.json({ error: 'This event is not in a state that can be marked ready (already ready / complete / cancelled).' }, { status: 409 });
       }
 
       const { error: rdyMsgErr } = await supabaseAdmin.from('aft_event_messages').insert({

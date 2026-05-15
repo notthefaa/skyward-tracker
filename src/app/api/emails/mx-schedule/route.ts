@@ -42,6 +42,27 @@ export async function POST(req: Request) {
       await requireAircraftAccess(supabaseAdmin, user.id, aircraft.id);
     }
 
+    // Re-fetch the maintenance item by id (scoped to the verified
+    // aircraft) instead of trusting the client-supplied row. Without
+    // this a DevTools caller could pass `mxItem.item_name = "FREE
+    // FUEL FROM ..."` and have Skyward's notifications@ address
+    // deliver arbitrary text to the mechanic CC'd on the
+    // main_contact_email's account. squawk-notify follows this same
+    // pattern. Body is HTML-escaped so no XSS, but content
+    // attribution is the bigger trust issue here.
+    const { data: dbItem, error: itemErr } = await supabaseAdmin
+      .from('aft_maintenance_items')
+      .select('id, item_name, tracking_type, due_time, due_date, aircraft_id')
+      .eq('id', mxItem?.id)
+      .eq('aircraft_id', aircraft.id)
+      .is('deleted_at', null)
+      .maybeSingle();
+    if (itemErr) throw itemErr;
+    if (!dbItem) {
+      return NextResponse.json({ error: 'Maintenance item not found for this aircraft.' }, { status: 404 });
+    }
+    const trustedItem = dbItem;
+
     if (aircraft.mx_contact_email) {
       // Honor the primary contact's mx_reminder mute on the CC line.
       // The mechanic-bound email (to:) is the operational notification
@@ -61,11 +82,11 @@ export async function POST(req: Request) {
       const safeMainContact = escapeHtml(aircraft.main_contact || 'Skyward Operations');
       const safeMainPhone = escapeHtml(aircraft.main_contact_phone);
       const safeMainEmail = escapeHtml(aircraft.main_contact_email);
-      const safeItemName = escapeHtml(mxItem.item_name);
+      const safeItemName = escapeHtml(trustedItem.item_name);
 
-      const dueString = mxItem.tracking_type === 'time'
-        ? `at ${escapeHtml(String(mxItem.due_time))} hours`
-        : `on ${escapeHtml(mxItem.due_date)}`;
+      const dueString = trustedItem.tracking_type === 'time'
+        ? `at ${escapeHtml(String(trustedItem.due_time))} hours`
+        : `on ${escapeHtml(trustedItem.due_date)}`;
 
       const signature = `
         <div class="sw-paragraph" style="margin-top:20px;padding-top:16px;border-top:1px solid #E5E7EB;font-size:14px;line-height:1.6;color:#091F3C;">
@@ -111,7 +132,7 @@ export async function POST(req: Request) {
       const { error: flagErr } = await supabaseAdmin
         .from('aft_maintenance_items')
         .update({ mx_schedule_sent: true })
-        .eq('id', mxItem.id)
+        .eq('id', trustedItem.id)
         .eq('aircraft_id', aircraft.id);
       if (flagErr) throw flagErr;
     }

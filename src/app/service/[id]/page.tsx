@@ -244,7 +244,17 @@ export default function ServicePortal() {
       formData.append('accessToken', accessToken);
       formData.append('description', uploadDescription);
       for (const file of uploadFiles) {
-        formData.append('files', file);
+        // WebKit serializes multipart boundaries against the original
+        // File.name byte-for-byte; a non-ASCII filename (umlauts,
+        // accents, emoji, even some Smart Quotes from camera apps)
+        // throws an opaque SyntaxError client-side on Safari + iOS.
+        // Rewrap with an ASCII-sanitized name before append so the
+        // mechanic's upload succeeds on every device. Matches the
+        // server-side sanitize at upload-attachment/route.ts and the
+        // [[feedback_webkit_formdata_filename]] rule.
+        const asciiName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_') || 'upload';
+        const safe = asciiName === file.name ? file : new File([file], asciiName, { type: file.type });
+        formData.append('files', safe);
       }
       // Sticky idempotency key per upload attempt. Pre-fix the key was
       // minted fresh inside the try block; a network blip retry produced
