@@ -42,16 +42,21 @@ test.describe('admin/flight-logs — backdated insert', () => {
       email: pilotEmail, password: pilotPw, email_confirm: true,
     });
     pilotId = p!.user!.id;
+    // Seed close to the first pilot log (tach 600) so the
+    // first-flight sanity fallback (migration 072) doesn't trip the
+    // 24hr delta check. The point of this spec is backdated-middle-
+    // insert behavior, not first-flight delta enforcement (covered
+    // by the "rejects implausible 24hr+ delta" test below).
     const { data: ac } = await sb.rpc('create_aircraft_atomic', {
       p_user_id: pilotId,
       p_payload: {
         tail_number: `N${randomUUID().slice(0, 5).toUpperCase()}`,
         aircraft_type: 'Cessna 172S',
         engine_type: 'Piston',
-        total_airframe_time: 500,
-        total_engine_time: 500,
-        setup_hobbs: 500,
-        setup_tach: 500,
+        total_airframe_time: 580,
+        total_engine_time: 580,
+        setup_hobbs: 580,
+        setup_tach: 580,
       },
     });
     aircraftId = (ac as { id: string }).id;
