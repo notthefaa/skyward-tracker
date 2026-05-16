@@ -171,13 +171,22 @@ export default function AdminModals({
       trip_reason: insertReason || null,
       occurred_at: isoOccurred,
     };
+    // Drop 0 on the secondary airframe meter — a truthy "0" string
+    // would land in the log and poison log_flight_atomic's coalesce
+    // chain on subsequent entries. See migration 076.
+    const insertAfttFloat = parseFloat(insertAftt);
+    const insertHobbsFloat = parseFloat(insertHobbs);
     if (insertIsTurbine) {
       logData.ftt = parseFloat(insertFtt);
-      if (insertAftt) logData.aftt = parseFloat(insertAftt);
+      if (insertAftt && Number.isFinite(insertAfttFloat) && insertAfttFloat > 0) {
+        logData.aftt = insertAfttFloat;
+      }
       logData.engine_cycles = parseInt(insertCycles);
     } else {
       logData.tach = parseFloat(insertTach);
-      if (insertHobbs) logData.hobbs = parseFloat(insertHobbs);
+      if (insertHobbs && Number.isFinite(insertHobbsFloat) && insertHobbsFloat > 0) {
+        logData.hobbs = insertHobbsFloat;
+      }
       logData.engine_cycles = 0;
     }
     if (insertFuel) logData.fuel_gallons = parseFloat(insertFuel);

@@ -381,21 +381,30 @@ export default function TimesTab({
     
     const aircraftUpdate: Record<string, any> = {};
 
+    // Secondary airframe meter: drop 0 to "not present". A truthy
+    // "0" string would otherwise land in the log and poison the
+    // log_flight_atomic coalesce chain on the next entry — see
+    // migration 076 + the N6872A field report.
+    const aftFloat = parseFloat(logAftt);
+    const hobbsFloat = parseFloat(logHobbs);
+    const hasAftt = logAftt && Number.isFinite(aftFloat) && aftFloat > 0;
+    const hasHobbs = logHobbs && Number.isFinite(hobbsFloat) && hobbsFloat > 0;
+
     if (isTurbine) {
       payload.ftt = parseFloat(logFtt);
       aircraftUpdate.total_engine_time = parseFloat(logFtt);
-      if (logAftt) {
-        payload.aftt = parseFloat(logAftt);
-        aircraftUpdate.total_airframe_time = parseFloat(logAftt);
+      if (hasAftt) {
+        payload.aftt = aftFloat;
+        aircraftUpdate.total_airframe_time = aftFloat;
       } else {
         aircraftUpdate.total_airframe_time = parseFloat(logFtt);
       }
     } else {
       payload.tach = parseFloat(logTach);
       aircraftUpdate.total_engine_time = parseFloat(logTach);
-      if (logHobbs) {
-        payload.hobbs = parseFloat(logHobbs);
-        aircraftUpdate.total_airframe_time = parseFloat(logHobbs);
+      if (hasHobbs) {
+        payload.hobbs = hobbsFloat;
+        aircraftUpdate.total_airframe_time = hobbsFloat;
       } else {
         aircraftUpdate.total_airframe_time = parseFloat(logTach);
       }
